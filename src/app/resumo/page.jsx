@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import TopFiveApex from '../components/TopFiveApex'
-import { formatBRLNumber, formatDate } from '@/utils/formatters' // Corrigido o caminho
-import DashboardFiltros from '@/components/DashboardFiltros' // Corrigido o caminho
-import RelatorioModal from '@/components/RelatorioModal' // Corrigido o caminho
+import { formatBRLNumber, formatDate } from '../utils/formatters'
+import RelatorioModal from '@/app/components/RelatorioModal' 
+import DashboardFiltros from '@/app/components/DashboardFiltros'
 import { FaChartLine, FaDollarSign, FaClock } from 'react-icons/fa'
 
 export default function ResumoPage() {
