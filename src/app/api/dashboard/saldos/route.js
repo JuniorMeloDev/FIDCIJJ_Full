@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '../../../utils/supabaseClient';
+import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
 export async function GET(request) {

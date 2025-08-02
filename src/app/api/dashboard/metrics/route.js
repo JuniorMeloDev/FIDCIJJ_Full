@@ -1,17 +1,30 @@
 import { NextResponse } from 'next/server';
-// Adicione as outras importações necessárias (supabase, jwt)
-// A lógica completa para buscar todas as métricas será complexa.
-// Por enquanto, vamos devolver um objeto vazio para não dar erro.
+import { supabase } from '../../../utils/supabaseClient';
+import jwt from 'jsonwebtoken';
+
 export async function GET(request) {
-    // AINDA PRECISAMOS DE IMPLEMENTAR A LÓGICA DE BUSCA DAS MÉTRICAS
+    // Validação do token (importante para segurança)
+    try {
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
+        }
+        const token = authHeader.substring(7);
+        jwt.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+        return NextResponse.json({ message: 'Token inválido' }, { status: 403 });
+    }
+
+    // Lógica para buscar as métricas (por enquanto, dados de exemplo)
     const mockMetrics = {
-        valorOperadoNoMes: 0,
+        valorOperadoNoMes: 150000.75,
         topClientes: [],
         topSacados: [],
         vencimentosProximos: [],
-        totalJuros: 0,
-        totalDespesas: 0,
-        lucroLiquido: 0,
+        totalJuros: 25000.50,
+        totalDespesas: 7500.25,
+        lucroLiquido: 17500.25,
     };
+
     return NextResponse.json(mockMetrics, { status: 200 });
 }
