@@ -5,7 +5,7 @@ import { format, subMonths, lastDayOfMonth } from 'date-fns';
 
 export async function GET(request) {
     try {
-        // Validação do token
+        // Validação do token'
         const authHeader = request.headers.get('Authorization');
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
