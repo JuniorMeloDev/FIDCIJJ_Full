@@ -96,3 +96,5 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
+
+//Pagina com Next.js 13 e Framer Motion para animações
