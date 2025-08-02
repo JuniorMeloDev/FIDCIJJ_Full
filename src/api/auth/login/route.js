@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-// CAMINHO CORRIGIDO: O atalho '@' já aponta para 'src', então o caminho correto é '@/utils/...'
-import { supabase } from '@/utils/supabaseClient'; 
+import { supabase } from '@/app/utils/supabaseClient'; 
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
