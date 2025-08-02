@@ -1,35 +1,33 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/app/utils/supabaseClient';
+import { supabase } from '@/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
 export async function GET(request) {
     try {
-        // 1. Validar o token de autenticação
+        // Validação do token (essencial para segurança)
         const authHeader = request.headers.get('Authorization');
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return NextResponse.json({ message: 'Não autorizado: Token em falta' }, { status: 401 });
+            return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         }
+        const token = authHeader.substring(7);
+        jwt.verify(token, process.env.JWT_SECRET);
 
-        const token = authHeader.substring(7); // Remove "Bearer "
+        // Extrai os parâmetros de filtro da URL
+        const { searchParams } = new URL(request.url);
+        const dataInicio = searchParams.get('dataInicio') || null;
+        const dataFim = searchParams.get('dataFim') || null;
 
-        try {
-            jwt.verify(token, process.env.JWT_SECRET);
-            // Se o token for inválido, o jwt.verify irá lançar um erro
-        } catch (error) {
-            return NextResponse.json({ message: 'Não autorizado: Token inválido' }, { status: 403 });
-        }
-
-        // 2. Se o token for válido, busca os dados no Supabase
-        // Esta consulta replica a lógica do seu backend Java: agrupa por conta e soma os valores.
-        const { data, error } = await supabase.rpc('get_saldos_por_conta');
+        // Chama a função no Supabase, agora passando os parâmetros
+        const { data, error } = await supabase.rpc('get_saldos_por_conta', {
+            data_inicio: dataInicio,
+            data_fim: dataFim
+        });
 
         if (error) {
             console.error("Erro ao buscar saldos:", error);
             throw new Error("Falha ao consultar os saldos no banco de dados.");
         }
 
-        // O Supabase RPC retorna um formato diferente, vamos ajustar para o que o frontend espera
-        // { conta_bancaria: 'Nome da Conta', saldo: 123.45 }
         const formattedData = data.map(item => ({
             contaBancaria: item.conta_bancaria,
             saldo: item.saldo
