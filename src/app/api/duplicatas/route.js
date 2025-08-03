@@ -10,53 +10,43 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // Mapeia os nomes do frontend para os nomes das colunas do DB
         const sortMapping = {
             dataOperacao: 'data_operacao',
             nfCte: 'nf_cte',
-            'operacao.cliente.nome': 'empresa_cedente',
+            empresaCedente: 'empresa_cedente',
             clienteSacado: 'cliente_sacado',
             valorBruto: 'valor_bruto',
             valorJuros: 'valor_juros',
             dataVencimento: 'data_vencimento'
         };
 
-        // Pega os parâmetros de ordenação da URL ou usa os padrões
         const sortKey = searchParams.get('sort') || 'dataOperacao';
         const sortColumn = sortMapping[sortKey] || 'data_operacao';
         const sortDirection = searchParams.get('direction') || 'DESC';
 
-        // Monta a chamada para a função RPC, agora incluindo os parâmetros de ordenação
-        let query = supabase.rpc('get_vencimentos_proximos', { 
-            dias_vencimento: 9999,
+        let query = supabase.rpc('get_duplicatas_filtradas', { 
             sort_column: sortColumn,
             sort_direction: sortDirection
         });
 
-        // Aplica os outros filtros
         if (searchParams.get('dataOpInicio')) query = query.gte('data_operacao', searchParams.get('dataOpInicio'));
         if (searchParams.get('dataOpFim')) query = query.lte('data_operacao', searchParams.get('dataOpFim'));
-        // ... (outros filtros continuam iguais)
+        if (searchParams.get('dataVencInicio')) query = query.gte('data_vencimento', searchParams.get('dataVencInicio'));
+        if (searchParams.get('dataVencFim')) query = query.lte('data_vencimento', searchParams.get('dataVencFim'));
+        if (searchParams.get('sacado')) query = query.ilike('cliente_sacado', `%${searchParams.get('sacado')}%`);
+        if (searchParams.get('nfCte')) query = query.ilike('nf_cte', `%${searchParams.get('nfCte')}%`);
         if (searchParams.get('status') && searchParams.get('status') !== 'Todos') query = query.eq('status_recebimento', searchParams.get('status'));
+        if (searchParams.get('clienteId')) query = query.eq('cliente_id', searchParams.get('clienteId'));
 
         const { data, error } = await query;
         if (error) throw error;
 
-        // Mapeia os nomes das colunas para o que o frontend espera (camelCase)
         const formattedData = data.map(d => ({
-            id: d.id,
-            operacaoId: d.operacao_id,
-            clienteId: d.cliente_id,
-            dataOperacao: d.data_operacao,
-            nfCte: d.nf_cte,
-            empresaCedente: d.empresa_cedente,
-            valorBruto: d.valor_bruto,
-            valorJuros: d.valor_juros,
-            clienteSacado: d.cliente_sacado,
-            dataVencimento: d.data_vencimento,
-            tipoOperacaoNome: d.tipo_operacao_nome,
-            statusRecebimento: d.status_recebimento,
-            dataLiquidacao: d.data_liquidacao,
+            id: d.id, operacaoId: d.operacao_id, clienteId: d.cliente_id,
+            dataOperacao: d.data_operacao, nfCte: d.nf_cte, empresaCedente: d.empresa_cedente,
+            valorBruto: d.valor_bruto, valorJuros: d.valor_juros, clienteSacado: d.cliente_sacado,
+            dataVencimento: d.data_vencimento, tipoOperacaoNome: d.tipo_operacao_nome,
+            statusRecebimento: d.status_recebimento, dataLiquidacao: d.data_liquidacao,
             contaLiquidacao: d.conta_liquidacao
         }));
 

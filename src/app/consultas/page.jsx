@@ -14,7 +14,6 @@ import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 const ITEMS_PER_PAGE = 7;
 
 export default function ConsultasPage() {
-    // ... (toda a lógica useState, useEffect, etc. que já temos. Nenhuma alteração aqui.)
     const [duplicatas, setDuplicatas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -247,12 +246,12 @@ export default function ConsultasPage() {
                             <table className="min-w-full divide-y divide-gray-700">
                                <thead className="bg-gray-700">
                                    <tr>
-                                       <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">Status</th>
                                        <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataOperacao')} className="flex items-center gap-1">Data Op. {getSortIcon('dataOperacao')}</button></th>
                                        <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase min-w-[120px]"><button onClick={() => handleSort('nfCte')} className="flex items-center gap-1">NF/CT-e {getSortIcon('nfCte')}</button></th>
                                        <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('empresaCedente')} className="flex items-center gap-1">Cedente {getSortIcon('empresaCedente')}</button></th>
                                        <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('clienteSacado')} className="flex items-center gap-1">Sacado {getSortIcon('clienteSacado')}</button></th>
                                        <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('valorBruto')} className="flex items-center gap-1 float-right">Valor Bruto {getSortIcon('valorBruto')}</button></th>
+                                       <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('valorJuros')} className="flex items-center gap-1 float-right">Juros {getSortIcon('valorJuros')}</button></th>
                                        <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataVencimento')} className="flex items-center gap-1">Data Venc. {getSortIcon('dataVencimento')}</button></th>
                                    </tr>
                                 </thead>
@@ -260,23 +259,24 @@ export default function ConsultasPage() {
                                     {currentItems.map((dup) => {
                                         const isLiquidado = dup.statusRecebimento === 'Recebido';
                                         return (
-                                            <tr key={dup.id} onContextMenu={(e) => handleContextMenu(e, dup)} className="hover:bg-gray-700 cursor-pointer">
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
-                                                    {isLiquidado ? (
-                                                        <div className="flex flex-col">
-                                                            <span className="font-semibold text-green-400">Recebido</span>
-                                                            <span className="text-xs text-gray-400">em {formatDate(dup.dataLiquidacao)}</span>
+                                            <tr key={dup.id} onContextMenu={(e) => handleContextMenu(e, dup)} className="group relative hover:bg-gray-700 cursor-pointer">
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{formatDate(dup.dataOperacao)}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-100'}`}>{dup.nfCte}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{dup.empresaCedente}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{dup.clienteSacado}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-100'}`}>{formatBRLNumber(dup.valorBruto)}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? 'text-gray-500' : 'text-red-400'}`}>{formatBRLNumber(dup.valorJuros)}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                    {formatDate(dup.dataVencimento)}
+                                                    {/* O OVERLAY DE HOVER FICA AQUI, DENTRO DA ÚLTIMA CÉLULA */}
+                                                    {isLiquidado && dup.dataLiquidacao && (
+                                                        <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-900 bg-opacity-80 pointer-events-none transition-opacity duration-300">
+                                                            <span className="bg-green-800 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
+                                                                Recebido em {formatDate(dup.dataLiquidacao)} na conta {dup.contaLiquidacao}
+                                                            </span>
                                                         </div>
-                                                    ) : (
-                                                        <span className="font-semibold text-yellow-400">Pendente</span>
                                                     )}
                                                 </td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle text-gray-400`}>{formatDate(dup.dataOperacao)}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle text-gray-100`}>{dup.nfCte}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle text-gray-400`}>{dup.empresaCedente}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle text-gray-400`}>{dup.clienteSacado}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle text-gray-100`}>{formatBRLNumber(dup.valorBruto)}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle text-gray-400`}>{formatDate(dup.dataVencimento)}</td>
                                             </tr>
                                         )
                                     })}
