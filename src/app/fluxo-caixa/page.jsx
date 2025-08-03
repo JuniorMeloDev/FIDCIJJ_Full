@@ -10,9 +10,8 @@ import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 import FiltroLateral from '@/app/components/FiltroLateral';
 import Pagination from '@/app/components/Pagination';
 import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
-import { API_URL } from '../apiConfig'; // IMPORTAÇÃO CORRETA DA URL
 
-const ITEMS_PER_PAGE = 6;
+const ITEMS_PER_PAGE = 7;
 
 export default function FluxoDeCaixaPage() {
     const [movimentacoes, setMovimentacoes] = useState([]);
@@ -28,15 +27,15 @@ export default function FluxoDeCaixaPage() {
     const [filters, setFilters] = useState({
         dataInicio: '', dataFim: '', descricao: '', contaBancaria: '', categoria: 'Todos'
     });
-    const [sortConfig, setSortConfig] = useState({ key: 'dataMovimento', direction: 'DESC' });
-    
+    const [sortConfig, setSortConfig] = useState({ key: 'data_movimento', direction: 'DESC' });
+
     const [contextMenu, setContextMenu] = useState({
         visible: false,
         x: 0,
         y: 0,
         selectedItem: null,
     });
-    
+
     const menuRef = useRef(null);
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -65,7 +64,7 @@ export default function FluxoDeCaixaPage() {
         params.append('direction', currentSortConfig.direction);
 
         try {
-            const response = await fetch(`${API_URL}/movimentacoes-caixa?${params.toString()}`, { headers: getAuthHeader() });
+            const response = await fetch(`/api/movimentacoes-caixa?${params.toString()}`, { headers: getAuthHeader() });
             if (!response.ok) throw new Error('Falha ao carregar movimentações.');
             const data = await response.json();
             setMovimentacoes(data);
@@ -75,12 +74,12 @@ export default function FluxoDeCaixaPage() {
             setLoading(false);
         }
     };
-    
+
     const fetchSaldos = async (currentFilters) => {
         const params = new URLSearchParams();
         if (currentFilters.dataInicio) params.append('dataInicio', currentFilters.dataInicio);
         if (currentFilters.dataFim) params.append('dataFim', currentFilters.dataFim);
-        const url = `${API_URL}/dashboard/saldos?${params.toString()}`;
+        const url = `/api/dashboard/saldos?${params.toString()}`;
         try {
             const saldosResponse = await fetch(url, { headers: getAuthHeader() });
             if (!saldosResponse.ok) throw new Error('Falha ao carregar saldos.');
@@ -96,15 +95,15 @@ export default function FluxoDeCaixaPage() {
              try {
                 const headers = getAuthHeader();
                 const [masterContasResponse, clientesResponse] = await Promise.all([
-                    fetch(`${API_URL}/cadastros/contas/master`, { headers }),
-                    fetch(`${API_URL}/cadastros/clientes`, { headers })
+                    fetch(`/api/cadastros/contas/master`, { headers }),
+                    fetch(`/api/cadastros/clientes`, { headers })
                 ]);
                 if (!masterContasResponse.ok || !clientesResponse.ok) {
                     throw new Error('Falha ao carregar dados para o modal.');
                 }
                 const masterContasData = await masterContasResponse.json();
                 const clientesData = await clientesResponse.json();
-                const masterContasFormatadas = masterContasData.map(c => ({ contaBancaria: `${c.banco} - ${c.agencia}/${c.contaCorrente}` }));
+                const masterContasFormatadas = masterContasData.map(c => ({ contaBancaria: `${c.banco} - ${c.agencia}/${c.conta_corrente}` }));
                 setContasMaster(masterContasFormatadas);
                 if (clientesData.length > 0) {
                     setClienteMasterNome(clientesData[0].nome);
@@ -120,7 +119,7 @@ export default function FluxoDeCaixaPage() {
         fetchMovimentacoes(filters, sortConfig);
         fetchSaldos(filters);
     }, [filters, sortConfig]);
-    
+
     useEffect(() => {
         const handleClick = () => setContextMenu({ ...contextMenu, visible: false });
         document.addEventListener("click", handleClick);
@@ -149,7 +148,7 @@ export default function FluxoDeCaixaPage() {
         setFilters(cleared);
         setCurrentPage(1);
     };
-    
+
     const handleFilterChange = (e) => {
         setCurrentPage(1);
         setFilters(prev => ({...prev, [e.target.name]: e.target.value}));
@@ -157,24 +156,24 @@ export default function FluxoDeCaixaPage() {
 
     const handleSaveLancamento = async (payload) => {
         try {
-            const response = await fetch(`${API_URL}/lancamentos`, {
+            const response = await fetch(`/api/lancamentos`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
                 body: JSON.stringify(payload)
             });
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(errorText || "Falha ao salvar lançamento.");
+                const errorText = await response.json();
+                throw new Error(errorText.message || "Falha ao salvar lançamento.");
             }
             showNotification('Lançamento salvo com sucesso!', 'success');
-            clearFilters();
+            clearFilters(); // Recarrega os dados
             return true;
         } catch (error) {
             showNotification(error.message, 'error');
             return false;
         }
     };
-    
+
     const handleDeleteRequest = () => {
         if (!contextMenu.selectedItem) return;
         setItemParaExcluir(contextMenu.selectedItem.id);
@@ -183,10 +182,11 @@ export default function FluxoDeCaixaPage() {
     const handleConfirmDelete = async () => {
         if(!itemParaExcluir) return;
         try {
-            await fetch(`${API_URL}/movimentacoes-caixa/${itemParaExcluir}`, { 
+            const response = await fetch(`/api/movimentacoes-caixa/${itemParaExcluir}`, { 
                 method: 'DELETE',
                 headers: getAuthHeader()
             });
+            if (!response.ok) throw new Error("Falha ao excluir lançamento.");
             showNotification('Lançamento excluído com sucesso!', 'success');
             fetchMovimentacoes(filters, sortConfig);
             fetchSaldos(filters);
@@ -198,52 +198,19 @@ export default function FluxoDeCaixaPage() {
     };
 
     const handleGeneratePdf = async () => {
-        if (!contextMenu.selectedItem) return;
-        const operacaoId = contextMenu.selectedItem.operacaoId;
-        try {
-            const response = await fetch(`${API_URL}/operacoes/${operacaoId}/pdf`, { headers: getAuthHeader() });
-            if (!response.ok) throw new Error('Não foi possível gerar o PDF.');
-            const contentDisposition = response.headers.get('content-disposition');
-            let filename = `bordero-${operacaoId}.pdf`;
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-                if (filenameMatch && filenameMatch.length > 1) {
-                    filename = filenameMatch[1].replace(/[^a-zA-Z0-9.,\s-]/g, '').trim();
-                }
-            }
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = filename;
-            document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
-        } catch (err) {
-            alert(err.message);
-        }
+        showNotification("Funcionalidade de gerar PDF ainda não implementada.", "error");
     };
-    
+
     const handleAbrirEmailModal = () => {
         if (!contextMenu.selectedItem) return;
         setIsEmailModalOpen(true);
     };
 
     const handleSendEmail = async (destinatarios) => {
-        if (!contextMenu.selectedItem) return;
-        setIsSendingEmail(true);
-        try {
-            const response = await fetch(`${API_URL}/operacoes/${contextMenu.selectedItem.operacaoId}/enviar-email`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-                body: JSON.stringify({ destinatarios }),
-            });
-            if (!response.ok) throw new Error("Falha ao enviar o e-mail.");
-            showNotification("E-mail(s) enviado(s) com sucesso!", "success");
-        } catch (err) {
-            showNotification(err.message, "error");
-        } finally {
-            setIsSendingEmail(false);
-            setIsEmailModalOpen(false);
-        }
+        showNotification("Funcionalidade de envio de e-mail ainda não implementada.", "error");
+        setIsEmailModalOpen(false);
     };
-    
+
     const handleContextMenu = (event, item) => {
         event.preventDefault();
         setContextMenu({
@@ -284,7 +251,7 @@ export default function FluxoDeCaixaPage() {
                         + Novo Lançamento
                     </button>
                 </motion.header>
-                
+
                 <motion.div 
                     className="mb-6"
                     initial={{ opacity: 0 }}
@@ -317,7 +284,7 @@ export default function FluxoDeCaixaPage() {
                                 <thead className="bg-gray-700">
                                     <tr>
                                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                                            <button onClick={() => handleSort('dataMovimento')} className="flex items-center gap-2">Data {getSortIcon('dataMovimento')}</button>
+                                            <button onClick={() => handleSort('data_movimento')} className="flex items-center gap-2">Data {getSortIcon('data_movimento')}</button>
                                         </th>
                                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                                             <button onClick={() => handleSort('descricao')} className="flex items-center gap-2">Descrição {getSortIcon('descricao')}</button>
@@ -357,7 +324,7 @@ export default function FluxoDeCaixaPage() {
                     </div>
                 </div>
             </main>
-            
+
             {contextMenu.visible && (
                 <div
                     ref={menuRef}
@@ -373,11 +340,11 @@ export default function FluxoDeCaixaPage() {
                                 <div className="border-t border-gray-600 my-1"></div>
                             </>
                         )}
-                        <a href="#" onClick={(e) => { e.preventDefault(); handleDeleteRequest(); }} 
+                        <button onClick={(e) => { e.preventDefault(); handleDeleteRequest(); }} 
                             className={`block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 ${contextMenu.selectedItem?.categoria === 'Pagamento de Borderô' || contextMenu.selectedItem?.categoria === 'Recebimento' ? 'opacity-50 cursor-not-allowed' : ''}`}
                             disabled={contextMenu.selectedItem?.categoria === 'Pagamento de Borderô' || contextMenu.selectedItem?.categoria === 'Recebimento'}>
                             Excluir Lançamento
-                        </a>
+                        </button>
                     </div>
                 </div>
             )}
