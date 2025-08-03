@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// PUT: Atualiza um cliente
+
 export async function PUT(request, { params }) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -11,15 +11,23 @@ export async function PUT(request, { params }) {
 
         const { id } = params;
         const body = await request.json();
-        const { contasBancarias, emails, ramoDeAtividade, ...clienteData } = body;
 
-        // Mapeia camelCase para snake_case
+        const { 
+            contasBancarias, 
+            emails, 
+            ramoDeAtividade,
+            cliente_emails, 
+            contas_bancarias, 
+            ...clienteData 
+        } = body;
+
+        // Mapeia camelCase para snake_case para o campo específico
         const clienteDataToUpdate = {
             ...clienteData,
             ramo_de_atividade: ramoDeAtividade
         };
 
-        // 1. Atualiza os dados do cliente
+        // 1. Atualiza apenas os dados da tabela 'clientes'
         const { error: clienteError } = await supabase.from('clientes').update(clienteDataToUpdate).eq('id', id);
         if (clienteError) throw clienteError;
 
@@ -28,7 +36,12 @@ export async function PUT(request, { params }) {
         await supabase.from('cliente_emails').delete().eq('cliente_id', id);
 
         if (contasBancarias && contasBancarias.length > 0) {
-            const contasToInsert = contasBancarias.map(({id: contaId, ...c}) => ({ ...c, cliente_id: id }));
+            const contasToInsert = contasBancarias.map(({id: contaId, ...c}) => ({ 
+                banco: c.banco,
+                agencia: c.agencia,
+                conta_corrente: c.contaCorrente, // Mapeamento manual
+                cliente_id: id 
+            }));
             const { error } = await supabase.from('contas_bancarias').insert(contasToInsert);
             if(error) throw error;
         }
@@ -40,6 +53,7 @@ export async function PUT(request, { params }) {
 
         return new NextResponse(null, { status: 204 });
     } catch (error) {
+        console.error("Erro ao atualizar cliente:", error);
         if (error.code === '23505') {
             return NextResponse.json({ message: 'Já existe um cliente com este CNPJ ou Nome.' }, { status: 409 });
         }
@@ -47,7 +61,7 @@ export async function PUT(request, { params }) {
     }
 }
 
-// DELETE: Apaga um cliente
+
 export async function DELETE(request, { params }) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
