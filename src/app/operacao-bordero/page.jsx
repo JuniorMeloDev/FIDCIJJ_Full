@@ -13,6 +13,7 @@ import EmailModal from '@/app/components/EmailModal';
 import { formatBRLInput, parseBRL } from '@/app/utils/formatters';
 
 export default function OperacaoBorderoPage() {
+    // ... (todos os seus estados useState)
     const [dataOperacao, setDataOperacao] = useState(new Date().toISOString().split('T')[0]);
     const [tipoOperacaoId, setTipoOperacaoId] = useState('');
     const [empresaCedente, setEmpresaCedente] = useState('');
@@ -32,8 +33,6 @@ export default function OperacaoBorderoPage() {
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
     const [savedOperacaoInfo, setSavedOperacaoInfo] = useState(null);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
-
-    // Estados e ref para XML e modais de criação rápida
     const fileInputRef = useRef(null);
     const [xmlDataPendente, setXmlDataPendente] = useState(null);
     const [isClienteModalOpen, setIsClienteModalOpen] = useState(false);
@@ -41,7 +40,8 @@ export default function OperacaoBorderoPage() {
     const [clienteParaCriar, setClienteParaCriar] = useState(null);
     const [sacadoParaCriar, setSacadoParaCriar] = useState(null);
 
-    const getAuthHeader = () => {
+    // ... (todas as suas funções handle, fetch, etc.)
+     const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     };
@@ -50,7 +50,6 @@ export default function OperacaoBorderoPage() {
         setNotification({ message, type });
         setTimeout(() => setNotification({ message: '', type: '' }), 5000);
     };
-
     const fetchApiData = async (url) => {
         try {
             const res = await fetch(url, { headers: getAuthHeader() });
@@ -74,10 +73,8 @@ export default function OperacaoBorderoPage() {
         };
         fetchInitialData();
     }, []);
-
     const fetchClientes = (query) => fetchApiData(`/api/cadastros/clientes/search?nome=${query}`);
     const fetchSacados = (query) => fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
-
     const handleXmlUpload = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -111,7 +108,6 @@ export default function OperacaoBorderoPage() {
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
-
     const preencherFormularioComXml = (data) => {
         const prazosArray = data.parcelas ? data.parcelas.map(p => {
             const d1 = new Date(data.dataEmissao);
@@ -135,8 +131,7 @@ export default function OperacaoBorderoPage() {
         showNotification("Dados do XML preenchidos com sucesso!", "success");
         setXmlDataPendente(null);
     };
-    
-    const handleSaveNovoCliente = async (id, data) => {
+     const handleSaveNovoCliente = async (id, data) => {
         try {
             const response = await fetch(`/api/cadastros/clientes`, { 
                 method: 'POST', 
@@ -171,7 +166,6 @@ export default function OperacaoBorderoPage() {
             return { success: false, message: err.message };
         }
     };
-    
     const handleSaveNovoSacado = async (id, data) => {
         try {
             const response = await fetch(`/api/cadastros/sacados`, { 
@@ -198,8 +192,6 @@ export default function OperacaoBorderoPage() {
             return { success: false, message: err.message };
         }
     };
-
-    // ... (O resto do seu código, como handleSelectCedente, handleAddNotaFiscal, etc. continua aqui)
     const handleSelectCedente = (cliente) => {
         setEmpresaCedente(cliente.nome);
         setEmpresaCedenteId(cliente.id);
@@ -282,32 +274,33 @@ export default function OperacaoBorderoPage() {
             }
     };
     const finalizarOperacao = () => {
-        if (savedOperacaoInfo) {
-            showNotification(`Operação salva com sucesso!`, 'success');
-        }
-        handleLimparTudo(false);
-    };
+            if (savedOperacaoInfo) {
+                showNotification(`Operação salva com sucesso!`, 'success');
+            }
+            handleLimparTudo(false);
+        };
     const handleSendEmail = async (destinatarios) => {
-        showNotification("Funcionalidade de e-mail ainda não implementada.", "error");
-        setIsEmailModalOpen(false);
-        finalizarOperacao();
-    };
+            showNotification("Funcionalidade de e-mail ainda não implementada.", "error");
+            setIsEmailModalOpen(false);
+            finalizarOperacao();
+        };
     const handleCloseEmailModal = () => {
-        setIsEmailModalOpen(false);
-        finalizarOperacao();
-    };
+            setIsEmailModalOpen(false);
+            finalizarOperacao();
+        };
     const handleLimparTudo = (showMsg = true) => {
-        setDataOperacao(new Date().toISOString().split('T')[0]);
-        setTipoOperacaoId('');
-        setEmpresaCedente('');
-        setEmpresaCedenteId(null);
-        setNotasFiscais([]);
-        setDescontos([]);
-        setNovaNf({ nfCte: '', dataNf: '', valorNf: '', clienteSacado: '', parcelas: '1', prazos: '', peso: '' });
-        setCondicoesSacado([]);
-        setIgnoreDespesasBancarias(false);
-        if (showMsg) showNotification('Formulário limpo.', 'success');
-    };
+            setDataOperacao(new Date().toISOString().split('T')[0]);
+            setTipoOperacaoId('');
+            setEmpresaCedente('');
+            setEmpresaCedenteId(null);
+            setNotasFiscais([]);
+            setDescontos([]);
+            setNovaNf({ nfCte: '', dataNf: '', valorNf: '', clienteSacado: '', parcelas: '1', prazos: '', peso: '' });
+            setCondicoesSacado([]);
+            setIgnoreDespesasBancarias(false);
+            if (showMsg) showNotification('Formulário limpo.', 'success');
+        };
+
     const todosOsDescontos = useMemo(() => {
         const selectedOperacao = tiposOperacao.find(op => op.id === parseInt(tipoOperacaoId));
         const despesasBancarias = selectedOperacao?.despesasBancarias || 0;
@@ -317,13 +310,22 @@ export default function OperacaoBorderoPage() {
         }
         return combined;
     }, [descontos, tipoOperacaoId, tiposOperacao, ignoreDespesasBancarias]);
+
     const totais = useMemo(() => {
         const valorTotalBruto = notasFiscais.reduce((acc, nf) => acc + nf.valorNf, 0);
         const desagioTotal = notasFiscais.reduce((acc, nf) => acc + (nf.jurosCalculado || 0), 0);
         const totalOutrosDescontos = todosOsDescontos.reduce((acc, d) => acc + d.valor, 0);
-        const liquidoOperacao = valorTotalBruto - desagioTotal - totalOutrosDescontos;
+        
+        const selectedOperacao = tiposOperacao.find(op => op.id === parseInt(tipoOperacaoId));
+        const isOperacaoAVista = selectedOperacao && selectedOperacao.nome.toLowerCase().includes('a vista');
+
+        const liquidoOperacao = isOperacaoAVista
+            ? valorTotalBruto - totalOutrosDescontos
+            : valorTotalBruto - desagioTotal - totalOutrosDescontos;
+
         return { valorTotalBruto, desagioTotal, totalOutrosDescontos, liquidoOperacao };
-    }, [notasFiscais, todosOsDescontos]);
+    }, [notasFiscais, todosOsDescontos, tipoOperacaoId, tiposOperacao]);
+    
     const handleRemoveDesconto = (idToRemove) => {
         if (idToRemove === 'despesas-bancarias') {
             setIgnoreDespesasBancarias(true);
@@ -331,7 +333,6 @@ export default function OperacaoBorderoPage() {
             setDescontos(descontos.filter(d => d.id !== idToRemove));
         }
     };
-
 
     return (
         <>

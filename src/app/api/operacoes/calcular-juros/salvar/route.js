@@ -10,27 +10,20 @@ export async function POST(request) {
 
         const body = await request.json();
 
-        // Lógica para calcular os totais
-        let valorTotalBruto = 0;
-        let valorTotalJuros = 0;
-        const duplicatasParaSalvar = [];
-
-        body.notasFiscais.forEach(nf => {
-            valorTotalBruto += nf.valorNf;
-            valorTotalJuros += nf.jurosCalculado;
-            nf.parcelasCalculadas.forEach(p => {
-                duplicatasParaSalvar.push({
-                    nfCte: `${nf.nfCte}.${p.numeroParcela}`,
-                    clienteSacado: nf.clienteSacado,
-                    valorParcela: p.valorParcela,
-                    jurosParcela: p.jurosParcela,
-                    dataVencimento: p.dataVencimento,
-                });
-            });
-        });
-
+        // A API agora apenas agrega os totais, sem aplicar a lógica de negócio
+        const valorTotalBruto = body.notasFiscais.reduce((acc, nf) => acc + nf.valorNf, 0);
+        const valorTotalJuros = body.notasFiscais.reduce((acc, nf) => acc + nf.jurosCalculado, 0);
         const valorTotalDescontos = body.descontos.reduce((acc, d) => acc + d.valor, 0);
-        const valorLiquido = valorTotalBruto - valorTotalJuros - valorTotalDescontos;
+
+        const duplicatasParaSalvar = body.notasFiscais.flatMap(nf =>
+            nf.parcelasCalculadas.map(p => ({
+                nfCte: `${nf.nfCte}.${p.numeroParcela}`,
+                clienteSacado: nf.clienteSacado,
+                valorParcela: p.valorParcela,
+                jurosParcela: p.jurosParcela,
+                dataVencimento: p.dataVencimento,
+            }))
+        );
 
         const { data: operacaoId, error } = await supabase.rpc('salvar_operacao_completa', {
             p_data_operacao: body.dataOperacao,
@@ -40,7 +33,6 @@ export async function POST(request) {
             p_valor_total_bruto: valorTotalBruto,
             p_valor_total_juros: valorTotalJuros,
             p_valor_total_descontos: valorTotalDescontos,
-            p_valor_liquido: valorLiquido,
             p_duplicatas: JSON.stringify(duplicatasParaSalvar),
             p_descontos: JSON.stringify(body.descontos)
         });
