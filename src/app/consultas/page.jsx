@@ -37,8 +37,6 @@ export default function ConsultasPage() {
         selectedItem: null,
     });
 
-    const [pdfLoading, setPdfLoading] = useState(null);
-    const [estornandoId, setEstornandoId] = useState(null);
     const [notification, setNotification] = useState({ message: '', type: '' });
     const [isLiquidarModalOpen, setIsLiquidarModalOpen] = useState(false);
     const [duplicataParaLiquidar, setDuplicataParaLiquidar] = useState(null);
@@ -195,18 +193,16 @@ export default function ConsultasPage() {
         }
     };
     const handleEstornar = () => { if (!contextMenu.selectedItem) return; setEstornoInfo({ id: contextMenu.selectedItem.id }); };
-    const confirmarEstorno = async () => { if (!estornoInfo) return; setEstornandoId(estornoInfo.id); try { const response = await fetch(`/api/duplicatas/${estornoInfo.id}/estornar`, { method: 'POST', headers: getAuthHeader() }); if (!response.ok) { const errorData = await response.text(); throw new Error(errorData || 'Falha ao estornar a liquidação.'); } showNotification('Liquidação estornada com sucesso!', 'success'); fetchDuplicatas(filters, sortConfig); } catch (err) { showNotification(err.message, 'error'); } finally { setEstornandoId(null); setEstornoInfo(null); } };
+    const confirmarEstorno = async () => { if (!estornoInfo) return; try { const response = await fetch(`/api/duplicatas/${estornoInfo.id}/estornar`, { method: 'POST', headers: getAuthHeader() }); if (!response.ok) { const errorData = await response.text(); throw new Error(errorData || 'Falha ao estornar a liquidação.'); } showNotification('Liquidação estornada com sucesso!', 'success'); fetchDuplicatas(filters, sortConfig); } catch (err) { showNotification(err.message, 'error'); } finally { setEstornoInfo(null); } };
     const handleAbrirEmailModal = () => {
         if (!contextMenu.selectedItem) return;
         setOperacaoParaEmail({ id: contextMenu.selectedItem.operacaoId, clienteId: contextMenu.selectedItem.clienteId });
         setIsEmailModalOpen(true);
     };
     const handleSendEmail = async (destinatarios) => {
-        // Esta funcionalidade ainda precisa ser migrada
         showNotification("Funcionalidade de envio de e-mail ainda não migrada.", "error");
     };
     const handleGeneratePdf = async () => {
-        // Esta funcionalidade ainda precisa ser migrada
         showNotification("Funcionalidade de gerar PDF ainda não migrada.", "error");
     };
 
@@ -272,9 +268,9 @@ export default function ConsultasPage() {
                                                 <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? 'text-gray-500' : 'text-red-400'}`}>{formatBRLNumber(dup.valorJuros)}</td>
                                                 <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{formatDate(dup.dataVencimento)}</td>
                                                 
-                                                {/* CÓDIGO CORRIGIDO AQUI */}
+                                                {/* CÓDIGO CORRIGIDO PARA O HOVER */}
                                                 {isLiquidado && dup.dataLiquidacao && (
-                                                    <td className="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 pointer-events-none">
+                                                    <td className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-800 bg-opacity-80 pointer-events-none transition-opacity duration-300">
                                                         <span className="bg-green-800 text-white text-xs font-bold py-1 px-3 rounded-full">
                                                             Baixada em {formatDate(dup.dataLiquidacao)} na conta {dup.contaLiquidacao}
                                                         </span>
