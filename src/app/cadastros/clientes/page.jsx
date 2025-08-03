@@ -10,7 +10,6 @@ import Pagination from '@/app/components/Pagination';
 import FiltroLateralClientes from '@/app/components/FiltroLateralClientes';
 import { formatCnpjCpf } from '@/app/utils/formatters'; 
 import useAuth from '@/app/hooks/useAuth';
-import { API_URL } from '../../apiConfig'; 
 
 const ITEMS_PER_PAGE = 10; 
 
@@ -23,7 +22,7 @@ export default function ClientesPage() {
     const [editingCliente, setEditingCliente] = useState(null);
     const [notification, setNotification] = useState({ message: '', type: '' });
     const [clienteParaExcluir, setClienteParaExcluir] = useState(null);
-    
+
     const [currentPage, setCurrentPage] = useState(1);
     const [filters, setFilters] = useState({ nome: '', cnpj: '' });
 
@@ -40,10 +39,22 @@ export default function ClientesPage() {
     const fetchClientes = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_URL}/cadastros/clientes`, { headers: getAuthHeader() });
+            const response = await fetch(`/api/cadastros/clientes`, { headers: getAuthHeader() });
             if (!response.ok) throw new Error('Falha ao carregar clientes. Verifique se está logado.');
             const data = await response.json();
-            setClientes(data);
+
+            // Mapeia os dados da API (snake_case) para o formato do frontend (camelCase)
+            const formattedData = data.map(cliente => ({
+                ...cliente,
+                ramoDeAtividade: cliente.ramo_de_atividade,
+                contasBancarias: cliente.contas_bancarias.map(conta => ({
+                    ...conta,
+                    contaCorrente: conta.conta_corrente
+                })),
+                emails: cliente.cliente_emails.map(e => e.email) // Extrai apenas o valor do email
+            }));
+
+            setClientes(formattedData);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -62,7 +73,7 @@ export default function ClientesPage() {
             return nomeMatch && cnpjMatch;
         });
     }, [filters, clientes]);
-    
+
     const handleFilterChange = (e) => {
         setCurrentPage(1);
         setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -79,25 +90,37 @@ export default function ClientesPage() {
     const handleSaveCliente = async (id, data) => {
         try {
             const isUpdating = !!id;
-            const url = isUpdating ? `${API_URL}/cadastros/clientes/${id}` : `${API_URL}/cadastros/clientes`;
+            const url = isUpdating ? `/api/cadastros/clientes/${id}` : `/api/cadastros/clientes`;
             const method = isUpdating ? 'PUT' : 'POST';
+
+            // Prepara o payload para o backend (snake_case)
+             const payload = {
+                ...data,
+                ramo_de_atividade: data.ramoDeAtividade,
+                contasBancarias: data.contasBancarias.map(c => ({
+                    ...c,
+                    conta_corrente: c.contaCorrente
+                }))
+            };
+
 
             const response = await fetch(url, {
                 method: method,
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-                body: JSON.stringify(data),
+                body: JSON.stringify(payload),
             });
 
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(errorText || 'Falha ao salvar cliente.');
+                const errorText = await response.json();
+                throw new Error(errorText.message || 'Falha ao salvar cliente.');
             }
-            
+
             setIsModalOpen(false);
             await fetchClientes();
             showNotification(`Cliente ${isUpdating ? 'atualizado' : 'criado'} com sucesso!`, 'success');
             return { success: true };
         } catch (err) {
+            showNotification(err.message, 'error');
             return { success: false, message: err.message };
         }
     };
@@ -110,7 +133,7 @@ export default function ClientesPage() {
     const handleConfirmarExclusao = async () => {
         if (!clienteParaExcluir) return;
         try {
-            const response = await fetch(`${API_URL}/cadastros/clientes/${clienteParaExcluir.id}`, { 
+            const response = await fetch(`/api/cadastros/clientes/${clienteParaExcluir.id}`, { 
                 method: 'DELETE',
                 headers: getAuthHeader()
             });
@@ -135,7 +158,7 @@ export default function ClientesPage() {
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
             <EditClienteModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} cliente={editingCliente} onSave={handleSaveCliente} onDelete={handleDeleteRequest} />
             <ConfirmacaoModal isOpen={!!clienteParaExcluir} onClose={() => setClienteParaExcluir(null)} onConfirm={handleConfirmarExclusao} title="Confirmar Exclusão" message={`Deseja excluir o cliente "${clienteParaExcluir?.nome}"?`} />
-            
+
             <motion.header 
                 className="mb-4 border-b-2 border-orange-500 pb-4"
                 initial={{ y: -20, opacity: 0 }}
