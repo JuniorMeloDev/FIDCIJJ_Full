@@ -6,7 +6,6 @@ import { motion } from 'framer-motion';
 import Notification from '@/app/components/Notification';
 import UserModal from '@/app/components/UserModal';
 import useAuth from '@/app/hooks/useAuth';
-import { API_URL } from '../../apiConfig';
 
 export default function UsuariosPage() {
     const { isAdmin } = useAuth();
@@ -30,8 +29,7 @@ export default function UsuariosPage() {
     const fetchUsers = async () => {
         setLoading(true);
         try {
-     
-            const response = await fetch(`${API_URL}/users`, { headers: getAuthHeader() });
+            const response = await fetch(`/api/users`, { headers: getAuthHeader() });
             if (response.status === 403) throw new Error("Acesso negado. Apenas administradores podem ver esta página.");
             if (!response.ok) throw new Error("Falha ao carregar usuários.");
             const data = await response.json();
@@ -46,7 +44,7 @@ export default function UsuariosPage() {
     useEffect(() => {
         if (isAdmin) {
             fetchUsers();
-        } else {
+        } else if (isAdmin === false) { // Verifica explicitamente para evitar o estado inicial nulo
             setError("Acesso negado. Apenas administradores podem ver esta página.");
             setLoading(false);
         }
@@ -54,14 +52,14 @@ export default function UsuariosPage() {
 
     const handleSave = async (userData) => {
         try {
-            const response = await fetch(`${API_URL}/users`, {
+            const response = await fetch(`/api/users`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
                 body: JSON.stringify(userData),
             });
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(errorText || "Falha ao criar usuário.");
+                const errorText = await response.json();
+                throw new Error(errorText.message || "Falha ao criar usuário.");
             }
             showNotification("Usuário criado com sucesso!", "success");
             setIsModalOpen(false);

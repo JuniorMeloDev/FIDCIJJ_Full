@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import Notification from '../components/Notification';
-import { API_URL } from '../apiConfig';
 
 export default function ProfilePage() {
     const [user, setUser] = useState(null);
@@ -13,6 +12,11 @@ export default function ProfilePage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [notification, setNotification] = useState({ message: '', type: '' });
 
+    const getAuthHeader = () => {
+        const token = sessionStorage.getItem('authToken');
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    };
+
     const showNotification = (message, type) => {
         setNotification({ message, type });
         setTimeout(() => setNotification({ message: '', type: '' }), 5000);
@@ -20,19 +24,18 @@ export default function ProfilePage() {
 
     const handlePasswordSave = async (passwordData) => {
         try {
-            const token = sessionStorage.getItem('authToken');
-            const response = await fetch(`${API_URL}/users/change-password`, { 
+            const response = await fetch(`/api/users/change-password`, { 
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    ...getAuthHeader()
                 },
                 body: JSON.stringify(passwordData),
             });
 
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(errorText || "Falha ao alterar a senha.");
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Falha ao alterar a senha.");
             }
             showNotification("Senha alterada com sucesso!", "success");
             setIsModalOpen(false);
@@ -52,8 +55,8 @@ export default function ProfilePage() {
             }
 
             try {
-                const response = await fetch(`${API_URL}/users/me`, { 
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const response = await fetch(`/api/users/me`, { 
+                    headers: getAuthHeader()
                 });
                 if (!response.ok) {
                     throw new Error('Falha ao buscar dados do perfil.');
@@ -100,7 +103,7 @@ export default function ProfilePage() {
                         Alterar Senha
                     </button>
                 </motion.header>
-                
+
                 {user && (
                     <motion.div 
                         className="bg-gray-800 p-6 rounded-lg shadow-md max-w-2xl"
@@ -111,12 +114,8 @@ export default function ProfilePage() {
                         <h2 className="text-xl font-semibold border-b border-gray-700 pb-3 mb-4">Informações</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-400">Nome</label>
+                                <label className="block text-sm font-medium text-gray-400">Nome de Usuário</label>
                                 <p className="mt-1 text-lg text-gray-100">{user.username}</p>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400">Login do Usuário</label>
-                                <p className="mt-1 text-lg text-gray-100">{user.email || 'Não informado'}</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-400">E-mail</label>
@@ -125,6 +124,10 @@ export default function ProfilePage() {
                             <div>
                                 <label className="block text-sm font-medium text-gray-400">Telefone</label>
                                 <p className="mt-1 text-lg text-gray-100">{user.telefone || 'Não informado'}</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400">Cargo</label>
+                                <p className="mt-1 text-lg text-gray-100">{user.roles}</p>
                             </div>
                         </div>
                     </motion.div>
