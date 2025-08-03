@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/app/utils/supabaseClient';
+import { supabase } from '@/APP/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
 // POST: Cria um novo lançamento manual
@@ -61,6 +61,7 @@ export async function POST(request) {
         return new NextResponse(null, { status: 201 });
 
     } catch (error) {
+        console.error("Erro ao criar lançamento:", error);
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
 }
