@@ -10,7 +10,6 @@ import EditTipoOperacaoModal from '@/app/components/EditTipoOperacaoModal';
 import ConfirmacaoModal from '@/app/components/ConfirmacaoModal';
 import { formatBRLNumber } from '@/app/utils/formatters';
 import useAuth from '@/app/hooks/useAuth';
-import { API_URL } from '../../apiConfig';
 
 const ITEMS_PER_PAGE = 7;
 
@@ -24,7 +23,7 @@ export default function TiposOperacaoPage() {
     const [editingOperacao, setEditingOperacao] = useState(null);
     const [notification, setNotification] = useState({ message: '', type: '' });
     const [filters, setFilters] = useState({ nome: '' });
-    
+
     const [operacaoParaExcluir, setOperacaoParaExcluir] = useState(null);
 
     const getAuthHeader = () => {
@@ -40,9 +39,17 @@ export default function TiposOperacaoPage() {
     const fetchTiposOperacao = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_URL}/cadastros/tipos-operacao`, { headers: getAuthHeader() });
+            const response = await fetch(`/api/cadastros/tipos-operacao`, { headers: getAuthHeader() });
             if (!response.ok) throw new Error('Falha ao carregar os tipos de operação.');
-            setTiposOperacao(await response.json());
+            const data = await response.json();
+            // Ajuste para corresponder ao frontend
+            const formattedData = data.map(item => ({
+                ...item,
+                taxaJuros: item.taxa_juros,
+                valorFixo: item.valor_fixo,
+                despesasBancarias: item.despesas_bancarias
+            }));
+            setTiposOperacao(formattedData);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -82,7 +89,7 @@ export default function TiposOperacaoPage() {
 
     const handleSave = async (id, data) => {
         const isUpdating = !!id;
-        const url = isUpdating ? `${API_URL}/cadastros/tipos-operacao/${id}` : `${API_URL}/cadastros/tipos-operacao`;
+        const url = isUpdating ? `/api/cadastros/tipos-operacao/${id}` : `/api/cadastros/tipos-operacao`;
         const method = isUpdating ? 'PUT' : 'POST';
 
         try {
@@ -92,7 +99,7 @@ export default function TiposOperacaoPage() {
                 body: JSON.stringify(data),
             });
             if (!response.ok) throw new Error(`Falha ao ${isUpdating ? 'atualizar' : 'criar'} tipo de operação.`);
-            
+
             showNotification(`Operação ${isUpdating ? 'atualizada' : 'criada'} com sucesso!`, 'success');
             setIsModalOpen(false);
             await fetchTiposOperacao();
@@ -105,11 +112,11 @@ export default function TiposOperacaoPage() {
         const operacao = tiposOperacao.find(op => op.id === id);
         setOperacaoParaExcluir(operacao);
     };
-    
+
     const handleConfirmarExclusao = async () => {
         if (!operacaoParaExcluir) return;
         try {
-            const response = await fetch(`${API_URL}/cadastros/tipos-operacao/${operacaoParaExcluir.id}`, { 
+            const response = await fetch(`/api/cadastros/tipos-operacao/${operacaoParaExcluir.id}`, { 
                 method: 'DELETE',
                 headers: getAuthHeader()
             });
@@ -146,7 +153,7 @@ export default function TiposOperacaoPage() {
                 title="Confirmar Exclusão"
                 message={`Deseja excluir o tipo de operação "${operacaoParaExcluir?.nome}"?`}
             />
-            
+
             <motion.header 
                 className="mb-4 border-b-2 border-orange-500 pb-4"
                 initial={{ y: -20, opacity: 0 }}
