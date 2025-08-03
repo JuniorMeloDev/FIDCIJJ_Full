@@ -20,7 +20,7 @@ export default function ConsultasPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [contasMaster, setContasMaster] = useState([]);
     const [tiposOperacao, setTiposOperacao] = useState([]);
-
+    
     const [filters, setFilters] = useState({
         dataOpInicio: '', dataOpFim: '',
         dataVencInicio: '', dataVencFim: '',
@@ -29,7 +29,7 @@ export default function ConsultasPage() {
     });
 
     const [sortConfig, setSortConfig] = useState({ key: 'dataOperacao', direction: 'DESC' });
-
+    
     const [contextMenu, setContextMenu] = useState({
         visible: false,
         x: 0,
@@ -64,7 +64,7 @@ export default function ConsultasPage() {
 
         params.append('sort', currentSortConfig.key);
         params.append('direction', currentSortConfig.direction);
-
+        
         try {
             const response = await fetch(`/api/duplicatas?${params.toString()}`, {
                 headers: getAuthHeader()
@@ -78,7 +78,7 @@ export default function ConsultasPage() {
             setLoading(false);
         }
     };
-
+    
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
@@ -89,11 +89,15 @@ export default function ConsultasPage() {
                 ]);
                 if (!contasRes.ok) throw new Error("Falha ao buscar contas master.");
                 if (!tiposRes.ok) throw new Error("Falha ao buscar tipos de operação.");
-
+                
                 const contas = await contasRes.json();
                 const tipos = await tiposRes.json();
-                setContasMaster(contas);
-                setTiposOperacao(tipos);
+                
+                const formattedTipos = tipos.map(t => ({...t, taxaJuros: t.taxa_juros, valorFixo: t.valor_fixo, despesasBancarias: t.despesas_bancarias}));
+                const formattedContas = contas.map(c => ({...c, contaCorrente: c.conta_corrente}));
+
+                setContasMaster(formattedContas);
+                setTiposOperacao(formattedTipos);
             } catch (error) {
                 console.error(error);
                 showNotification(error.message, 'error');
@@ -122,7 +126,7 @@ export default function ConsultasPage() {
             return [];
         }
     };
-
+    
     const fetchClientes = (query) => fetchApiData(`/api/cadastros/clientes/search?nome=${query}`);
     const fetchSacados = (query) => fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
 
@@ -135,7 +139,7 @@ export default function ConsultasPage() {
             setFilters(prev => ({ ...prev, [name]: value }));
         }
     };
-
+    
     const handleAutocompleteSelect = (name, item) => {
         setCurrentPage(1);
         if (name === 'cliente') {
@@ -163,7 +167,7 @@ export default function ConsultasPage() {
         if (sortConfig.direction === 'ASC') return <FaSortUp />;
         return <FaSortDown />;
     };
-
+    
     const handleContextMenu = (event, item) => {
         event.preventDefault();
         setContextMenu({ visible: true, x: event.pageX, y: event.pageY, selectedItem: item });
@@ -198,43 +202,12 @@ export default function ConsultasPage() {
         setIsEmailModalOpen(true);
     };
     const handleSendEmail = async (destinatarios) => {
-        if (!operacaoParaEmail) return;
-        setIsSendingEmail(true);
-        try {
-            // Este endpoint ainda não foi migrado, irá falhar
-            const response = await fetch(`/api/operacoes/${operacaoParaEmail.id}/enviar-email`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, body: JSON.stringify({ destinatarios }) });
-            if (!response.ok) throw new Error("Falha ao enviar o e-mail.");
-            showNotification("E-mail(s) enviado(s) com sucesso!", "success");
-        } catch (err) {
-            showNotification(err.message, "error");
-        } finally {
-            setIsSendingEmail(false);
-            setIsEmailModalOpen(false);
-        }
+        // Esta funcionalidade ainda precisa ser migrada
+        showNotification("Funcionalidade de envio de e-mail ainda não migrada.", "error");
     };
     const handleGeneratePdf = async () => {
-        // Este endpoint ainda não foi migrado, irá falhar
-        if (!contextMenu.selectedItem) return;
-        const operacaoId = contextMenu.selectedItem.operacaoId;
-        if (!operacaoId) { alert("Esta duplicata não está associada a uma operação para gerar PDF."); return; }
-        setPdfLoading(operacaoId);
-        try {
-            const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, { headers: getAuthHeader() });
-            if (!response.ok) throw new Error('Não foi possível gerar o PDF.');
-            const contentDisposition = response.headers.get('content-disposition');
-            let filename = `bordero-${operacaoId}.pdf`;
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-                if (filenameMatch && filenameMatch.length > 1) { filename = filenameMatch[1].replace(/[^a-zA-Z0-9.,\s-]/g, '').trim(); }
-            }
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
-        } catch (err) {
-            alert(err.message);
-        } finally {
-            setPdfLoading(null);
-        }
+        // Esta funcionalidade ainda precisa ser migrada
+        showNotification("Funcionalidade de gerar PDF ainda não migrada.", "error");
     };
 
     const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
@@ -244,7 +217,7 @@ export default function ConsultasPage() {
 
     if (loading && duplicatas.length === 0) return <div className="text-center p-10">A carregar...</div>;
     if (error) return <div className="text-center p-10 text-red-500">Erro: {error}</div>;
-
+    
     return (
         <>
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
@@ -289,19 +262,22 @@ export default function ConsultasPage() {
                                 <tbody className="bg-gray-800 divide-y divide-gray-700">
                                     {currentItems.map((dup) => {
                                         const isLiquidado = dup.statusRecebimento === 'Recebido';
-                                        const opacidade = isLiquidado ? 'opacity-50' : '';
                                         return (
-                                            <tr key={dup.id} onContextMenu={(e) => handleContextMenu(e, dup)} className={`group relative hover:bg-gray-700 cursor-pointer`}>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-gray-400 align-middle ${opacidade}`}>{formatDate(dup.dataOperacao)}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle ${opacidade}`}>{dup.nfCte}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-gray-400 align-middle ${opacidade}`}>{dup.empresaCedente}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-gray-400 align-middle ${opacidade}`}>{dup.clienteSacado}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-gray-100 text-right align-middle ${opacidade}`}>{formatBRLNumber(dup.valorBruto)}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-red-400 text-right align-middle ${opacidade}`}>{formatBRLNumber(dup.valorJuros)}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-gray-400 align-middle ${opacidade}`}>{formatDate(dup.dataVencimento)}</td>
+                                            <tr key={dup.id} onContextMenu={(e) => handleContextMenu(e, dup)} className="group relative hover:bg-gray-700 cursor-pointer">
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{formatDate(dup.dataOperacao)}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-100'}`}>{dup.nfCte}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{dup.empresaCedente}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{dup.clienteSacado}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-100'}`}>{formatBRLNumber(dup.valorBruto)}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? 'text-gray-500' : 'text-red-400'}`}>{formatBRLNumber(dup.valorJuros)}</td>
+                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{formatDate(dup.dataVencimento)}</td>
+                                                
+                                                {/* CÓDIGO CORRIGIDO AQUI */}
                                                 {isLiquidado && dup.dataLiquidacao && (
-                                                    <td className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-black bg-opacity-10 pointer-events-none">
-                                                        <span className="bg-gray-900 text-white text-xs font-bold py-1 px-3 rounded-md">Baixada em {formatDate(dup.dataLiquidacao)} na conta {dup.contaLiquidacao}</span>
+                                                    <td className="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 pointer-events-none">
+                                                        <span className="bg-green-800 text-white text-xs font-bold py-1 px-3 rounded-full">
+                                                            Baixada em {formatDate(dup.dataLiquidacao)} na conta {dup.contaLiquidacao}
+                                                        </span>
                                                     </td>
                                                 )}
                                             </tr>

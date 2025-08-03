@@ -1,6 +1,6 @@
 import { Inter } from "next/font/google";
 import Navbar from "./components/Navbar";
-//import SetupChecker from "./components/SetupChecker";
+import SetupChecker from "./components/SetupChecker";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -16,12 +16,12 @@ export default function RootLayout({ children }) {
       <body className={`${inter.className} h-screen overflow-hidden`}>
         <div className="bg-gray-900 h-full flex flex-col">
           {/* O SetupChecker envolve o conteúdo que depende do login/setup */}
-           {/* <SetupChecker> */}
+           <SetupChecker>
             <Navbar />
             <div className="flex-grow overflow-y-auto">
               {children}
             </div>
-             {/* </SetupChecker> */}
+             </SetupChecker> */
         </div>
       </body>
     </html>
