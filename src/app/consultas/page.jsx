@@ -10,7 +10,6 @@ import EmailModal from '@/app/components/EmailModal';
 import Pagination from '@/app/components/Pagination';
 import FiltroLateralConsultas from '@/app/components/FiltroLateralConsultas';
 import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
-import { API_URL } from '../apiConfig'; // IMPORTAÇÃO CORRETA DA URL
 
 const ITEMS_PER_PAGE = 7;
 
@@ -21,7 +20,7 @@ export default function ConsultasPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [contasMaster, setContasMaster] = useState([]);
     const [tiposOperacao, setTiposOperacao] = useState([]);
-    
+
     const [filters, setFilters] = useState({
         dataOpInicio: '', dataOpFim: '',
         dataVencInicio: '', dataVencFim: '',
@@ -30,7 +29,7 @@ export default function ConsultasPage() {
     });
 
     const [sortConfig, setSortConfig] = useState({ key: 'dataOperacao', direction: 'DESC' });
-    
+
     const [contextMenu, setContextMenu] = useState({
         visible: false,
         x: 0,
@@ -65,10 +64,9 @@ export default function ConsultasPage() {
 
         params.append('sort', currentSortConfig.key);
         params.append('direction', currentSortConfig.direction);
-        
+
         try {
-            // Todas as chamadas fetch já usam a API_URL importada, então não precisam de alteração
-            const response = await fetch(`${API_URL}/duplicatas?${params.toString()}`, {
+            const response = await fetch(`/api/duplicatas?${params.toString()}`, {
                 headers: getAuthHeader()
             });
             if (!response.ok) throw new Error('Falha ao buscar os dados da API.');
@@ -80,18 +78,18 @@ export default function ConsultasPage() {
             setLoading(false);
         }
     };
-    
+
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
                 const headers = getAuthHeader();
                 const [contasRes, tiposRes] = await Promise.all([
-                    fetch(`${API_URL}/cadastros/contas/master`, { headers }),
-                    fetch(`${API_URL}/cadastros/tipos-operacao`, { headers })
+                    fetch(`/api/cadastros/contas/master`, { headers }),
+                    fetch(`/api/cadastros/tipos-operacao`, { headers })
                 ]);
                 if (!contasRes.ok) throw new Error("Falha ao buscar contas master.");
                 if (!tiposRes.ok) throw new Error("Falha ao buscar tipos de operação.");
-                
+
                 const contas = await contasRes.json();
                 const tipos = await tiposRes.json();
                 setContasMaster(contas);
@@ -115,21 +113,18 @@ export default function ConsultasPage() {
         return () => { document.removeEventListener('click', handleClick); };
     }, [contextMenu]);
 
-    const fetchClientes = async (query) => {
+    const fetchApiData = async (url) => {
         try {
-            const res = await fetch(`${API_URL}/cadastros/clientes/search?nome=${query}`, { headers: getAuthHeader() });
+            const res = await fetch(url, { headers: getAuthHeader() });
             if (!res.ok) return [];
             return await res.json();
-        } catch (error) { console.error("Erro ao buscar clientes:", error); return []; }
+        } catch {
+            return [];
+        }
     };
-    
-    const fetchSacados = async (query) => {
-        try {
-            const res = await fetch(`${API_URL}/cadastros/sacados/search?nome=${query}`, { headers: getAuthHeader() });
-            if (!res.ok) return [];
-            return await res.json();
-        } catch (error) { console.error("Erro ao buscar sacados:", error); return []; }
-    };
+
+    const fetchClientes = (query) => fetchApiData(`/api/cadastros/clientes/search?nome=${query}`);
+    const fetchSacados = (query) => fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
 
     const handleFilterChange = (e) => {
         setCurrentPage(1);
@@ -140,7 +135,7 @@ export default function ConsultasPage() {
             setFilters(prev => ({ ...prev, [name]: value }));
         }
     };
-    
+
     const handleAutocompleteSelect = (name, item) => {
         setCurrentPage(1);
         if (name === 'cliente') {
@@ -168,7 +163,7 @@ export default function ConsultasPage() {
         if (sortConfig.direction === 'ASC') return <FaSortUp />;
         return <FaSortDown />;
     };
-    
+
     const handleContextMenu = (event, item) => {
         event.preventDefault();
         setContextMenu({ visible: true, x: event.pageX, y: event.pageY, selectedItem: item });
@@ -177,7 +172,7 @@ export default function ConsultasPage() {
     const showNotification = (message, type) => { setNotification({ message, type }); setTimeout(() => setNotification({ message: '', type: '' }), 5000); };
     const handleAbrirModalLiquidacao = () => { if (!contextMenu.selectedItem) return; setDuplicataParaLiquidar(contextMenu.selectedItem); setIsLiquidarModalOpen(true); };
     const handleConfirmarLiquidacao = async (duplicataId, dataLiquidacao, jurosMora, contaBancariaId) => {
-        let url = `${API_URL}/duplicatas/${duplicataId}/liquidar`;
+        let url = `/api/duplicatas/${duplicataId}/liquidar`;
         const params = new URLSearchParams();
         if (dataLiquidacao) params.append('dataLiquidacao', dataLiquidacao);
         if (jurosMora && jurosMora > 0) params.append('jurosMora', jurosMora);
@@ -196,7 +191,7 @@ export default function ConsultasPage() {
         }
     };
     const handleEstornar = () => { if (!contextMenu.selectedItem) return; setEstornoInfo({ id: contextMenu.selectedItem.id }); };
-    const confirmarEstorno = async () => { if (!estornoInfo) return; setEstornandoId(estornoInfo.id); try { const response = await fetch(`${API_URL}/duplicatas/${estornoInfo.id}/estornar`, { method: 'POST', headers: getAuthHeader() }); if (!response.ok) { const errorData = await response.text(); throw new Error(errorData || 'Falha ao estornar a liquidação.'); } showNotification('Liquidação estornada com sucesso!', 'success'); fetchDuplicatas(filters, sortConfig); } catch (err) { showNotification(err.message, 'error'); } finally { setEstornandoId(null); setEstornoInfo(null); } };
+    const confirmarEstorno = async () => { if (!estornoInfo) return; setEstornandoId(estornoInfo.id); try { const response = await fetch(`/api/duplicatas/${estornoInfo.id}/estornar`, { method: 'POST', headers: getAuthHeader() }); if (!response.ok) { const errorData = await response.text(); throw new Error(errorData || 'Falha ao estornar a liquidação.'); } showNotification('Liquidação estornada com sucesso!', 'success'); fetchDuplicatas(filters, sortConfig); } catch (err) { showNotification(err.message, 'error'); } finally { setEstornandoId(null); setEstornoInfo(null); } };
     const handleAbrirEmailModal = () => {
         if (!contextMenu.selectedItem) return;
         setOperacaoParaEmail({ id: contextMenu.selectedItem.operacaoId, clienteId: contextMenu.selectedItem.clienteId });
@@ -206,7 +201,8 @@ export default function ConsultasPage() {
         if (!operacaoParaEmail) return;
         setIsSendingEmail(true);
         try {
-            const response = await fetch(`${API_URL}/operacoes/${operacaoParaEmail.id}/enviar-email`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, body: JSON.stringify({ destinatarios }) });
+            // Este endpoint ainda não foi migrado, irá falhar
+            const response = await fetch(`/api/operacoes/${operacaoParaEmail.id}/enviar-email`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, body: JSON.stringify({ destinatarios }) });
             if (!response.ok) throw new Error("Falha ao enviar o e-mail.");
             showNotification("E-mail(s) enviado(s) com sucesso!", "success");
         } catch (err) {
@@ -217,12 +213,13 @@ export default function ConsultasPage() {
         }
     };
     const handleGeneratePdf = async () => {
+        // Este endpoint ainda não foi migrado, irá falhar
         if (!contextMenu.selectedItem) return;
         const operacaoId = contextMenu.selectedItem.operacaoId;
         if (!operacaoId) { alert("Esta duplicata não está associada a uma operação para gerar PDF."); return; }
         setPdfLoading(operacaoId);
         try {
-            const response = await fetch(`${API_URL}/operacoes/${operacaoId}/pdf`, { headers: getAuthHeader() });
+            const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, { headers: getAuthHeader() });
             if (!response.ok) throw new Error('Não foi possível gerar o PDF.');
             const contentDisposition = response.headers.get('content-disposition');
             let filename = `bordero-${operacaoId}.pdf`;
@@ -247,7 +244,7 @@ export default function ConsultasPage() {
 
     if (loading && duplicatas.length === 0) return <div className="text-center p-10">A carregar...</div>;
     if (error) return <div className="text-center p-10 text-red-500">Erro: {error}</div>;
-    
+
     return (
         <>
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
@@ -282,7 +279,7 @@ export default function ConsultasPage() {
                                    <tr>
                                        <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataOperacao')} className="flex items-center gap-1">Data Op. {getSortIcon('dataOperacao')}</button></th>
                                        <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase min-w-[120px]"><button onClick={() => handleSort('nfCte')} className="flex items-center gap-1">NF/CT-e {getSortIcon('nfCte')}</button></th>
-                                       <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('operacao.cliente.nome')} className="flex items-center gap-1">Cedente {getSortIcon('operacao.cliente.nome')}</button></th>
+                                       <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('empresaCedente')} className="flex items-center gap-1">Cedente {getSortIcon('empresaCedente')}</button></th>
                                        <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('clienteSacado')} className="flex items-center gap-1">Sacado {getSortIcon('clienteSacado')}</button></th>
                                        <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('valorBruto')} className="flex items-center gap-1 float-right">Valor Bruto {getSortIcon('valorBruto')}</button></th>
                                        <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('valorJuros')} className="flex items-center gap-1 float-right">Juros {getSortIcon('valorJuros')}</button></th>
