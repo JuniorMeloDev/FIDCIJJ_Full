@@ -21,7 +21,7 @@ export default function RootLayout({ children }) {
             <div className="flex-grow overflow-y-auto">
               {children}
             </div>
-             </SetupChecker> */
+             </SetupChecker>
         </div>
       </body>
     </html>

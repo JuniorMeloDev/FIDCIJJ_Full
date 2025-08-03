@@ -5,9 +5,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import PrimeiroAcesso from './PrimeiroAcesso';
 import { useInactivityTimeout } from '../hooks/useInactivityTimeout';
 import SessionTimeoutModal from './SessionTimeoutModal';
-import { API_URL } from '../apiConfig'; 
 
-
+// Componente interno para ativar o gerenciador de inatividade
 function InactivityManager() {
     const { isWarningModalOpen, countdown, handleContinue, logout } = useInactivityTimeout();
     return (
@@ -26,6 +25,12 @@ export default function SetupChecker({ children }) {
     const pathname = usePathname();
     const router = useRouter();
 
+    // Função para obter o cabeçalho de autenticação
+    const getAuthHeader = () => {
+        const token = sessionStorage.getItem('authToken');
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    };
+
     useEffect(() => {
         const checkStatus = async () => {
             const publicPaths = ['/', '/login', '/register'];
@@ -39,18 +44,28 @@ export default function SetupChecker({ children }) {
                 const token = sessionStorage.getItem('authToken');
                 const isAuthenticated = !!token;
 
-                const response = await fetch(`${API_URL}/setup/status`); // Usa a API_URL
+                if (!isAuthenticated) {
+                    router.push('/login');
+                    setStatus({ loading: false, needsSetup: false, isAuthenticated: false });
+                    return;
+                }
+
+                // Chama a nova rota de API local com o token de autenticação
+                const response = await fetch(`/api/setup/status`, { headers: getAuthHeader() }); 
+                
                 if (!response.ok) {
-                    throw new Error('Não foi possível conectar ao servidor. Verifique se o backend está em execução.');
+                    // Se o token for inválido (401/403), desloga o utilizador
+                    if (response.status === 401 || response.status === 403) {
+                        sessionStorage.removeItem('authToken');
+                        router.push('/login');
+                        throw new Error('Sessão inválida. Por favor, faça login novamente.');
+                    }
+                    throw new Error('Não foi possível conectar ao servidor.');
                 }
                 const data = await response.json();
                 
                 setStatus({ loading: false, needsSetup: data.needsSetup, isAuthenticated });
                 
-                if (!isAuthenticated) {
-                    router.push('/login');
-                }
-
             } catch (err) {
                 console.error(err);
                 setError(err.message);
