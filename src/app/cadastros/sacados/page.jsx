@@ -10,14 +10,12 @@ import Pagination from '@/app/components/Pagination';
 import FiltroLateralSacados from '@/app/components/FiltroLateralSacados';
 import { formatCnpjCpf, formatTelefone } from '@/app/utils/formatters';
 import useAuth from '@/app/hooks/useAuth';
-import { API_URL } from '../../apiConfig'; 
 
 const ITEMS_PER_PAGE = 10;
 
 export default function SacadosPage() {
     const { isAdmin } = useAuth();
     const [sacados, setSacados] = useState([]);
-    const [tiposOperacao, setTiposOperacao] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,7 +23,7 @@ export default function SacadosPage() {
     const [notification, setNotification] = useState({ message: '', type: '' });
     const [currentPage, setCurrentPage] = useState(1);
     const [filters, setFilters] = useState({ nome: '', cnpj: '' });
-    
+
     const [sacadoParaExcluir, setSacadoParaExcluir] = useState(null);
 
     const getAuthHeader = () => {
@@ -41,16 +39,16 @@ export default function SacadosPage() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const headers = getAuthHeader();
-            const [sacadosRes, tiposRes] = await Promise.all([
-                fetch(`${API_URL}/cadastros/sacados`, { headers }),
-                fetch(`${API_URL}/cadastros/tipos-operacao`, { headers })
-            ]);
-            if (!sacadosRes.ok) throw new Error('Falha ao carregar sacados.');
-            if (!tiposRes.ok) throw new Error('Falha ao carregar tipos de operação.');
-            
-            setSacados(await sacadosRes.json());
-            setTiposOperacao(await tiposRes.json());
+            const response = await fetch(`/api/cadastros/sacados`, { headers: getAuthHeader() });
+            if (!response.ok) throw new Error('Falha ao carregar sacados.');
+
+            const data = await response.json();
+            // Mapeia os nomes das colunas (snake_case) para o que o frontend espera (camelCase)
+            const formattedData = data.map(sacado => ({
+                ...sacado,
+                condicoesPagamento: sacado.condicoes_pagamento || []
+            }));
+            setSacados(formattedData);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -86,10 +84,15 @@ export default function SacadosPage() {
     const handleSaveSacado = async (id, data) => {
         try {
             const isUpdating = !!id;
-            const url = isUpdating ? `${API_URL}/cadastros/sacados/${id}` : `${API_URL}/cadastros/sacados`;
+            const url = isUpdating ? `/api/cadastros/sacados/${id}` : `/api/cadastros/sacados`;
             const method = isUpdating ? 'PUT' : 'POST';
 
-            const payload = { ...data };
+            // Prepara o payload para o backend (snake_case)
+            const payload = {
+                ...data,
+                condicoesPagamento: data.condicoesPagamento.map(({id, ...rest}) => rest) // Remove o ID temporário do frontend
+            };
+
             const response = await fetch(url, { 
                 method, 
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, 
@@ -97,19 +100,20 @@ export default function SacadosPage() {
             });
 
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(errorText || 'Falha ao salvar o sacado.');
+                const errorText = await response.json();
+                throw new Error(errorText.message || 'Falha ao salvar o sacado.');
             }
-            
+
             setIsModalOpen(false);
             await fetchData();
             showNotification(`Sacado ${isUpdating ? 'atualizado' : 'criado'} com sucesso!`, 'success');
             return { success: true };
         } catch (err) {
+            showNotification(err.message, 'error');
             return { success: false, message: err.message };
         }
     };
-    
+
     const handleDeleteRequest = (id) => {
         const sacado = sacados.find(s => s.id === id);
         setSacadoParaExcluir(sacado);
@@ -118,7 +122,7 @@ export default function SacadosPage() {
     const handleConfirmarExclusao = async () => {
         if (!sacadoParaExcluir) return;
         try {
-            const response = await fetch(`${API_URL}/cadastros/sacados/${sacadoParaExcluir.id}`, { 
+            const response = await fetch(`/api/cadastros/sacados/${sacadoParaExcluir.id}`, { 
                 method: 'DELETE',
                 headers: getAuthHeader()
             });
@@ -141,7 +145,7 @@ export default function SacadosPage() {
     return (
         <main className="min-h-screen pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
-            
+
             <EditSacadoModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
@@ -157,7 +161,7 @@ export default function SacadosPage() {
                 title="Confirmar Exclusão"
                 message={`Deseja excluir o sacado "${sacadoParaExcluir?.nome}"?`}
             />
-            
+
             <motion.header 
                 className="mb-4 border-b-2 border-orange-500 pb-4"
                 initial={{ y: -20, opacity: 0 }}
