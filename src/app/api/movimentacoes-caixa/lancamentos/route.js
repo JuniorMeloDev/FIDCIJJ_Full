@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// POST: Cria um novo lançamento manual
+// POST: Cria um novo lançamento manual (Débito, Crédito ou Transferência)
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
