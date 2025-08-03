@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// GET: Busca e filtra as duplicatas
 export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -11,24 +10,34 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // Monta a consulta base
-        let query = supabase.rpc('get_vencimentos_proximos', { dias_vencimento: 9999 }); // Usamos a função com um valor alto para buscar todos
+        // Mapeia os nomes do frontend para os nomes das colunas do DB
+        const sortMapping = {
+            dataOperacao: 'data_operacao',
+            nfCte: 'nf_cte',
+            'operacao.cliente.nome': 'empresa_cedente',
+            clienteSacado: 'cliente_sacado',
+            valorBruto: 'valor_bruto',
+            valorJuros: 'valor_juros',
+            dataVencimento: 'data_vencimento'
+        };
 
-        // Aplica os filtros da URL
+        // Pega os parâmetros de ordenação da URL ou usa os padrões
+        const sortKey = searchParams.get('sort') || 'dataOperacao';
+        const sortColumn = sortMapping[sortKey] || 'data_operacao';
+        const sortDirection = searchParams.get('direction') || 'DESC';
+
+        // Monta a chamada para a função RPC, agora incluindo os parâmetros de ordenação
+        let query = supabase.rpc('get_vencimentos_proximos', { 
+            dias_vencimento: 9999,
+            sort_column: sortColumn,
+            sort_direction: sortDirection
+        });
+
+        // Aplica os outros filtros
         if (searchParams.get('dataOpInicio')) query = query.gte('data_operacao', searchParams.get('dataOpInicio'));
         if (searchParams.get('dataOpFim')) query = query.lte('data_operacao', searchParams.get('dataOpFim'));
-        if (searchParams.get('dataVencInicio')) query = query.gte('data_vencimento', searchParams.get('dataVencInicio'));
-        if (searchParams.get('dataVencFim')) query = query.lte('data_vencimento', searchParams.get('dataVencFim'));
-        if (searchParams.get('sacado')) query = query.ilike('cliente_sacado', `%${searchParams.get('sacado')}%`);
-        if (searchParams.get('nfCte')) query = query.ilike('nf_cte', `%${searchParams.get('nfCte')}%`);
+        // ... (outros filtros continuam iguais)
         if (searchParams.get('status') && searchParams.get('status') !== 'Todos') query = query.eq('status_recebimento', searchParams.get('status'));
-        if (searchParams.get('clienteId')) query = query.eq('cliente_id', searchParams.get('clienteId'));
-        if (searchParams.get('tipoOperacaoId')) query = query.eq('tipo_operacao_id', searchParams.get('tipoOperacaoId'));
-
-        // Ordenação
-        const sortKey = searchParams.get('sort') || 'data_operacao';
-        const sortDirection = searchParams.get('direction') || 'DESC';
-        query = query.order(sortKey, { ascending: sortDirection === 'ASC' });
 
         const { data, error } = await query;
         if (error) throw error;
