@@ -10,7 +10,6 @@ export async function POST(request) {
 
         const body = await request.json();
 
-        // A API agora apenas agrega os totais, sem aplicar a lógica de negócio
         const valorTotalBruto = body.notasFiscais.reduce((acc, nf) => acc + nf.valorNf, 0);
         const valorTotalJuros = body.notasFiscais.reduce((acc, nf) => acc + nf.jurosCalculado, 0);
         const valorTotalDescontos = body.descontos.reduce((acc, d) => acc + d.valor, 0);
@@ -25,6 +24,7 @@ export async function POST(request) {
             }))
         );
 
+        // A chamada para a função rpc agora passa os arrays diretamente, sem JSON.stringify
         const { data: operacaoId, error } = await supabase.rpc('salvar_operacao_completa', {
             p_data_operacao: body.dataOperacao,
             p_tipo_operacao_id: body.tipoOperacaoId,
@@ -33,8 +33,8 @@ export async function POST(request) {
             p_valor_total_bruto: valorTotalBruto,
             p_valor_total_juros: valorTotalJuros,
             p_valor_total_descontos: valorTotalDescontos,
-            p_duplicatas: JSON.stringify(duplicatasParaSalvar),
-            p_descontos: JSON.stringify(body.descontos)
+            p_duplicatas: duplicatasParaSalvar, // <--- CORRIGIDO
+            p_descontos: body.descontos // <--- CORRIGIDO
         });
 
         if (error) throw error;
