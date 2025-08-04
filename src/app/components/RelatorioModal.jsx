@@ -58,6 +58,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         }
     }, [isOpen]);
     
+    // ... (O resto da lógica de handleFilterChange, clearFilters, etc. continua igual)
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
         setFilters(prev => ({ ...prev, [name]: value }));
@@ -109,8 +110,9 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
     const generatePdf = (data, type, currentFilters) => {
         const doc = new jsPDF({ orientation: type === 'fluxoCaixa' || type === 'duplicatas' ? 'landscape' : 'portrait' });
         
+
         if (logoBase64) {
-            const logoWidth = 40;
+            const logoWidth = 60;
             const logoHeight = logoWidth / 2.3;
             doc.addImage(logoBase64, 'PNG', 14, 10, logoWidth, logoHeight);
         }
