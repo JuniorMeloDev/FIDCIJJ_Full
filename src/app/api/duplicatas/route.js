@@ -24,7 +24,7 @@ export async function GET(request) {
 
         if (error) throw error;
 
-        // --- LÓGICA DE ORDENAÇÃO CORRIGIDA AQUI ---
+    
         const sortKey = searchParams.get('sort'); // Ex: 'dataOperacao'
         const sortDirection = searchParams.get('direction'); // Ex: 'DESC'
 

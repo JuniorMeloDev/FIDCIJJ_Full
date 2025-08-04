@@ -20,6 +20,7 @@ export default function FluxoDeCaixaPage() {
   const [error, setError] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [notification, setNotification] = useState({ message: "", type: "" });
+  const [operacaoParaEmail, setOperacaoParaEmail] = useState(null);
   const [itemParaExcluir, setItemParaExcluir] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [contasMaster, setContasMaster] = useState([]);
