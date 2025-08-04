@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import AutocompleteSearch from './AutoCompleteSearch';
-import { API_URL } from '../apiConfig'; 
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 
 export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchClientes, fetchSacados }) {
     const initialState = {
@@ -23,7 +26,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         if (isOpen) {
             const fetchContas = async () => {
                 try {
-                    const res = await fetch(`${API_URL}/dashboard/saldos`, { headers: getAuthHeader() });
+                    const res = await fetch(`/api/dashboard/saldos`, { headers: getAuthHeader() });
                     if (res.ok) {
                         const data = await res.json();
                         setContas(data.map(c => c.contaBancaria));
@@ -41,9 +44,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         setFilters(prev => ({ ...prev, [name]: value }));
     };
     
-    const clearFilters = () => {
-        setFilters(initialState);
-    };
+    const clearFilters = () => setFilters(initialState);
 
     const handleAutocompleteSelect = (name, item) => {
         if (name === "cliente") {
@@ -53,70 +54,104 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         }
     };
 
+    // --- LÓGICA DE GERAÇÃO DE RELATÓRIOS ---
     const handleGenerateReport = async () => {
         setIsGenerating(true);
         const params = new URLSearchParams();
-        
         const endpointMap = {
-          fluxoCaixa: 'fluxo-caixa',
-          duplicatas: 'duplicatas',
-          totalOperado: 'total-operado'
+            fluxoCaixa: 'fluxo-caixa',
+            duplicatas: 'duplicatas',
+            totalOperado: 'total-operado'
         };
-        
-        const endpoint = endpointMap[reportType] || 'fluxo-caixa';
+        const endpoint = endpointMap[reportType];
 
-        // Adiciona todos os filtros
-        if (filters.dataInicio) params.append('dataInicio', filters.dataInicio);
-        if (filters.dataFim) params.append('dataFim', filters.dataFim);
-        if (filters.tipoOperacaoId) params.append('tipoOperacaoId', filters.tipoOperacaoId);
-        if (filters.clienteId) params.append('clienteId', filters.clienteId);
-        if (filters.sacado) params.append('sacado', filters.sacado);
-        if (filters.conta) params.append('conta', filters.conta);
-        if (filters.status) params.append('status', filters.status);
-        if (filters.categoria) params.append('categoria', filters.categoria);
-        if (filters.tipoValor) params.append('tipoValor', filters.tipoValor);
-        
-        // Adiciona o formato selecionado (pdf ou excel)
-        params.append('format', format);
+        Object.entries(filters).forEach(([key, value]) => {
+            if(value && key !== 'clienteNome') params.append(key, value);
+        });
 
         try {
-          const response = await fetch(`${API_URL}/relatorios/${endpoint}?${params.toString()}`, {
-            headers: getAuthHeader()
-          });
+            const response = await fetch(`/api/relatorios/${endpoint}?${params.toString()}`, {
+                headers: getAuthHeader()
+            });
+            if (!response.ok) throw new Error('Não foi possível buscar os dados para o relatório.');
+            const data = await response.json();
 
-          if (!response.ok) {
-            throw new Error('Não foi possível gerar o relatório.');
-          }
+            if (format === 'pdf') {
+                generatePdf(data, reportType, filters);
+            } else {
+                generateExcel(data, reportType);
+            }
+            onClose();
 
-          const contentDisposition = response.headers.get('content-disposition');
-          let filename = `${reportType}.${format === 'excel' ? 'xlsx' : 'pdf'}`;
-          if (contentDisposition) {
-              const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-              if (filenameMatch && filenameMatch.length > 1) {
-                  filename = filenameMatch[1].replace(/[^a-zA-Z0-9.,\s-]/g, '').trim();
-              }
-          }
-
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          window.URL.revokeObjectURL(url);
-          onClose();
         } catch (error) {
           console.error('Erro ao gerar relatório:', error);
-          alert('Erro ao gerar relatório. Verifique o console para mais detalhes.');
+          alert('Erro ao gerar relatório. Verifique a consola para mais detalhes.');
         } finally {
             setIsGenerating(false);
         }
     };
 
-    if (!isOpen) return null;
+    const generatePdf = (data, type, currentFilters) => {
+        const doc = new jsPDF({ orientation: type === 'fluxoCaixa' || type === 'duplicatas' ? 'landscape' : 'portrait' });
+        doc.setFontSize(18);
+        doc.text(`Relatório de ${type.replace(/([A-Z])/g, ' $1').trim()}`, 14, 22);
+        
+        // Adicionar filtros ao PDF
+        let filterText = 'Filtros: ';
+        if (currentFilters.dataInicio || currentFilters.dataFim) {
+            filterText += `Período de ${formatDate(currentFilters.dataInicio) || '...'} a ${formatDate(currentFilters.dataFim) || '...'}. `;
+        }
+        doc.setFontSize(8);
+        doc.text(filterText, 14, 30);
+        
+        let head, body;
+        switch (type) {
+            case 'fluxoCaixa':
+                head = [['Data', 'Descrição', 'Conta', 'Categoria', 'Valor']];
+                body = data.map(row => [formatDate(row.data_movimento), row.descricao, row.conta_bancaria, row.categoria, formatBRLNumber(row.valor)]);
+                break;
+            case 'duplicatas':
+                head = [['Data Op.', 'NF/CT-e', 'Cedente', 'Sacado', 'Venc.', 'Status', 'Valor']];
+                body = data.map(row => [formatDate(row.data_operacao), row.nf_cte, row.empresa_cedente, row.cliente_sacado, formatDate(row.data_vencimento), row.status_recebimento, formatBRLNumber(row.valor_bruto)]);
+                break;
+            case 'totalOperado':
+                doc.setFontSize(12);
+                doc.text(`Total Operado no Período: ${formatBRLNumber(data.valorOperadoNoMes)}`, 14, 40);
+                doc.autoTable({ startY: 50, head: [['Top 5 Cedentes', 'Valor Total']], body: data.topClientes.map(c => [c.nome, formatBRLNumber(c.valor_total)]) });
+                doc.autoTable({ head: [['Top 5 Sacados', 'Valor Total']], body: data.topSacados.map(s => [s.nome, formatBRLNumber(s.valor_total)]) });
+                doc.save('relatorio_total_operado.pdf');
+                return;
+        }
+        doc.autoTable({ startY: 35, head, body });
+        doc.save(`relatorio_${type}.pdf`);
+    };
 
+    const generateExcel = (data, type) => {
+        let ws_data;
+        switch (type) {
+            case 'fluxoCaixa':
+                ws_data = data.map(row => ({ Data: formatDate(row.data_movimento), Descricao: row.descricao, Conta: row.conta_bancaria, Categoria: row.categoria, Valor: row.valor }));
+                break;
+            case 'duplicatas':
+                 ws_data = data.map(row => ({ 'Data Op.': formatDate(row.data_operacao), 'NF/CT-e': row.nf_cte, Cedente: row.empresa_cedente, Sacado: row.cliente_sacado, Vencimento: formatDate(row.data_vencimento), Status: row.status_recebimento, Valor: row.valor_bruto }));
+                break;
+            case 'totalOperado':
+                const combinedData = [
+                    { Categoria: 'Total Operado', Valor: data.valorOperadoNoMes },
+                    ...data.topClientes.map(c => ({ Categoria: `Cedente: ${c.nome}`, Valor: c.valor_total })),
+                    ...data.topSacados.map(s => ({ Categoria: `Sacado: ${s.nome}`, Valor: s.valor_total }))
+                ];
+                ws_data = combinedData;
+                break;
+        }
+        const ws = XLSX.utils.json_to_sheet(ws_data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Relatorio');
+        XLSX.writeFile(wb, `relatorio_${type}.xlsx`);
+    };
+
+    if (!isOpen) return null;
+    // ... (O seu JSX continua aqui, sem alterações)
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
             <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl text-white">
