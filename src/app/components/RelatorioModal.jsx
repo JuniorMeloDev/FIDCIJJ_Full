@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import AutocompleteSearch from './AutoCompleteSearch';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
+import AutocompleteSearch from './AutoCompleteSearch';
+
 
 export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchClientes, fetchSacados }) {
     const initialState = {
@@ -54,7 +55,6 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         }
     };
 
-    // --- LÓGICA DE GERAÇÃO DE RELATÓRIOS ---
     const handleGenerateReport = async () => {
         setIsGenerating(true);
         const params = new URLSearchParams();
@@ -96,7 +96,6 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         doc.setFontSize(18);
         doc.text(`Relatório de ${type.replace(/([A-Z])/g, ' $1').trim()}`, 14, 22);
         
-        // Adicionar filtros ao PDF
         let filterText = 'Filtros: ';
         if (currentFilters.dataInicio || currentFilters.dataFim) {
             filterText += `Período de ${formatDate(currentFilters.dataInicio) || '...'} a ${formatDate(currentFilters.dataFim) || '...'}. `;
@@ -117,12 +116,12 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             case 'totalOperado':
                 doc.setFontSize(12);
                 doc.text(`Total Operado no Período: ${formatBRLNumber(data.valorOperadoNoMes)}`, 14, 40);
-                doc.autoTable({ startY: 50, head: [['Top 5 Cedentes', 'Valor Total']], body: data.topClientes.map(c => [c.nome, formatBRLNumber(c.valor_total)]) });
-                doc.autoTable({ head: [['Top 5 Sacados', 'Valor Total']], body: data.topSacados.map(s => [s.nome, formatBRLNumber(s.valor_total)]) });
+                autoTable(doc, { startY: 50, head: [['Top 5 Cedentes', 'Valor Total']], body: data.topClientes.map(c => [c.nome, formatBRLNumber(c.valor_total)]) });
+                autoTable(doc, { head: [['Top 5 Sacados', 'Valor Total']], body: data.topSacados.map(s => [s.nome, formatBRLNumber(s.valor_total)]) });
                 doc.save('relatorio_total_operado.pdf');
                 return;
         }
-        doc.autoTable({ startY: 35, head, body });
+        autoTable(doc, { startY: 35, head, body });
         doc.save(`relatorio_${type}.pdf`);
     };
 
@@ -151,7 +150,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
     };
 
     if (!isOpen) return null;
-    // ... (O seu JSX continua aqui, sem alterações)
+    
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
             <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl text-white">
