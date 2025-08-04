@@ -21,7 +21,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
     const [format, setFormat] = useState('pdf');
     const [logoBase64, setLogoBase64] = useState(null);
 
-    // Converte o logo para Base64 para ser usado no PDF
+    // Converte a imagem do logo para Base64 quando o componente carrega
     useEffect(() => {
         const image = new Image();
         image.src = Logo.src;
@@ -57,13 +57,14 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             fetchContas();
         }
     }, [isOpen]);
-    
-    // ... (O resto da lógica de handleFilterChange, clearFilters, etc. continua igual)
+
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
         setFilters(prev => ({ ...prev, [name]: value }));
     };
+    
     const clearFilters = () => setFilters(initialState);
+
     const handleAutocompleteSelect = (name, item) => {
         if (name === "cliente") {
             setFilters(prev => ({ ...prev, clienteId: item?.id || "", clienteNome: item?.nome || "" }));
@@ -93,12 +94,16 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             if (!response.ok) throw new Error('Não foi possível buscar os dados para o relatório.');
             const data = await response.json();
 
-            if (format === 'pdf') {
-                generatePdf(data, reportType, filters);
+            if (Array.isArray(data) && data.length === 0) {
+                 alert("Nenhum dado encontrado para os filtros selecionados.");
             } else {
-                generateExcel(data, reportType, filters);
+                if (format === 'pdf') {
+                    generatePdf(data, reportType, filters);
+                } else {
+                    generateExcel(data, reportType, filters);
+                }
+                onClose();
             }
-            onClose();
 
         } catch (error) {
           console.error('Erro ao gerar relatório:', error);
@@ -107,18 +112,18 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             setIsGenerating(false);
         }
     };
+
     const generatePdf = (data, type, currentFilters) => {
         const doc = new jsPDF({ orientation: type === 'fluxoCaixa' || type === 'duplicatas' ? 'landscape' : 'portrait' });
         
-
         if (logoBase64) {
-            const logoWidth = 60;
-            const logoHeight = logoWidth / 2.3;
+            const logoWidth = 65;
+            const logoHeight = logoWidth / 2.3; // Mantém a proporção da imagem
             doc.addImage(logoBase64, 'PNG', 14, 10, logoWidth, logoHeight);
         }
-
+        const pageWidth = doc.internal.pageSize.getWidth();
         doc.setFontSize(18);
-        doc.text(`Relatório de ${type.replace(/([A-Z])/g, ' $1').trim()}`, 205, 22, { align: 'right' });
+        doc.text(`Relatório de ${type.replace(/([A-Z])/g, ' $1').trim()}`, pageWidth - 14, 22, { align: 'right' });
         
         let filterText = 'Filtros: ';
         if (currentFilters.dataInicio || currentFilters.dataFim) {
@@ -133,80 +138,76 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 head = [['Data', 'Descrição', 'Conta', 'Categoria', 'Valor']];
                 body = data.map(row => [formatDate(row.data_movimento), row.descricao, row.conta_bancaria, row.categoria, formatBRLNumber(row.valor)]);
                 autoTable(doc, { startY: 35, head, body });
+
                 const totalGeral = data.reduce((sum, row) => sum + row.valor, 0);
                 const saldosPorConta = contas.map(conta => {
                     const saldo = data.filter(d => d.conta_bancaria === conta).reduce((sum, row) => sum + row.valor, 0);
                     return `${conta}: ${formatBRLNumber(saldo)}`;
                 }).join('\n');
                 doc.setFontSize(10);
-                doc.text(`Total do Período: ${formatBRLNumber(totalGeral)}`, 14, doc.autoTable.previous.finalY + 10);
-                doc.text(`Saldos por Conta:\n${saldosPorConta}`, 14, doc.autoTable.previous.finalY + 15);
+                doc.text(`Total do Período: ${formatBRLNumber(totalGeral)}`, 14, doc.lastAutoTable.finalY + 10);
+                doc.text(`Saldos por Conta:\n${saldosPorConta}`, 14, doc.lastAutoTable.finalY + 15);
                 break;
 
             case 'duplicatas':
                 const showTipoOperacao = !currentFilters.tipoOperacaoId;
                 head = [['Data Op.', 'NF/CT-e', 'Cedente', 'Sacado', ...(showTipoOperacao ? ['Tipo Op.'] : []), 'Venc.', 'Status', 'Valor']];
                 body = data.map(row => [
-                    formatDate(row.data_operacao), 
-                    row.nf_cte, 
-                    row.empresa_cedente, 
-                    row.cliente_sacado, 
-                    ...(showTipoOperacao ? [row.tipo_operacao_nome] : []),
-                    formatDate(row.data_vencimento), 
-                    row.status_recebimento, 
-                    formatBRLNumber(row.valor_bruto)
+                    formatDate(row.data_operacao), row.nf_cte, row.empresa_cedente, 
+                    row.cliente_sacado, ...(showTipoOperacao ? [row.tipo_operacao_nome] : []),
+                    formatDate(row.data_vencimento), row.status_recebimento, formatBRLNumber(row.valor_bruto)
                 ]);
                 autoTable(doc, { startY: 35, head, body });
                 
                 const totalBruto = data.reduce((sum, row) => sum + (row.valor_bruto || 0), 0);
                 doc.setFontSize(10);
-                doc.text(`Total Bruto das Duplicatas: ${formatBRLNumber(totalBruto)}`, 14, doc.autoTable.previous.finalY + 10);
+                doc.text(`Total Bruto das Duplicatas: ${formatBRLNumber(totalBruto)}`, 14, doc.lastAutoTable.finalY + 10);
                 break;
 
             case 'totalOperado':
                 doc.setFontSize(12);
                 doc.text(`Total Operado no Período: ${formatBRLNumber(data.valorOperadoNoMes)}`, 14, 40);
-                autoTable(doc, { startY: 50, head: [['Top 5 Cedentes', 'Valor Total']], body: data.topClientes.map(c => [c.nome, formatBRLNumber(c.valor_total)]) });
+                doc.text(`Total de Juros: ${formatBRLNumber(data.totalJuros)}`, 14, 45);
+                doc.text(`Total de Despesas: ${formatBRLNumber(data.totalDespesas)}`, 14, 50);
+                doc.text(`Lucro Líquido: ${formatBRLNumber(data.lucroLiquido)}`, 14, 55);
+                
+                autoTable(doc, { startY: 65, head: [['Top 5 Cedentes', 'Valor Total']], body: data.topClientes.map(c => [c.nome, formatBRLNumber(c.valor_total)]) });
                 autoTable(doc, { head: [['Top 5 Sacados', 'Valor Total']], body: data.topSacados.map(s => [s.nome, formatBRLNumber(s.valor_total)]) });
                 break;
         }
         doc.save(`relatorio_${type}.pdf`);
     };
 
-    // ... (generateExcel e o resto do componente continuam iguais)
-     const generateExcel = (data, type, currentFilters) => {
+    const generateExcel = (data, type, currentFilters) => {
         let ws_data;
-        let totals = [];
         switch (type) {
             case 'fluxoCaixa':
                 ws_data = data.map(row => ({ Data: formatDate(row.data_movimento), Descricao: row.descricao, Conta: row.conta_bancaria, Categoria: row.categoria, Valor: row.valor }));
                 const totalGeral = data.reduce((sum, row) => sum + row.valor, 0);
-                totals.push({ Categoria: 'Total do Período', Valor: totalGeral });
+                const totalsFluxo = [{ Categoria: 'Total do Período', Valor: totalGeral }];
                 contas.forEach(conta => {
                     const saldo = data.filter(d => d.conta_bancaria === conta).reduce((sum, row) => sum + row.valor, 0);
-                    totals.push({ Categoria: `Saldo ${conta}`, Valor: saldo });
+                    totalsFluxo.push({ Categoria: `Saldo ${conta}`, Valor: saldo });
                 });
-                ws_data = [...ws_data, {}, ...totals];
+                ws_data = [...ws_data, {}, ...totalsFluxo];
                 break;
             case 'duplicatas':
                 const showTipoOperacao = !currentFilters.tipoOperacaoId;
                 ws_data = data.map(row => ({ 
-                    'Data Op.': formatDate(row.data_operacao), 
-                    'NF/CT-e': row.nf_cte, 
-                    'Cedente': row.empresa_cedente, 
-                    'Sacado': row.cliente_sacado, 
-                    ...(showTipoOperacao && { 'Tipo Operação': row.tipo_operacao_nome }),
-                    'Vencimento': formatDate(row.data_vencimento), 
-                    'Status': row.status_recebimento, 
-                    'Valor': row.valor_bruto 
+                    'Data Op.': formatDate(row.data_operacao), 'NF/CT-e': row.nf_cte, 'Cedente': row.empresa_cedente, 
+                    'Sacado': row.cliente_sacado, ...(showTipoOperacao && { 'Tipo Operação': row.tipo_operacao_nome }),
+                    'Vencimento': formatDate(row.data_vencimento), 'Status': row.status_recebimento, 'Valor': row.valor_bruto 
                 }));
                 const totalBruto = data.reduce((sum, row) => sum + (row.valor_bruto || 0), 0);
-                ws_data.push({}); // Linha em branco
+                ws_data.push({});
                 ws_data.push({ 'Cedente': 'Total Bruto', 'Valor': totalBruto });
                 break;
             case 'totalOperado':
                 ws_data = [
                     { Categoria: 'Total Operado', Valor: data.valorOperadoNoMes },
+                    { Categoria: 'Total Juros', Valor: data.totalJuros },
+                    { Categoria: 'Total Despesas', Valor: data.totalDespesas },
+                    { Categoria: 'Lucro Líquido', Valor: data.lucroLiquido },
                     {}, 
                     { Categoria: 'Top 5 Cedentes' },
                     ...data.topClientes.map(c => ({ Categoria: c.nome, Valor: c.valor_total })),
