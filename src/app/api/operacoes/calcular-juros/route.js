@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// Função para calcular os juros, replicando a lógica do backend Java
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -12,7 +11,7 @@ export async function POST(request) {
         const body = await request.json();
         const { dataOperacao, tipoOperacaoId, valorNf, parcelas, prazos, dataNf, peso } = body;
 
-        // Busca os dados do tipo de operação
+        // Busca os dados do tipo de operação, incluindo os novos campos
         const { data: tipoOp, error } = await supabase
             .from('tipos_operacao')
             .select('*')
@@ -26,11 +25,16 @@ export async function POST(request) {
         const prazosArray = prazos.split('/').map(p => parseInt(p.trim(), 10));
         const parcelasCalculadas = [];
 
-        if (tipoOp.valor_fixo > 0 && peso > 0) {
-            // Lógica para valor fixo (ex: CTe)
-            totalJuros = peso * tipoOp.valor_fixo;
+        if (tipoOp.valor_fixo > 0) {
+
+            if (tipoOp.usar_peso_no_valor_fixo && peso > 0) {
+                totalJuros = peso * tipoOp.valor_fixo; // Multiplica pelo peso se o check estiver marcado
+            } else {
+                totalJuros = tipoOp.valor_fixo; // Senão, usa o valor fixo diretamente
+            }
             const jurosPorParcela = totalJuros / parcelas;
-             for (let i = 0; i < prazosArray.length; i++) {
+
+            for (let i = 0; i < prazosArray.length; i++) {
                 const dataVencimento = new Date(dataNf);
                 dataVencimento.setDate(dataVencimento.getDate() + prazosArray[i]);
                 parcelasCalculadas.push({
@@ -41,12 +45,18 @@ export async function POST(request) {
                 });
             }
         } else {
-            // Lógica para taxa de juros
+            // LÓGICA DA TAXA DE JUROS ATUALIZADA
             for (let i = 0; i < prazosArray.length; i++) {
+                const prazoDias = prazosArray[i];
                 const dataVenc = new Date(dataNf);
-                dataVenc.setDate(dataVenc.getDate() + prazosArray[i]);
+                dataVenc.setDate(dataVenc.getDate() + prazoDias);
 
-                const diasCorridos = Math.ceil((dataVenc - new Date(dataOperacao)) / (1000 * 60 * 60 * 24));
+                // Se o check "Usar prazo do sacado" estiver marcado, os dias corridos são fixos.
+                // Senão, calcula a diferença entre a data da operação e o vencimento.
+                const diasCorridos = tipoOp.usar_prazo_sacado 
+                    ? prazoDias 
+                    : Math.ceil((dataVenc - new Date(dataOperacao)) / (1000 * 60 * 60 * 24));
+
                 const jurosParcela = (valorParcelaBase * (tipoOp.taxa_juros / 100) / 30) * diasCorridos;
 
                 totalJuros += jurosParcela;

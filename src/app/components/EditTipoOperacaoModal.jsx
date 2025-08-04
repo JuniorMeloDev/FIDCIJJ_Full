@@ -4,7 +4,11 @@ import { useState, useEffect } from 'react';
 import { formatBRLInput, parseBRL } from '@/app/utils/formatters';
 
 export default function EditTipoOperacaoModal({ isOpen, onClose, onSave, onDelete, tipoOperacao }) {
-    const initialState = { nome: '', taxaJuros: '', valorFixo: '', despesasBancarias: '', descricao: '' };
+    const initialState = { 
+        nome: '', taxaJuros: '', valorFixo: '', despesasBancarias: '', descricao: '',
+        usarPrazoSacado: false, 
+        usarPesoNoValorFixo: false
+    };
     const [formData, setFormData] = useState(initialState);
     const isEditMode = !!tipoOperacao?.id;
 
@@ -17,6 +21,8 @@ export default function EditTipoOperacaoModal({ isOpen, onClose, onSave, onDelet
                     valorFixo: formatBRLInput(String(tipoOperacao.valorFixo * 100)),
                     despesasBancarias: formatBRLInput(String(tipoOperacao.despesasBancarias * 100)),
                     descricao: tipoOperacao.descricao || '',
+                    usarPrazoSacado: tipoOperacao.usarPrazoSacado || false,
+                    usarPesoNoValorFixo: tipoOperacao.usarPesoNoValorFixo || false,
                 });
             } else {
                 setFormData(initialState);
@@ -27,8 +33,11 @@ export default function EditTipoOperacaoModal({ isOpen, onClose, onSave, onDelet
     if (!isOpen) return null;
 
     const handleChange = (e) => {
-        const { name, value } = e.target;
-        if (['valorFixo', 'despesasBancarias'].includes(name)) {
+        const { name, value, type, checked } = e.target;
+
+        if (type === 'checkbox') {
+            setFormData(prev => ({ ...prev, [name]: checked }));
+        } else if (['valorFixo', 'despesasBancarias'].includes(name)) {
             setFormData(prev => ({ ...prev, [name]: formatBRLInput(value) }));
         } else if (name === 'taxaJuros') {
             setFormData(prev => ({ ...prev, [name]: value.replace(/[^\d,]/g, '') }));
@@ -38,11 +47,16 @@ export default function EditTipoOperacaoModal({ isOpen, onClose, onSave, onDelet
     };
 
     const handleSave = () => {
+        // Prepara os dados para serem enviados para a API
         const dataToSave = {
-            ...formData,
+            nome: formData.nome,
             taxaJuros: parseFloat(String(formData.taxaJuros).replace(',', '.')) || 0,
             valorFixo: parseBRL(formData.valorFixo),
             despesasBancarias: parseBRL(formData.despesasBancarias),
+            descricao: formData.descricao,
+            // Mapeia de camelCase para snake_case para a API salvar
+            usar_prazo_sacado: formData.usarPrazoSacado,
+            usar_peso_no_valor_fixo: formData.usarPesoNoValorFixo,
         };
         onSave(tipoOperacao?.id, dataToSave);
     };
@@ -52,6 +66,7 @@ export default function EditTipoOperacaoModal({ isOpen, onClose, onSave, onDelet
             <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-lg">
                 <h2 className="text-xl font-bold mb-4">{isEditMode ? 'Editar Tipo de Operação' : 'Novo Tipo de Operação'}</h2>
                 <div className="space-y-4">
+                    {/* Campos existentes */}
                     <div>
                         <label className="block text-sm font-medium text-gray-300">Nome da Operação</label>
                         <input type="text" name="nome" value={formData.nome} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-2 text-sm"/>
@@ -68,25 +83,26 @@ export default function EditTipoOperacaoModal({ isOpen, onClose, onSave, onDelet
                         <label className="block text-sm font-medium text-gray-300">Despesas Bancárias (R$)</label>
                         <input type="text" name="despesasBancarias" placeholder="R$ 0,00" value={formData.despesasBancarias} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-2 text-sm"/>
                     </div>
-                    <div>
+                     <div>
                         <label className="block text-sm font-medium text-gray-300">Descrição (Opcional)</label>
-                        <textarea
-                            name="descricao"
-                            value={formData.descricao}
-                            onChange={handleChange}
-                            rows="3"
-                            className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
-                            placeholder="Adicione uma observação sobre este tipo de operação..."
-                        ></textarea>
+                        <textarea name="descricao" value={formData.descricao} onChange={handleChange} rows="3" className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-2 text-sm" placeholder="Adicione uma observação..."></textarea>
+                    </div>
+
+                    {/* NOVOS CHECKS ADICIONADOS AQUI */}
+                    <div className="border-t border-gray-700 pt-4 space-y-3">
+                        <label className="flex items-center">
+                            <input type="checkbox" name="usarPrazoSacado" checked={formData.usarPrazoSacado} onChange={handleChange} className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500" />
+                            <span className="ml-2 text-sm text-gray-200">Usar prazo do sacado para cálculo de juros</span>
+                        </label>
+                         <label className="flex items-center">
+                            <input type="checkbox" name="usarPesoNoValorFixo" checked={formData.usarPesoNoValorFixo} onChange={handleChange} className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500" />
+                            <span className="ml-2 text-sm text-gray-200">Utilizar peso no cálculo do valor fixo</span>
+                        </label>
                     </div>
                 </div>
                 <div className="mt-6 flex justify-between border-t border-gray-700 pt-4">
                     <div>
-                        {isEditMode && (
-                             <button onClick={() => onDelete(tipoOperacao.id)} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-red-700 transition text-sm">
-                                Excluir
-                            </button>
-                        )}
+                        {isEditMode && (<button onClick={() => onDelete(tipoOperacao.id)} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-red-700 transition text-sm">Excluir</button>)}
                     </div>
                     <div className="flex gap-2">
                         <button type="button" onClick={onClose} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition text-sm">Cancelar</button>
@@ -96,4 +112,4 @@ export default function EditTipoOperacaoModal({ isOpen, onClose, onSave, onDelet
             </div>
         </div>
     );
-}   
+}
