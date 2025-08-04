@@ -10,61 +10,74 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        const rpcParams = {
-            p_data_inicio: searchParams.get('dataInicio') || null,
-            p_data_fim: searchParams.get('dataFim') || null,
-            p_cliente_id: searchParams.get('clienteId') || null,
-            p_sacado: searchParams.get('sacado') || null,
-            p_status: searchParams.get('status') || null,
-            p_tipo_operacao_id: searchParams.get('tipoOperacaoId') || null,
-        };
+        // Inicia a consulta diretamente na tabela 'duplicatas'
+        let query = supabase
+            .from('duplicatas')
+            .select(`
+                id, operacao_id, data_operacao, nf_cte, valor_bruto, valor_juros,
+                cliente_sacado, data_vencimento, status_recebimento,
+                operacao:operacoes (
+                    cliente_id,
+                    cliente:clientes ( nome ),
+                    tipo_operacao:tipos_operacao ( nome )
+                ),
+                movimentacao:movimentacoes_caixa ( data_movimento, conta_bancaria )
+            `);
 
-        const { data, error } = await supabase.rpc('get_duplicatas_filtradas', rpcParams);
+        // Aplica os filtros
+        if (searchParams.get('dataOpInicio')) query = query.gte('data_operacao', searchParams.get('dataOpInicio'));
+        if (searchParams.get('dataOpFim')) query = query.lte('data_operacao', searchParams.get('dataOpFim'));
+        if (searchParams.get('dataVencInicio')) query = query.gte('data_vencimento', searchParams.get('dataVencInicio'));
+        if (searchParams.get('dataVencFim')) query = query.lte('data_vencimento', searchParams.get('dataVencFim'));
+        if (searchParams.get('sacado')) query = query.ilike('cliente_sacado', `%${searchParams.get('sacado')}%`);
+        if (searchParams.get('nfCte')) query = query.ilike('nf_cte', `%${searchParams.get('nfCte')}%`);
+        if (searchParams.get('status') && searchParams.get('status') !== 'Todos') query = query.eq('status_recebimento', searchParams.get('status'));
+        if (searchParams.get('clienteId')) query = query.eq('operacoes.cliente_id', searchParams.get('clienteId'));
+        if (search_params.get('tipoOperacaoId')) query = query.eq('operacoes.tipo_operacao_id', search_params.get('tipoOperacaoId'));
 
-        if (error) throw error;
+        // Aplica a ordenação
+        const sortKey = searchParams.get('sort') || 'dataOperacao';
+        const sortDirection = searchParams.get('direction') || 'DESC';
 
-        // --- LÓGICA DE ORDENAÇÃO EXECUTADA AQUI NA API ---
-        const sortKey = searchParams.get('sort'); 
-        const sortDirection = searchParams.get('direction');
-
-        // Mapeia os nomes do frontend para os nomes das colunas do DB
         const sortColumnMapping = {
             dataOperacao: 'data_operacao',
             nfCte: 'nf_cte',
-            empresaCedente: 'empresa_cedente',
+            empresaCedente: 'operacoes(clientes(nome))',
             clienteSacado: 'cliente_sacado',
             valorBruto: 'valor_bruto',
             valorJuros: 'valor_juros',
             dataVencimento: 'data_vencimento'
         };
+        const dbColumn = sortColumnMapping[sortKey] || 'data_operacao';
 
-        if (sortKey && sortDirection) {
-            const dbColumn = sortColumnMapping[sortKey] || 'data_operacao';
+        query = query.order(dbColumn, { ascending: sortDirection === 'ASC' });
 
-            data.sort((a, b) => {
-                const valA = a[dbColumn];
-                const valB = b[dbColumn];
 
-                if (valA === null) return 1;
-                if (valB === null) return -1;
+        const { data, error } = await query;
+        if (error) throw error;
 
-                if (valA < valB) return sortDirection === 'ASC' ? -1 : 1;
-                if (valA > valB) return sortDirection === 'ASC' ? 1 : -1;
-                return 0;
-            });
-        }
-
-        // Mapeia os nomes das colunas para o que o frontend espera (camelCase)
+        // Mapeia os dados para o formato que o frontend espera (camelCase)
         const formattedData = data.map(d => ({
-            id: d.id, operacaoId: d.operacao_id, clienteId: d.cliente_id,
-            dataOperacao: d.data_operacao, nfCte: d.nf_cte, empresaCedente: d.empresa_cedente,
-            valorBruto: d.valor_bruto, valorJuros: d.valor_juros, clienteSacado: d.cliente_sacado,
-            dataVencimento: d.data_vencimento, tipoOperacaoNome: d.tipo_operacao_nome,
-            statusRecebimento: d.status_recebimento, dataLiquidacao: d.data_liquidacao,
-            contaLiquidacao: d.conta_liquidacao
+            id: d.id,
+            operacaoId: d.operacao_id,
+            clienteId: d.operacao?.cliente_id,
+            dataOperacao: d.data_operacao,
+            nfCte: d.nf_cte,
+            empresaCedente: d.operacao?.cliente?.nome,
+            valorBruto: d.valor_bruto,
+            valorJuros: d.valor_juros,
+            clienteSacado: d.cliente_sacado,
+            dataVencimento: d.data_vencimento,
+            tipoOperacaoNome: d.operacao?.tipo_operacao?.nome,
+            statusRecebimento: d.status_recebimento,
+            dataLiquidacao: d.movimentacao?.data_movimento,
+            contaLiquidacao: d.movimentacao?.conta_bancaria
         }));
 
-        return NextResponse.json(formattedData, { status: 200 });
+        // Lógica de deduplicação em JavaScript para garantir
+        const uniqueData = Array.from(new Map(formattedData.map(item => [item.id, item])).values());
+
+        return NextResponse.json(uniqueData, { status: 200 });
 
     } catch (error) {
         console.error('Erro ao buscar duplicatas:', error);
