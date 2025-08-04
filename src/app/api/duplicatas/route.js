@@ -6,11 +6,16 @@ export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
-        jwt.verify(token, process.env.JWT_SECRET);
+
+        // Valida o token com tratamento de erro
+        try {
+            jwt.verify(token, process.env.JWT_SECRET);
+        } catch (err) {
+            return NextResponse.json({ message: 'Token inválido' }, { status: 401 });
+        }
 
         const { searchParams } = new URL(request.url);
 
-        // Inicia a consulta diretamente na tabela 'duplicatas'
         let query = supabase
             .from('duplicatas')
             .select(`
@@ -24,7 +29,7 @@ export async function GET(request) {
                 movimentacao:movimentacoes_caixa ( data_movimento, conta_bancaria )
             `);
 
-        // Aplica os filtros
+        // Filtros
         if (searchParams.get('dataOpInicio')) query = query.gte('data_operacao', searchParams.get('dataOpInicio'));
         if (searchParams.get('dataOpFim')) query = query.lte('data_operacao', searchParams.get('dataOpFim'));
         if (searchParams.get('dataVencInicio')) query = query.gte('data_vencimento', searchParams.get('dataVencInicio'));
@@ -33,9 +38,9 @@ export async function GET(request) {
         if (searchParams.get('nfCte')) query = query.ilike('nf_cte', `%${searchParams.get('nfCte')}%`);
         if (searchParams.get('status') && searchParams.get('status') !== 'Todos') query = query.eq('status_recebimento', searchParams.get('status'));
         if (searchParams.get('clienteId')) query = query.eq('operacoes.cliente_id', searchParams.get('clienteId'));
-        if (search_params.get('tipoOperacaoId')) query = query.eq('operacoes.tipo_operacao_id', search_params.get('tipoOperacaoId'));
+        if (searchParams.get('tipoOperacaoId')) query = query.eq('operacoes.tipo_operacao_id', searchParams.get('tipoOperacaoId'));
 
-        // Aplica a ordenação
+        // Ordenação segura
         const sortKey = searchParams.get('sort') || 'dataOperacao';
         const sortDirection = searchParams.get('direction') || 'DESC';
 
@@ -48,15 +53,19 @@ export async function GET(request) {
             valorJuros: 'valor_juros',
             dataVencimento: 'data_vencimento'
         };
-        const dbColumn = sortColumnMapping[sortKey] || 'data_operacao';
 
+        // Valida sortKey antes de aplicar
+        const allowedSorts = Object.keys(sortColumnMapping);
+        if (!allowedSorts.includes(sortKey)) {
+            return NextResponse.json({ message: 'Parâmetro sort inválido' }, { status: 400 });
+        }
+
+        const dbColumn = sortColumnMapping[sortKey];
         query = query.order(dbColumn, { ascending: sortDirection === 'ASC' });
-
 
         const { data, error } = await query;
         if (error) throw error;
 
-        // Mapeia os dados para o formato que o frontend espera (camelCase)
         const formattedData = data.map(d => ({
             id: d.id,
             operacaoId: d.operacao_id,
@@ -74,13 +83,12 @@ export async function GET(request) {
             contaLiquidacao: d.movimentacao?.conta_bancaria
         }));
 
-        // Lógica de deduplicação em JavaScript para garantir
         const uniqueData = Array.from(new Map(formattedData.map(item => [item.id, item])).values());
 
         return NextResponse.json(uniqueData, { status: 200 });
 
     } catch (error) {
         console.error('Erro ao buscar duplicatas:', error);
-        return NextResponse.json({ message: error.message }, { status: 500 });
+        return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
     }
 }
