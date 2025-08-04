@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { formatBRLNumber, formatDate } from '@/utils/formatters';
+import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 
 // (Esta função de gerar PDF é uma cópia da que criámos para o endpoint de PDF)
 const generatePdfBuffer = (operacao) => {

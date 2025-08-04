@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '/@app/utils/supabaseClient';
+import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { formatBRLNumber, formatDate } from '@/utils/formatters';
+import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 
 // Função auxiliar para criar células de cabeçalho no PDF
 const getHeaderCell = (text) => ({
