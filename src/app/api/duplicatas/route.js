@@ -10,37 +10,33 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        const sortMapping = {
-            dataOperacao: 'data_operacao',
-            nfCte: 'nf_cte',
-            empresaCedente: 'empresa_cedente',
-            clienteSacado: 'cliente_sacado',
-            valorBruto: 'valor_bruto',
-            valorJuros: 'valor_juros',
-            dataVencimento: 'data_vencimento'
+        const rpcParams = {
+            p_data_inicio: searchParams.get('dataInicio') || null,
+            p_data_fim: searchParams.get('dataFim') || null,
+            p_cliente_id: searchParams.get('clienteId') || null,
+            p_sacado: searchParams.get('sacado') || null,
+            p_status: searchParams.get('status') || null,
+            p_tipo_operacao_id: searchParams.get('tipoOperacaoId') || null,
         };
 
-        const sortKey = searchParams.get('sort') || 'dataOperacao';
-        const sortColumn = sortMapping[sortKey] || 'data_operacao';
-        const sortDirection = searchParams.get('direction') || 'DESC';
-
-        let query = supabase.rpc('get_duplicatas_filtradas', { 
-            sort_column: sortColumn,
-            sort_direction: sortDirection
-        });
-
-        if (searchParams.get('dataOpInicio')) query = query.gte('data_operacao', searchParams.get('dataOpInicio'));
-        if (searchParams.get('dataOpFim')) query = query.lte('data_operacao', searchParams.get('dataOpFim'));
-        if (searchParams.get('dataVencInicio')) query = query.gte('data_vencimento', searchParams.get('dataVencInicio'));
-        if (searchParams.get('dataVencFim')) query = query.lte('data_vencimento', searchParams.get('dataVencFim'));
-        if (searchParams.get('sacado')) query = query.ilike('cliente_sacado', `%${searchParams.get('sacado')}%`);
-        if (searchParams.get('nfCte')) query = query.ilike('nf_cte', `%${searchParams.get('nfCte')}%`);
-        if (searchParams.get('status') && searchParams.get('status') !== 'Todos') query = query.eq('status_recebimento', searchParams.get('status'));
-        if (searchParams.get('clienteId')) query = query.eq('cliente_id', searchParams.get('clienteId'));
-
-        const { data, error } = await query;
+        const { data, error } = await supabase.rpc('get_duplicatas_filtradas', rpcParams);
         if (error) throw error;
 
+        // --- LÓGICA DE ORDENAÇÃO MOVIDA PARA AQUI ---
+        const sortKey = searchParams.get('sort');
+        const sortDirection = searchParams.get('direction');
+
+        if (sortKey && sortDirection) {
+            data.sort((a, b) => {
+                const valA = a[sortKey];
+                const valB = b[sortKey];
+                if (valA < valB) return sortDirection === 'ASC' ? -1 : 1;
+                if (valA > valB) return sortDirection === 'ASC' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        // Mapeia os nomes das colunas para o que o frontend espera (camelCase)
         const formattedData = data.map(d => ({
             id: d.id, operacaoId: d.operacao_id, clienteId: d.cliente_id,
             dataOperacao: d.data_operacao, nfCte: d.nf_cte, empresaCedente: d.empresa_cedente,

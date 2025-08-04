@@ -200,11 +200,57 @@ export default function ConsultasPage() {
         setIsEmailModalOpen(true);
     };
     const handleSendEmail = async (destinatarios) => {
-        showNotification("Funcionalidade de envio de e-mail ainda não migrada.", "error");
-    };
+    if (!operacaoParaEmail) return;
+    setIsSendingEmail(true);
+    try {
+        const response = await fetch(`/api/operacoes/${operacaoParaEmail.id}/enviar-email`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, 
+            body: JSON.stringify({ destinatarios }) 
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || "Falha ao enviar o e-mail.");
+        }
+        showNotification("E-mail(s) enviado(s) com sucesso!", "success");
+    } catch (err) {
+        showNotification(err.message, "error");
+    } finally {
+        setIsSendingEmail(false);
+        setIsEmailModalOpen(false);
+    }
+};
     const handleGeneratePdf = async () => {
-        showNotification("Funcionalidade de gerar PDF ainda não migrada.", "error");
-    };
+    if (!contextMenu.selectedItem) return;
+    const operacaoId = contextMenu.selectedItem.operacaoId;
+    if (!operacaoId) {
+        alert("Esta duplicata não está associada a uma operação para gerar PDF.");
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, { 
+            headers: getAuthHeader() 
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Não foi possível gerar o PDF.');
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bordero-${operacaoId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (err) {
+        alert(err.message);
+    }
+};
 
     const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
     const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
