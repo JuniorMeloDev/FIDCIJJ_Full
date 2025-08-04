@@ -10,6 +10,7 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
+        // Parâmetros de filtro
         const rpcParams = {
             p_data_inicio: searchParams.get('dataInicio') || null,
             p_data_fim: searchParams.get('dataFim') || null,
@@ -20,16 +21,31 @@ export async function GET(request) {
         };
 
         const { data, error } = await supabase.rpc('get_duplicatas_filtradas', rpcParams);
+
         if (error) throw error;
 
-        // --- LÓGICA DE ORDENAÇÃO MOVIDA PARA AQUI ---
-        const sortKey = searchParams.get('sort');
-        const sortDirection = searchParams.get('direction');
+        // --- LÓGICA DE ORDENAÇÃO CORRIGIDA AQUI ---
+        const sortKey = searchParams.get('sort'); // Ex: 'dataOperacao'
+        const sortDirection = searchParams.get('direction'); // Ex: 'DESC'
+
+        // Mapeia os nomes do frontend para os nomes das colunas do DB
+        const sortColumnMapping = {
+            dataOperacao: 'data_operacao',
+            nfCte: 'nf_cte',
+            empresaCedente: 'empresa_cedente',
+            clienteSacado: 'cliente_sacado',
+            valorBruto: 'valor_bruto',
+            valorJuros: 'valor_juros',
+            dataVencimento: 'data_vencimento'
+        };
 
         if (sortKey && sortDirection) {
+            const dbColumn = sortColumnMapping[sortKey] || 'data_operacao';
+
             data.sort((a, b) => {
-                const valA = a[sortKey];
-                const valB = b[sortKey];
+                const valA = a[dbColumn];
+                const valB = b[dbColumn];
+
                 if (valA < valB) return sortDirection === 'ASC' ? -1 : 1;
                 if (valA > valB) return sortDirection === 'ASC' ? 1 : -1;
                 return 0;
