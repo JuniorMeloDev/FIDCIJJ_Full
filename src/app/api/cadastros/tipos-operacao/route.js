@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// Função GET: Para buscar todos os tipos de operação
 export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -18,7 +17,7 @@ export async function GET(request) {
     }
 }
 
-// Função POST: Para criar um novo tipo de operação
+
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -35,6 +34,8 @@ export async function POST(request) {
                 valor_fixo: body.valorFixo,
                 despesas_bancarias: body.despesasBancarias,
                 descricao: body.descricao,
+                usar_prazo_sacado: body.usarPrazoSacado,
+                usar_peso_no_valor_fixo: body.usarPesoNoValorFixo,
             }])
             .select();
 

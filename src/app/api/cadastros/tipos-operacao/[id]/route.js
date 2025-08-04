@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// Função PUT: Para atualizar um tipo de operação existente
+
 export async function PUT(request, { params }) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -20,6 +20,9 @@ export async function PUT(request, { params }) {
                 valor_fixo: body.valorFixo,
                 despesas_bancarias: body.despesasBancarias,
                 descricao: body.descricao,
+                // Novos campos
+                usar_prazo_sacado: body.usarPrazoSacado,
+                usar_peso_no_valor_fixo: body.usarPesoNoValorFixo,
             })
             .eq('id', id)
             .select();
@@ -31,7 +34,6 @@ export async function PUT(request, { params }) {
     }
 }
 
-// Função DELETE: Para apagar um tipo de operação
 export async function DELETE(request, { params }) {
      try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
