@@ -20,7 +20,7 @@ export default function ConsultasPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [contasMaster, setContasMaster] = useState([]);
     const [tiposOperacao, setTiposOperacao] = useState([]);
-    
+
     const [filters, setFilters] = useState({
         dataOpInicio: '', dataOpFim: '',
         dataVencInicio: '', dataVencFim: '',
@@ -29,7 +29,7 @@ export default function ConsultasPage() {
     });
 
     const [sortConfig, setSortConfig] = useState({ key: 'dataOperacao', direction: 'DESC' });
-    
+
     const [contextMenu, setContextMenu] = useState({
         visible: false,
         x: 0,
@@ -62,12 +62,15 @@ export default function ConsultasPage() {
 
         params.append('sort', currentSortConfig.key);
         params.append('direction', currentSortConfig.direction);
-        
+
         try {
             const response = await fetch(`/api/duplicatas?${params.toString()}`, {
                 headers: getAuthHeader()
             });
-            if (!response.ok) throw new Error('Falha ao buscar os dados da API.');
+            if (!response.ok) {
+                const errorJson = await response.json();
+                throw new Error(errorJson.message || 'Falha ao buscar os dados da API.');
+            }
             const data = await response.json();
             setDuplicatas(data);
         } catch (err) {
@@ -76,7 +79,7 @@ export default function ConsultasPage() {
             setLoading(false);
         }
     };
-    
+
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
@@ -87,10 +90,10 @@ export default function ConsultasPage() {
                 ]);
                 if (!contasRes.ok) throw new Error("Falha ao buscar contas master.");
                 if (!tiposRes.ok) throw new Error("Falha ao buscar tipos de operação.");
-                
+
                 const contas = await contasRes.json();
                 const tipos = await tiposRes.json();
-                
+
                 const formattedTipos = tipos.map(t => ({...t, taxaJuros: t.taxa_juros, valorFixo: t.valor_fixo, despesasBancarias: t.despesas_bancarias}));
                 const formattedContas = contas.map(c => ({...c, contaCorrente: c.conta_corrente}));
 
@@ -124,7 +127,7 @@ export default function ConsultasPage() {
             return [];
         }
     };
-    
+
     const fetchClientes = (query) => fetchApiData(`/api/cadastros/clientes/search?nome=${query}`);
     const fetchSacados = (query) => fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
 
@@ -137,7 +140,7 @@ export default function ConsultasPage() {
             setFilters(prev => ({ ...prev, [name]: value }));
         }
     };
-    
+
     const handleAutocompleteSelect = (name, item) => {
         setCurrentPage(1);
         if (name === 'cliente') {
@@ -165,7 +168,7 @@ export default function ConsultasPage() {
         if (sortConfig.direction === 'ASC') return <FaSortUp />;
         return <FaSortDown />;
     };
-    
+
     const handleContextMenu = (event, item) => {
         event.preventDefault();
         setContextMenu({ visible: true, x: event.pageX, y: event.pageY, selectedItem: item });
@@ -193,73 +196,70 @@ export default function ConsultasPage() {
         }
     };
     const handleEstornar = () => { if (!contextMenu.selectedItem) return; setEstornoInfo({ id: contextMenu.selectedItem.id }); };
-    const confirmarEstorno = async () => { if (!estornoInfo) return; try { const response = await fetch(`/api/duplicatas/${estornoInfo.id}/estornar`, { method: 'POST', headers: getAuthHeader() }); if (!response.ok) { const errorData = await response.text(); throw new Error(errorData || 'Falha ao estornar a liquidação.'); } showNotification('Liquidação estornada com sucesso!', 'success'); fetchDuplicatas(filters, sortConfig); } catch (err) { showNotification(err.message, 'error'); } finally { setEstornoInfo(null); } };
+    const confirmarEstorno = async () => { if (!estornoInfo) return; try { const response = await fetch(`/api/duplicatas/${estornoInfo.id}/estornar`, { method: 'POST', headers: getAuthHeader() }); if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.message || 'Falha ao estornar a liquidação.'); } showNotification('Liquidação estornada com sucesso!', 'success'); fetchDuplicatas(filters, sortConfig); } catch (err) { showNotification(err.message, 'error'); } finally { setEstornoInfo(null); } };
     const handleAbrirEmailModal = () => {
         if (!contextMenu.selectedItem) return;
         setOperacaoParaEmail({ id: contextMenu.selectedItem.operacaoId, clienteId: contextMenu.selectedItem.clienteId });
         setIsEmailModalOpen(true);
     };
     const handleSendEmail = async (destinatarios) => {
-    if (!operacaoParaEmail) return;
-    setIsSendingEmail(true);
-    try {
-        const response = await fetch(`/api/operacoes/${operacaoParaEmail.id}/enviar-email`, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, 
-            body: JSON.stringify({ destinatarios }) 
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || "Falha ao enviar o e-mail.");
+        if (!operacaoParaEmail) return;
+        setIsSendingEmail(true);
+        try {
+            const response = await fetch(`/api/operacoes/${operacaoParaEmail.id}/enviar-email`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, 
+                body: JSON.stringify({ destinatarios }) 
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Falha ao enviar o e-mail.");
+            }
+            showNotification("E-mail(s) enviado(s) com sucesso!", "success");
+        } catch (err) {
+            showNotification(err.message, "error");
+        } finally {
+            setIsSendingEmail(false);
+            setIsEmailModalOpen(false);
         }
-        showNotification("E-mail(s) enviado(s) com sucesso!", "success");
-    } catch (err) {
-        showNotification(err.message, "error");
-    } finally {
-        setIsSendingEmail(false);
-        setIsEmailModalOpen(false);
-    }
-};
+    };
     const handleGeneratePdf = async () => {
-    if (!contextMenu.selectedItem) return;
-    const operacaoId = contextMenu.selectedItem.operacaoId;
-    if (!operacaoId) {
-        alert("Esta duplicata não está associada a uma operação para gerar PDF.");
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, { 
-            headers: getAuthHeader() 
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Não foi possível gerar o PDF.');
+        if (!contextMenu.selectedItem) return;
+        const operacaoId = contextMenu.selectedItem.operacaoId;
+        if (!operacaoId) {
+            alert("Esta duplicata não está associada a uma operação para gerar PDF.");
+            return;
         }
 
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `bordero-${operacaoId}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-    } catch (err) {
-        alert(err.message);
-    }
-};
+        try {
+            const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, { 
+                headers: getAuthHeader() 
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Não foi possível gerar o PDF.');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bordero-${operacaoId}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            alert(err.message);
+        }
+    };
 
     const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
     const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
     const currentItems = duplicatas.slice(indexOfFirstItem, indexOfLastItem);
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
-    if (loading && duplicatas.length === 0) return <div className="text-center p-10">A carregar...</div>;
-    if (error) return <div className="text-center p-10 text-red-500">Erro: {error}</div>;
-    
     return (
         <>
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
@@ -288,48 +288,51 @@ export default function ConsultasPage() {
                         onAutocompleteSelect={handleAutocompleteSelect}
                     />
                     <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
-                        <div className="overflow-auto">
-                            <table className="min-w-full divide-y divide-gray-700">
-                               <thead className="bg-gray-700">
-                                   <tr>
-                                       <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataOperacao')} className="flex items-center gap-1">Data Op. {getSortIcon('dataOperacao')}</button></th>
-                                       <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase min-w-[120px]"><button onClick={() => handleSort('nfCte')} className="flex items-center gap-1">NF/CT-e {getSortIcon('nfCte')}</button></th>
-                                       <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('empresaCedente')} className="flex items-center gap-1">Cedente {getSortIcon('empresaCedente')}</button></th>
-                                       <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('clienteSacado')} className="flex items-center gap-1">Sacado {getSortIcon('clienteSacado')}</button></th>
-                                       <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('valorBruto')} className="flex items-center gap-1 float-right">Valor Bruto {getSortIcon('valorBruto')}</button></th>
-                                       <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('valorJuros')} className="flex items-center gap-1 float-right">Juros {getSortIcon('valorJuros')}</button></th>
-                                       <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataVencimento')} className="flex items-center gap-1">Data Venc. {getSortIcon('dataVencimento')}</button></th>
-                                   </tr>
-                                </thead>
-                                <tbody className="bg-gray-800 divide-y divide-gray-700">
-                                    {currentItems.map((dup) => {
-                                        const isLiquidado = dup.statusRecebimento === 'Recebido';
-                                        return (
-                                            <tr key={dup.id} onContextMenu={(e) => handleContextMenu(e, dup)} className="group relative hover:bg-gray-700 cursor-pointer">
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{formatDate(dup.dataOperacao)}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-100'}`}>{dup.nfCte}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{dup.empresaCedente}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{dup.clienteSacado}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-100'}`}>{formatBRLNumber(dup.valorBruto)}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? 'text-gray-500' : 'text-red-400'}`}>{formatBRLNumber(dup.valorJuros)}</td>
-                                                <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>
-                                                    {formatDate(dup.dataVencimento)}
-                                                    {/* O OVERLAY DE HOVER FICA AQUI, DENTRO DA ÚLTIMA CÉLULA */}
-                                                    {isLiquidado && dup.dataLiquidacao && (
-                                                        <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-900 bg-opacity-80 pointer-events-none transition-opacity duration-300">
-                                                            <span className="bg-green-800 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
-                                                                Recebido em {formatDate(dup.dataLiquidacao)} na conta {dup.contaLiquidacao}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        )
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                        <Pagination totalItems={duplicatas.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={paginate} />
+                         {loading ? <p className="text-center py-10 text-gray-400">A carregar...</p> : error ? <p className="text-red-400 text-center py-10">{error}</p> : (
+                            <>
+                                <div className="overflow-auto">
+                                    <table className="min-w-full divide-y divide-gray-700">
+                                        <thead className="bg-gray-700">
+                                        <tr>
+                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataOperacao')} className="flex items-center gap-1">Data Op. {getSortIcon('dataOperacao')}</button></th>
+                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase min-w-[120px]"><button onClick={() => handleSort('nfCte')} className="flex items-center gap-1">NF/CT-e {getSortIcon('nfCte')}</button></th>
+                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('empresaCedente')} className="flex items-center gap-1">Cedente {getSortIcon('empresaCedente')}</button></th>
+                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('clienteSacado')} className="flex items-center gap-1">Sacado {getSortIcon('clienteSacado')}</button></th>
+                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('valorBruto')} className="flex items-center gap-1 float-right">Valor Bruto {getSortIcon('valorBruto')}</button></th>
+                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('valorJuros')} className="flex items-center gap-1 float-right">Juros {getSortIcon('valorJuros')}</button></th>
+                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataVencimento')} className="flex items-center gap-1">Data Venc. {getSortIcon('dataVencimento')}</button></th>
+                                        </tr>
+                                        </thead>
+                                        <tbody className="bg-gray-800 divide-y divide-gray-700">
+                                            {currentItems.map((dup) => {
+                                                const isLiquidado = dup.statusRecebimento === 'Recebido';
+                                                return (
+                                                    <tr key={dup.id} onContextMenu={(e) => handleContextMenu(e, dup)} className="group relative hover:bg-gray-700 cursor-pointer">
+                                                        <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{formatDate(dup.dataOperacao)}</td>
+                                                        <td className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-100'}`}>{dup.nfCte}</td>
+                                                        <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{dup.empresaCedente}</td>
+                                                        <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{dup.clienteSacado}</td>
+                                                        <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-100'}`}>{formatBRLNumber(dup.valorBruto)}</td>
+                                                        <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? 'text-gray-500' : 'text-red-400'}`}>{formatBRLNumber(dup.valorJuros)}</td>
+                                                        <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                            {formatDate(dup.dataVencimento)}
+                                                            {isLiquidado && dup.dataLiquidacao && (
+                                                                <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-900 bg-opacity-80 pointer-events-none transition-opacity duration-300">
+                                                                    <span className="bg-green-800 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
+                                                                        Recebido em {formatDate(dup.dataLiquidacao)} na conta {dup.contaLiquidacao}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <Pagination totalItems={duplicatas.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={paginate} />
+                            </>
+                        )}
                     </div>
                 </div>
             </main>
