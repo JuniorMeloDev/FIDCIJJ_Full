@@ -7,6 +7,7 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 
+// O Next.js permite importar imagens diretamente
 import Logo from '../../../public/Logo.png';
 
 export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchClientes, fetchSacados }) {
@@ -20,6 +21,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
     const [format, setFormat] = useState('pdf');
     const [logoBase64, setLogoBase64] = useState(null);
 
+    // Converte o logo para Base64 para ser usado no PDF
     useEffect(() => {
         const image = new Image();
         image.src = Logo.src;
@@ -55,14 +57,12 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             fetchContas();
         }
     }, [isOpen]);
-
+    
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
         setFilters(prev => ({ ...prev, [name]: value }));
     };
-    
     const clearFilters = () => setFilters(initialState);
-
     const handleAutocompleteSelect = (name, item) => {
         if (name === "cliente") {
             setFilters(prev => ({ ...prev, clienteId: item?.id || "", clienteNome: item?.nome || "" }));
@@ -106,13 +106,15 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             setIsGenerating(false);
         }
     };
-
     const generatePdf = (data, type, currentFilters) => {
         const doc = new jsPDF({ orientation: type === 'fluxoCaixa' || type === 'duplicatas' ? 'landscape' : 'portrait' });
         
         if (logoBase64) {
-            doc.addImage(logoBase64, 'PNG', 14, 10, 35, 15);
+            const logoWidth = 40;
+            const logoHeight = logoWidth / 2.3;
+            doc.addImage(logoBase64, 'PNG', 14, 10, logoWidth, logoHeight);
         }
+
         doc.setFontSize(18);
         doc.text(`Relatório de ${type.replace(/([A-Z])/g, ' $1').trim()}`, 205, 22, { align: 'right' });
         
@@ -140,7 +142,6 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 break;
 
             case 'duplicatas':
-                // --- LÓGICA DA COLUNA CONDICIONAL AQUI ---
                 const showTipoOperacao = !currentFilters.tipoOperacaoId;
                 head = [['Data Op.', 'NF/CT-e', 'Cedente', 'Sacado', ...(showTipoOperacao ? ['Tipo Op.'] : []), 'Venc.', 'Status', 'Valor']];
                 body = data.map(row => [
@@ -170,11 +171,20 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         doc.save(`relatorio_${type}.pdf`);
     };
 
-    const generateExcel = (data, type, currentFilters) => {
+    // ... (generateExcel e o resto do componente continuam iguais)
+     const generateExcel = (data, type, currentFilters) => {
         let ws_data;
         let totals = [];
         switch (type) {
             case 'fluxoCaixa':
+                ws_data = data.map(row => ({ Data: formatDate(row.data_movimento), Descricao: row.descricao, Conta: row.conta_bancaria, Categoria: row.categoria, Valor: row.valor }));
+                const totalGeral = data.reduce((sum, row) => sum + row.valor, 0);
+                totals.push({ Categoria: 'Total do Período', Valor: totalGeral });
+                contas.forEach(conta => {
+                    const saldo = data.filter(d => d.conta_bancaria === conta).reduce((sum, row) => sum + row.valor, 0);
+                    totals.push({ Categoria: `Saldo ${conta}`, Valor: saldo });
+                });
+                ws_data = [...ws_data, {}, ...totals];
                 break;
             case 'duplicatas':
                 const showTipoOperacao = !currentFilters.tipoOperacaoId;
@@ -193,6 +203,15 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 ws_data.push({ 'Cedente': 'Total Bruto', 'Valor': totalBruto });
                 break;
             case 'totalOperado':
+                ws_data = [
+                    { Categoria: 'Total Operado', Valor: data.valorOperadoNoMes },
+                    {}, 
+                    { Categoria: 'Top 5 Cedentes' },
+                    ...data.topClientes.map(c => ({ Categoria: c.nome, Valor: c.valor_total })),
+                    {}, 
+                    { Categoria: 'Top 5 Sacados' },
+                    ...data.topSacados.map(s => ({ Categoria: s.nome, Valor: s.valor_total }))
+                ];
                 break;
         }
         const ws = XLSX.utils.json_to_sheet(ws_data);
