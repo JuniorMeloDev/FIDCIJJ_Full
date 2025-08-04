@@ -84,7 +84,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         const endpoint = endpointMap[reportType];
 
         Object.entries(filters).forEach(([key, value]) => {
-            if(value && key !== 'clienteNome') params.append(key, value);
+            if(value && value !== 'clienteNome') params.append(key, value);
         });
 
         try {
@@ -93,8 +93,13 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             });
             if (!response.ok) throw new Error('Não foi possível buscar os dados para o relatório.');
             const data = await response.json();
+            
+            const hasData = (type, responseData) => {
+                if (type === 'totalOperado') return responseData && responseData.valorOperadoNoMes > 0;
+                return Array.isArray(responseData) && responseData.length > 0;
+            };
 
-            if (Array.isArray(data) && data.length === 0) {
+            if (!hasData(reportType, data)) {
                  alert("Nenhum dado encontrado para os filtros selecionados.");
             } else {
                 if (format === 'pdf') {
@@ -117,8 +122,8 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         const doc = new jsPDF({ orientation: type === 'fluxoCaixa' || type === 'duplicatas' ? 'landscape' : 'portrait' });
         
         if (logoBase64) {
-            const logoWidth = 50;
-            const logoHeight = logoWidth / 3.3; // Mantém a proporção da imagem
+            const logoWidth = 40;
+            const logoHeight = logoWidth / 2.3; // Mantém a proporção da imagem
             doc.addImage(logoBase64, 'PNG', 14, 10, logoWidth, logoHeight);
         }
         const pageWidth = doc.internal.pageSize.getWidth();
