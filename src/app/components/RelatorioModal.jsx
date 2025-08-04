@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import AutocompleteSearch from './AutoCompleteSearch';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
-import AutocompleteSearch from './AutoCompleteSearch';
 
+// O Next.js permite importar imagens diretamente para obter o seu caminho
+import Logo from '../../../public/Logo.png';
 
 export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchClientes, fetchSacados }) {
     const initialState = {
@@ -17,6 +19,22 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
     const [isGenerating, setIsGenerating] = useState(false);
     const [contas, setContas] = useState([]);
     const [format, setFormat] = useState('pdf');
+    const [logoBase64, setLogoBase64] = useState(null);
+
+    // Converte a imagem do logo para Base64 quando o componente carrega
+    useEffect(() => {
+        const image = new Image();
+        image.src = Logo.src;
+        image.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = image.width;
+            canvas.height = image.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(image, 0, 0);
+            const dataURL = canvas.toDataURL('image/png');
+            setLogoBase64(dataURL);
+        };
+    }, []);
 
     const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
@@ -93,8 +111,13 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
 
     const generatePdf = (data, type, currentFilters) => {
         const doc = new jsPDF({ orientation: type === 'fluxoCaixa' || type === 'duplicatas' ? 'landscape' : 'portrait' });
+        
+        // --- ADIÇÃO DO LOGO E CABEÇALHO ---
+        if (logoBase64) {
+            doc.addImage(logoBase64, 'PNG', 14, 10, 35, 15);
+        }
         doc.setFontSize(18);
-        doc.text(`Relatório de ${type.replace(/([A-Z])/g, ' $1').trim()}`, 14, 22);
+        doc.text(`Relatório de ${type.replace(/([A-Z])/g, ' $1').trim()}`, 205, 22, { align: 'right' });
         
         let filterText = 'Filtros: ';
         if (currentFilters.dataInicio || currentFilters.dataFim) {
@@ -108,31 +131,60 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             case 'fluxoCaixa':
                 head = [['Data', 'Descrição', 'Conta', 'Categoria', 'Valor']];
                 body = data.map(row => [formatDate(row.data_movimento), row.descricao, row.conta_bancaria, row.categoria, formatBRLNumber(row.valor)]);
+                autoTable(doc, { startY: 35, head, body });
+
+                // --- ADIÇÃO DOS TOTAIS NO FLUXO DE CAIXA ---
+                const totalGeral = data.reduce((sum, row) => sum + row.valor, 0);
+                const saldosPorConta = contas.map(conta => {
+                    const saldo = data.filter(d => d.conta_bancaria === conta).reduce((sum, row) => sum + row.valor, 0);
+                    return `${conta}: ${formatBRLNumber(saldo)}`;
+                }).join('\n');
+                doc.setFontSize(10);
+                doc.text(`Total do Período: ${formatBRLNumber(totalGeral)}`, 14, doc.autoTable.previous.finalY + 10);
+                doc.text(`Saldos por Conta:\n${saldosPorConta}`, 14, doc.autoTable.previous.finalY + 15);
                 break;
+
             case 'duplicatas':
                 head = [['Data Op.', 'NF/CT-e', 'Cedente', 'Sacado', 'Venc.', 'Status', 'Valor']];
                 body = data.map(row => [formatDate(row.data_operacao), row.nf_cte, row.empresa_cedente, row.cliente_sacado, formatDate(row.data_vencimento), row.status_recebimento, formatBRLNumber(row.valor_bruto)]);
+                autoTable(doc, { startY: 35, head, body });
+                
+                // --- ADIÇÃO DOS TOTAIS NO RELATÓRIO DE DUPLICATAS ---
+                const totalBruto = data.reduce((sum, row) => sum + (row.valor_bruto || 0), 0);
+                doc.setFontSize(10);
+                doc.text(`Total Bruto das Duplicatas: ${formatBRLNumber(totalBruto)}`, 14, doc.autoTable.previous.finalY + 10);
                 break;
+
             case 'totalOperado':
                 doc.setFontSize(12);
                 doc.text(`Total Operado no Período: ${formatBRLNumber(data.valorOperadoNoMes)}`, 14, 40);
                 autoTable(doc, { startY: 50, head: [['Top 5 Cedentes', 'Valor Total']], body: data.topClientes.map(c => [c.nome, formatBRLNumber(c.valor_total)]) });
                 autoTable(doc, { head: [['Top 5 Sacados', 'Valor Total']], body: data.topSacados.map(s => [s.nome, formatBRLNumber(s.valor_total)]) });
-                doc.save('relatorio_total_operado.pdf');
-                return;
+                break;
         }
-        autoTable(doc, { startY: 35, head, body });
         doc.save(`relatorio_${type}.pdf`);
     };
 
+    // ... (generateExcel e o resto do componente continuam iguais)
     const generateExcel = (data, type) => {
         let ws_data;
+        let totals = [];
         switch (type) {
             case 'fluxoCaixa':
                 ws_data = data.map(row => ({ Data: formatDate(row.data_movimento), Descricao: row.descricao, Conta: row.conta_bancaria, Categoria: row.categoria, Valor: row.valor }));
+                const totalGeral = data.reduce((sum, row) => sum + row.valor, 0);
+                totals.push({ Categoria: 'Total do Período', Valor: totalGeral });
+                contas.forEach(conta => {
+                    const saldo = data.filter(d => d.conta_bancaria === conta).reduce((sum, row) => sum + row.valor, 0);
+                    totals.push({ Categoria: `Saldo ${conta}`, Valor: saldo });
+                });
+                ws_data = [...ws_data, {}, ...totals];
                 break;
             case 'duplicatas':
                  ws_data = data.map(row => ({ 'Data Op.': formatDate(row.data_operacao), 'NF/CT-e': row.nf_cte, Cedente: row.empresa_cedente, Sacado: row.cliente_sacado, Vencimento: formatDate(row.data_vencimento), Status: row.status_recebimento, Valor: row.valor_bruto }));
+                 const totalBruto = data.reduce((sum, row) => sum + (row.valor_bruto || 0), 0);
+                 ws_data.push({}); // Linha em branco
+                 ws_data.push({ 'Cedente': 'Total Bruto', 'Valor': totalBruto });
                 break;
             case 'totalOperado':
                 const combinedData = [
@@ -148,9 +200,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         XLSX.utils.book_append_sheet(wb, ws, 'Relatorio');
         XLSX.writeFile(wb, `relatorio_${type}.xlsx`);
     };
-
     if (!isOpen) return null;
-    
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
             <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl text-white">
@@ -247,7 +297,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                         {reportType === 'duplicatas' && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-300">Status</label>
-                                <select name="status" value={filters.status} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
+                                <select name="status" value={filters.status} onChange={handleFilterChange} className="mt-1 w-full bg-gray-70g-gray-600 rounded-md p-1.5 text-sm">
                                     <option value="Todos">Todos</option>
                                     <option value="Pendente">Pendente</option>
                                     <option value="Recebido">Recebido</option>
