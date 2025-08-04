@@ -5,10 +5,28 @@ import nodemailer from 'nodemailer';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
+import fs from 'fs';
+import path from 'path';
 
-// (Esta função de gerar PDF é uma cópia da que criámos para o endpoint de PDF)
+// Função para carregar a imagem e converter para Base64
+const getLogoBase64 = () => {
+    try {
+        const imagePath = path.resolve(process.cwd(), 'public', 'Logo.png');
+        const imageBuffer = fs.readFileSync(imagePath);
+        return `data:image/png;base64,${imageBuffer.toString('base64')}`;
+    } catch (error) {
+        console.error("Erro ao carregar a imagem do logo:", error);
+        return null;
+    }
+};
+
 const generatePdfBuffer = (operacao) => {
     const doc = new jsPDF();
+    const logoBase64 = getLogoBase64();
+    if (logoBase64) {
+        doc.addImage(logoBase64, 'PNG', 14, 10, 35, 15);
+    }
+
     doc.setFontSize(18);
     doc.text("BORDERÔ ANALÍTICO", 14, 22);
     doc.setFontSize(10);
@@ -26,7 +44,6 @@ const generatePdfBuffer = (operacao) => {
     return Buffer.from(doc.output('arraybuffer'));
 };
 
-
 export async function POST(request, { params }) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -40,7 +57,6 @@ export async function POST(request, { params }) {
             return NextResponse.json({ message: 'Nenhum destinatário fornecido.' }, { status: 400 });
         }
 
-        // Busca os dados da operação para montar o PDF
         const { data: operacao, error } = await supabase
             .from('operacoes')
             .select('*, cliente:clientes(*), duplicatas(*)')
@@ -51,31 +67,51 @@ export async function POST(request, { params }) {
 
         const pdfBuffer = generatePdfBuffer(operacao);
 
-        // Configura o transportador de e-mail (Nodemailer)
         const transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com', // Ou o host do seu provedor
-            port: 587,
-            secure: false, // true para 465, false para outras portas
-            auth: {
-                user: process.env.EMAIL_USERNAME,
-                pass: process.env.EMAIL_PASSWORD,
-            },
+            host: 'smtp.gmail.com', port: 587, secure: false,
+            auth: { user: process.env.EMAIL_USERNAME, pass: process.env.EMAIL_PASSWORD },
         });
 
         const numerosNfs = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
-        const subject = `Borderô NF ${numerosNfs}`;
+        const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
+        const subject = `Borderô ${tipoDocumento} ${numerosNfs}`;
 
-        // Envia o e-mail
+        // --- CORPO DO E-MAIL CORRIGIDO ---
+        const emailBody = `
+            <p>Prezados,</p>
+            <p>Segue em anexo o borderô referente à operação.</p>
+            <br>
+            <p>Atenciosamente,</p>
+            <p>
+                <strong>Junior Melo</strong><br>
+                Analista Financeiro<br>
+                <strong>FIDC IJJ</strong><br>
+                (81) 9 7339-0292
+            </p>
+            <br>
+            <img src="cid:logoImage" width="140">
+        `;
+
+        const logoPath = path.resolve(process.cwd(), 'public', 'Logo.png');
+
         await transporter.sendMail({
             from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
             to: destinatarios.join(', '),
             subject: subject,
-            html: `<p>Prezados,</p><p>Segue em anexo o borderô referente à operação.</p><p>Atenciosamente,<br/>FIDC IJJ</p>`,
-            attachments: [{
-                filename: `${subject}.pdf`,
-                content: pdfBuffer,
-                contentType: 'application/pdf'
-            }],
+            html: emailBody,
+            attachments: [
+                {
+                    filename: `${subject}.pdf`,
+                    content: pdfBuffer,
+                    contentType: 'application/pdf'
+                },
+                // Anexa a imagem com um Content-ID (cid) para ser usada no corpo do e-mail
+                {
+                    filename: 'Logo.png',
+                    path: logoPath,
+                    cid: 'logoImage' 
+                }
+            ],
         });
 
         return NextResponse.json({ message: 'E-mail enviado com sucesso!' }, { status: 200 });
