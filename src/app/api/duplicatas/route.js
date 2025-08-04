@@ -10,7 +10,6 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // Parâmetros de filtro
         const rpcParams = {
             p_data_inicio: searchParams.get('dataInicio') || null,
             p_data_fim: searchParams.get('dataFim') || null,
@@ -24,9 +23,9 @@ export async function GET(request) {
 
         if (error) throw error;
 
-    
-        const sortKey = searchParams.get('sort'); // Ex: 'dataOperacao'
-        const sortDirection = searchParams.get('direction'); // Ex: 'DESC'
+        // --- LÓGICA DE ORDENAÇÃO EXECUTADA AQUI NA API ---
+        const sortKey = searchParams.get('sort'); 
+        const sortDirection = searchParams.get('direction');
 
         // Mapeia os nomes do frontend para os nomes das colunas do DB
         const sortColumnMapping = {
@@ -45,6 +44,9 @@ export async function GET(request) {
             data.sort((a, b) => {
                 const valA = a[dbColumn];
                 const valB = b[dbColumn];
+
+                if (valA === null) return 1;
+                if (valB === null) return -1;
 
                 if (valA < valB) return sortDirection === 'ASC' ? -1 : 1;
                 if (valA > valB) return sortDirection === 'ASC' ? 1 : -1;
