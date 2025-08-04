@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase} from '../../../utils/supabaseClient';
+import { supabase } from '@/app/utils/supabaseClient';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
@@ -12,31 +12,25 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Usuário e senha são obrigatórios' }, { status: 400 });
         }
 
-        // 1. Encontra o utilizador na base de dados Supabase
-        const { data: users, error: userError } = await supabase
-            .from('users') // O nome da sua tabela de utilizadores
+        const { data: user, error: userError } = await supabase
+            .from('users')
             .select('*')
             .eq('username', username)
             .single();
 
-        if (userError || !users) {
-            console.error('Erro ao buscar utilizador ou utilizador não encontrado:', userError);
+        if (userError || !user) {
             return NextResponse.json({ message: 'Credenciais inválidas' }, { status: 401 });
         }
 
-        const user = users;
-
-        // 2. Compara a senha enviada com a senha encriptada no banco de dados
         const isPasswordValid = await bcrypt.compare(password, user.password);
 
         if (!isPasswordValid) {
             return NextResponse.json({ message: 'Credenciais inválidas' }, { status: 401 });
         }
 
-        // 3. Se a senha for válida, cria o token JWT
         const claims = {
             username: user.username,
-            roles: user.roles.split(','),
+            roles: user.roles.split(',').map(role => role.trim()),
             sub: user.username,
         };
 
@@ -44,7 +38,6 @@ export async function POST(request) {
             expiresIn: '10h',
         });
 
-        // 4. Retorna o token com sucesso
         return NextResponse.json({ token }, { status: 200 });
 
     } catch (error) {

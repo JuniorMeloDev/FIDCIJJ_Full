@@ -10,8 +10,8 @@ export async function GET(request) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        // Apenas permite que administradores vejam a lista de usuários
-        if (!decoded.roles.includes('ROLE_ADMIN')) {
+
+        if (!decoded.roles || !decoded.roles.map(role => role.trim()).includes('ROLE_ADMIN')) {
             return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
         }
 
@@ -24,20 +24,19 @@ export async function GET(request) {
     }
 }
 
-// POST: Cria um novo usuário
+// POST: Cria um novo usuário (código continua o mesmo, mas incluído para ter o ficheiro completo)
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        if (!decoded.roles.includes('ROLE_ADMIN')) {
+        if (!decoded.roles.map(r => r.trim()).includes('ROLE_ADMIN')) {
             return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
         }
 
         const body = await request.json();
 
-        // Verifica se o usuário ou email já existem
         const { data: existingUser, error: existingUserError } = await supabase
             .from('users')
             .select('id')
@@ -57,7 +56,7 @@ export async function POST(request) {
                 email: body.email,
                 telefone: body.telefone,
                 password: hashedPassword,
-                roles: 'ROLE_USER' // Por padrão, novos usuários são 'USER'
+                roles: 'ROLE_USER'
             })
             .select('id, username, email, telefone, roles')
             .single();
