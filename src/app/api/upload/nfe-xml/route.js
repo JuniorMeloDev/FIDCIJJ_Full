@@ -3,7 +3,6 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js';
 
-// Função utilitária para acessar caminhos do objeto
 const getVal = (obj, path) =>
   path.split('.').reduce((acc, key) => acc?.[key]?.[0], obj);
 
@@ -22,44 +21,42 @@ export async function POST(request) {
 
     const xmlText = await file.text();
 
-    // Ignora namespaces e atributos
+    // ✅ Remoção completa de namespaces e prefixos
     const parsedXml = await parseStringPromise(xmlText, {
       explicitArray: true,
       ignoreAttrs: true,
-      tagNameProcessors: [name => name.replace(/^.*:/, '')]
+      tagNameProcessors: [
+        name => name.replace(/^.*:/, ''),
+        name => name.replace(/{.*}/, '')
+      ]
     });
 
-    // Tenta detectar a estrutura válida
-    let infNFe = null;
+    // Agora a raiz será "NFe" e "infNFe" diretamente
+    const infNFe =
+      parsedXml.nfeProc?.NFe?.[0]?.infNFe?.[0] ||
+      parsedXml.NFe?.[0]?.infNFe?.[0] ||
+      parsedXml.infNFe;
 
-    if (parsedXml.nfeProc?.NFe?.[0]?.infNFe?.[0]) {
-      infNFe = parsedXml.nfeProc.NFe[0].infNFe[0];
-    } else if (parsedXml.NFe?.[0]?.infNFe?.[0]) {
-      infNFe = parsedXml.NFe[0].infNFe[0];
-    } else {
+    if (!infNFe) {
       console.error("parsedXml raiz:", Object.keys(parsedXml));
       throw new Error("Estrutura do XML inválida ou não suportada.");
     }
 
-    // CNPJs
     const emitCnpj = getVal(infNFe, 'emit.CNPJ');
     const destCnpjCpf = getVal(infNFe, 'dest.CNPJ') || getVal(infNFe, 'dest.CPF');
 
-    // Busca emitente no Supabase
     const { data: emitenteData } = await supabase
       .from('clientes')
       .select('id, nome')
       .eq('cnpj', emitCnpj)
       .single();
 
-    // Busca sacado no Supabase
     const { data: sacadoData } = await supabase
       .from('sacados')
       .select('id, nome')
       .eq('cnpj', destCnpjCpf)
       .single();
 
-    // Parcelas
     const cobr = getVal(infNFe, 'cobr');
     const parcelas = cobr?.dup?.map(p => ({
       numero: getVal(p, 'nDup'),
@@ -67,7 +64,6 @@ export async function POST(request) {
       valor: parseFloat(getVal(p, 'vDup')),
     })) || [];
 
-    // Monta resposta
     const responseData = {
       numeroNf: getVal(infNFe, 'ide.nNF'),
       dataEmissao: getVal(infNFe, 'ide.dhEmi')?.substring(0, 10),
