@@ -94,7 +94,20 @@ export async function POST(request, { params }) {
         const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
         const subject = `Borderô ${tipoDocumento} ${numeros}`;
 
-        const emailBody = `...`; // (o corpo do e-mail continua igual)
+        const emailBody = `
+            <p>Prezados,</p>
+            <p>Segue em anexo o borderô referente à operação.</p>
+            <br>
+            <p>Atenciosamente,</p>
+            <p>
+                <strong>Junior Melo</strong><br>
+                Analista Financeiro<br>
+                <strong>FIDC IJJ</strong><br>
+                (81) 9 7339-0292
+            </p>
+            <br>
+            <img src="cid:logoImage" width="140">
+        `;
         const logoPath = path.resolve(process.cwd(), 'public', 'Logo.png');
 
         await transporter.sendMail({
