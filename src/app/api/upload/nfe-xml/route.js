@@ -3,9 +3,7 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js';
 
-// Função utilitária para acessar campos
-const getVal = (obj, path) =>
-  path.split('.').reduce((acc, key) => acc && acc[key] ? acc[key][0] : null, obj);
+const getVal = (obj, path) => path.split('.').reduce((acc, key) => acc?.[key]?.[0], obj);
 
 export async function POST(request) {
   try {
@@ -15,22 +13,21 @@ export async function POST(request) {
 
     const formData = await request.formData();
     const file = formData.get('file');
-
-    if (!file) {
-      return NextResponse.json({ message: 'Arquivo não encontrado' }, { status: 400 });
-    }
+    if (!file) return NextResponse.json({ message: 'Arquivo não encontrado' }, { status: 400 });
 
     const xmlText = await file.text();
 
+    // 🚀 Configuração para ignorar namespaces e atributos
     const parsedXml = await parseStringPromise(xmlText, {
       explicitArray: true,
       ignoreAttrs: true,
-      tagNameProcessors: [name => name.replace(/^.*:/, '')], // remove namespaces
-      xmlns: false
+      tagNameProcessors: [name => name.replace(/^.*:/, '')]
     });
 
-    // A estrutura base da NF está diretamente em NFe.infNFe
-    const infNFe = getVal(parsedXml, 'NFe.infNFe');
+    // Tenta acessar com ou sem nfeProc
+    const infNFe =
+      getVal(parsedXml, 'nfeProc.NFe.infNFe') ||
+      getVal(parsedXml, 'NFe.infNFe');
 
     if (!infNFe) {
       throw new Error("Estrutura do XML inválida ou não suportada.");
@@ -52,19 +49,17 @@ export async function POST(request) {
       .single();
 
     const cobr = getVal(infNFe, 'cobr');
-    const parcelas = cobr && cobr.dup
-      ? cobr.dup.map(p => ({
-          numero: getVal(p, 'nDup'),
-          dataVencimento: getVal(p, 'dVenc'),
-          valor: parseFloat(getVal(p, 'vDup')),
-        }))
-      : [];
+    const parcelas = cobr?.dup?.map(p => ({
+      numero: getVal(p, 'nDup'),
+      dataVencimento: getVal(p, 'dVenc'),
+      valor: parseFloat(getVal(p, 'vDup')),
+    })) || [];
 
     const responseData = {
       numeroNf: getVal(infNFe, 'ide.nNF'),
       dataEmissao: getVal(infNFe, 'ide.dhEmi')?.substring(0, 10),
       valorTotal: parseFloat(getVal(infNFe, 'total.ICMSTot.vNF')),
-      parcelas: parcelas,
+      parcelas,
       emitente: {
         id: emitenteData?.id || null,
         nome: getVal(infNFe, 'emit.xNome'),
