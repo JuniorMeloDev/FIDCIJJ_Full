@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
-import { format } from 'date-fns';
 
 export async function GET(request) {
     try {
@@ -11,11 +10,9 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        const defaultEndDate = new Date();
-        const defaultStartDate = new Date(defaultEndDate.getFullYear(), defaultEndDate.getMonth(), 1);
-
-        const dataInicio = searchParams.get('dataInicio') || format(defaultStartDate, 'yyyy-MM-dd');
-        const dataFim = searchParams.get('dataFim') || format(defaultEndDate, 'yyyy-MM-dd');
+        // LÓGICA CORRIGIDA: Usa as datas do filtro ou null se estiverem vazias
+        const dataInicio = searchParams.get('dataInicio') || null;
+        const dataFim = searchParams.get('dataFim') || null;
         const diasVencimento = parseInt(searchParams.get('diasVencimento') || '5', 10);
         const tipoOperacaoId = searchParams.get('tipoOperacaoId') || null;
 
@@ -42,7 +39,7 @@ export async function GET(request) {
             throw new Error("Uma ou mais consultas de métricas falharam.");
         }
 
-        const totais = totaisFinanceirosRes.data[0];
+        const totais = totaisFinanceirosRes.data[0] || { total_juros: 0, total_despesas: 0 };
         const lucroLiquido = (totais.total_juros || 0) - (totais.total_despesas || 0);
 
         const metrics = {
