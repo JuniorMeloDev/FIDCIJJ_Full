@@ -10,7 +10,7 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // Inicia a consulta na tabela 'operacoes' para facilitar os filtros
+        // Inicia a consulta na tabela 'operacoes' para facilitar os filtros principais
         let query = supabase
             .from('operacoes')
             .select(`
@@ -23,7 +23,7 @@ export async function GET(request) {
                 )
             `);
 
-        // Aplica os filtros que podem ser feitos diretamente na query
+        // Aplica os filtros da URL
         if (searchParams.get('dataInicio')) query = query.gte('data_operacao', searchParams.get('dataInicio'));
         if (searchParams.get('dataFim')) query = query.lte('data_operacao', searchParams.get('dataFim'));
         if (searchParams.get('clienteId')) query = query.eq('cliente_id', searchParams.get('clienteId'));
