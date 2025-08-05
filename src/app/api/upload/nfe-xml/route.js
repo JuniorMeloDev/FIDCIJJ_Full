@@ -3,51 +3,63 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js';
 
-const getVal = (obj, path) => path.split('.').reduce((acc, key) => acc?.[key]?.[0], obj);
+// Função utilitária para acessar caminhos do objeto
+const getVal = (obj, path) =>
+  path.split('.').reduce((acc, key) => acc?.[key]?.[0], obj);
 
 export async function POST(request) {
   try {
     const token = request.headers.get('Authorization')?.split(' ')[1];
-    if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
+    if (!token)
+      return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
     jwt.verify(token, process.env.JWT_SECRET);
 
     const formData = await request.formData();
     const file = formData.get('file');
-    if (!file) return NextResponse.json({ message: 'Arquivo não encontrado' }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ message: 'Arquivo não encontrado' }, { status: 400 });
+    }
 
     const xmlText = await file.text();
 
-    // 🚀 Configuração para ignorar namespaces e atributos
+    // Ignora namespaces e atributos
     const parsedXml = await parseStringPromise(xmlText, {
       explicitArray: true,
       ignoreAttrs: true,
       tagNameProcessors: [name => name.replace(/^.*:/, '')]
     });
 
-    // Tenta acessar com ou sem nfeProc
-    const infNFe =
-      getVal(parsedXml, 'nfeProc.NFe.infNFe') ||
-      getVal(parsedXml, 'NFe.infNFe');
+    // Tenta detectar a estrutura válida
+    let infNFe = null;
 
-    if (!infNFe) {
+    if (parsedXml.nfeProc?.NFe?.[0]?.infNFe?.[0]) {
+      infNFe = parsedXml.nfeProc.NFe[0].infNFe[0];
+    } else if (parsedXml.NFe?.[0]?.infNFe?.[0]) {
+      infNFe = parsedXml.NFe[0].infNFe[0];
+    } else {
+      console.error("parsedXml raiz:", Object.keys(parsedXml));
       throw new Error("Estrutura do XML inválida ou não suportada.");
     }
 
+    // CNPJs
     const emitCnpj = getVal(infNFe, 'emit.CNPJ');
     const destCnpjCpf = getVal(infNFe, 'dest.CNPJ') || getVal(infNFe, 'dest.CPF');
 
+    // Busca emitente no Supabase
     const { data: emitenteData } = await supabase
       .from('clientes')
       .select('id, nome')
       .eq('cnpj', emitCnpj)
       .single();
 
+    // Busca sacado no Supabase
     const { data: sacadoData } = await supabase
       .from('sacados')
       .select('id, nome')
       .eq('cnpj', destCnpjCpf)
       .single();
 
+    // Parcelas
     const cobr = getVal(infNFe, 'cobr');
     const parcelas = cobr?.dup?.map(p => ({
       numero: getVal(p, 'nDup'),
@@ -55,6 +67,7 @@ export async function POST(request) {
       valor: parseFloat(getVal(p, 'vDup')),
     })) || [];
 
+    // Monta resposta
     const responseData = {
       numeroNf: getVal(infNFe, 'ide.nNF'),
       dataEmissao: getVal(infNFe, 'ide.dhEmi')?.substring(0, 10),
@@ -84,6 +97,9 @@ export async function POST(request) {
 
   } catch (error) {
     console.error("Erro ao processar XML:", error.stack || error);
-    return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
+    return NextResponse.json(
+      { message: error.message || 'Erro interno do servidor' },
+      { status: 500 }
+    );
   }
 }
