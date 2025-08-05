@@ -10,10 +10,8 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // LÓGICA CORRIGIDA: Usa as datas do filtro ou null se estiverem vazias
         const dataInicio = searchParams.get('dataInicio') || null;
         const dataFim = searchParams.get('dataFim') || null;
-        const diasVencimento = parseInt(searchParams.get('diasVencimento') || '5', 10);
         const tipoOperacaoId = searchParams.get('tipoOperacaoId') || null;
 
         const rpcParams = { 
@@ -22,18 +20,27 @@ export async function GET(request) {
             p_tipo_operacao_id: tipoOperacaoId 
         };
 
+        // 🧠 Agora buscamos os vencimentos para 5, 15 e 30 dias
         const [
             valorOperadoRes, topClientesRes, topSacadosRes,
-            totaisFinanceirosRes, vencimentosProximosRes
+            totaisFinanceirosRes,
+            vencimentos5Res, vencimentos15Res, vencimentos30Res
         ] = await Promise.all([
             supabase.rpc('get_valor_operado', rpcParams),
             supabase.rpc('get_top_clientes', rpcParams),
             supabase.rpc('get_top_sacados', rpcParams),
             supabase.rpc('get_totais_financeiros', rpcParams),
-            supabase.rpc('get_vencimentos_proximos', { dias_vencimento: diasVencimento })
+            supabase.rpc('get_vencimentos_proximos', { dias_vencimento: 5 }),
+            supabase.rpc('get_vencimentos_proximos', { dias_vencimento: 15 }),
+            supabase.rpc('get_vencimentos_proximos', { dias_vencimento: 30 }),
         ]);
 
-        const errors = [valorOperadoRes.error, topClientesRes.error, topSacadosRes.error, totaisFinanceirosRes.error, vencimentosProximosRes.error].filter(Boolean);
+        const errors = [
+            valorOperadoRes.error, topClientesRes.error, topSacadosRes.error,
+            totaisFinanceirosRes.error, vencimentos5Res.error,
+            vencimentos15Res.error, vencimentos30Res.error
+        ].filter(Boolean);
+
         if (errors.length > 0) {
             console.error("Erros ao buscar métricas:", errors);
             throw new Error("Uma ou mais consultas de métricas falharam.");
@@ -46,7 +53,11 @@ export async function GET(request) {
             valorOperadoNoMes: valorOperadoRes.data || 0,
             topClientes: topClientesRes.data || [],
             topSacados: topSacadosRes.data || [],
-            vencimentosProximos: vencimentosProximosRes.data || [],
+            vencimentosProximos: {
+                cincoDias: vencimentos5Res.data || [],
+                quinzeDias: vencimentos15Res.data || [],
+                trintaDias: vencimentos30Res.data || [],
+            },
             totalJuros: totais.total_juros || 0,
             totalDespesas: totais.total_despesas || 0,
             lucroLiquido: lucroLiquido,
