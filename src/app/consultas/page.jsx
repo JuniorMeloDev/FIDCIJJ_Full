@@ -20,7 +20,7 @@ export default function ConsultasPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [contasMaster, setContasMaster] = useState([]);
     const [tiposOperacao, setTiposOperacao] = useState([]);
-
+    
     const [filters, setFilters] = useState({
         dataOpInicio: '', dataOpFim: '',
         dataVencInicio: '', dataVencFim: '',
@@ -29,7 +29,7 @@ export default function ConsultasPage() {
     });
 
     const [sortConfig, setSortConfig] = useState({ key: 'dataOperacao', direction: 'DESC' });
-
+    
     const [contextMenu, setContextMenu] = useState({
         visible: false,
         x: 0,
@@ -62,7 +62,7 @@ export default function ConsultasPage() {
 
         params.append('sort', currentSortConfig.key);
         params.append('direction', currentSortConfig.direction);
-
+        
         try {
             const response = await fetch(`/api/duplicatas?${params.toString()}`, {
                 headers: getAuthHeader()
@@ -79,7 +79,7 @@ export default function ConsultasPage() {
             setLoading(false);
         }
     };
-
+    
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
@@ -90,11 +90,11 @@ export default function ConsultasPage() {
                 ]);
                 if (!contasRes.ok) throw new Error("Falha ao buscar contas master.");
                 if (!tiposRes.ok) throw new Error("Falha ao buscar tipos de operação.");
-
+                
                 const contas = await contasRes.json();
                 const tipos = await tiposRes.json();
-
-                const formattedTipos = tipos.map(t => ({...t, taxaJuros: t.taxa_juros, valorFixo: t.valor_fixo, despesasBancarias: t.despesas_bancarias}));
+                
+                const formattedTipos = tipos.map(t => ({...t, taxaJuros: t.taxa_juros, valorFixo: t.valor_fixo, despesasBancarias: t.despesas_bancarias, usarPrazoSacado: t.usar_prazo_sacado, usarPesoNoValorFixo: t.usar_peso_no_valor_fixo}));
                 const formattedContas = contas.map(c => ({...c, contaCorrente: c.conta_corrente}));
 
                 setContasMaster(formattedContas);
@@ -127,7 +127,7 @@ export default function ConsultasPage() {
             return [];
         }
     };
-
+    
     const fetchClientes = (query) => fetchApiData(`/api/cadastros/clientes/search?nome=${query}`);
     const fetchSacados = (query) => fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
 
@@ -140,7 +140,7 @@ export default function ConsultasPage() {
             setFilters(prev => ({ ...prev, [name]: value }));
         }
     };
-
+    
     const handleAutocompleteSelect = (name, item) => {
         setCurrentPage(1);
         if (name === 'cliente') {
@@ -168,7 +168,7 @@ export default function ConsultasPage() {
         if (sortConfig.direction === 'ASC') return <FaSortUp />;
         return <FaSortDown />;
     };
-
+    
     const handleContextMenu = (event, item) => {
         event.preventDefault();
         setContextMenu({ visible: true, x: event.pageX, y: event.pageY, selectedItem: item });
@@ -223,6 +223,7 @@ export default function ConsultasPage() {
             setIsEmailModalOpen(false);
         }
     };
+
     const handleGeneratePdf = async () => {
         if (!contextMenu.selectedItem) return;
         const operacaoId = contextMenu.selectedItem.operacaoId;
@@ -237,15 +238,31 @@ export default function ConsultasPage() {
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Não foi possível gerar o PDF.');
+                // Tenta ler a mensagem de erro do servidor
+                try {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Não foi possível gerar o PDF.');
+                } catch {
+                    // Se a resposta não for JSON, mostra uma mensagem genérica
+                    throw new Error(`Erro do servidor: ${response.status} ${response.statusText}`);
+                }
             }
-
+            
+            // Lê o nome do ficheiro do cabeçalho Content-Disposition
+            const contentDisposition = response.headers.get('content-disposition');
+            let filename = `bordero-${operacaoId}.pdf`; // Nome padrão
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+                if (filenameMatch && filenameMatch.length > 1) {
+                    filename = filenameMatch[1];
+                }
+            }
+            
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `bordero-${operacaoId}.pdf`;
+            a.download = filename; // Usa o nome do ficheiro recebido da API
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -254,12 +271,12 @@ export default function ConsultasPage() {
             alert(err.message);
         }
     };
-
+    
     const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
     const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
     const currentItems = duplicatas.slice(indexOfFirstItem, indexOfLastItem);
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
+    
     return (
         <>
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />

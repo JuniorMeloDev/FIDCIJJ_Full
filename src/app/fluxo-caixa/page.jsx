@@ -256,36 +256,49 @@ export default function FluxoDeCaixaPage() {
     }
   };
   const handleGeneratePdf = async () => {
-    if (!contextMenu.selectedItem) return;
-    const operacaoId = contextMenu.selectedItem.operacaoId;
-    if (!operacaoId) {
-      alert("Esta duplicata não está associada a uma operação para gerar PDF.");
-      return;
-    }
+        if (!contextMenu.selectedItem) return;
+        const operacaoId = contextMenu.selectedItem.operacaoId;
+        if (!operacaoId) {
+            alert("Este lançamento não está associado a um borderô para gerar PDF.");
+            return;
+        }
 
-    try {
-      const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, {
-        headers: getAuthHeader(),
-      });
+        try {
+            const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, { 
+                headers: getAuthHeader() 
+            });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Não foi possível gerar o PDF.");
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `bordero-${operacaoId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      alert(err.message);
-    }
-  };
+            if (!response.ok) {
+                try {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Não foi possível gerar o PDF.');
+                } catch {
+                    throw new Error(`Erro do servidor: ${response.status} ${response.statusText}`);
+                }
+            }
+            
+            const contentDisposition = response.headers.get('content-disposition');
+            let filename = `bordero-${operacaoId}.pdf`;
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+                if (filenameMatch && filenameMatch.length > 1) {
+                    filename = filenameMatch[1];
+                }
+            }
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            alert(err.message);
+        }
+    };
 
   const handleContextMenu = (event, item) => {
     event.preventDefault();
