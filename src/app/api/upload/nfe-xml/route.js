@@ -22,14 +22,15 @@ export async function POST(request) {
         const xmlText = await file.text();
         const parsedXml = await parseStringPromise(xmlText);
 
+        // --- LÓGICA CORRIGIDA PARA ENCONTRAR OS DADOS DA NF-e ---
+        // Procura por duas estruturas comuns de XML de NF-e
         const infNFe = getVal(parsedXml, 'nfeProc.NFe.0.infNFe.0') || getVal(parsedXml, 'NFe.0.infNFe.0');
+
         if (!infNFe) {
              throw new Error("Estrutura do XML de NF-e inválida ou não suportada.");
         }
 
         const emitCnpj = getVal(infNFe, 'emit.0.CNPJ.0');
-
-        // --- CORREÇÃO AQUI: Procura por CNPJ ou CPF no destinatário ---
         const destCnpjCpf = getVal(infNFe, 'dest.0.CNPJ.0') || getVal(infNFe, 'dest.0.CPF.0');
 
         if (!emitCnpj || !destCnpjCpf) {
