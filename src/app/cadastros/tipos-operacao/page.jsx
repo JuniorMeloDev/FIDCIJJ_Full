@@ -237,7 +237,7 @@ export default function TiposOperacaoPage() {
               Nova Operação
             </button>
           </div>
-          <div className="overflow-auto">
+          <div className="overflow-x-auto">
             {loading ? (
               <p className="text-center py-10 text-gray-400">A carregar...</p>
             ) : error ? (

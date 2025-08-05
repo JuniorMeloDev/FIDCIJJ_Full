@@ -192,7 +192,7 @@ export default function ClientesPage() {
                     <div className="flex justify-end mb-4">
                         <button onClick={handleOpenAddModal} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition">Novo Cliente</button>
                     </div>
-                    <div className="overflow-auto">
+                    <div className="overflow-x-auto">
                         {loading ? <p className="text-center py-10 text-gray-400">A carregar...</p> : error ? <p className="text-red-400 text-center py-10">{error}</p> : (
                             <table className="min-w-full divide-y divide-gray-700">
                                 <thead className="bg-gray-700">

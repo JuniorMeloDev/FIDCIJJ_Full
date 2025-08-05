@@ -12,17 +12,14 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="pt-br">
-      <body className={`${inter.className} h-screen overflow-hidden`}>
-        <div className="bg-gray-900 h-full flex flex-col">
-          {/* O SetupChecker envolve o conteúdo que depende do login/setup */}
-           <SetupChecker>
+    <html lang="pt-br" className="bg-gray-900">
+      <body className={`${inter.className} h-screen flex flex-col`}>
+          <SetupChecker>
             <Navbar />
-            <div className="flex-grow overflow-y-auto">
+            <div className="flex-grow pt-16 overflow-y-auto">
               {children}
             </div>
-             </SetupChecker>
-        </div>
+          </SetupChecker>
       </body>
     </html>
   );

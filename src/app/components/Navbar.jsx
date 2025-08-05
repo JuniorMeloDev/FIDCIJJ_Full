@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { jwtDecode } from 'jwt-decode';
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { FaChartLine } from 'react-icons/fa'
 import { FaBars, FaTimes } from 'react-icons/fa'
 
@@ -61,53 +61,82 @@ export default function Navbar() {
   ]
 
   return (
-    <motion.nav
-      className="bg-gray-900 border-b border-gray-800 shadow-lg fixed w-full z-30"
-      initial={{ y: -40, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.5 }}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <Link href="/resumo" className="flex items-center space-x-2">
-            <FaChartLine className="w-6 h-6 text-orange-400" />
-            <span className="text-xl font-bold text-white">IJJ FIDC</span>
-          </Link>
+    <>
+      <motion.nav
+        className="bg-gray-900 border-b border-gray-800 shadow-lg fixed w-full z-30"
+        initial={{ y: -64, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <Link href="/resumo" className="flex items-center space-x-2">
+              <FaChartLine className="w-6 h-6 text-orange-400" />
+              <span className="text-xl font-bold text-white">IJJ FIDC</span>
+            </Link>
 
-          <button
-            className="md:hidden text-gray-400 hover:text-white"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-          >
-            {isMenuOpen ? <FaTimes /> : <FaBars />}
-          </button>
+            {/* Itens do menu para telas grandes */}
+            <div className="hidden md:flex md:items-center md:space-x-4">
+              {links.map(({ label, href }) => (
+                <Link key={href} href={href} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${pathname.startsWith(href) ? 'text-white bg-gray-700' : 'text-gray-300 hover:text-orange-400 hover:bg-gray-800'}`}>
+                  {label}
+                </Link>
+              ))}
+            </div>
 
-          <div className={`${isMenuOpen ? 'block' : 'hidden'} md:flex md:items-center md:space-x-8`}>
-            {links.map(({ label, href }) => (
-              <Link key={href} href={href} className={`block px-3 py-2 rounded-md text-sm font-medium ${pathname.startsWith(href) ? 'text-white border-b-2 border-orange-400' : 'text-gray-300 hover:text-orange-400'}`}>
-                {label}
-              </Link>
-            ))}
-          </div>
-
-          <div className="relative ml-4 flex-shrink-0" ref={profileRef}>
-            <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-800 transition">
-              <span className="font-medium text-gray-200">{currentUser.username}</span>
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-            </button>
-            {isProfileOpen && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.2 }}
-                className="origin-top-right absolute right-0 mt-2 w-44 bg-gray-800 rounded-md shadow-xl py-1"
+            {/* Ícone do menu para telas pequenas */}
+            <div className="md:hidden flex items-center">
+              <button
+                className="text-gray-400 hover:text-white"
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
               >
-                <Link href="/profile" onClick={() => setIsProfileOpen(false)} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700">Perfil</Link>
-                <button onClick={handleLogout} className="w-full text-left block px-4 py-2 text-sm text-red-500 hover:bg-gray-700">Sair</button>
-              </motion.div>
-            )}
+                {isMenuOpen ? <FaTimes size={20} /> : <FaBars size={20} />}
+              </button>
+            </div>
+
+            {/* Dropdown do perfil (sempre visível em telas grandes) */}
+            <div className="hidden md:block relative ml-4 flex-shrink-0" ref={profileRef}>
+              <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-800 transition">
+                <span className="font-medium text-gray-200">{currentUser.username}</span>
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {isProfileOpen && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2 }}
+                  className="origin-top-right absolute right-0 mt-2 w-44 bg-gray-800 rounded-md shadow-xl py-1"
+                >
+                  <Link href="/profile" onClick={() => setIsProfileOpen(false)} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700">Perfil</Link>
+                  <button onClick={handleLogout} className="w-full text-left block px-4 py-2 text-sm text-red-500 hover:bg-gray-700">Sair</button>
+                </motion.div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </motion.nav>
+      </motion.nav>
+
+      {/* Menu lateral para telas pequenas */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            className="md:hidden fixed top-16 left-0 h-[calc(100%-4rem)] w-64 bg-gray-900 border-r border-gray-800 z-20 flex flex-col p-4 space-y-2"
+          >
+             {links.map(({ label, href }) => (
+                <Link key={href} href={href} onClick={() => setIsMenuOpen(false)} className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${pathname.startsWith(href) ? 'text-white bg-gray-700' : 'text-gray-300 hover:text-orange-400 hover:bg-gray-800'}`}>
+                  {label}
+                </Link>
+              ))}
+              <div className="border-t border-gray-700 my-4"></div>
+               <Link href="/profile" onClick={() => {setIsMenuOpen(false); setIsProfileOpen(false)}} className="block px-3 py-2 text-base font-medium text-gray-300 hover:text-orange-400 hover:bg-gray-800">Perfil</Link>
+               <button onClick={handleLogout} className="w-full text-left block px-3 py-2 text-base font-medium text-red-500 hover:bg-gray-800">Sair</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   )
 }
