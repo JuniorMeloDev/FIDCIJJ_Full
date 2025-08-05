@@ -22,7 +22,7 @@ export async function POST(request) {
         const xmlText = await file.text();
         const parsedXml = await parseStringPromise(xmlText);
 
-        const infNFe = getVal(parsedXml, 'nfeProc.NFe.0.infNFe.0');
+        const infNFe = getVal(parsedXml, 'nfeProc.NFe.0.infNFe.0') || getVal(parsedXml, 'NFe.0.infNFe.0');
         if (!infNFe) {
              throw new Error("Estrutura do XML de NF-e inválida ou não suportada.");
         }
@@ -40,7 +40,6 @@ export async function POST(request) {
             dataVencimento: getVal(p, 'dVenc.0'),
             valor: parseFloat(getVal(p, 'vDup.0')),
         })) : [];
-
 
         const responseData = {
             numeroNf: getVal(infNFe, 'ide.0.nNF.0'),

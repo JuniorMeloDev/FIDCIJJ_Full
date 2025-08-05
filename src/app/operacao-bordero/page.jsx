@@ -13,6 +13,7 @@ import EmailModal from '@/app/components/EmailModal';
 import { formatBRLInput, parseBRL } from '@/app/utils/formatters';
 
 export default function OperacaoBorderoPage() {
+    // ... (estados existentes)
     const [dataOperacao, setDataOperacao] = useState(new Date().toISOString().split('T')[0]);
     const [tipoOperacaoId, setTipoOperacaoId] = useState('');
     const [empresaCedente, setEmpresaCedente] = useState('');
@@ -33,7 +34,7 @@ export default function OperacaoBorderoPage() {
     const [savedOperacaoInfo, setSavedOperacaoInfo] = useState(null);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
 
-    // Estados e ref para XML e modais de criação rápida
+    // --- LÓGICA DO XML E MODAIS RESTAURADA ---
     const fileInputRef = useRef(null);
     const [xmlDataPendente, setXmlDataPendente] = useState(null);
     const [isClienteModalOpen, setIsClienteModalOpen] = useState(false);
@@ -199,16 +200,15 @@ export default function OperacaoBorderoPage() {
         }
     };
 
+    // ... (O resto do seu código, como handleSelectCedente, handleAddNotaFiscal, etc. continua aqui)
     const handleSelectCedente = (cliente) => {
         setEmpresaCedente(cliente.nome);
         setEmpresaCedenteId(cliente.id);
     };
-    
     const handleCedenteChange = (newName) => {
         setEmpresaCedente(newName);
         setEmpresaCedenteId(null);
     };
-
     const handleSelectSacado = (sacado) => {
         const condicoes = sacado.condicoes_pagamento || sacado.condicoesPagamento || [];
         setCondicoesSacado(condicoes);
@@ -219,12 +219,10 @@ export default function OperacaoBorderoPage() {
             setNovaNf(prev => ({ ...prev, clienteSacado: sacado.nome, prazos: '', parcelas: '1' }));
         }
     };
-
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setNovaNf(prevState => ({ ...prevState, [name]: name === 'valorNf' ? formatBRLInput(value) : value }));
     };
-
     const handleAddNotaFiscal = async (e) => {
         e.preventDefault();
         if (!tipoOperacaoId || !dataOperacao || !novaNf.clienteSacado) {
@@ -256,7 +254,6 @@ export default function OperacaoBorderoPage() {
             setIsLoading(false);
         }
     };
-
     const handleSalvarOperacao = async () => {
         if (notasFiscais.length === 0 || !contaBancariaId) {
             showNotification('Adicione ao menos uma NF e selecione uma conta bancária.', 'error');
@@ -290,15 +287,12 @@ export default function OperacaoBorderoPage() {
             setIsSaving(false);
         }
     };
-    
     const finalizarOperacao = () => {
         if (savedOperacaoInfo) {
             showNotification(`Operação salva com sucesso!`, 'success');
         }
         handleLimparTudo(false);
     };
-
-    // --- FUNÇÃO DE ENVIO DE E-MAIL ATUALIZADA ---
     const handleSendEmail = async (destinatarios) => {
         if (!savedOperacaoInfo) return;
         setIsSendingEmail(true);
@@ -321,12 +315,10 @@ export default function OperacaoBorderoPage() {
             finalizarOperacao();
         }
     };
-
     const handleCloseEmailModal = () => {
         setIsEmailModalOpen(false);
         finalizarOperacao();
     };
-
     const handleLimparTudo = (showMsg = true) => {
         setDataOperacao(new Date().toISOString().split('T')[0]);
         setTipoOperacaoId('');
@@ -339,7 +331,6 @@ export default function OperacaoBorderoPage() {
         setIgnoreDespesasBancarias(false);
         if (showMsg) showNotification('Formulário limpo.', 'success');
     };
-
     const todosOsDescontos = useMemo(() => {
         const selectedOperacao = tiposOperacao.find(op => op.id === parseInt(tipoOperacaoId));
         const despesasBancarias = selectedOperacao?.despesasBancarias || 0;
@@ -349,7 +340,6 @@ export default function OperacaoBorderoPage() {
         }
         return combined;
     }, [descontos, tipoOperacaoId, tiposOperacao, ignoreDespesasBancarias]);
-
     const totais = useMemo(() => {
         const valorTotalBruto = notasFiscais.reduce((acc, nf) => acc + nf.valorNf, 0);
         const desagioTotal = notasFiscais.reduce((acc, nf) => acc + (nf.jurosCalculado || 0), 0);
@@ -364,7 +354,6 @@ export default function OperacaoBorderoPage() {
 
         return { valorTotalBruto, desagioTotal, totalOutrosDescontos, liquidoOperacao };
     }, [notasFiscais, todosOsDescontos, tipoOperacaoId, tiposOperacao]);
-    
     const handleRemoveDesconto = (idToRemove) => {
         if (idToRemove === 'despesas-bancarias') {
             setIgnoreDespesasBancarias(true);
@@ -378,8 +367,8 @@ export default function OperacaoBorderoPage() {
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
             <DescontoModal isOpen={isDescontoModalOpen} onClose={() => setIsDescontoModalOpen(false)} onSave={(d) => setDescontos([...descontos, d])} />
             
-            <EditClienteModal isOpen={isClienteModalOpen} onClose={() => setIsClienteModalOpen(false)} onSave={handleSaveNovoCliente} cliente={clienteParaCriar} />
-            <EditSacadoModal isOpen={isSacadoModalOpen} onClose={() => setIsSacadoModalOpen(false)} onSave={handleSaveNovoSacado} sacado={sacadoParaCriar} />
+            <EditClienteModal isOpen={isClienteModalOpen} onClose={() => setClienteParaCriar(null)} onSave={handleSaveNovoCliente} cliente={clienteParaCriar} />
+            <EditSacadoModal isOpen={isSacadoModalOpen} onClose={() => setSacadoParaCriar(null)} onSave={handleSaveNovoSacado} sacado={sacadoParaCriar} />
 
             <EmailModal 
                 isOpen={isEmailModalOpen}
