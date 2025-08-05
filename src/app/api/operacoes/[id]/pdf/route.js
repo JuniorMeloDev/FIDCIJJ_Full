@@ -7,7 +7,6 @@ import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
-// Função para carregar a imagem do logo e converter para Base64
 const getLogoBase64 = () => {
     try {
         const imagePath = path.resolve(process.cwd(), 'public', 'Logo.png');
@@ -19,15 +18,11 @@ const getLogoBase64 = () => {
     }
 };
 
-// Função auxiliar para criar células de cabeçalho no PDF
 const getHeaderCell = (text) => ({
-    content: text,
-    styles: { fillColor: [31, 41, 55], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }
+    content: text, styles: { fillColor: [31, 41, 55], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }
 });
 
-// Função para "limpar" o nome do ficheiro, removendo caracteres especiais
 const sanitizeFilename = (filename) => {
-    // Remove o acento de "Borderô" e quaisquer outros caracteres não permitidos
     return filename.replace(/ô/g, 'o').replace(/[^\w\s.,-]/g, '');
 };
 
@@ -36,10 +31,9 @@ export async function GET(request, { params }) {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
-        
+
         const { id } = params;
 
-        // --- LÓGICA DE BUSCA DE DADOS ROBUSTA (EM ETAPAS) ---
         const { data: operacaoData, error: operacaoError } = await supabase.from('operacoes').select('*').eq('id', id).single();
         if (operacaoError) throw new Error("Operação não encontrada.");
 
@@ -49,49 +43,35 @@ export async function GET(request, { params }) {
         const { data: descontosData } = await supabase.from('descontos').select('*').eq('operacao_id', id);
 
         const operacao = { ...operacaoData, cliente: clienteData, tipo_operacao: tipoOpData, duplicatas: duplicatasData || [], descontos: descontosData || [] };
-        
+
+        // --- LÓGICA PARA O NOME DINÂMICO DO FICHEIRO ---
         const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
         const rawFilename = `Borderô ${tipoDocumento} ${numeros}.pdf`;
         const filename = sanitizeFilename(rawFilename);
-        
+
         const doc = new jsPDF();
-        
-        // --- LAYOUT DO CABEÇALHO CORRIGIDO ---
+
+        // ... (o resto da lógica de geração do PDF continua igual)
         const logoBase64 = getLogoBase64();
         if (logoBase64) {
-            const logoWidth = 50;
-            const logoHeight = logoWidth / 2.3; // Mantém a proporção
+            const logoWidth = 40;
+            const logoHeight = logoWidth / 2.3;
             doc.addImage(logoBase64, 'PNG', 14, 12, logoWidth, logoHeight);
         }
-
         const pageWidth = doc.internal.pageSize.getWidth();
         doc.setFontSize(18);
         doc.text("BORDERO ANALITICO", pageWidth - 14, 22, { align: 'right' });
         doc.setFontSize(10);
         doc.text(`Data Assinatura: ${formatDate(operacao.data_operacao)}`, pageWidth - 14, 28, { align: 'right' });
-        
         doc.text(`Empresa: ${operacao.cliente.nome}`, 14, 40);
-        
         const head = [[getHeaderCell('Nº. Do Título'), getHeaderCell('Venc. Parcelas'), getHeaderCell('Sacado/Emitente'), getHeaderCell('Juros Parcela'), getHeaderCell('Valor')]];
-        const body = operacao.duplicatas.map(dup => [ 
-            dup.nf_cte, 
-            formatDate(dup.data_vencimento), 
-            dup.cliente_sacado, 
-            { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } },
-            { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } 
-        ]);
-        
+        const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), dup.cliente_sacado, { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
         autoTable(doc, {
             startY: 50, head: head, body: body,
-            foot: [[
-                { content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, 
-                { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, 
-                { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }
-            ]],
+            foot: [[{ content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }]],
             theme: 'grid', headStyles: { fillColor: [31, 41, 55] },
         });
-        
         const finalY = doc.lastAutoTable.finalY + 10;
         const totaisBody = [
             ['Valor total dos Títulos:', { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right' } }],
@@ -99,7 +79,6 @@ export async function GET(request, { params }) {
             ...operacao.descontos.map(d => [ `${d.descricao}:`, { content: `-${formatBRLNumber(d.valor)}`, styles: { halign: 'right' } } ]),
             [{ content: 'Líquido da Operação:', styles: { fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_liquido), styles: { halign: 'right', fontStyle: 'bold' } }]
         ];
-
         autoTable(doc, {
             startY: finalY, body: totaisBody, theme: 'plain', tableWidth: 'wrap',
             margin: { left: pageWidth / 2 }, styles: { cellPadding: 1, fontSize: 10 }
