@@ -28,11 +28,17 @@ export async function POST(request) {
         }
 
         const emitCnpj = getVal(infNFe, 'emit.0.CNPJ.0');
-        const destCnpj = getVal(infNFe, 'dest.0.CNPJ.0');
+
+        // --- CORREÇÃO AQUI: Procura por CNPJ ou CPF no destinatário ---
+        const destCnpjCpf = getVal(infNFe, 'dest.0.CNPJ.0') || getVal(infNFe, 'dest.0.CPF.0');
+
+        if (!emitCnpj || !destCnpjCpf) {
+            throw new Error("Não foi possível encontrar o CNPJ do emitente ou o CNPJ/CPF do destinatário no XML.");
+        }
 
         // Verifica se emitente e sacado existem no banco de dados
         const { data: emitenteData } = await supabase.from('clientes').select('id, nome').eq('cnpj', emitCnpj).single();
-        const { data: sacadoData } = await supabase.from('sacados').select('id, nome').eq('cnpj', destCnpj).single();
+        const { data: sacadoData } = await supabase.from('sacados').select('id, nome').eq('cnpj', destCnpjCpf).single();
 
         const cobr = getVal(infNFe, 'cobr.0');
         const parcelas = cobr && cobr.dup ? cobr.dup.map(p => ({
@@ -54,7 +60,7 @@ export async function POST(request) {
             emitenteExiste: !!emitenteData,
             sacado: {
                 nome: getVal(infNFe, 'dest.0.xNome.0'),
-                cnpj: destCnpj,
+                cnpj: destCnpjCpf,
                 ie: getVal(infNFe, 'dest.0.IE.0'),
                 endereco: getVal(infNFe, 'dest.0.enderDest.0.xLgr.0'),
                 bairro: getVal(infNFe, 'dest.0.enderDest.0.xBairro.0'),
