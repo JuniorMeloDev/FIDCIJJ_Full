@@ -10,59 +10,77 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // Inicia a consulta na tabela 'operacoes' para facilitar os filtros principais
-        let query = supabase
-            .from('operacoes')
+        // 1. FAZ UMA CONSULTA MAIS SIMPLES E ABRANGENTE
+        // Busca as duplicatas e os seus dados relacionados
+        let { data: duplicatas, error } = await supabase
+            .from('duplicatas')
             .select(`
-                id, cliente_id, tipo_operacao_id,
-                cliente:clientes ( nome ),
-                tipo_operacao:tipos_operacao ( nome ),
-                duplicatas!inner (
-                    id, data_operacao, nf_cte, valor_bruto, valor_juros,
-                    cliente_sacado, data_vencimento, status_recebimento
-                )
+                *,
+                operacao:operacoes (
+                    cliente_id,
+                    tipo_operacao_id,
+                    cliente:clientes ( nome ),
+                    tipo_operacao:tipos_operacao ( nome )
+                ),
+                movimentacao:movimentacoes_caixa ( data_movimento, conta_bancaria )
             `);
 
-        // Aplica os filtros da URL
-        if (searchParams.get('dataInicio')) query = query.gte('data_operacao', searchParams.get('dataInicio'));
-        if (searchParams.get('dataFim')) query = query.lte('data_operacao', searchParams.get('dataFim'));
-        if (searchParams.get('clienteId')) query = query.eq('cliente_id', searchParams.get('clienteId'));
-        if (searchParams.get('tipoOperacaoId')) query = query.eq('tipo_operacao_id', searchParams.get('tipoOperacaoId'));
-
-        const { data: operacoes, error } = await query;
         if (error) throw error;
 
-        // Transforma a estrutura numa lista simples de duplicatas
-        let duplicatas = operacoes.flatMap(op => 
-            op.duplicatas.map(dup => ({
-                ...dup,
-                empresa_cedente: op.cliente?.nome,
-                tipo_operacao_nome: op.tipo_operacao?.nome,
-            }))
-        );
-
-        // Aplica os filtros restantes em JavaScript
+        // 2. APLICA OS FILTROS EM JAVASCRIPT (MAIS SEGURO)
         const sacadoFilter = searchParams.get('sacado');
         const statusFilter = searchParams.get('status');
+        const dataOpInicio = searchParams.get('dataOpInicio');
+        const dataOpFim = searchParams.get('dataOpFim');
+        const dataVencInicio = searchParams.get('dataVencInicio');
+        const dataVencFim = searchParams.get('dataVencFim');
+        const nfCteFilter = searchParams.get('nfCte');
+        const clienteIdFilter = searchParams.get('clienteId');
+        const tipoOperacaoIdFilter = searchParams.get('tipoOperacaoId');
 
-        duplicatas = duplicatas.filter(dup => {
+        const filteredData = duplicatas.filter(dup => {
+            if (!dup.operacao) return false; // Garante que a duplicata tem uma operação associada
             if (sacadoFilter && !dup.cliente_sacado.toLowerCase().includes(sacadoFilter.toLowerCase())) return false;
             if (statusFilter && statusFilter !== 'Todos' && dup.status_recebimento !== statusFilter) return false;
+            if (dataOpInicio && dup.data_operacao < dataOpInicio) return false;
+            if (dataOpFim && dup.data_operacao > dataOpFim) return false;
+            if (dataVencInicio && dup.data_vencimento < dataVencInicio) return false;
+            if (dataVencFim && dup.data_vencimento > dataVencFim) return false;
+            if (nfCteFilter && !dup.nf_cte.includes(nfCteFilter)) return false;
+            if (clienteIdFilter && String(dup.operacao.cliente_id) !== clienteIdFilter) return false;
+            if (tipoOperacaoIdFilter && String(dup.operacao.tipo_operacao_id) !== tipoOperacaoIdFilter) return false;
             return true;
         });
 
-        // Lógica de deduplicação em JavaScript para garantir
-        const uniqueData = Array.from(new Map(duplicatas.map(item => [
-            `${item.data_operacao}-${item.nf_cte}-${item.valor_bruto}`, item
-        ])).values());
+        // 3. FORMATA OS DADOS PARA O FRONTEND
+        let formattedData = filteredData.map(d => ({
+            id: d.id, operacaoId: d.operacao_id, clienteId: d.operacao?.cliente_id,
+            dataOperacao: d.data_operacao, nfCte: d.nf_cte, empresaCedente: d.operacao?.cliente?.nome,
+            valorBruto: d.valor_bruto, valorJuros: d.valor_juros, clienteSacado: d.cliente_sacado,
+            dataVencimento: d.data_vencimento, tipoOperacaoNome: d.operacao?.tipo_operacao?.nome,
+            statusRecebimento: d.status_recebimento, dataLiquidacao: d.movimentacao?.data_movimento,
+            contaLiquidacao: d.movimentacao?.conta_bancaria
+        }));
 
-        return NextResponse.json(uniqueData, { status: 200 });
+        // 4. APLICA A ORDENAÇÃO EM JAVASCRIPT
+        const sortKey = searchParams.get('sort');
+        const sortDirection = searchParams.get('direction');
+
+        if (sortKey && sortDirection) {
+            formattedData.sort((a, b) => {
+                const valA = a[sortKey];
+                const valB = b[sortKey];
+                if (valA === null) return 1; if (valB === null) return -1;
+                if (valA < valB) return sortDirection === 'ASC' ? -1 : 1;
+                if (valA > valB) return sortDirection === 'ASC' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        return NextResponse.json(formattedData, { status: 200 });
 
     } catch (error) {
-        console.error('Erro ao gerar relatório de duplicatas:', error);
-        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-            return NextResponse.json({ message: 'Token inválido ou expirado' }, { status: 403 });
-        }
+        console.error('Erro ao buscar duplicatas:', error);
         return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
     }
 }
