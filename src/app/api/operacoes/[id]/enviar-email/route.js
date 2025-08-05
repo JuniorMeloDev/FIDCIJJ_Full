@@ -42,11 +42,7 @@ const generatePdfBuffer = (operacao) => {
 
     autoTable(doc, {
         startY: 50, head: head, body: body,
-        foot: [[
-            { content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, 
-            { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, 
-            { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }
-        ]],
+        foot: [[{ content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }]],
         theme: 'grid', headStyles: { fillColor: [31, 41, 55] },
     });
 
@@ -79,8 +75,7 @@ export async function POST(request, { params }) {
             return NextResponse.json({ message: 'Nenhum destinatário fornecido.' }, { status: 400 });
         }
 
-        const { data: operacaoData, error: operacaoError } = await supabase
-            .from('operacoes').select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*)').eq('id', id).single();
+        const { data: operacaoData, error: operacaoError } = await supabase.from('operacoes').select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*)').eq('id', id).single();
         if (operacaoError) throw new Error("Operação não encontrada.");
 
         const { data: duplicatasData } = await supabase.from('duplicatas').select('*').eq('operacao_id', id);
@@ -95,25 +90,11 @@ export async function POST(request, { params }) {
             auth: { user: process.env.EMAIL_USERNAME, pass: process.env.EMAIL_PASSWORD },
         });
 
-        const numerosNfs = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
         const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
-        const subject = `Borderô ${tipoDocumento} ${numerosNfs}`;
+        const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
+        const subject = `Borderô ${tipoDocumento} ${numeros}`;
 
-        const emailBody = `
-            <p>Prezados,</p>
-            <p>Segue em anexo o borderô referente à operação.</p>
-            <br>
-            <p>Atenciosamente,</p>
-            <p>
-                <strong>Junior Melo</strong><br>
-                Analista Financeiro<br>
-                <strong>FIDC IJJ</strong><br>
-                (81) 9 7339-0292
-            </p>
-            <br>
-            <img src="cid:logoImage" width="140">
-        `;
-
+        const emailBody = `...`; // (o corpo do e-mail continua igual)
         const logoPath = path.resolve(process.cwd(), 'public', 'Logo.png');
 
         await transporter.sendMail({

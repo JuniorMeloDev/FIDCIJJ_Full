@@ -32,6 +32,8 @@ export default function OperacaoBorderoPage() {
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
     const [savedOperacaoInfo, setSavedOperacaoInfo] = useState(null);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+    // Estados e ref para XML e modais de criação rápida
     const fileInputRef = useRef(null);
     const [xmlDataPendente, setXmlDataPendente] = useState(null);
     const [isClienteModalOpen, setIsClienteModalOpen] = useState(false);
@@ -39,8 +41,7 @@ export default function OperacaoBorderoPage() {
     const [clienteParaCriar, setClienteParaCriar] = useState(null);
     const [sacadoParaCriar, setSacadoParaCriar] = useState(null);
 
-
-     const getAuthHeader = () => {
+    const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     };
@@ -49,6 +50,7 @@ export default function OperacaoBorderoPage() {
         setNotification({ message, type });
         setTimeout(() => setNotification({ message: '', type: '' }), 5000);
     };
+
     const fetchApiData = async (url) => {
         try {
             const res = await fetch(url, { headers: getAuthHeader() });
@@ -63,7 +65,7 @@ export default function OperacaoBorderoPage() {
                 fetchApiData(`/api/cadastros/tipos-operacao`),
                 fetchApiData(`/api/cadastros/contas/master`),
             ]);
-             const formattedTipos = tiposData.map(t => ({...t, taxaJuros: t.taxa_juros, valorFixo: t.valor_fixo, despesasBancarias: t.despesas_bancarias}));
+             const formattedTipos = tiposData.map(t => ({...t, taxaJuros: t.taxa_juros, valorFixo: t.valor_fixo, despesasBancarias: t.despesas_bancarias, usarPrazoSacado: t.usar_prazo_sacado, usarPesoNoValorFixo: t.usar_peso_no_valor_fixo}));
             const formattedContas = contasData.map(c => ({...c, contaCorrente: c.conta_corrente}));
 
             setTiposOperacao(formattedTipos);
@@ -72,8 +74,10 @@ export default function OperacaoBorderoPage() {
         };
         fetchInitialData();
     }, []);
+
     const fetchClientes = (query) => fetchApiData(`/api/cadastros/clientes/search?nome=${query}`);
     const fetchSacados = (query) => fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
+
     const handleXmlUpload = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -107,6 +111,7 @@ export default function OperacaoBorderoPage() {
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
+
     const preencherFormularioComXml = (data) => {
         const prazosArray = data.parcelas ? data.parcelas.map(p => {
             const d1 = new Date(data.dataEmissao);
@@ -114,7 +119,7 @@ export default function OperacaoBorderoPage() {
             return Math.ceil(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24));
         }) : [];
         const prazosString = prazosArray.join('/');
-        const valorFormatado = data.valorTotal ? formatBRLInput(data.valorTotal * 100) : '';
+        const valorFormatado = data.valorTotal ? formatBRLInput(String(data.valorTotal * 100)) : '';
 
         setNovaNf({
             nfCte: data.numeroNf || '',
@@ -130,7 +135,8 @@ export default function OperacaoBorderoPage() {
         showNotification("Dados do XML preenchidos com sucesso!", "success");
         setXmlDataPendente(null);
     };
-     const handleSaveNovoCliente = async (id, data) => {
+    
+    const handleSaveNovoCliente = async (id, data) => {
         try {
             const response = await fetch(`/api/cadastros/clientes`, { 
                 method: 'POST', 
@@ -165,6 +171,7 @@ export default function OperacaoBorderoPage() {
             return { success: false, message: err.message };
         }
     };
+    
     const handleSaveNovoSacado = async (id, data) => {
         try {
             const response = await fetch(`/api/cadastros/sacados`, { 
@@ -191,14 +198,17 @@ export default function OperacaoBorderoPage() {
             return { success: false, message: err.message };
         }
     };
+
     const handleSelectCedente = (cliente) => {
         setEmpresaCedente(cliente.nome);
         setEmpresaCedenteId(cliente.id);
     };
+    
     const handleCedenteChange = (newName) => {
         setEmpresaCedente(newName);
         setEmpresaCedenteId(null);
     };
+
     const handleSelectSacado = (sacado) => {
         const condicoes = sacado.condicoes_pagamento || sacado.condicoesPagamento || [];
         setCondicoesSacado(condicoes);
@@ -209,13 +219,18 @@ export default function OperacaoBorderoPage() {
             setNovaNf(prev => ({ ...prev, clienteSacado: sacado.nome, prazos: '', parcelas: '1' }));
         }
     };
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setNovaNf(prevState => ({ ...prevState, [name]: name === 'valorNf' ? formatBRLInput(value) : value }));
     };
+
     const handleAddNotaFiscal = async (e) => {
         e.preventDefault();
-        // ... (lógica existente para adicionar nota fiscal)
+        if (!tipoOperacaoId || !dataOperacao || !novaNf.clienteSacado) {
+            showNotification('Preencha os Dados da Operação e o Sacado primeiro.', 'error');
+            return;
+        }
         setIsLoading(true);
         const valorNfFloat = parseBRL(novaNf.valorNf);
         const body = { 
@@ -241,48 +256,54 @@ export default function OperacaoBorderoPage() {
             setIsLoading(false);
         }
     };
+
     const handleSalvarOperacao = async () => {
-        // ... (lógica existente para salvar)
         if (notasFiscais.length === 0 || !contaBancariaId) {
-                showNotification('Adicione ao menos uma NF e selecione uma conta bancária.', 'error');
-                return;
-            }
-            if (!empresaCedenteId) {
-                showNotification('Selecione um cedente válido da lista antes de salvar.', 'error');
-                return;
-            }
-            setIsSaving(true);
-            const payload = {
-                dataOperacao,
-                tipoOperacaoId: parseInt(tipoOperacaoId),
-                clienteId: empresaCedenteId,
-                contaBancariaId: parseInt(contaBancariaId),
-                descontos: todosOsDescontos.map(({ id, ...rest }) => rest),
-                notasFiscais: notasFiscais.map(nf => ({ ...nf, peso: parseFloat(String(nf.peso).replace(',', '.')) || null }))
-            };
-            try {
-                const response = await fetch(`/api/operacoes/salvar`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, body: JSON.stringify(payload) });
-                if (!response.ok) throw new Error(await response.text() || 'Ocorreu um erro ao guardar a operação.');
-                const operacaoId = await response.json();
-                setSavedOperacaoInfo({ id: operacaoId, clienteId: empresaCedenteId });
-                setIsEmailModalOpen(true);
-            } catch (error) {
-                showNotification(error.message, 'error');
-            } finally {
-                setIsSaving(false);
-            }
-    };
-    const finalizarOperacao = () => {
-            if (savedOperacaoInfo) {
-                showNotification(`Operação salva com sucesso!`, 'success');
-            }
-            handleLimparTudo(false);
+            showNotification('Adicione ao menos uma NF e selecione uma conta bancária.', 'error');
+            return;
+        }
+        if (!empresaCedenteId) {
+            showNotification('Selecione um cedente válido da lista antes de salvar.', 'error');
+            return;
+        }
+        setIsSaving(true);
+        const payload = {
+            dataOperacao,
+            tipoOperacaoId: parseInt(tipoOperacaoId),
+            clienteId: empresaCedenteId,
+            contaBancariaId: parseInt(contaBancariaId),
+            descontos: todosOsDescontos.map(({ id, ...rest }) => rest),
+            notasFiscais: notasFiscais.map(nf => ({ ...nf, peso: parseFloat(String(nf.peso).replace(',', '.')) || null }))
         };
+        try {
+            const response = await fetch(`/api/operacoes/salvar`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, body: JSON.stringify(payload) });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Ocorreu um erro ao guardar a operação.');
+            }
+            const operacaoId = await response.json();
+            setSavedOperacaoInfo({ id: operacaoId, clienteId: empresaCedenteId });
+            setIsEmailModalOpen(true);
+        } catch (error) {
+            showNotification(error.message, 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    const finalizarOperacao = () => {
+        if (savedOperacaoInfo) {
+            showNotification(`Operação salva com sucesso!`, 'success');
+        }
+        handleLimparTudo(false);
+    };
+
+    // --- FUNÇÃO DE ENVIO DE E-MAIL ATUALIZADA ---
     const handleSendEmail = async (destinatarios) => {
-        if (!operacaoParaEmail) return;
+        if (!savedOperacaoInfo) return;
         setIsSendingEmail(true);
         try {
-            const response = await fetch(`/api/operacoes/${operacaoParaEmail.id}/enviar-email`, { 
+            const response = await fetch(`/api/operacoes/${savedOperacaoInfo.id}/enviar-email`, { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, 
                 body: JSON.stringify({ destinatarios }) 
@@ -297,24 +318,27 @@ export default function OperacaoBorderoPage() {
         } finally {
             setIsSendingEmail(false);
             setIsEmailModalOpen(false);
+            finalizarOperacao();
         }
     };
+
     const handleCloseEmailModal = () => {
-            setIsEmailModalOpen(false);
-            finalizarOperacao();
-        };
+        setIsEmailModalOpen(false);
+        finalizarOperacao();
+    };
+
     const handleLimparTudo = (showMsg = true) => {
-            setDataOperacao(new Date().toISOString().split('T')[0]);
-            setTipoOperacaoId('');
-            setEmpresaCedente('');
-            setEmpresaCedenteId(null);
-            setNotasFiscais([]);
-            setDescontos([]);
-            setNovaNf({ nfCte: '', dataNf: '', valorNf: '', clienteSacado: '', parcelas: '1', prazos: '', peso: '' });
-            setCondicoesSacado([]);
-            setIgnoreDespesasBancarias(false);
-            if (showMsg) showNotification('Formulário limpo.', 'success');
-        };
+        setDataOperacao(new Date().toISOString().split('T')[0]);
+        setTipoOperacaoId('');
+        setEmpresaCedente('');
+        setEmpresaCedenteId(null);
+        setNotasFiscais([]);
+        setDescontos([]);
+        setNovaNf({ nfCte: '', dataNf: '', valorNf: '', clienteSacado: '', parcelas: '1', prazos: '', peso: '' });
+        setCondicoesSacado([]);
+        setIgnoreDespesasBancarias(false);
+        if (showMsg) showNotification('Formulário limpo.', 'success');
+    };
 
     const todosOsDescontos = useMemo(() => {
         const selectedOperacao = tiposOperacao.find(op => op.id === parseInt(tipoOperacaoId));
