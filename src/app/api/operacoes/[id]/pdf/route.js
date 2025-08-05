@@ -7,7 +7,6 @@ import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
-// Função para carregar a imagem e converter para Base64
 const getLogoBase64 = () => {
     try {
         const imagePath = path.resolve(process.cwd(), 'public', 'Logo.png');
@@ -32,47 +31,50 @@ export async function GET(request, { params }) {
 
         const { id } = params;
 
-        const { data: operacao, error } = await supabase
+        // --- LÓGICA DE BUSCA DE DADOS MAIS ROBUSTA ---
+        const { data: operacaoData, error: operacaoError } = await supabase
             .from('operacoes')
-            .select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*), duplicatas(*), descontos(*)')
+            .select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*)')
             .eq('id', id)
             .single();
+        if (operacaoError) throw new Error("Operação não encontrada.");
 
-        if (error) throw error;
+        const { data: duplicatasData, error: duplicatasError } = await supabase.from('duplicatas').select('*').eq('operacao_id', id);
+        if (duplicatasError) throw new Error("Erro ao buscar duplicatas da operação.");
 
+        const { data: descontosData, error: descontosError } = await supabase.from('descontos').select('*').eq('operacao_id', id);
+        if (descontosError) throw new Error("Erro ao buscar descontos da operação.");
+
+        const operacao = { ...operacaoData, duplicatas: duplicatasData, descontos: descontosData };
+
+        // --- LÓGICA DO NOME DO FICHEIRO ---
         const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
         const filename = `Borderô ${tipoDocumento} ${numeros}.pdf`;
 
         const doc = new jsPDF();
+
+        // --- LAYOUT DO CABEÇALHO CORRIGIDO ---
         const logoBase64 = getLogoBase64();
         if (logoBase64) {
-            doc.addImage(logoBase64, 'PNG', 14, 10, 35, 15);
+            doc.addImage(logoBase64, 'PNG', 14, 12, 35, 15);
         }
 
-        doc.setFontSize(18);
-        doc.text("BORDERÔ ANALÍTICO", 14, 22);
-        doc.setFontSize(10);
         const pageWidth = doc.internal.pageSize.getWidth();
-        doc.text(`Data Assinatura: ${formatDate(operacao.data_operacao)}`, pageWidth - 14, 22, { align: 'right' });
-        doc.text(`Empresa: ${operacao.cliente.nome}`, 14, 30);
+        doc.setFontSize(18);
+        doc.text("BORDERÔ ANALÍTICO", pageWidth - 14, 22, { align: 'right' });
+        doc.setFontSize(10);
+        doc.text(`Data Assinatura: ${formatDate(operacao.data_operacao)}`, pageWidth - 14, 28, { align: 'right' });
 
+        doc.text(`Empresa: ${operacao.cliente.nome}`, 14, 40);
+
+        // ... (resto da lógica de geração do PDF continua igual)
         const head = [[getHeaderCell('Nº. Do Título'), getHeaderCell('Venc. Parcelas'), getHeaderCell('Sacado/Emitente'), getHeaderCell('Juros Parcela'), getHeaderCell('Valor')]];
-        const body = operacao.duplicatas.map(dup => [ 
-            dup.nf_cte, 
-            formatDate(dup.data_vencimento), 
-            dup.cliente_sacado, 
-            { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } },
-            { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } 
-        ]);
+        const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), dup.cliente_sacado, { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
 
         autoTable(doc, {
-            startY: 40, head: head, body: body,
-            foot: [[
-                { content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, 
-                { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, 
-                { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }
-            ]],
+            startY: 50, head: head, body: body,
+            foot: [[{ content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }]],
             theme: 'grid', headStyles: { fillColor: [31, 41, 55] },
         });
 
@@ -90,7 +92,6 @@ export async function GET(request, { params }) {
         });
 
         const pdfBuffer = doc.output('arraybuffer');
-
         const headers = new Headers();
         headers.append('Content-Type', 'application/pdf');
         headers.append('Content-Disposition', `attachment; filename="${filename}"`);
