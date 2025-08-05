@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/app/utils/supabaseClient';
+import { supabase } from '@/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
 export async function GET(request) {
@@ -10,26 +10,69 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // A API agora apenas recolhe os filtros
-        const rpcParams = {
-            p_data_inicio: searchParams.get('dataInicio') || null,
-            p_data_fim: searchParams.get('dataFim') || null,
-            p_cliente_id: searchParams.get('clienteId') || null,
-            p_sacado: searchParams.get('sacado') || null,
-            p_status: searchParams.get('status') || null,
-            p_tipo_operacao_id: searchParams.get('tipoOperacaoId') || null
-        };
-
-        // E passa-os todos para a função do Supabase
-        const { data, error } = await supabase.rpc('get_duplicatas_filtradas', rpcParams);
+        // 1. FAZ UMA CONSULTA MAIS SIMPLES E ABRANGENTE
+        // Busca as duplicatas e os seus dados relacionados
+        let { data: duplicatas, error } = await supabase
+            .from('duplicatas')
+            .select(`
+                *,
+                operacao:operacoes (
+                    cliente_id,
+                    tipo_operacao_id,
+                    cliente:clientes ( nome ),
+                    tipo_operacao:tipos_operacao ( nome )
+                )
+            `);
 
         if (error) throw error;
-        return NextResponse.json(data, { status: 200 });
+
+        // 2. APLICA OS FILTROS EM JAVASCRIPT (MAIS SEGURO)
+        const sacadoFilter = searchParams.get('sacado');
+        const statusFilter = searchParams.get('status');
+        const dataInicio = searchParams.get('dataInicio');
+        const dataFim = searchParams.get('dataFim');
+        const clienteIdFilter = searchParams.get('clienteId');
+        const tipoOperacaoIdFilter = searchParams.get('tipoOperacaoId');
+
+        const filteredData = duplicatas.filter(dup => {
+            if (!dup.operacao) return false; // Garante que a duplicata tem uma operação associada
+            if (sacadoFilter && !dup.cliente_sacado.toLowerCase().includes(sacadoFilter.toLowerCase())) return false;
+            if (statusFilter && statusFilter !== 'Todos' && dup.status_recebimento !== statusFilter) return false;
+            if (dataInicio && dup.data_operacao < dataInicio) return false;
+            if (dataFim && dup.data_operacao > dataFim) return false;
+            if (clienteIdFilter && String(dup.operacao.cliente_id) !== clienteIdFilter) return false;
+            if (tipoOperacaoIdFilter && String(dup.operacao.tipo_operacao_id) !== tipoOperacaoIdFilter) return false;
+            return true;
+        });
+
+        // 3. FORMATA OS DADOS PARA O RELATÓRIO
+        let formattedData = filteredData.map(d => ({
+            id: d.id,
+            operacao_id: d.operacao_id,
+            cliente_id: d.operacao?.cliente_id,
+            data_operacao: d.data_operacao,
+            nf_cte: d.nf_cte,
+            empresa_cedente: d.operacao?.cliente?.nome,
+            valor_bruto: d.valor_bruto,
+            valor_juros: d.valor_juros,
+            cliente_sacado: d.cliente_sacado,
+            data_vencimento: d.data_vencimento,
+            tipo_operacao_nome: d.operacao?.tipo_operacao?.nome,
+            status_recebimento: d.status_recebimento,
+        }));
+
+        // 4. LÓGICA DE DEDUPLICAÇÃO FINAL
+        const uniqueData = Array.from(new Map(formattedData.map(item => [
+            `${item.data_operacao}-${item.nf_cte}-${item.valor_bruto}`, item
+        ])).values());
+
+        return NextResponse.json(uniqueData, { status: 200 });
+
     } catch (error) {
-        console.error("Erro na API de relatório de duplicatas:", error);
+        console.error('Erro ao gerar relatório de duplicatas:', error);
         if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
             return NextResponse.json({ message: 'Token inválido ou expirado' }, { status: 403 });
         }
-        return NextResponse.json({ message: error.message }, { status: 500 });
+        return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
     }
 }
