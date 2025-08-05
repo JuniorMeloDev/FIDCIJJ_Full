@@ -21,7 +21,7 @@ export async function POST(request) {
 
     const xmlText = await file.text();
 
-    // ✅ Remoção completa de namespaces e prefixos
+    // Remove namespaces e atributos
     const parsedXml = await parseStringPromise(xmlText, {
       explicitArray: true,
       ignoreAttrs: true,
@@ -31,11 +31,8 @@ export async function POST(request) {
       ]
     });
 
-    // Agora a raiz será "NFe" e "infNFe" diretamente
-    const infNFe =
-      parsedXml.nfeProc?.NFe?.[0]?.infNFe?.[0] ||
-      parsedXml.NFe?.[0]?.infNFe?.[0] ||
-      parsedXml.infNFe;
+    // 🚨 A estrutura correta dos seus arquivos:
+    const infNFe = parsedXml?.NFe?.infNFe?.[0];
 
     if (!infNFe) {
       console.error("parsedXml raiz:", Object.keys(parsedXml));
