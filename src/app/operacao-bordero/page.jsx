@@ -13,7 +13,6 @@ import EmailModal from '@/app/components/EmailModal';
 import { formatBRLInput, parseBRL } from '@/app/utils/formatters';
 
 export default function OperacaoBorderoPage() {
-    // ... (todos os seus estados useState)
     const [dataOperacao, setDataOperacao] = useState(new Date().toISOString().split('T')[0]);
     const [tipoOperacaoId, setTipoOperacaoId] = useState('');
     const [empresaCedente, setEmpresaCedente] = useState('');
@@ -40,7 +39,7 @@ export default function OperacaoBorderoPage() {
     const [clienteParaCriar, setClienteParaCriar] = useState(null);
     const [sacadoParaCriar, setSacadoParaCriar] = useState(null);
 
-    // ... (todas as suas funções handle, fetch, etc.)
+
      const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
         return token ? { 'Authorization': `Bearer ${token}` } : {};
@@ -280,10 +279,26 @@ export default function OperacaoBorderoPage() {
             handleLimparTudo(false);
         };
     const handleSendEmail = async (destinatarios) => {
-            showNotification("Funcionalidade de e-mail ainda não implementada.", "error");
+        if (!operacaoParaEmail) return;
+        setIsSendingEmail(true);
+        try {
+            const response = await fetch(`/api/operacoes/${operacaoParaEmail.id}/enviar-email`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, 
+                body: JSON.stringify({ destinatarios }) 
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Falha ao enviar o e-mail.");
+            }
+            showNotification("E-mail(s) enviado(s) com sucesso!", "success");
+        } catch (err) {
+            showNotification(err.message, "error");
+        } finally {
+            setIsSendingEmail(false);
             setIsEmailModalOpen(false);
-            finalizarOperacao();
-        };
+        }
+    };
     const handleCloseEmailModal = () => {
             setIsEmailModalOpen(false);
             finalizarOperacao();

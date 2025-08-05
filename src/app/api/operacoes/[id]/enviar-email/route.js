@@ -8,17 +8,18 @@ import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
-// Função para carregar a imagem e converter para Base64
 const getLogoBase64 = () => {
     try {
         const imagePath = path.resolve(process.cwd(), 'public', 'Logo.png');
         const imageBuffer = fs.readFileSync(imagePath);
         return `data:image/png;base64,${imageBuffer.toString('base64')}`;
-    } catch (error) {
-        console.error("Erro ao carregar a imagem do logo:", error);
-        return null;
-    }
+    } catch (error) { return null; }
 };
+
+const getHeaderCell = (text) => ({
+    content: text,
+    styles: { fillColor: [31, 41, 55], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }
+});
 
 const generatePdfBuffer = (operacao) => {
     const doc = new jsPDF();
@@ -30,15 +31,30 @@ const generatePdfBuffer = (operacao) => {
     doc.setFontSize(18);
     doc.text("BORDERÔ ANALÍTICO", 14, 22);
     doc.setFontSize(10);
-    doc.text(`Data Assinatura: ${formatDate(operacao.data_operacao)}`, 200, 22, { align: 'right' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    doc.text(`Data Assinatura: ${formatDate(operacao.data_operacao)}`, pageWidth - 14, 22, { align: 'right' });
     doc.text(`Empresa: ${operacao.cliente.nome}`, 14, 30);
 
-    const head = [['Nº. Do Título', 'Venc. Parcelas', 'Sacado/Emitente', 'Juros Parcela', 'Valor']];
-    const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), dup.cliente_sacado, formatBRLNumber(dup.valor_juros), formatBRLNumber(dup.valor_bruto) ]);
+    const head = [[getHeaderCell('Nº. Do Título'), getHeaderCell('Venc. Parcelas'), getHeaderCell('Sacado/Emitente'), getHeaderCell('Juros Parcela'), getHeaderCell('Valor')]];
+    const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), dup.cliente_sacado, { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
 
     autoTable(doc, {
-        startY: 40, head, body, theme: 'grid',
-        foot: [[{ content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold' } }, formatBRLNumber(operacao.valor_total_juros), formatBRLNumber(operacao.valor_total_bruto) ]],
+        startY: 40, head: head, body: body,
+        foot: [[{ content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }]],
+        theme: 'grid', headStyles: { fillColor: [31, 41, 55] },
+    });
+
+    const finalY = doc.lastAutoTable.finalY + 10;
+    const totaisBody = [
+        ['Valor total dos Títulos:', { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right' } }],
+        [`Deságio (${operacao.tipo_operacao.nome}):`, { content: `-${formatBRLNumber(operacao.valor_total_juros)}`, styles: { halign: 'right' } }],
+        ...operacao.descontos.map(d => [ `${d.descricao}:`, { content: `-${formatBRLNumber(d.valor)}`, styles: { halign: 'right' } } ]),
+        [{ content: 'Líquido da Operação:', styles: { fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_liquido), styles: { halign: 'right', fontStyle: 'bold' } }]
+    ];
+
+    autoTable(doc, {
+        startY: finalY, body: totaisBody, theme: 'plain', tableWidth: 'wrap',
+        margin: { left: pageWidth / 2 }, styles: { cellPadding: 1, fontSize: 10 }
     });
 
     return Buffer.from(doc.output('arraybuffer'));
@@ -59,7 +75,7 @@ export async function POST(request, { params }) {
 
         const { data: operacao, error } = await supabase
             .from('operacoes')
-            .select('*, cliente:clientes(*), duplicatas(*)')
+            .select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*), duplicatas(*), descontos(*)')
             .eq('id', id)
             .single();
 
@@ -76,7 +92,6 @@ export async function POST(request, { params }) {
         const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const subject = `Borderô ${tipoDocumento} ${numerosNfs}`;
 
-        // --- CORPO DO E-MAIL CORRIGIDO ---
         const emailBody = `
             <p>Prezados,</p>
             <p>Segue em anexo o borderô referente à operação.</p>
@@ -105,7 +120,6 @@ export async function POST(request, { params }) {
                     content: pdfBuffer,
                     contentType: 'application/pdf'
                 },
-                // Anexa a imagem com um Content-ID (cid) para ser usada no corpo do e-mail
                 {
                     filename: 'Logo.png',
                     path: logoPath,

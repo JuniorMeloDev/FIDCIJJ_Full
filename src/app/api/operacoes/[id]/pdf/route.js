@@ -53,29 +53,40 @@ export async function GET(request, { params }) {
         doc.setFontSize(18);
         doc.text("BORDERÔ ANALÍTICO", 14, 22);
         doc.setFontSize(10);
-        doc.text(`Data Assinatura: ${formatDate(operacao.data_operacao)}`, 200, 22, { align: 'right' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        doc.text(`Data Assinatura: ${formatDate(operacao.data_operacao)}`, pageWidth - 14, 22, { align: 'right' });
         doc.text(`Empresa: ${operacao.cliente.nome}`, 14, 30);
 
         const head = [[getHeaderCell('Nº. Do Título'), getHeaderCell('Venc. Parcelas'), getHeaderCell('Sacado/Emitente'), getHeaderCell('Juros Parcela'), getHeaderCell('Valor')]];
-        const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), dup.cliente_sacado, { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
+        const body = operacao.duplicatas.map(dup => [ 
+            dup.nf_cte, 
+            formatDate(dup.data_vencimento), 
+            dup.cliente_sacado, 
+            { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } },
+            { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } 
+        ]);
 
         autoTable(doc, {
             startY: 40, head: head, body: body,
-            foot: [[{ content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }]],
+            foot: [[
+                { content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, 
+                { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, 
+                { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }
+            ]],
             theme: 'grid', headStyles: { fillColor: [31, 41, 55] },
         });
 
         const finalY = doc.lastAutoTable.finalY + 10;
         const totaisBody = [
             ['Valor total dos Títulos:', { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right' } }],
-            [`Deságio (${operacao.tipo_operacao.nome}):`, { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right' } }],
-            ...operacao.descontos.map(d => [ `${d.descricao}:`, { content: formatBRLNumber(d.valor), styles: { halign: 'right' } } ]),
+            [`Deságio (${operacao.tipo_operacao.nome}):`, { content: `-${formatBRLNumber(operacao.valor_total_juros)}`, styles: { halign: 'right' } }],
+            ...operacao.descontos.map(d => [ `${d.descricao}:`, { content: `-${formatBRLNumber(d.valor)}`, styles: { halign: 'right' } } ]),
             [{ content: 'Líquido da Operação:', styles: { fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_liquido), styles: { halign: 'right', fontStyle: 'bold' } }]
         ];
 
         autoTable(doc, {
             startY: finalY, body: totaisBody, theme: 'plain', tableWidth: 'wrap',
-            margin: { left: doc.internal.pageSize.getWidth() / 2 }, styles: { cellPadding: 1 }
+            margin: { left: pageWidth / 2 }, styles: { cellPadding: 1, fontSize: 10 }
         });
 
         const pdfBuffer = doc.output('arraybuffer');
