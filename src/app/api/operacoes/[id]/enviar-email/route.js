@@ -8,26 +8,19 @@ import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
-// Função para carregar a imagem do logo e converter para Base64
 const getLogoBase64 = () => {
     try {
-        // Encontra o caminho para a pasta 'public'
         const imagePath = path.resolve(process.cwd(), 'public', 'Logo.png');
         const imageBuffer = fs.readFileSync(imagePath);
         return `data:image/png;base64,${imageBuffer.toString('base64')}`;
-    } catch (error) {
-        console.error("Erro ao carregar a imagem do logo:", error);
-        return null;
-    }
+    } catch (error) { return null; }
 };
 
-// Função auxiliar para criar células de cabeçalho no PDF
 const getHeaderCell = (text) => ({
     content: text,
     styles: { fillColor: [31, 41, 55], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }
 });
 
-// Função que gera o PDF em memória (buffer) para ser anexado
 const generatePdfBuffer = (operacao) => {
     const doc = new jsPDF();
     const logoBase64 = getLogoBase64();
@@ -36,23 +29,17 @@ const generatePdfBuffer = (operacao) => {
     if (logoBase64) {
         doc.addImage(logoBase64, 'PNG', 14, 12, 35, 15);
     }
-    
+
     doc.setFontSize(18);
     doc.text("BORDERÔ ANALÍTICO", pageWidth - 14, 22, { align: 'right' });
     doc.setFontSize(10);
     doc.text(`Data Assinatura: ${formatDate(operacao.data_operacao)}`, pageWidth - 14, 28, { align: 'right' });
-    
+
     doc.text(`Empresa: ${operacao.cliente.nome}`, 14, 40);
-    
+
     const head = [[getHeaderCell('Nº. Do Título'), getHeaderCell('Venc. Parcelas'), getHeaderCell('Sacado/Emitente'), getHeaderCell('Juros Parcela'), getHeaderCell('Valor')]];
-    const body = operacao.duplicatas.map(dup => [ 
-        dup.nf_cte, 
-        formatDate(dup.data_vencimento), 
-        dup.cliente_sacado, 
-        { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } },
-        { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } 
-    ]);
-    
+    const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), dup.cliente_sacado, { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
+
     autoTable(doc, {
         startY: 50, head: head, body: body,
         foot: [[
@@ -62,7 +49,7 @@ const generatePdfBuffer = (operacao) => {
         ]],
         theme: 'grid', headStyles: { fillColor: [31, 41, 55] },
     });
-    
+
     const finalY = doc.lastAutoTable.finalY + 10;
     const totaisBody = [
         ['Valor total dos Títulos:', { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right' } }],
@@ -75,7 +62,7 @@ const generatePdfBuffer = (operacao) => {
         startY: finalY, body: totaisBody, theme: 'plain', tableWidth: 'wrap',
         margin: { left: pageWidth / 2 }, styles: { cellPadding: 1, fontSize: 10 }
     });
-    
+
     return Buffer.from(doc.output('arraybuffer'));
 };
 
@@ -84,7 +71,7 @@ export async function POST(request, { params }) {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
-        
+
         const { id } = params;
         const { destinatarios } = await request.json();
 
@@ -92,14 +79,13 @@ export async function POST(request, { params }) {
             return NextResponse.json({ message: 'Nenhum destinatário fornecido.' }, { status: 400 });
         }
 
-        // Busca os dados da operação de forma mais segura
         const { data: operacaoData, error: operacaoError } = await supabase
             .from('operacoes').select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*)').eq('id', id).single();
         if (operacaoError) throw new Error("Operação não encontrada.");
 
         const { data: duplicatasData } = await supabase.from('duplicatas').select('*').eq('operacao_id', id);
         const { data: descontosData } = await supabase.from('descontos').select('*').eq('operacao_id', id);
-        
+
         const operacao = { ...operacaoData, duplicatas: duplicatasData || [], descontos: descontosData || [] };
 
         const pdfBuffer = generatePdfBuffer(operacao);
@@ -113,7 +99,6 @@ export async function POST(request, { params }) {
         const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const subject = `Borderô ${tipoDocumento} ${numerosNfs}`;
 
-        // Corpo do e-mail formatado como você pediu
         const emailBody = `
             <p>Prezados,</p>
             <p>Segue em anexo o borderô referente à operação.</p>
@@ -133,24 +118,13 @@ export async function POST(request, { params }) {
 
         await transporter.sendMail({
             from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
-            to: destinatarios.join(', '),
-            subject: subject,
-            html: emailBody,
+            to: destinatarios.join(', '), subject, html: emailBody,
             attachments: [
-                {
-                    filename: `${subject}.pdf`,
-                    content: pdfBuffer,
-                    contentType: 'application/pdf'
-                },
-                // Anexa a imagem com um Content-ID (cid) para ser usada no corpo do e-mail
-                {
-                    filename: 'Logo.png',
-                    path: logoPath,
-                    cid: 'logoImage' 
-                }
+                { filename: `${subject}.pdf`, content: pdfBuffer, contentType: 'application/pdf' },
+                { filename: 'Logo.png', path: logoPath, cid: 'logoImage' }
             ],
         });
-        
+
         return NextResponse.json({ message: 'E-mail enviado com sucesso!' }, { status: 200 });
 
     } catch (error) {

@@ -7,6 +7,7 @@ import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
+// Função para carregar a imagem do logo e converter para Base64
 const getLogoBase64 = () => {
     try {
         const imagePath = path.resolve(process.cwd(), 'public', 'Logo.png');
@@ -18,6 +19,7 @@ const getLogoBase64 = () => {
     }
 };
 
+// Função auxiliar para criar células de cabeçalho no PDF
 const getHeaderCell = (text) => ({
     content: text,
     styles: { fillColor: [31, 41, 55], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }
@@ -31,7 +33,7 @@ export async function GET(request, { params }) {
 
         const { id } = params;
 
-        // --- LÓGICA DE BUSCA DE DADOS MAIS ROBUSTA ---
+        // Busca os dados em consultas separadas para maior robustez
         const { data: operacaoData, error: operacaoError } = await supabase
             .from('operacoes')
             .select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*)')
@@ -47,7 +49,6 @@ export async function GET(request, { params }) {
 
         const operacao = { ...operacaoData, duplicatas: duplicatasData, descontos: descontosData };
 
-        // --- LÓGICA DO NOME DO FICHEIRO ---
         const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
         const filename = `Borderô ${tipoDocumento} ${numeros}.pdf`;
@@ -68,13 +69,22 @@ export async function GET(request, { params }) {
 
         doc.text(`Empresa: ${operacao.cliente.nome}`, 14, 40);
 
-        // ... (resto da lógica de geração do PDF continua igual)
         const head = [[getHeaderCell('Nº. Do Título'), getHeaderCell('Venc. Parcelas'), getHeaderCell('Sacado/Emitente'), getHeaderCell('Juros Parcela'), getHeaderCell('Valor')]];
-        const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), dup.cliente_sacado, { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
+        const body = operacao.duplicatas.map(dup => [ 
+            dup.nf_cte, 
+            formatDate(dup.data_vencimento), 
+            dup.cliente_sacado, 
+            { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } },
+            { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } 
+        ]);
 
         autoTable(doc, {
             startY: 50, head: head, body: body,
-            foot: [[{ content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }]],
+            foot: [[
+                { content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, 
+                { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, 
+                { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }
+            ]],
             theme: 'grid', headStyles: { fillColor: [31, 41, 55] },
         });
 
