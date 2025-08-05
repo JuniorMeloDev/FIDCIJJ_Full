@@ -51,14 +51,13 @@ export async function GET(request, { params }) {
         // --- LAYOUT DO CABEÇALHO CORRIGIDO ---
         const logoBase64 = getLogoBase64();
         if (logoBase64) {
-            // Aumenta a altura para evitar que fique achatado
-            doc.addImage(logoBase64, 'PNG', 14, 12, 40, 18); 
+            doc.addImage(logoBase64, 'PNG', 14, 12, 50, 18); // Aumenta a altura para evitar que fique achatado
         }
 
         const pageWidth = doc.internal.pageSize.getWidth();
         doc.setFontSize(18);
         // Move o texto para a direita para não colidir com o logo
-        doc.text("BORDERÔ ANALÍTICO", pageWidth / 2, 22, { align: 'center' }); 
+        doc.text("BORDERÔ ANALÍTICO", pageWidth - 14, 22, { align: 'right' }); 
         doc.setFontSize(10);
         doc.text(`Data Assinatura: ${formatDate(operacao.data_operacao)}`, pageWidth - 14, 28, { align: 'right' });
 

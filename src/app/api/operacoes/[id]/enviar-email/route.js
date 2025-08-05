@@ -27,7 +27,7 @@ const generatePdfBuffer = (operacao) => {
     const pageWidth = doc.internal.pageSize.getWidth();
 
     if (logoBase64) {
-        doc.addImage(logoBase64, 'PNG', 14, 12, 35, 15);
+        doc.addImage(logoBase64, 'PNG', 14, 12, 50, 15);
     }
 
     doc.setFontSize(18);
