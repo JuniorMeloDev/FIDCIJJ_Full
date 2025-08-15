@@ -12,6 +12,7 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
     const [contaDestino, setContaDestino] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
+    const [isDespesa, setIsDespesa] = useState(true); // Estado para controlar o checkbox
 
     useEffect(() => {
         if (isOpen) {
@@ -29,6 +30,7 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
         setContaOrigem('');
         setContaDestino('');
         setError('');
+        setIsDespesa(true); // Reseta o estado do checkbox ao limpar
     };
 
     const handleSubmit = async (e) => {
@@ -50,6 +52,7 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
             empresaAssociada: clienteMasterNome, 
             contaDestino: tipo === 'TRANSFERENCIA' ? contaDestino : null,
             empresaDestino: tipo === 'TRANSFERENCIA' ? clienteMasterNome : null,
+            isDespesa: tipo === 'DEBITO' ? isDespesa : null, // Envia o estado do checkbox para a API
         };
         
         const success = await onSave(payload);
@@ -94,11 +97,26 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
                     
                     { (tipo === 'DEBITO' || tipo === 'CREDITO') && (
                          <div>
-                           <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Conta Master</label>
+                           <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Conta</label>
                            <select id="contaOrigem" name="contaOrigem" value={contaOrigem} onChange={e => setContaOrigem(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
                                 <option value="">Selecione...</option>
                                 {Array.isArray(contasMaster) && contasMaster.map(c => <option key={c.contaBancaria} value={c.contaBancaria}>{c.contaBancaria}</option>)}
                            </select>
+                        </div>
+                    )}
+                    
+                    {/* --- CÓDIGO ADICIONADO AQUI --- */}
+                    {tipo === 'DEBITO' && (
+                        <div className="pt-2">
+                            <label className="flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={isDespesa} 
+                                    onChange={(e) => setIsDespesa(e.target.checked)} 
+                                    className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
+                                />
+                                <span className="ml-2 text-sm text-gray-200">É uma despesa? (Contabilizar no resumo)</span>
+                            </label>
                         </div>
                     )}
                     

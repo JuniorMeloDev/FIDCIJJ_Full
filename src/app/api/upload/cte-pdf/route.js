@@ -5,36 +5,45 @@ import PDFParser from "pdf2json";
 
 export const runtime = "nodejs";
 
-/** Normaliza o texto pra facilitar regex (remove acentos, caixa alta) */
+// --- utils de normalização e busca ---
 function normalize(str) {
-  return str
+  return (str || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase();
 }
 
-/** Extrai o primeiro CNPJ que aparecer em até `win` chars APOS um rótulo; se falhar, tenta até `back` chars ANTES */
-function cnpjNearLabel(text, labels, win = 800, back = 300) {
-  const norm = normalize(text);
+// captura CNPJ formatado ou 14 dígitos; NÃO usa \b no fim (pois às vezes vem colado em "IE")
+const CNPJ_ANY_RE = /(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}|\d{14})(?!\d)/;
+
+// procura um CNPJ até `winFwd` chars DEPOIS do índice e, se falhar, até `winBack` ANTES
+function findCnpjAround(normText, idx, winFwd = 1200, winBack = 500) {
+  // para frente
+  const forward = normText.slice(idx, idx + winFwd);
+  const f = forward.match(CNPJ_ANY_RE);
+  if (f) return f[1].replace(/\D/g, "");
+
+  // para trás (pega o último CNPJ antes do rótulo, se houver)
+  const back = normText.slice(Math.max(0, idx - winBack), idx + 50);
+  const allBack = [...back.matchAll(new RegExp(CNPJ_ANY_RE, "g"))];
+  if (allBack.length) return allBack[allBack.length - 1][1].replace(/\D/g, "");
+
+  return null;
+}
+
+function cnpjNearLabel(originalText, labels, winFwd = 1200, winBack = 500) {
+  const norm = normalize(originalText);
   for (const rawLabel of labels) {
     const label = normalize(rawLabel);
     const idx = norm.indexOf(label);
     if (idx !== -1) {
-      // 1) procurar PARA FRENTE
-      const forwardSlice = norm.slice(idx, idx + win);
-      const fwd = forwardSlice.match(/\b(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}|\d{14})\b/);
-      if (fwd) return fwd[1].replace(/\D/g, "");
-
-      // 2) fallback: procurar um CNPJ imediatamente ANTES do rótulo (alguns layouts trazem o CNPJ antes da palavra)
-      const backSlice = norm.slice(Math.max(0, idx - back), idx + 50);
-      const allBack = [...backSlice.matchAll(/\b(\d{14})\b/g)];
-      if (allBack.length) return allBack[allBack.length - 1][1]; // último 14 dígitos encontrados perto do rótulo
+      const found = findCnpjAround(norm, idx + label.length, winFwd, winBack);
+      if (found) return found;
     }
   }
   return null;
 }
 
-/** Extrai o valor (número) a partir do texto "VALOR TOTAL DA PRESTAÇÃO DO SERVIÇO" */
 function extrairValorTotal(text) {
   const m = text.match(/VALOR TOTAL DA PRESTA[ÇC][ÃA]O DO SERVI[ÇC]O\s*([\d.,]+)/i);
   if (!m) return { valorStr: "", valorNum: 0 };
@@ -43,16 +52,29 @@ function extrairValorTotal(text) {
   return { valorStr, valorNum: Number.isFinite(num) ? num : 0 };
 }
 
-/** Extrai data de emissão (DD/MM/AAAA) próximo do rótulo */
 function extrairDataEmissao(text) {
   const m = text.match(/DATA E HORA DE EMISS[ÃA]O\s*([0-3]?\d\/[01]?\d\/\d{4})/i);
   return m ? m[1].split("/").reverse().join("-") : "";
 }
 
-/** Tenta pegar o CNPJ do emitente a partir do padrão "CNPJ:" (o primeiro costuma ser do emitente) */
 function extrairCnpjEmitente(text) {
   const m = text.match(/CNPJ[:\s]*([\d./-]{14,18})/i);
   return m ? m[1].replace(/\D/g, "") : null;
+}
+
+// tenta extrair o NOME do tomador (opcional, ajuda seu front caso não exista no banco)
+function extrairNomeTomador(originalText) {
+  const norm = normalize(originalText);
+  // pega tudo entre o rótulo e "ENDERECO|MUNICIPIO|UF|CEP|CPF/CNPJ"
+  const r = /TOMADOR DO SERVIC[O]\s*([A-Z0-9 .,&\-]+?)\s+(ENDERECO|MUNICIPIO|UF|CEP|CPF\/CNPJ)/i;
+  const m = norm.match(r);
+  if (m && m[1]) {
+    // volta para o texto original aproximando pelos mesmos limites (melhor esforço)
+    const rough = m[1].trim();
+    // como fallback, retorna a versão normalizada mesmo
+    return rough;
+  }
+  return "";
 }
 
 export async function POST(request) {
@@ -78,7 +100,7 @@ export async function POST(request) {
         reject(new Error("Erro ao ler o ficheiro PDF."));
       });
       pdfParser.on("pdfParser_dataReady", () => {
-        // NÃO remova tudo para 1 espaço antes de extrair; só compacte múltiplos mantendo separadores
+        // mantém quebras de linha; compacta apenas espaços/tabs
         pdfText = pdfParser.getRawTextContent().replace(/[ \t]+/g, " ").trim();
         console.log("Texto extraído do PDF:", pdfText);
         resolve();
@@ -86,7 +108,7 @@ export async function POST(request) {
       pdfParser.parseBuffer(buffer);
     });
 
-    // --- Emitente por CNPJ (mais confiável que nome fixo) ---
+    // --- Emitente (cliente/cedente) pelo CNPJ do cabeçalho ---
     const cnpjEmitente = extrairCnpjEmitente(pdfText);
     let cedenteData = null;
 
@@ -99,8 +121,8 @@ export async function POST(request) {
       cedenteData = data || null;
     }
 
-    // Fallback: nome fixo se não achar por CNPJ
     if (!cedenteData) {
+      // fallback por nome fixo
       const cedenteNomeFixo = "TRANSREC CARGAS LTDA";
       const { data } = await supabase
         .from("clientes")
@@ -115,11 +137,31 @@ export async function POST(request) {
       cedenteData = data;
     }
 
-    // --- Sacado (Tomador do Serviço ou Remetente) por CNPJ perto dos rótulos ---
-    // Janela ampla para capturar depois do rótulo; PDF vem sem quebras confiáveis
-    const cnpjSacado =
-      cnpjNearLabel(pdfText, ["TOMADOR DO SERVIÇO", "TOMADOR DO SERVICO"], 900, 400) ||
-      cnpjNearLabel(pdfText, ["REMETENTE"], 900, 400);
+    // --- Sacado (Tomador ou Remetente) por CNPJ ---
+    let cnpjSacado =
+      cnpjNearLabel(pdfText, ["TOMADOR DO SERVIÇO", "TOMADOR DO SERVICO"], 1400, 600) ||
+      cnpjNearLabel(pdfText, ["REMETENTE"], 1400, 600);
+
+    // fallback global com janela limitada (evita pegar CNPJ do emitente)
+    if (!cnpjSacado) {
+      const norm = normalize(pdfText);
+      // pega CNPJ até 1500 chars após TOMADOR
+      const tomIdx = norm.indexOf("TOMADOR DO SERVICO");
+      if (tomIdx !== -1) {
+        const slice = norm.slice(tomIdx, tomIdx + 1500);
+        const m = slice.match(CNPJ_ANY_RE);
+        if (m) cnpjSacado = m[1].replace(/\D/g, "");
+      }
+    }
+    if (!cnpjSacado) {
+      const norm = normalize(pdfText);
+      const remIdx = norm.indexOf("REMETENTE");
+      if (remIdx !== -1) {
+        const slice = norm.slice(remIdx, remIdx + 1500);
+        const m = slice.match(CNPJ_ANY_RE);
+        if (m) cnpjSacado = m[1].replace(/\D/g, "");
+      }
+    }
 
     if (!cnpjSacado) {
       throw new Error("Não foi possível extrair o CNPJ do Tomador ou Remetente do CT-e.");
@@ -131,24 +173,23 @@ export async function POST(request) {
       .eq("cnpj", cnpjSacado)
       .single();
 
-    // --- Campos básicos do CT-e ---
+    const nomeTomador = sacadoData?.nome || extrairNomeTomador(pdfText) || "";
+
+    // --- Dados do CT-e ---
     const numeroCteMatch = pdfText.match(/N[ÚU]MERO\s*([0-9]{1,10})\s*DATA E HORA DE EMISS[ÃA]O/i);
     const numeroNf = numeroCteMatch ? numeroCteMatch[1] : "";
-
     const dataNf = extrairDataEmissao(pdfText);
     const { valorStr, valorNum } = extrairValorTotal(pdfText);
 
     const responseData = {
-      // para seu front preencher
       numeroNf,
       dataNf, // YYYY-MM-DD
-      // mando os dois formatos para compatibilidade com sua página
-      valorTotal: valorNum, // número (ex.: 6000)
-      valorNf: valorStr || "", // string (ex.: "6.000,00")
+      valorTotal: valorNum,  // number
+      valorNf: valorStr || "", // string
       parcelas: "1",
       prazos: "",
       peso: "",
-      clienteSacado: sacadoData?.nome || "",
+      clienteSacado: nomeTomador,
       emitente: {
         id: cedenteData.id,
         nome: cedenteData.nome,
@@ -157,7 +198,7 @@ export async function POST(request) {
       emitenteExiste: true,
       sacado: {
         id: sacadoData?.id || null,
-        nome: sacadoData?.nome || "",
+        nome: nomeTomador,
         cnpj: sacadoData?.cnpj || cnpjSacado,
         condicoes_pagamento: sacadoData?.condicoes_pagamento || [],
       },
