@@ -35,17 +35,27 @@ export async function POST(request) {
         });
 
         // --- EXPRESSÕES REGULARES CORRIGIDAS E MAIS PRECISAS ---
-        const remetenteMatch = pdfText.match(/REMETENTE\s*(.*?)\s*ENDEREÇO/i);
         const numeroCteMatch = pdfText.match(/NÚMERO\s+(\d+)\s+DATA E HORA DE EMISSÃO/i);
         const dataEmissaoMatch = pdfText.match(/DATA E HORA DE EMISSÃO\s+(\d{2}\/\d{2}\/\d{4})/i);
         const valorTotalMatch = pdfText.match(/VALOR TOTAL DA PRESTAÇÃO DO SERVIÇO\s+([\d.,]+)/i);
 
         // --- LÓGICA DO CEDENTE FIXO E BUSCA DO SACADO (REMETENTE) PELO NOME ---
         const cedenteNomeFixo = "TRANSREC CARGAS LTDA";
-        const sacadoNomeExtraido = remetenteMatch ? remetenteMatch[1].trim() : null;
+        // Tenta extrair o nome do Tomador do Serviço
+        let sacadoNomeExtraido = null;
+        const tomadorMatch = pdfText.match(/TOMADOR DO SERVIÇO\s*:?([\w\s\-.&]+?)(?=\s*CPF\/CNPJ|\s*ENDEREÇO|\s*CEP|\s*$)/i);
+        if (tomadorMatch) {
+            sacadoNomeExtraido = tomadorMatch[1].trim();
+        } else {
+            // Se não encontrar, tenta extrair o nome do Remetente
+            const remetenteMatch = pdfText.match(/REMETENTE\s*:?([\w\s\-.&]+?)(?=\s*CPF\/CNPJ|\s*ENDEREÇO|\s*CEP|\s*$)/i);
+            if (remetenteMatch) {
+                sacadoNomeExtraido = remetenteMatch[1].trim();
+            }
+        }
 
         if (!sacadoNomeExtraido) {
-            throw new Error('Não foi possível extrair o nome do Remetente (Sacado) do CT-e.');
+            throw new Error('Não foi possível extrair o nome do Tomador ou Remetente do CT-e.');
         }
 
         // Busca os dados do Cedente Fixo e do Sacado (pelo nome) no Supabase
