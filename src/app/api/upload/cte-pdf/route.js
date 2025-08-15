@@ -3,8 +3,6 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import PDFParser from "pdf2json";
 
-export const runtime = 'nodejs';
-
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -34,48 +32,49 @@ export async function POST(request) {
             pdfParser.parseBuffer(buffer);
         });
 
-        // --- EXPRESSÕES REGULARES CORRIGIDAS SEGUINDO A SUA LÓGICA DE NEGÓCIO ---
-
-        // Cedente = Emitente (Transportadora, no topo do PDF)
-        const cedenteMatch = pdfText.match("TRANSREC CARGAS LTDA");
-
+        // --- EXPRESSÕES REGULARES CORRIGIDAS ---
         // Sacado = Tomador do Serviço
-        const sacadoMatch = pdfText.match(/TOMADOR DO SERVIÇO\s*(.*?)\s*CPF\/CNPJ\s*([\d\.\/-]+)/i);
-
-        const numeroCteMatch = pdfText.match(/N DOCUMENTO\s+(\d+)/i) || pdfText.match(/NÚMERO\s+(\d+)\s+DATA/i);
+        const tomadorMatch = pdfText.match(/TOMADOR DO SERVIÇO\s*(.*?)\s*([\d\.\/-]+)\s*IE/i);
+        const numeroCteMatch = pdfText.match(/NÚMERO\s+(\d+)\s+DATA E HORA DE EMISSÃO/i);
         const dataEmissaoMatch = pdfText.match(/DATA E HORA DE EMISSÃO\s+(\d{2}\/\d{2}\/\d{4})/i);
         const valorTotalMatch = pdfText.match(/VALOR TOTAL DA PRESTAÇÃO DO SERVIÇO\s+([\d.,]+)/i);
 
-        const cedenteCNPJ = cedenteMatch ? cedenteMatch[1].replace(/\D/g, '') : null;
-        const sacadoCNPJ = sacadoMatch ? sacadoMatch[2].replace(/\D/g, '') : null;
+        // --- LÓGICA DO CEDENTE FIXO ---
+        const cedenteNomeFixo = "TRANSREC CARGAS LTDA";
+        const sacadoNome = tomadorMatch ? tomadorMatch[1].trim().replace(/CPF\/CNPJ/i, '').trim() : null;
+        const sacadoCNPJ = tomadorMatch ? tomadorMatch[2].replace(/\D/g, '') : null;
 
-        if (!cedenteCNPJ || !sacadoCNPJ) {
-            console.error({cedenteMatch, sacadoMatch});
-            throw new Error('Não foi possível extrair o CNPJ do Emitente (Cedente) ou do Tomador (Sacado) do CT-e.');
+        if (!sacadoCNPJ) {
+            console.error({tomadorMatch});
+            throw new Error('Não foi possível extrair o CNPJ do Tomador (Sacado) do CT-e.');
         }
 
-        // Busca os dados no Supabase
-        const { data: cedenteData } = await supabase.from('clientes').select('id, nome').eq('cnpj', cedenteCNPJ).single();
+        // Busca os dados do Cedente Fixo e do Sacado no Supabase
+        const { data: cedenteData } = await supabase.from('clientes').select('id, nome, cnpj').eq('nome', cedenteNomeFixo).single();
         const { data: sacadoData } = await supabase.from('sacados').select('id, nome').eq('cnpj', sacadoCNPJ).single();
+
+        if (!cedenteData) {
+            throw new Error(`O cedente padrão "${cedenteNomeFixo}" não foi encontrado no cadastro de clientes.`);
+        }
 
         // Monta a resposta seguindo as suas regras de negócio
         const responseData = {
             numeroNf: numeroCteMatch ? numeroCteMatch[1] : '',
-            dataNf: dataEmissaoMatch ? dataEmissaoMatch[1].split('/').reverse().join('-') : '', // Formata para AAAA-MM-DD
+            dataNf: dataEmissaoMatch ? dataEmissaoMatch[1].split('/').reverse().join('-') : '',
             valorNf: valorTotalMatch ? valorTotalMatch[1] : '0,00',
             parcelas: '1',
-            prazos: '', // Vazio como pediu
-            peso: '',   // Vazio como pediu
-            clienteSacado: sacadoData?.nome || (sacadoMatch ? sacadoMatch[1].trim() : 'Sacado não encontrado'),
-            emitente: {
-                id: cedenteData?.id || null,
-                nome: cedenteData?.nome || 'TRANSREC TRANSPORTES E LOGISTICA', // Usa o nome fixo se não encontrar
-                cnpj: cedenteCNPJ
+            prazos: '',
+            peso: '',
+            clienteSacado: sacadoData?.nome || sacadoNome,
+            emitente: { // O emitente agora é o nosso Cedente Fixo
+                id: cedenteData.id,
+                nome: cedenteData.nome,
+                cnpj: cedenteData.cnpj
             },
-            emitenteExiste: !!cedenteData,
+            emitenteExiste: true,
             sacado: {
                 id: sacadoData?.id || null,
-                nome: sacadoData?.nome || (sacadoMatch ? sacadoMatch[1].trim() : 'Tomador não encontrado'),
+                nome: sacadoData?.nome || sacadoNome,
                 cnpj: sacadoCNPJ
             },
             sacadoExiste: !!sacadoData
