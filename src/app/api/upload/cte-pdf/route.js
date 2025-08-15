@@ -5,13 +5,31 @@ import PDFParser from "pdf2json";
 
 export const runtime = "nodejs";
 
+// Função segura para extrair CNPJ do Tomador
+function extrairCnpjTomador(texto) {
+  // 1 - localiza trecho do Tomador
+  const trechoMatch = texto.match(/TOMADOR DO SERVIÇO(.{0,300})/i); // pega até 300 caracteres depois
+  if (!trechoMatch) return null;
+
+  // 2 - busca o CNPJ dentro desse trecho
+  const cnpjMatch = trechoMatch[1].match(
+    /\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}|\d{14}/
+  );
+  if (!cnpjMatch) return null;
+
+  // 3 - retorna somente números
+  return cnpjMatch[0].replace(/\D/g, "");
+}
+
 export async function POST(request) {
   try {
+    // --- Autenticação ---
     const token = request.headers.get("Authorization")?.split(" ")[1];
     if (!token)
       return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
     jwt.verify(token, process.env.JWT_SECRET);
 
+    // --- Arquivo PDF ---
     const formData = await request.formData();
     const file = formData.get("file");
     if (!file) {
@@ -22,10 +40,9 @@ export async function POST(request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    const pdfParser = new PDFParser();
 
-    const pdfParser = new PDFParser(this, 1);
     let pdfText = "";
-
     await new Promise((resolve, reject) => {
       pdfParser.on("pdfParser_dataError", (errData) => {
         console.error(errData.parserError);
@@ -33,13 +50,13 @@ export async function POST(request) {
       });
       pdfParser.on("pdfParser_dataReady", () => {
         pdfText = pdfParser.getRawTextContent().replace(/\s+/g, " ").trim();
-        console.log("Texto extraído do PDF:", pdfText); // Adicione este log
+        console.log("Texto extraído do PDF:", pdfText);
         resolve();
       });
       pdfParser.parseBuffer(buffer);
     });
 
-    // --- EXPRESSÕES REGULARES CORRIGIDAS E MAIS PRECISAS ---
+    // --- Captura ---
     const numeroCteMatch = pdfText.match(
       /NÚMERO\s+(\d+)\s+DATA E HORA DE EMISSÃO/i
     );
@@ -50,51 +67,38 @@ export async function POST(request) {
       /VALOR TOTAL DA PRESTAÇÃO DO SERVIÇO\s+([\d.,]+)/i
     );
 
-    // --- LÓGICA DO CEDENTE FIXO E BUSCA DO SACADO (REMETENTE) PELO NOME ---
+    // Cedente fixo
     const cedenteNomeFixo = "TRANSREC CARGAS LTDA";
-    // Tenta extrair o nome do Tomador do Serviço
-    // Regex para capturar apenas o nome (até o primeiro endereço, município ou CNPJ)
-    let sacadoNomeExtraido = null;
 
-    const tomadorMatch = pdfText.match(
-      /TOMADOR DO SERVIÇO\s+([A-Z0-9\s\-.&]+?)(?=\s+ROD|\s+ENDEREÇO|\s+CNPJ)/i
-    );
-    if (tomadorMatch) {
-      sacadoNomeExtraido = tomadorMatch[1].trim();
-    } else {
-      const remetenteMatch = pdfText.match(
-        /REMETENTE\s+([A-Z0-9\s\-.&]+?)(?=\s+ROD|\s+ENDEREÇO|\s+CNPJ)/i
-      );
-      if (remetenteMatch) {
-        sacadoNomeExtraido = remetenteMatch[1].trim();
-      }
+    // --- Extrair CNPJ do Tomador ---
+    const cnpjTomador = extrairCnpjTomador(pdfText);
+    if (!cnpjTomador) {
+      throw new Error("Não foi possível extrair o CNPJ do Tomador do CT-e.");
     }
 
-    if (!sacadoNomeExtraido) {
-      throw new Error(
-        "Não foi possível extrair o nome do Tomador ou Remetente do CT-e."
-      );
-    }
-
-    // Busca os dados do Cedente Fixo e do Sacado (pelo nome) no Supabase
+    // --- Buscar no banco ---
     const { data: cedenteData } = await supabase
       .from("clientes")
       .select("id, nome, cnpj")
       .eq("nome", cedenteNomeFixo)
       .single();
+
     const { data: sacadoData } = await supabase
       .from("sacados")
-      .select("*, condicoes_pagamento(*)") // Pede para trazer as condições de pagamento
-      .eq("nome", sacadoNomeExtraido)
+      .select("*, condicoes_pagamento(*)")
+      .eq("cnpj", cnpjTomador)
       .single();
 
     if (!cedenteData) {
       throw new Error(
-        `O cedente padrão "${cedenteNomeFixo}" não foi encontrado no seu cadastro de clientes.`
+        `O cedente padrão "${cedenteNomeFixo}" não foi encontrado.`
       );
     }
 
-    // Monta a resposta seguindo as suas regras de negócio
+    // Nome do sacado (para preencher na operacao-bordero)
+    const nomeSacado = sacadoData?.nome || "SACADO NÃO ENCONTRADO";
+
+    // --- Resposta ---
     const responseData = {
       numeroNf: numeroCteMatch ? numeroCteMatch[1] : "",
       dataNf: dataEmissaoMatch
@@ -104,9 +108,8 @@ export async function POST(request) {
       parcelas: "1",
       prazos: "",
       peso: "",
-      clienteSacado: sacadoNomeExtraido,
+      clienteSacado: nomeSacado, // volta nome para sua tela
       emitente: {
-        // O emitente agora é o nosso Cedente Fixo
         id: cedenteData.id,
         nome: cedenteData.nome,
         cnpj: cedenteData.cnpj,
@@ -114,8 +117,8 @@ export async function POST(request) {
       emitenteExiste: true,
       sacado: {
         id: sacadoData?.id || null,
-        nome: sacadoNomeExtraido,
-        cnpj: sacadoData?.cnpj || "", // Pega o CNPJ do banco se encontrar o sacado
+        nome: nomeSacado,
+        cnpj: cnpjTomador,
         condicoes_pagamento: sacadoData?.condicoes_pagamento || [],
       },
       sacadoExiste: !!sacadoData,

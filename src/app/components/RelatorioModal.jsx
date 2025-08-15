@@ -150,56 +150,49 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 body = data.map(row => [formatDate(row.data_movimento), row.descricao, row.conta_bancaria, row.categoria, formatBRLNumber(row.valor)]);
                 
                 // --- LÓGICA CORRIGIDA PARA OS TOTAIS E CARDS ---
-                autoTable(doc, {
-                    startY: 35, head, body,
-                    didDrawPage: (hookData) => {
-                        // Só adiciona os totais na ÚLTIMA página
-                        if (hookData.pageNumber === doc.internal.getNumberOfPages()) {
-                            let finalY = hookData.cursor.y + 15;
-                            
-                            // Verifica se o resumo cabe na página atual, se não, adiciona uma nova
-                            if (finalY > doc.internal.pageSize.getHeight() - 40) {
-                                doc.addPage();
-                                finalY = 20; // Posição inicial na nova página
-                            }
+                autoTable(doc, { startY: 35, head, body });
 
-                            doc.setFontSize(12);
-                            doc.text("Resumo do Período", 14, finalY);
-                            finalY += 8;
-                            
-                            let startX = 14;
-                            const contasParaMostrar = currentFilters.conta ? [currentFilters.conta] : contas;
-                            
-                            contasParaMostrar.forEach(conta => {
-                                const saldo = data.filter(d => d.conta_bancaria === conta).reduce((sum, row) => sum + row.valor, 0);
-                                const cardColor = saldo >= 0 ? [34, 197, 94] : [239, 68, 68];
-                                
-                                doc.setFillColor(...cardColor);
-                                doc.roundedRect(startX, finalY, 60, 20, 3, 3, 'F');
-                                
-                                doc.setTextColor(255, 255, 255);
-                                doc.setFontSize(8);
-                                doc.text(conta, startX + 5, finalY + 7, { maxWidth: 50 });
-                                doc.setFontSize(12);
-                                doc.setFont('helvetica', 'bold');
-                                doc.text(formatBRLNumber(saldo), startX + 5, finalY + 15);
-                                
-                                startX += 65;
-                                if (startX > pageWidth - 60) {
-                                    startX = 14;
-                                    finalY += 25;
-                                }
-                            });
+                let finalY = doc.lastAutoTable.finalY + 15;
+                
+                if (finalY > doc.internal.pageSize.getHeight() - 40) {
+                    doc.addPage();
+                    finalY = 20;
+                }
 
-                            if (!currentFilters.conta) {
-                                const totalGeral = data.reduce((sum, row) => sum + row.valor, 0);
-                                doc.setTextColor(0, 0, 0);
-                                doc.setFontSize(10);
-                                doc.text(`Total Geral do Período: ${formatBRLNumber(totalGeral)}`, 14, finalY + 30);
-                            }
-                        }
+                doc.setFontSize(12);
+                doc.text("Resumo do Período", 14, finalY);
+                finalY += 8;
+                
+                let startX = 14;
+                const contasParaMostrar = currentFilters.conta ? [currentFilters.conta] : contas;
+                
+                contasParaMostrar.forEach(conta => {
+                    const saldo = data.filter(d => d.conta_bancaria === conta).reduce((sum, row) => sum + row.valor, 0);
+                    const cardColor = saldo >= 0 ? [34, 197, 94] : [239, 68, 68];
+                    
+                    doc.setFillColor(...cardColor);
+                    doc.roundedRect(startX, finalY, 60, 20, 3, 3, 'F');
+                    
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFontSize(8);
+                    doc.text(conta, startX + 5, finalY + 7, { maxWidth: 50 });
+                    doc.setFontSize(12);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(formatBRLNumber(saldo), startX + 5, finalY + 15);
+                    
+                    startX += 65;
+                    if (startX > pageWidth - 60) {
+                        startX = 14;
+                        finalY += 25;
                     }
                 });
+
+                if (!currentFilters.conta) {
+                    const totalGeral = data.reduce((sum, row) => sum + row.valor, 0);
+                    doc.setTextColor(0, 0, 0);
+                    doc.setFontSize(10);
+                    doc.text(`Total Geral do Período: ${formatBRLNumber(totalGeral)}`, 14, finalY + 30);
+                }
                 break;
 
             case 'duplicatas':
