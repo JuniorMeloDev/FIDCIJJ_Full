@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/app/utils/supabaseServerClient';
+import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
 // GET: Busca todos os sacados com as suas condições de pagamento

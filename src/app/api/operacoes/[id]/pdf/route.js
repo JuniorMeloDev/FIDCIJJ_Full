@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/app/utils/supabaseServerClient';
+import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
