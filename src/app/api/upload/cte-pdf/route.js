@@ -55,19 +55,15 @@ export async function POST(request) {
     // Tenta extrair o nome do Tomador do Serviço
     // Regex para capturar apenas o nome (até o primeiro endereço, município ou CNPJ)
     let sacadoNomeExtraido = null;
-    const tomadorMatch = pdfText.match(
-      /TOMADOR DO SERVIÇO\s*([A-Z0-9\s\-.&]+?)(?=\sROD|\sENDEREÇO|\sMUNICÍPIO|\sCNPJ|\sCPF|\sCEP|\sPAÍS|$)/i
-    );
-    if (tomadorMatch) {
-      sacadoNomeExtraido = tomadorMatch[1].trim();
-    } else {
-      const remetenteMatch = pdfText.match(
-        /REMETENTE\s*([A-Z0-9\s\-.&]+?)(?=\sROD|\sENDEREÇO|\sMUNICÍPIO|\sCNPJ|\sCPF|\sCEP|\sPAÍS|$)/i
-      );
-      if (remetenteMatch) {
-        sacadoNomeExtraido = remetenteMatch[1].trim();
-      }
-    }
+const tomadorMatch = pdfText.match(/TOMADOR DO SERVIÇO\s*([A-Z0-9\s\-.&]+?)(?=\sROD)/i);
+if (tomadorMatch) {
+  sacadoNomeExtraido = tomadorMatch[1].trim();
+} else {
+  const remetenteMatch = pdfText.match(/REMETENTE\s*([A-Z0-9\s\-.&]+?)(?=\sROD)/i);
+  if (remetenteMatch) {
+    sacadoNomeExtraido = remetenteMatch[1].trim();
+  }
+}
 
     if (!sacadoNomeExtraido) {
       throw new Error(

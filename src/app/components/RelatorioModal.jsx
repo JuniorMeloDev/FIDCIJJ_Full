@@ -157,6 +157,30 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                         doc.setFontSize(10);
                         doc.text(`Total do Período: ${formatBRLNumber(totalGeral)}`, 14, hookData.cursor.y + 10);
                         doc.text(`Saldos por Conta:\n${saldosPorConta}`, 14, hookData.cursor.y + 15);
+
+                        // --- LAYOUT DE CARDS PARA OS SALDOS ---
+                        let startX = 14;
+                        contas.forEach(conta => {
+                            const saldo = data.filter(d => d.conta_bancaria === conta).reduce((sum, row) => sum + row.valor, 0);
+                            const cardColor = saldo >= 0 ? [44, 122, 123] : [192, 57, 43]; // Verde ou Vermelho
+                            
+                            doc.setFillColor(...cardColor);
+                            doc.roundedRect(startX, finalY, 60, 20, 3, 3, 'F');
+                            
+                            doc.setTextColor(255, 255, 255);
+                            doc.setFontSize(8);
+                            doc.text(conta, startX + 5, finalY + 7);
+                            doc.setFontSize(12);
+                            doc.setFont('helvetica', 'bold');
+                            doc.text(formatBRLNumber(saldo), startX + 5, finalY + 15);
+                            
+                            startX += 65; // Move para a direita para o próximo card
+                        });
+
+                        doc.setTextColor(0, 0, 0); // Reseta a cor do texto
+                        doc.setFontSize(10);
+                        doc.text(`Total Geral: ${formatBRLNumber(totalGeral)}`, 14, finalY + 30);
+                    
                     }
                 });
                 break;
