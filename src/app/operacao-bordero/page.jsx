@@ -381,13 +381,13 @@ export default function OperacaoBorderoPage() {
         <>
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
             <DescontoModal isOpen={isDescontoModalOpen} onClose={() => setIsDescontoModalOpen(false)} onSave={(d) => setDescontos([...descontos, d])} />
-
+            
             <EditClienteModal isOpen={isClienteModalOpen} onClose={() => setClienteParaCriar(null)} onSave={handleSaveNovoCliente} cliente={clienteParaCriar} />
             <EditSacadoModal isOpen={isSacadoModalOpen} onClose={() => setSacadoParaCriar(null)} onSave={handleSaveNovoSacado} sacado={sacadoParaCriar} />
 
-            <EmailModal
+            <EmailModal 
                 isOpen={isEmailModalOpen}
-                onClose={() => setIsEmailModalOpen(false)}
+                onClose={handleCloseEmailModal}
                 onSend={handleSendEmail}
                 isSending={isSendingEmail}
                 clienteId={savedOperacaoInfo?.clienteId}
@@ -397,33 +397,33 @@ export default function OperacaoBorderoPage() {
                 <motion.header className="mb-4 flex justify-between items-center border-b-2 border-orange-500 pb-4" initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
                     <div>
                         <h1 className="text-3xl font-bold">Criar Borderô</h1>
-                        <p className="text-sm text-gray-300 mt-1">Preencha os dados abaixo ou importe um XML/PDF.</p>
+                        <p className="text-sm text-gray-300 mt-1">Preencha os dados abaixo ou importe um XML.</p>
                     </div>
                     <div>
-                        <input type="file" accept=".xml,.pdf" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} id="file-upload-input" />
-                        <button onClick={() => fileInputRef.current.click()} className="bg-gray-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-gray-600 transition">Importar NF-e (XML) ou CT-e (PDF)</button>
+                        <input type="file" accept=".xml" ref={fileInputRef} onChange={handleXmlUpload} style={{ display: 'none' }} id="xml-upload-input"/>
+                        <button onClick={() => fileInputRef.current.click()} className="bg-gray-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-gray-600 transition">Importar NF-e (XML)</button>
                     </div>
                 </motion.header>
 
-                <OperacaoHeader
-                    dataOperacao={dataOperacao} setDataOperacao={setDataOperacao}
-                    tipoOperacaoId={tipoOperacaoId} setTipoOperacaoId={setTipoOperacaoId}
-                    tiposOperacao={tiposOperacao} empresaCedente={empresaCedente}
-                    onCedenteChange={handleCedenteChange} onSelectCedente={handleSelectCedente}
-                    fetchClientes={fetchClientes}
+                <OperacaoHeader 
+                    dataOperacao={dataOperacao} setDataOperacao={setDataOperacao} 
+                    tipoOperacaoId={tipoOperacaoId} setTipoOperacaoId={setTipoOperacaoId} 
+                    tiposOperacao={tiposOperacao} empresaCedente={empresaCedente} 
+                    onCedenteChange={handleCedenteChange} onSelectCedente={handleSelectCedente} 
+                    fetchClientes={fetchClientes} 
                 />
-                <AdicionarNotaFiscalForm
-                    novaNf={novaNf} handleInputChange={handleInputChange}
-                    handleAddNotaFiscal={handleAddNotaFiscal} isLoading={isLoading}
-                    onSelectSacado={handleSelectSacado} fetchSacados={fetchSacados}
+                <AdicionarNotaFiscalForm 
+                    novaNf={novaNf} handleInputChange={handleInputChange} 
+                    handleAddNotaFiscal={handleAddNotaFiscal} isLoading={isLoading} 
+                    onSelectSacado={handleSelectSacado} fetchSacados={fetchSacados} 
                     condicoesSacado={condicoesSacado} setNovaNf={setNovaNf}
                 />
-                <OperacaoDetalhes
-                    notasFiscais={notasFiscais} descontos={todosOsDescontos} totais={totais}
-                    handleSalvarOperacao={handleSalvarOperacao} handleLimparTudo={handleLimparTudo}
-                    isSaving={isSaving} onAddDescontoClick={() => setIsDescontoModalOpen(true)}
-                    onRemoveDesconto={handleRemoveDesconto} contasBancarias={contasBancarias}
-                    contaBancariaId={contaBancariaId} setContaBancariaId={setContaBancariaId}
+                <OperacaoDetalhes 
+                    notasFiscais={notasFiscais} descontos={todosOsDescontos} totais={totais} 
+                    handleSalvarOperacao={handleSalvarOperacao} handleLimparTudo={handleLimparTudo} 
+                    isSaving={isSaving} onAddDescontoClick={() => setIsDescontoModalOpen(true)} 
+                    onRemoveDesconto={handleRemoveDesconto} contasBancarias={contasBancarias} 
+                    contaBancariaId={contaBancariaId} setContaBancariaId={setContaBancariaId} 
                 />
             </main>
         </>
