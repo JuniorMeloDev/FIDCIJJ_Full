@@ -143,49 +143,21 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         let head, body;
         switch (type) {
             case 'fluxoCaixa':
-                const head = [['Data', 'Descrição', 'Conta', 'Categoria', 'Valor']];
-                const body = data.map(row => [formatDate(row.data_movimento), row.descricao, row.conta_bancaria, row.categoria, formatBRLNumber(row.valor)]);
+                head = [['Data', 'Descrição', 'Conta', 'Categoria', 'Valor']];
+                body = data.map(row => [formatDate(row.data_movimento), row.descricao, row.conta_bancaria, row.categoria, formatBRLNumber(row.valor)]);
                 
                 autoTable(doc, {
                     startY: 35, head, body,
+                    // --- HOOK CORRIGIDO PARA ADICIONAR TOTAIS ---
                     didDrawPage: (hookData) => {
-                        let finalY = hookData.cursor.y + 10;
-                        doc.setFontSize(12);
-                        doc.text("Resumo do Período", 14, finalY);
-                        finalY += 8;
-                        
-                        // --- LAYOUT DE CARDS PARA OS SALDOS ---
-                        let startX = 14;
-                        const contasParaMostrar = currentFilters.conta ? [currentFilters.conta] : contas;
-                        
-                        contasParaMostrar.forEach(conta => {
+                        const totalGeral = data.reduce((sum, row) => sum + row.valor, 0);
+                        const saldosPorConta = contas.map(conta => {
                             const saldo = data.filter(d => d.conta_bancaria === conta).reduce((sum, row) => sum + row.valor, 0);
-                            const cardColor = saldo >= 0 ? [34, 197, 94] : [239, 68, 68]; // Verde ou Vermelho (Tailwind colors)
-                            
-                            doc.setFillColor(...cardColor);
-                            doc.roundedRect(startX, finalY, 60, 20, 3, 3, 'F');
-                            
-                            doc.setTextColor(255, 255, 255);
-                            doc.setFontSize(8);
-                            doc.text(conta, startX + 5, finalY + 7, { maxWidth: 50 });
-                            doc.setFontSize(12);
-                            doc.setFont('helvetica', 'bold');
-                            doc.text(formatBRLNumber(saldo), startX + 5, finalY + 15);
-                            
-                            startX += 65;
-                            if (startX > pageWidth - 60) { // Quebra a linha se não couber mais cards
-                                startX = 14;
-                                finalY += 25;
-                            }
-                        });
-
-                        // Se for um relatório geral (sem filtro de conta), mostra o total geral
-                        if (!currentFilters.conta) {
-                            const totalGeral = data.reduce((sum, row) => sum + row.valor, 0);
-                            doc.setTextColor(0, 0, 0);
-                            doc.setFontSize(10);
-                            doc.text(`Total Geral do Período: ${formatBRLNumber(totalGeral)}`, 14, finalY + 30);
-                        }
+                            return `${conta}: ${formatBRLNumber(saldo)}`;
+                        }).join('\n');
+                        doc.setFontSize(10);
+                        doc.text(`Total do Período: ${formatBRLNumber(totalGeral)}`, 14, hookData.cursor.y + 10);
+                        doc.text(`Saldos por Conta:\n${saldosPorConta}`, 14, hookData.cursor.y + 15);
                     }
                 });
                 break;
@@ -201,6 +173,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
 
                 autoTable(doc, {
                     startY: 35, head, body,
+                     // --- HOOK CORRIGIDO PARA ADICIONAR TOTAIS ---
                     didDrawPage: (hookData) => {
                         const totalBruto = data.reduce((sum, row) => sum + (row.valor_bruto || 0), 0);
                         doc.setFontSize(10);
