@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/app/utils/supabaseClient';
+import { supabase } from '@/app/utils/supabaseServerClient';
 import jwt from 'jsonwebtoken';
 
 // POST: Cria um novo lançamento manual (Débito, Crédito ou Transferência)

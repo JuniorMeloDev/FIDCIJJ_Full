@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/app/utils/supabaseClient';
+import { supabase } from '@/app/utils/supabaseServerClient';
 import jwt from 'jsonwebtoken';
 
 // GET: Busca as movimentações de caixa com filtros
