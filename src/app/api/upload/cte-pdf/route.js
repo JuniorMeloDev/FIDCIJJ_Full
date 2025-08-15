@@ -35,30 +35,33 @@ export async function POST(request) {
         });
 
         // --- EXPRESSÕES REGULARES CORRIGIDAS E MAIS PRECISAS ---
-        // Cedente é fixo
-        const cedenteNomeFixo = "TRANSREC CARGAS LTDA";
-
-        // Sacado = Tomador do Serviço. A regex agora para antes do endereço.
-        const tomadorMatch = pdfText.match(/TOMADOR DO SERVIÇO\s*([^0-9]+?)\s*ROD/i);
-        const tomadorCnpjMatch = pdfText.match(/TOMADOR DO SERVIÇO.*?CPF\/CNPJ\s*([\d\.\/-]+)/i);
+        const tomadorBlockMatch = pdfText.match(/TOMADOR DO SERVIÇO(.*?)ENDEREÇO/i);
+        const tomadorNomeMatch = tomadorBlockMatch ? tomadorBlockMatch[1].match(/^(.*?)\s*ROD/i) : null;
+        const tomadorCnpjMatch = tomadorBlockMatch ? tomadorBlockMatch[1].match(/([\d\.\/-]{18})/) : null;
 
         const numeroCteMatch = pdfText.match(/NÚMERO\s+(\d+)\s+DATA E HORA DE EMISSÃO/i);
         const dataEmissaoMatch = pdfText.match(/DATA E HORA DE EMISSÃO\s+(\d{2}\/\d{2}\/\d{4})/i);
         const valorTotalMatch = pdfText.match(/VALOR TOTAL DA PRESTAÇÃO DO SERVIÇO\s+([\d.,]+)/i);
 
-        const sacadoNomeExtraido = tomadorMatch ? tomadorMatch[1].trim() : null;
+        // --- LÓGICA DO CEDENTE FIXO E BUSCA DO SACADO ---
+        const cedenteNomeFixo = "TRANSREC CARGAS LTDA";
+        const sacadoNomeExtraido = tomadorNomeMatch ? tomadorNomeMatch[1].trim() : null;
         const sacadoCNPJ = tomadorCnpjMatch ? tomadorCnpjMatch[1].replace(/\D/g, '') : null;
 
-        if (!sacadoNomeExtraido || !sacadoCNPJ) {
-            throw new Error('Não foi possível extrair o nome ou o CNPJ do Tomador (Sacado) do CT-e.');
+        if (!sacadoNomeExtraido) {
+            throw new Error('Não foi possível extrair o nome do Tomador (Sacado) do CT-e.');
         }
 
-        // Busca os dados no Supabase
+        // Busca os dados do Cedente Fixo e do Sacado (pelo nome) no Supabase
         const { data: cedenteData } = await supabase.from('clientes').select('id, nome, cnpj').eq('nome', cedenteNomeFixo).single();
-        const { data: sacadoData } = await supabase.from('sacados').select('id, nome, condicoes_pagamento(*)').eq('nome', sacadoNomeExtraido).single();
+        const { data: sacadoData } = await supabase
+            .from('sacados')
+            .select('*, condicoes_pagamento(*)') // Pede para trazer as condições de pagamento
+            .eq('nome', sacadoNomeExtraido)
+            .single();
 
         if (!cedenteData) {
-            throw new Error(`O cedente padrão "${cedenteNomeFixo}" não foi encontrado no cadastro de clientes.`);
+            throw new Error(`O cedente padrão "${cedenteNomeFixo}" não foi encontrado no seu cadastro de clientes.`);
         }
 
         // Monta a resposta seguindo as suas regras de negócio
@@ -70,16 +73,18 @@ export async function POST(request) {
             prazos: '',
             peso: '',
             clienteSacado: sacadoNomeExtraido,
+            // Dados do Cedente (fixo)
             emitente: {
                 id: cedenteData.id,
                 nome: cedenteData.nome,
                 cnpj: cedenteData.cnpj
             },
             emitenteExiste: true,
+            // Dados do Sacado (extraído)
             sacado: {
                 id: sacadoData?.id || null,
                 nome: sacadoNomeExtraido,
-                cnpj: sacadoCNPJ,
+                cnpj: sacadoCNPJ || '',
                 condicoes_pagamento: sacadoData?.condicoes_pagamento || []
             },
             sacadoExiste: !!sacadoData
