@@ -35,21 +35,17 @@ export async function POST(request) {
         });
 
         // --- EXPRESSÕES REGULARES CORRIGIDAS E MAIS PRECISAS ---
-        const tomadorBlockMatch = pdfText.match(/TOMADOR DO SERVIÇO(.*?)ENDEREÇO/i);
-        const tomadorNomeMatch = tomadorBlockMatch ? tomadorBlockMatch[1].match(/^(.*?)\s*ROD/i) : null;
-        const tomadorCnpjMatch = tomadorBlockMatch ? tomadorBlockMatch[1].match(/([\d\.\/-]{18})/) : null;
-
+        const remetenteMatch = pdfText.match(/REMETENTE\s*(.*?)\s*ENDEREÇO/i);
         const numeroCteMatch = pdfText.match(/NÚMERO\s+(\d+)\s+DATA E HORA DE EMISSÃO/i);
         const dataEmissaoMatch = pdfText.match(/DATA E HORA DE EMISSÃO\s+(\d{2}\/\d{2}\/\d{4})/i);
         const valorTotalMatch = pdfText.match(/VALOR TOTAL DA PRESTAÇÃO DO SERVIÇO\s+([\d.,]+)/i);
 
-        // --- LÓGICA DO CEDENTE FIXO E BUSCA DO SACADO ---
+        // --- LÓGICA DO CEDENTE FIXO E BUSCA DO SACADO (REMETENTE) PELO NOME ---
         const cedenteNomeFixo = "TRANSREC CARGAS LTDA";
-        const sacadoNomeExtraido = tomadorNomeMatch ? tomadorNomeMatch[1].trim() : null;
-        const sacadoCNPJ = tomadorCnpjMatch ? tomadorCnpjMatch[1].replace(/\D/g, '') : null;
+        const sacadoNomeExtraido = remetenteMatch ? remetenteMatch[1].trim() : null;
 
         if (!sacadoNomeExtraido) {
-            throw new Error('Não foi possível extrair o nome do Tomador (Sacado) do CT-e.');
+            throw new Error('Não foi possível extrair o nome do Remetente (Sacado) do CT-e.');
         }
 
         // Busca os dados do Cedente Fixo e do Sacado (pelo nome) no Supabase
@@ -73,18 +69,16 @@ export async function POST(request) {
             prazos: '',
             peso: '',
             clienteSacado: sacadoNomeExtraido,
-            // Dados do Cedente (fixo)
-            emitente: {
+            emitente: { // O emitente agora é o nosso Cedente Fixo
                 id: cedenteData.id,
                 nome: cedenteData.nome,
                 cnpj: cedenteData.cnpj
             },
             emitenteExiste: true,
-            // Dados do Sacado (extraído)
             sacado: {
                 id: sacadoData?.id || null,
                 nome: sacadoNomeExtraido,
-                cnpj: sacadoCNPJ || '',
+                cnpj: sacadoData?.cnpj || '', // Pega o CNPJ do banco se encontrar o sacado
                 condicoes_pagamento: sacadoData?.condicoes_pagamento || []
             },
             sacadoExiste: !!sacadoData

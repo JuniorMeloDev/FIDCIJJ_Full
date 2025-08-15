@@ -138,8 +138,6 @@ export default function ResumoPage() {
         )
     }
 
-    // O resto do seu componente JSX continua aqui...
-    // (A parte do return com o HTML/JSX não precisa de ser alterada)
     return (
         <main className="min-h-screen pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800">
           <RelatorioModal
