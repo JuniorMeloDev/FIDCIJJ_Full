@@ -1,5 +1,3 @@
-// /app/api/upload/cte-pdf/route.js
-
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import pdf from 'pdf-parse';
