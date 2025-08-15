@@ -84,18 +84,21 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         const endpoint = endpointMap[reportType];
 
         Object.entries(filters).forEach(([key, value]) => {
-            if(value && value !== 'clienteNome') params.append(key, value);
+            if(value && key !== 'clienteNome') params.append(key, value);
         });
 
         try {
             const response = await fetch(`/api/relatorios/${endpoint}?${params.toString()}`, {
                 headers: getAuthHeader()
             });
-            if (!response.ok) throw new Error('Não foi possível buscar os dados para o relatório.');
+            if (!response.ok) {
+                 const errorData = await response.json();
+                 throw new Error(errorData.message || 'Não foi possível buscar os dados para o relatório.');
+            }
             const data = await response.json();
             
             const hasData = (type, responseData) => {
-                if (type === 'totalOperado') return responseData && responseData.valorOperadoNoMes > 0;
+                if (type === 'totalOperado') return responseData && (responseData.valorOperadoNoMes > 0 || responseData.topClientes?.length > 0 || responseData.topSacados?.length > 0);
                 return Array.isArray(responseData) && responseData.length > 0;
             };
 
@@ -112,7 +115,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
 
         } catch (error) {
           console.error('Erro ao gerar relatório:', error);
-          alert('Erro ao gerar relatório. Verifique a consola para mais detalhes.');
+          alert(`Erro ao gerar relatório: ${error.message}`);
         } finally {
             setIsGenerating(false);
         }
@@ -142,16 +145,20 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             case 'fluxoCaixa':
                 head = [['Data', 'Descrição', 'Conta', 'Categoria', 'Valor']];
                 body = data.map(row => [formatDate(row.data_movimento), row.descricao, row.conta_bancaria, row.categoria, formatBRLNumber(row.valor)]);
-                autoTable(doc, { startY: 35, head, body });
-
-                const totalGeral = data.reduce((sum, row) => sum + row.valor, 0);
-                const saldosPorConta = contas.map(conta => {
-                    const saldo = data.filter(d => d.conta_bancaria === conta).reduce((sum, row) => sum + row.valor, 0);
-                    return `${conta}: ${formatBRLNumber(saldo)}`;
-                }).join('\n');
-                doc.setFontSize(10);
-                doc.text(`Total do Período: ${formatBRLNumber(totalGeral)}`, 14, doc.lastAutoTable.finalY + 10);
-                doc.text(`Saldos por Conta:\n${saldosPorConta}`, 14, doc.lastAutoTable.finalY + 15);
+                
+                autoTable(doc, {
+                    startY: 35, head, body,
+                    didDrawPage: (hookData) => {
+                        const totalGeral = data.reduce((sum, row) => sum + row.valor, 0);
+                        const saldosPorConta = contas.map(conta => {
+                            const saldo = data.filter(d => d.conta_bancaria === conta).reduce((sum, row) => sum + row.valor, 0);
+                            return `${conta}: ${formatBRLNumber(saldo)}`;
+                        }).join('\n');
+                        doc.setFontSize(10);
+                        doc.text(`Total do Período: ${formatBRLNumber(totalGeral)}`, 14, hookData.cursor.y + 10);
+                        doc.text(`Saldos por Conta:\n${saldosPorConta}`, 14, hookData.cursor.y + 15);
+                    }
+                });
                 break;
 
             case 'duplicatas':
@@ -162,11 +169,15 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                     row.cliente_sacado, ...(showTipoOperacao ? [row.tipo_operacao_nome] : []),
                     formatDate(row.data_vencimento), row.status_recebimento, formatBRLNumber(row.valor_bruto)
                 ]);
-                autoTable(doc, { startY: 35, head, body });
-                
-                const totalBruto = data.reduce((sum, row) => sum + (row.valor_bruto || 0), 0);
-                doc.setFontSize(10);
-                doc.text(`Total Bruto das Duplicatas: ${formatBRLNumber(totalBruto)}`, 14, doc.lastAutoTable.finalY + 10);
+
+                autoTable(doc, {
+                    startY: 35, head, body,
+                    didDrawPage: (hookData) => {
+                        const totalBruto = data.reduce((sum, row) => sum + (row.valor_bruto || 0), 0);
+                        doc.setFontSize(10);
+                        doc.text(`Total Bruto das Duplicatas: ${formatBRLNumber(totalBruto)}`, 14, hookData.cursor.y + 10);
+                    }
+                });
                 break;
 
             case 'totalOperado':
