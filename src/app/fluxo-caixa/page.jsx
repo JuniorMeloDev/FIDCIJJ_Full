@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import LancamentoModal from "@/app/components/LancamentoModal";
+import EditLancamentoModal from "@/app/components/EditLancamentoModal"; // Importe o novo modal
 import Notification from "@/app/components/Notification";
 import ConfirmacaoModal from "@/app/components/ConfirmacaoModal";
 import EmailModal from "@/app/components/EmailModal";
@@ -47,6 +48,11 @@ export default function FluxoDeCaixaPage() {
   const menuRef = useRef(null);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  // Novos estados para o modal de edição
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [itemParaEditar, setItemParaEditar] = useState(null);
+
 
   const getAuthHeader = () => {
     const token = sessionStorage.getItem("authToken");
@@ -192,12 +198,42 @@ export default function FluxoDeCaixaPage() {
         throw new Error(errorText.message || "Falha ao salvar lançamento.");
       }
       showNotification("Lançamento salvo com sucesso!", "success");
-      clearFilters(); // Recarrega os dados
+      fetchMovimentacoes(filters, sortConfig); // Recarrega os dados
+      fetchSaldos(filters);
       return true;
     } catch (error) {
       showNotification(error.message, "error");
       return false;
     }
+  };
+
+  // Nova função para salvar a edição
+  const handleUpdateLancamento = async (payload) => {
+    try {
+        const response = await fetch(`/api/movimentacoes-caixa/${payload.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const errorText = await response.json();
+            throw new Error(errorText.message || 'Falha ao atualizar lançamento.');
+        }
+        showNotification("Lançamento atualizado com sucesso!", "success");
+        fetchMovimentacoes(filters, sortConfig);
+        fetchSaldos(filters);
+        return true;
+    } catch (error) {
+        showNotification(error.message, 'error');
+        return false;
+    }
+  };
+  
+  // Nova função para abrir o modal de edição
+  const handleEditRequest = () => {
+    if (!contextMenu.selectedItem) return;
+    setItemParaEditar(contextMenu.selectedItem);
+    setIsEditModalOpen(true);
   };
 
   const handleDeleteRequest = () => {
@@ -337,6 +373,14 @@ export default function FluxoDeCaixaPage() {
         onSave={handleSaveLancamento}
         contasMaster={contasMaster}
         clienteMasterNome={clienteMasterNome}
+      />
+      {/* Novo modal de edição */}
+      <EditLancamentoModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleUpdateLancamento}
+        lancamento={itemParaEditar}
+        contasMaster={contasMaster}
       />
       <ConfirmacaoModal
         isOpen={!!itemParaExcluir}
@@ -510,8 +554,16 @@ export default function FluxoDeCaixaPage() {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="py-1">
+             <a
+                href="#"
+                onClick={(e) => { e.preventDefault(); handleEditRequest(); }}
+                className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+            >
+                Editar Lançamento
+            </a>
             {contextMenu.selectedItem?.operacaoId && (
               <>
+                <div className="border-t border-gray-600 my-1"></div>
                 <a
                   href="#"
                   onClick={(e) => {
@@ -532,25 +584,21 @@ export default function FluxoDeCaixaPage() {
                 >
                   Enviar Borderô por E-mail
                 </a>
-                <div className="border-t border-gray-600 my-1"></div>
               </>
             )}
+             <div className="border-t border-gray-600 my-1"></div>
             <button
               onClick={(e) => {
                 e.preventDefault();
                 handleDeleteRequest();
               }}
               className={`block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 ${
-                contextMenu.selectedItem?.categoria ===
-                  "Pagamento de Borderô" ||
-                contextMenu.selectedItem?.categoria === "Recebimento"
+                ['Pagamento de Borderô', 'Recebimento'].includes(contextMenu.selectedItem?.categoria)
                   ? "opacity-50 cursor-not-allowed"
                   : ""
               }`}
               disabled={
-                contextMenu.selectedItem?.categoria ===
-                  "Pagamento de Borderô" ||
-                contextMenu.selectedItem?.categoria === "Recebimento"
+                ['Pagamento de Borderô', 'Recebimento'].includes(contextMenu.selectedItem?.categoria)
               }
             >
               Excluir Lançamento
