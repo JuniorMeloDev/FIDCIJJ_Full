@@ -29,6 +29,7 @@ export async function POST(request) {
             });
             pdfParser.on("pdfParser_dataReady", () => {
                 pdfText = pdfParser.getRawTextContent().replace(/\s+/g, ' ').trim();
+                console.log('Texto extraído do PDF:', pdfText); // Adicione este log
                 resolve();
             });
             pdfParser.parseBuffer(buffer);
