@@ -7,19 +7,26 @@ export const runtime = "nodejs";
 
 // Função segura para extrair CNPJ do Tomador
 function extrairCnpjTomador(texto) {
-  // 1 - localiza trecho do Tomador
-  const trechoMatch = texto.match(/TOMADOR DO SERVIÇO(.{0,300})/i); // pega até 300 caracteres depois
-  if (!trechoMatch) return null;
+  // Tenta localizar trecho do Tomador
+  let trecho = null;
 
-  // 2 - busca o CNPJ dentro desse trecho
-  const cnpjMatch = trechoMatch[1].match(
-    /\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}|\d{14}/
-  );
+  const tomadorMatch = texto.match(/TOMADOR DO SERVIÇO(.+)/i);
+  if (tomadorMatch) {
+    trecho = tomadorMatch[1];
+  } else {
+    const remetenteMatch = texto.match(/REMETENTE(.+)/i);
+    if (remetenteMatch) trecho = remetenteMatch[1];
+  }
+
+  if (!trecho) return null;
+
+  // Procura o primeiro CNPJ no trecho encontrado
+  const cnpjMatch = trecho.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}|\d{14}/);
   if (!cnpjMatch) return null;
 
-  // 3 - retorna somente números
   return cnpjMatch[0].replace(/\D/g, "");
 }
+
 
 export async function POST(request) {
   try {
