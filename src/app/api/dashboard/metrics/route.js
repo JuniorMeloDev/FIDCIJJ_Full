@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
+import { format } from 'date-fns';
 
 export async function GET(request) {
   try {
@@ -15,7 +16,7 @@ export async function GET(request) {
     const dataInicio = searchParams.get('dataInicio') || null;
     const dataFim = searchParams.get('dataFim') || null;
     const tipoOperacaoId = searchParams.get('tipoOperacaoId') || null;
-    const diasVencimento = searchParams.get('diasVencimento') || 5;
+    const diasVencimento = parseInt(searchParams.get('diasVencimento') || '5', 10);
 
     const rpcParams = {
       data_inicio: dataInicio,
@@ -23,25 +24,52 @@ export async function GET(request) {
       p_tipo_operacao_id: tipoOperacaoId,
     };
 
-    const vencimentoParams = {
-      dias_vencimento: parseInt(diasVencimento),
-      data_inicio: dataInicio,
-      data_fim: dataFim,
-      p_tipo_operacao_id: tipoOperacaoId,
-    };
+    // --- LÓGICA DE VENCIMENTOS AGORA DENTRO DA API ---
+    const hoje = new Date();
+    const dataLimite = new Date();
+    dataLimite.setDate(hoje.getDate() + diasVencimento);
+
+    // Constrói a query para buscar duplicatas a vencer
+    let vencimentosQuery = supabase
+      .from('duplicatas')
+      .select(`
+        id,
+        nf_cte,
+        data_vencimento,
+        valor_bruto,
+        cliente_sacado,
+        operacao:operacoes!inner(
+          tipo_operacao_id,
+          data_operacao
+        )
+      `)
+      .eq('status_recebimento', 'Pendente')
+      .gte('data_vencimento', format(hoje, 'yyyy-MM-dd'))
+      .lte('data_vencimento', format(dataLimite, 'yyyy-MM-dd'));
+    
+    // Aplica filtros da tela de resumo na query de vencimentos
+    if (dataInicio) {
+        vencimentosQuery = vencimentosQuery.gte('operacao.data_operacao', dataInicio);
+    }
+    if (dataFim) {
+        vencimentosQuery = vencimentosQuery.lte('operacao.data_operacao', dataFim);
+    }
+    if (tipoOperacaoId) {
+        vencimentosQuery = vencimentosQuery.eq('operacao.tipo_operacao_id', tipoOperacaoId);
+    }
 
     const [
       valorOperadoRes,
       topClientesRes,
       topSacadosRes,
       totaisFinanceirosRes,
-      vencimentosProximosRes,
+      vencimentosProximosRes, // Agora é uma query direta, não um RPC
     ] = await Promise.all([
       supabase.rpc('get_valor_operado', rpcParams),
       supabase.rpc('get_top_clientes', rpcParams),
       supabase.rpc('get_top_sacados', rpcParams),
       supabase.rpc('get_totais_financeiros', rpcParams),
-      supabase.rpc('get_vencimentos_proximos', vencimentoParams),
+      vencimentosQuery, // Executa a query que construímos
     ]);
 
     const errors = [
@@ -68,13 +96,12 @@ export async function GET(request) {
       valorOperadoNoMes: valorOperadoRes.data || 0,
       topClientes: (topClientesRes.data || []).map(c => ({ ...c, valorTotal: c.valor_total })),
       topSacados: (topSacadosRes.data || []).map(s => ({ ...s, valorTotal: s.valor_total })),
-      // CORREÇÃO APLICADA AQUI: Mapeamento robusto dos nomes das colunas.
       vencimentosProximos: (vencimentosProximosRes.data || []).map(v => ({
         id: v.id,
-        nfCte: v.nf_cte || v.nfCte,
-        dataVencimento: v.data_vencimento || v.dataVencimento,
-        valorBruto: v.valor_bruto || v.valorBruto,
-        clienteSacado: v.cliente_sacado || v.clienteSacado
+        nfCte: v.nf_cte,
+        dataVencimento: v.data_vencimento,
+        valorBruto: v.valor_bruto,
+        clienteSacado: v.cliente_sacado
       })),
       totalJuros: totais.total_juros || 0,
       totalDespesas: totais.total_despesas || 0,
