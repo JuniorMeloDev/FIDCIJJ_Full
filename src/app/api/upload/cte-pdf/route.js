@@ -34,39 +34,40 @@ export async function POST(request) {
             pdfParser.parseBuffer(buffer);
         });
 
-   
-        const emitenteMatch = pdfText.match(/EMITENTE\s*(.*?)\s*(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/i);
-        const tomadorMatch = pdfText.match(/TOMADOR DO SERVIÇO\s*(.*?)\s*(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/i);
-        const numeroCteMatch = pdfText.match(/CT-e\s+Nº\s+(\d+)/i);
-        const dataEmissaoMatch = pdfText.match(/Data e Hora de Emissão\s+(\d{2}\/\d{2}\/\d{4})/i);
-        const valorTotalMatch = pdfText.match(/VALOR TOTAL DA PRESTAÇÃO\s+([\d.,]+)/i);
-
+        // --- EXPRESSÕES REGULARES CORRIGIDAS E MAIS ROBUSTAS ---
+        const emitenteMatch = pdfText.match(/REMETENTE\s*(.*?)\s*CPF\/CNPJ\s*([\d\.\/-]+)/i);
+        const tomadorMatch = pdfText.match(/TOMADOR DO SERVIÇO\s*(.*?)\s*CPF\/CNPJ\s*([\d\.\/-]+)/i);
+        const numeroCteMatch = pdfText.match(/N DOCUMENTO\s+(\d+)/i) || pdfText.match(/CT-e\s+Nº\s+(\d+)/i);
+        const dataEmissaoMatch = pdfText.match(/EMISSÃO\s+(\d{2}\/\d{2}\/\d{4})/i) || pdfText.match(/Data e Hora de Emissão\s+(\d{2}\/\d{2}\/\d{4})/i);
+        const valorTotalMatch = pdfText.match(/VALOR TOTAL DA PRESTAÇÃO DO SERVIÇO\s+([\d.,]+)/i);
 
         const emitenteCNPJ = emitenteMatch ? emitenteMatch[2].replace(/\D/g, '') : null;
         const tomadorCNPJ = tomadorMatch ? tomadorMatch[2].replace(/\D/g, '') : null;
 
         if (!emitenteCNPJ || !tomadorCNPJ) {
-            throw new Error('Não foi possível extrair o CNPJ do emitente ou do tomador do CT-e.');
+            console.error({emitenteMatch, tomadorMatch});
+            throw new Error('Não foi possível extrair o CNPJ do Remetente (Cedente) ou do Tomador (Sacado) do CT-e.');
         }
 
+        // Busca os dados no Supabase
         const { data: emitenteData } = await supabase.from('clientes').select('id, nome').eq('cnpj', emitenteCNPJ).single();
         const { data: sacadoData } = await supabase.from('sacados').select('id, nome').eq('cnpj', tomadorCNPJ).single();
 
         const responseData = {
             tipo: 'cte',
             numeroNf: numeroCteMatch ? numeroCteMatch[1] : '',
-            dataEmissao: dataEmissaoMatch ? dataEmissaoMatch[1].split('/').reverse().join('-') : '',
+            dataEmissao: dataEmissaoMatch ? dataEmissaoMatch[1].split('/').reverse().join('-') : '', // Formata para AAAA-MM-DD
             valorTotal: valorTotalMatch ? parseFloat(valorTotalMatch[1].replace(/\./g, '').replace(',', '.')) : 0,
-            parcelas: [],
+            parcelas: [], // CT-e geralmente não tem parcelas
             emitente: {
                 id: emitenteData?.id || null,
-                nome: emitenteData?.nome || (emitenteMatch ? emitenteMatch[1].trim() : 'Emitente não encontrado'),
+                nome: emitenteData?.nome || (emitenteMatch ? emitenteMatch[1].trim() : 'Remetente não encontrado'),
                 cnpj: emitenteCNPJ
             },
             emitenteExiste: !!emitenteData,
             sacado: {
                 id: sacadoData?.id || null,
-                nome: sacadoData?.nome || (tomadorMatch ? tomadorMatch[1].trim() : 'Sacado não encontrado'),
+                nome: sacadoData?.nome || (tomadorMatch ? tomadorMatch[1].trim() : 'Tomador não encontrado'),
                 cnpj: tomadorCNPJ
             },
             sacadoExiste: !!sacadoData
