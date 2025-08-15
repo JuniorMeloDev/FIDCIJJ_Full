@@ -37,7 +37,7 @@ export async function POST(request) {
         // --- EXPRESSÕES REGULARES CORRIGIDAS SEGUINDO A SUA LÓGICA DE NEGÓCIO ---
 
         // Cedente = Emitente (Transportadora, no topo do PDF)
-        const cedenteMatch = pdfText.match(/TRANSREC TRANSPORTES E LOGISTICA\s*CNPJ:\s*([\d\.\/-]+)/i);
+        const cedenteMatch = pdfText.match("TRANSREC CARGAS LTDA");
 
         // Sacado = Tomador do Serviço
         const sacadoMatch = pdfText.match(/TOMADOR DO SERVIÇO\s*(.*?)\s*CPF\/CNPJ\s*([\d\.\/-]+)/i);
