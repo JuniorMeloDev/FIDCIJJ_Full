@@ -43,6 +43,7 @@ export async function POST(request) {
         // --- LÓGICA DO CEDENTE FIXO E BUSCA DO SACADO (REMETENTE) PELO NOME ---
         const cedenteNomeFixo = "TRANSREC CARGAS LTDA";
         // Tenta extrair o nome do Tomador do Serviço
+        // Regex para capturar apenas o nome (até o primeiro endereço, município ou CNPJ)
         let sacadoNomeExtraido = null;
         const tomadorMatch = pdfText.match(/TOMADOR DO SERVIÇO\s*:?([\w\s\-.&]+?)(?=\s*CPF\/CNPJ|\s*ENDEREÇO|\s*CEP|\s*$)/i);
         if (tomadorMatch) {
