@@ -1,32 +1,35 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { API_URL } from '../apiConfig';
 
 export default function EmailModal({ isOpen, onClose, onSend, isSending, clienteId }) {
     const [recipients, setRecipients] = useState([]);
     const [newEmail, setNewEmail] = useState('');
     
     const getAuthHeader = () => {
-        const token = sessionStorage.getItem('authToken'); 
+        const token = sessionStorage.getItem('authToken');
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     };
 
+    // Este useEffect agora busca os e-mails quando o modal abre
     useEffect(() => {
         const fetchClientRecipients = async () => {
-            // Limpa a lista anterior sempre que o modal abre
+            // Limpa a lista anterior para evitar mostrar e-mails de clientes errados
             setRecipients([]); 
 
             if (isOpen && clienteId) {
                 try {
-                    // Busca os e-mails do cliente usando o ID dele
-                    const response = await fetch(`${API_URL}/cadastros/clientes/${clienteId}/emails`, { headers: getAuthHeader() });
+                    // Chama a nossa nova API
+                    const response = await fetch(`/api/cadastros/clientes/${clienteId}/emails`, { headers: getAuthHeader() });
                     if (response.ok) {
                         const clientEmails = await response.json();
                         setRecipients(clientEmails || []);
+                    } else {
+                         console.error("API falhou ao buscar e-mails do cliente.");
+                         setRecipients([]);
                     }
                 } catch (error) {
-                    console.error("Falha ao buscar e-mails do cliente:", error);
+                    console.error("Erro de rede ao buscar e-mails do cliente:", error);
                     setRecipients([]);
                 }
             }
