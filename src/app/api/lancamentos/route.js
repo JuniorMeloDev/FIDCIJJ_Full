@@ -20,7 +20,8 @@ export async function POST(request) {
                     valor: -Math.abs(body.valor),
                     conta_bancaria: body.contaOrigem,
                     empresa_associada: body.empresaAssociada,
-                    categoria: 'Despesa Avulsa'
+                    // Define a categoria com base no novo campo 'isDespesa'
+                    categoria: body.isDespesa ? 'Despesa Avulsa' : 'Débito de Conciliação'
                 });
                 break;
             case 'CREDITO':
