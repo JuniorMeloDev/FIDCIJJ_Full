@@ -19,11 +19,9 @@ export async function POST(request) {
 
         const buffer = Buffer.from(await file.arrayBuffer());
 
-        // --- LÓGICA ATUALIZADA PARA USAR PDF2JSON ---
         const pdfParser = new PDFParser(this, 1);
         let pdfText = '';
 
-        // A biblioteca pdf2json usa eventos para processar o ficheiro
         await new Promise((resolve, reject) => {
             pdfParser.on("pdfParser_dataError", errData => {
                 console.error(errData.parserError);
@@ -36,11 +34,13 @@ export async function POST(request) {
             pdfParser.parseBuffer(buffer);
         });
 
-        const emitenteMatch = text.match(/EMITENTE\s*(.*?)\s*(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/i);
-        const tomadorMatch = text.match(/TOMADOR DO SERVIÇO\s*(.*?)\s*(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/i);
-        const numeroCteMatch = text.match(/CT-e\s+Nº\s+(\d+)/i);
-        const dataEmissaoMatch = text.match(/Data e Hora de Emissão\s+(\d{2}\/\d{2}\/\d{4})/i);
-        const valorTotalMatch = text.match(/VALOR TOTAL DA PRESTAÇÃO\s+([\d.,]+)/i);
+   
+        const emitenteMatch = pdfText.match(/EMITENTE\s*(.*?)\s*(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/i);
+        const tomadorMatch = pdfText.match(/TOMADOR DO SERVIÇO\s*(.*?)\s*(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/i);
+        const numeroCteMatch = pdfText.match(/CT-e\s+Nº\s+(\d+)/i);
+        const dataEmissaoMatch = pdfText.match(/Data e Hora de Emissão\s+(\d{2}\/\d{2}\/\d{4})/i);
+        const valorTotalMatch = pdfText.match(/VALOR TOTAL DA PRESTAÇÃO\s+([\d.,]+)/i);
+
 
         const emitenteCNPJ = emitenteMatch ? emitenteMatch[2].replace(/\D/g, '') : null;
         const tomadorCNPJ = tomadorMatch ? tomadorMatch[2].replace(/\D/g, '') : null;
@@ -49,7 +49,6 @@ export async function POST(request) {
             throw new Error('Não foi possível extrair o CNPJ do emitente ou do tomador do CT-e.');
         }
 
-        // A busca no Supabase continua igual
         const { data: emitenteData } = await supabase.from('clientes').select('id, nome').eq('cnpj', emitenteCNPJ).single();
         const { data: sacadoData } = await supabase.from('sacados').select('id, nome').eq('cnpj', tomadorCNPJ).single();
 
