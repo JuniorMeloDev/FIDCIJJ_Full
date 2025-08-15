@@ -354,6 +354,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                                         <option value="Pagamento de Borderô">Pagamento de Borderô</option>
                                         <option value="Receita Avulsa">Receita Avulsa</option>
                                         <option value="Despesa Avulsa">Despesa Avulsa</option>
+                                        <option value="Movimentação Avulsa">Movimentação Avulsa</option>
                                         <option value="Transferencia Enviada">Transferência Enviada</option>
                                         <option value="Transferencia Recebida">Transferência Recebida</option>
                                     </select>
