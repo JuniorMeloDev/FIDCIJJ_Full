@@ -48,8 +48,8 @@ export default function ResumoPage() {
     useEffect(() => {
         ;(async () => {
           const [tiposData, contasData] = await Promise.all([
-            fetchApiData(`/api/cadastros/tipos-operacao`), // Caminho corrigido
-            fetchApiData(`/api/cadastros/contas/master`),  // Caminho corrigido
+            fetchApiData(`/api/cadastros/tipos-operacao`),
+            fetchApiData(`/api/cadastros/contas/master`),
           ])
           setTiposOperacao(tiposData)
           setContasBancarias(contasData)
@@ -78,8 +78,8 @@ export default function ResumoPage() {
 
             const headers = getAuthHeader()
             const [saldosRes, metricsRes] = await Promise.all([
-              fetch(`/api/dashboard/saldos?${params}`, { headers }), // Caminho corrigido
-              fetch(`/api/dashboard/metrics?${params}`, { headers }), // Caminho corrigido
+              fetch(`/api/dashboard/saldos?${params}`, { headers }),
+              fetch(`/api/dashboard/metrics?${params}`, { headers }),
             ])
             if (!saldosRes.ok || !metricsRes.ok) {
               throw new Error('Falha ao buscar dados do dashboard.')
@@ -105,7 +105,6 @@ export default function ResumoPage() {
     }
 
     const handleAutocompleteSelect = (name, item) => {
-        // A lógica para buscar clientes e sacados ainda precisará ser migrada
         if (name === 'cliente') {
           setFilters((prev) => ({
             ...prev,
@@ -128,9 +127,9 @@ export default function ResumoPage() {
           contaBancaria: '',
         })
 
-    const totalGeral = saldos.reduce((sum, c) => sum + (c.saldo || 0), 0) // Adicionado fallback para saldo
+    const totalGeral = saldos.reduce((sum, c) => sum + (c.saldo || 0), 0)
     
-    if (!metrics) {
+    if (loading || !metrics) {
         return (
           <main className="min-h-screen pt-16 flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
             <p className="text-gray-400 text-xl">Carregando resumo...</p>
