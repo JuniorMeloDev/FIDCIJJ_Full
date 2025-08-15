@@ -9,6 +9,7 @@ import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 import EmailModal from '@/app/components/EmailModal';
 import Pagination from '@/app/components/Pagination';
 import FiltroLateralConsultas from '@/app/components/FiltroLateralConsultas';
+import SelectionActionsBar from '@/app/components/SelectionActionsBar'; // Importe o novo componente
 import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 
 const ITEMS_PER_PAGE = 7;
@@ -20,6 +21,10 @@ export default function ConsultasPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [contasMaster, setContasMaster] = useState([]);
     const [tiposOperacao, setTiposOperacao] = useState([]);
+    
+    // Estados para o modo de seleção
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [selectedItems, setSelectedItems] = useState(new Set());
     
     const [filters, setFilters] = useState({
         dataOpInicio: '', dataOpFim: '',
@@ -175,26 +180,42 @@ export default function ConsultasPage() {
     };
 
     const showNotification = (message, type) => { setNotification({ message, type }); setTimeout(() => setNotification({ message: '', type: '' }), 5000); };
-    const handleAbrirModalLiquidacao = () => { if (!contextMenu.selectedItem) return; setDuplicataParaLiquidar(contextMenu.selectedItem); setIsLiquidarModalOpen(true); };
-    const handleConfirmarLiquidacao = async (duplicataId, dataLiquidacao, jurosMora, contaBancariaId) => {
-        let url = `/api/duplicatas/${duplicataId}/liquidar`;
-        const params = new URLSearchParams();
-        if (dataLiquidacao) params.append('dataLiquidacao', dataLiquidacao);
-        if (jurosMora && jurosMora > 0) params.append('jurosMora', jurosMora);
-        if(contaBancariaId) params.append('contaBancariaId', contaBancariaId);
-        const queryString = params.toString();
-        if (queryString) url += `?${queryString}`;
+    
+    // Abre o modal de liquidação para um ou vários itens
+    const handleAbrirModalLiquidacao = () => {
+        let itemsParaLiquidar = [];
+        if (isSelectionMode && selectedItems.size > 0) {
+            itemsParaLiquidar = duplicatas.filter(d => selectedItems.has(d.id));
+        } else if (contextMenu.selectedItem) {
+            itemsParaLiquidar = [contextMenu.selectedItem];
+        }
+        
+        if (itemsParaLiquidar.length > 0) {
+            setDuplicataParaLiquidar(itemsParaLiquidar);
+            setIsLiquidarModalOpen(true);
+        }
+    };
+
+    // Lida com a confirmação da liquidação
+    const handleConfirmarLiquidacao = async (duplicataIds, dataLiquidacao, jurosMora, contaBancariaId) => {
+        const url = `/api/duplicatas/liquidar-em-massa`;
         try {
-            const response = await fetch(url, { method: 'POST', headers: getAuthHeader() });
-            if (!response.ok) throw new Error('Falha ao dar baixa na duplicata.');
-            showNotification('Duplicata liquidada com sucesso!', 'success');
+            const response = await fetch(url, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+                body: JSON.stringify({ ids: duplicataIds, dataLiquidacao, jurosMora, contaBancariaId })
+            });
+            if (!response.ok) throw new Error('Falha ao dar baixa na(s) duplicata(s).');
+            showNotification(`Duplicata(s) liquidada(s) com sucesso!`, 'success');
             fetchDuplicatas(filters, sortConfig);
+            clearSelection();
         } catch (err) {
             showNotification(err.message, 'error');
         } finally {
             setIsLiquidarModalOpen(false);
         }
     };
+
     const handleEstornar = () => { if (!contextMenu.selectedItem) return; setEstornoInfo({ id: contextMenu.selectedItem.id }); };
     const confirmarEstorno = async () => { if (!estornoInfo) return; try { const response = await fetch(`/api/duplicatas/${estornoInfo.id}/estornar`, { method: 'POST', headers: getAuthHeader() }); if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.message || 'Falha ao estornar a liquidação.'); } showNotification('Liquidação estornada com sucesso!', 'success'); fetchDuplicatas(filters, sortConfig); } catch (err) { showNotification(err.message, 'error'); } finally { setEstornoInfo(null); } };
     const handleAbrirEmailModal = () => {
@@ -225,32 +246,33 @@ export default function ConsultasPage() {
     };
 
     const handleGeneratePdf = async () => {
-        if (!contextMenu.selectedItem) return;
-        const operacaoId = contextMenu.selectedItem.operacaoId;
-        if (!operacaoId) {
-            alert("Esta duplicata não está associada a uma operação para gerar PDF.");
+        const itemsToProcess = isSelectionMode && selectedItems.size > 0
+            ? Array.from(selectedItems)
+            : (contextMenu.selectedItem ? [contextMenu.selectedItem.id] : []);
+
+        if (itemsToProcess.length === 0) {
+            alert("Nenhuma duplicata selecionada.");
             return;
         }
 
+        const url = itemsToProcess.length > 1 ? '/api/duplicatas/pdf-em-massa' : `/api/operacoes/${contextMenu.selectedItem.operacaoId}/pdf`;
+
         try {
-            const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, { 
-                headers: getAuthHeader() 
+            const response = await fetch(url, { 
+                method: itemsToProcess.length > 1 ? 'POST' : 'GET',
+                headers: itemsToProcess.length > 1 
+                    ? { 'Content-Type': 'application/json', ...getAuthHeader() }
+                    : getAuthHeader(),
+                body: itemsToProcess.length > 1 ? JSON.stringify({ ids: itemsToProcess }) : null,
             });
 
             if (!response.ok) {
-                // Tenta ler a mensagem de erro do servidor
-                try {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || 'Não foi possível gerar o PDF.');
-                } catch {
-                    // Se a resposta não for JSON, mostra uma mensagem genérica
-                    throw new Error(`Erro do servidor: ${response.status} ${response.statusText}`);
-                }
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Não foi possível gerar o PDF.');
             }
             
-            // Lê o nome do ficheiro do cabeçalho Content-Disposition
             const contentDisposition = response.headers.get('content-disposition');
-            let filename = `bordero-${operacaoId}.pdf`; // Nome padrão
+            let filename = `documento.pdf`;
             if (contentDisposition) {
                 const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
                 if (filenameMatch && filenameMatch.length > 1) {
@@ -259,18 +281,47 @@ export default function ConsultasPage() {
             }
             
             const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
+            const downloadUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = filename; // Usa o nome do ficheiro recebido da API
+            a.href = downloadUrl;
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             a.remove();
-            window.URL.revokeObjectURL(url);
+            window.URL.revokeObjectURL(downloadUrl);
+            clearSelection();
         } catch (err) {
             alert(err.message);
         }
     };
+
+    const handleToggleSelectionMode = () => {
+        setIsSelectionMode(!isSelectionMode);
+        setSelectedItems(new Set()); // Limpa a seleção ao sair do modo
+    };
+
+    const handleToggleSelectItem = (id) => {
+        setSelectedItems(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) {
+                newSet.delete(id);
+            } else {
+                newSet.add(id);
+            }
+            return newSet;
+        });
+    };
+
+    const clearSelection = () => {
+        setSelectedItems(new Set());
+        setIsSelectionMode(false);
+    };
+
+    const selectedValue = useMemo(() => {
+        return duplicatas
+            .filter(d => selectedItems.has(d.id))
+            .reduce((sum, item) => sum + item.valorBruto, 0);
+    }, [selectedItems, duplicatas]);
     
     const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
     const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
@@ -311,6 +362,11 @@ export default function ConsultasPage() {
                                     <table className="min-w-full divide-y divide-gray-700">
                                         <thead className="bg-gray-700">
                                         <tr>
+                                            {isSelectionMode && (
+                                                <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left">
+                                                    {/* Checkbox para selecionar todos (opcional) */}
+                                                </th>
+                                            )}
                                             <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataOperacao')} className="flex items-center gap-1">Data Op. {getSortIcon('dataOperacao')}</button></th>
                                             <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase min-w-[120px]"><button onClick={() => handleSort('nfCte')} className="flex items-center gap-1">NF/CT-e {getSortIcon('nfCte')}</button></th>
                                             <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('empresaCedente')} className="flex items-center gap-1">Cedente {getSortIcon('empresaCedente')}</button></th>
@@ -325,6 +381,17 @@ export default function ConsultasPage() {
                                                 const isLiquidado = dup.statusRecebimento === 'Recebido';
                                                 return (
                                                     <tr key={dup.id} onContextMenu={(e) => handleContextMenu(e, dup)} className="group relative hover:bg-gray-700 cursor-pointer">
+                                                        {isSelectionMode && (
+                                                            <td className="px-4 py-2 align-middle">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
+                                                                    checked={selectedItems.has(dup.id)}
+                                                                    onChange={() => handleToggleSelectItem(dup.id)}
+                                                                    disabled={isLiquidado}
+                                                                />
+                                                            </td>
+                                                        )}
                                                         <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{formatDate(dup.dataOperacao)}</td>
                                                         <td className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-100'}`}>{dup.nfCte}</td>
                                                         <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? 'text-gray-500' : 'text-gray-400'}`}>{dup.empresaCedente}</td>
@@ -354,9 +421,19 @@ export default function ConsultasPage() {
                 </div>
             </main>
 
+            <SelectionActionsBar
+                selectedCount={selectedItems.size}
+                totalValue={selectedValue}
+                onLiquidate={handleAbrirModalLiquidacao}
+                onGeneratePdf={handleGeneratePdf}
+                onClear={clearSelection}
+            />
+
             {contextMenu.visible && (
-                <div ref={menuRef} style={{ top: contextMenu.y, left: contextMenu.x }} className="absolute origin-top-right w-48 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-20">
+                <div ref={menuRef} style={{ top: contextMenu.y, left: contextMenu.x }} className="absolute origin-top-right w-48 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-50">
                     <div className="py-1" onClick={(e) => e.stopPropagation()}>
+                        <a href="#" onClick={(e) => { e.preventDefault(); handleToggleSelectionMode(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">{isSelectionMode ? 'Sair da Seleção' : 'Selecionar'}</a>
+                        <div className="border-t border-gray-600 my-1"></div>
                         {contextMenu.selectedItem?.statusRecebimento === 'Recebido' ? (
                             <a href="#" onClick={(e) => { e.preventDefault(); handleEstornar(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Estornar Liquidação</a>
                         ) : (
