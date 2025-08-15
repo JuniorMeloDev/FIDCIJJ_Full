@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
-import pdfParse from 'pdf-parse';
 
 export const runtime = 'nodejs';
 
@@ -18,6 +17,7 @@ export async function POST(request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    const pdfParse = (await import('pdf-parse')).default;
     const pdfData = await pdfParse(buffer);
     const text = pdfData.text.replace(/\s+/g, ' ').trim();
 
