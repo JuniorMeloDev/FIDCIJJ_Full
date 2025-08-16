@@ -13,8 +13,11 @@ export default function OperacaoDetalhes({
     onRemoveDesconto,
     contasBancarias,
     contaBancariaId,
-    setContaBancariaId
+    setContaBancariaId,
+    cedenteRamo // Nova prop
 }) {
+    const docType = cedenteRamo === 'Transportes' ? 'CT-e' : 'NF-e';
+
     return (
         <section className="bg-gray-800 p-4 rounded-lg shadow-md mt-4">
             <h2 className="text-2xl font-semibold mb-4 text-gray-100">Duplicatas da Operação</h2>
@@ -23,7 +26,7 @@ export default function OperacaoDetalhes({
                 <table className="min-w-full divide-y divide-gray-700">
                     <thead className="bg-gray-700">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">NF/CT-e</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">{docType}</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cliente</th>
                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Valor Bruto</th>
                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Deságio (Juros)</th>

@@ -9,7 +9,9 @@ export default function AdicionarNotaFiscalForm({
     onSelectSacado,
     fetchSacados,
     condicoesSacado,
-    setNovaNf 
+    setNovaNf,
+    cedenteRamo, // Nova prop
+    showPeso // Nova prop
 }) {
     const handleCondicaoChange = (e) => {
         const selectedIndex = e.target.value;
@@ -27,9 +29,11 @@ export default function AdicionarNotaFiscalForm({
         }
     };
     
+    const docType = cedenteRamo === 'Transportes' ? 'CT-e' : 'NF-e';
+
     return (
         <section className="bg-gray-800 p-4 rounded-lg shadow-md mb-4">
-          <h2 className="text-xl font-semibold mb-4 text-gray-100">Adicionar Nota Fiscal / CT-e</h2>
+          <h2 className="text-xl font-semibold mb-4 text-gray-100">Adicionar {docType}</h2>
           <form onSubmit={handleAddNotaFiscal} className="grid grid-cols-1 md:grid-cols-6 gap-6 items-end">
             
             <div className="md:col-span-2">
@@ -45,12 +49,12 @@ export default function AdicionarNotaFiscalForm({
             </div>
 
             <div className="md:col-span-1">
-              <label htmlFor="nfCte" className="block text-sm font-medium text-gray-300">Número NF/CT-e</label>
+              <label htmlFor="nfCte" className="block text-sm font-medium text-gray-300">Número {docType}</label>
               <input type="text" name="nfCte" value={novaNf.nfCte} onChange={handleInputChange} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-white"/>
             </div>
 
             <div className="md:col-span-1">
-              <label htmlFor="dataNf" className="block text-sm font-medium text-gray-300">Data da NF/CT-e</label>
+              <label htmlFor="dataNf" className="block text-sm font-medium text-gray-300">Data do {docType}</label>
               <input type="date" name="dataNf" value={novaNf.dataNf} onChange={handleInputChange} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-white"/>
             </div>
 
@@ -90,14 +94,16 @@ export default function AdicionarNotaFiscalForm({
                 </>
             )}
             
-            <div className="md:col-span-2">
-              <label htmlFor="peso" className="block text-sm font-medium text-gray-300">Peso Líquido (Kg)</label>
-              <input type="text" name="peso" value={novaNf.peso} onChange={handleInputChange} placeholder="0,00" className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-white"/>
-            </div>
+            {showPeso && (
+              <div className="md:col-span-2">
+                <label htmlFor="peso" className="block text-sm font-medium text-gray-300">Peso Líquido (Kg)</label>
+                <input type="text" name="peso" value={novaNf.peso} onChange={handleInputChange} placeholder="0,00" className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-white"/>
+              </div>
+            )}
             
             <div className="md:col-span-1">
               <button type="submit" disabled={isLoading} className="w-full bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition disabled:bg-orange-400">
-                {isLoading ? 'A calcular...' : 'Adicionar NF'}
+                {isLoading ? 'A calcular...' : `Adicionar ${docType}`}
               </button>
             </div>
           </form>

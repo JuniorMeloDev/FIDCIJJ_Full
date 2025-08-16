@@ -17,6 +17,7 @@ export default function OperacaoBorderoPage() {
     const [tipoOperacaoId, setTipoOperacaoId] = useState('');
     const [empresaCedente, setEmpresaCedente] = useState('');
     const [empresaCedenteId, setEmpresaCedenteId] = useState(null);
+    const [cedenteRamo, setCedenteRamo] = useState(''); // Novo estado para o ramo de atividade
     const [novaNf, setNovaNf] = useState({ nfCte: '', dataNf: '', valorNf: '', clienteSacado: '', parcelas: '1', prazos: '', peso: '' });
     const [notasFiscais, setNotasFiscais] = useState([]);
     const [descontos, setDescontos] = useState([]);
@@ -35,7 +36,7 @@ export default function OperacaoBorderoPage() {
 
 
     const fileInputRef = useRef(null);
-    const cteFileInputRef = useRef(null); // Novo ref para o input de PDF
+    const cteFileInputRef = useRef(null);
     const [xmlDataPendente, setXmlDataPendente] = useState(null);
     const [isClienteModalOpen, setIsClienteModalOpen] = useState(false);
     const [isSacadoModalOpen, setIsSacadoModalOpen] = useState(false);
@@ -169,6 +170,8 @@ export default function OperacaoBorderoPage() {
         });
         setEmpresaCedente(data.emitente.nome || '');
         setEmpresaCedenteId(data.emitente.id || null);
+        // Atualiza o ramo do cedente
+        setCedenteRamo(data.emitente.ramo_de_atividade || '');
         showNotification("Dados do ficheiro preenchidos com sucesso!", "success");
         setXmlDataPendente(null);
     };
@@ -188,7 +191,7 @@ export default function OperacaoBorderoPage() {
             const novoClienteCriado = await response.json();
             const updatedXmlData = {
                 ...xmlDataPendente,
-                emitente: { ...xmlDataPendente.emitente, id: novoClienteCriado.id },
+                emitente: { ...xmlDataPendente.emitente, id: novoClienteCriado.id, ramo_de_atividade: data.ramoDeAtividade },
                 emitenteExiste: true
             };
             setXmlDataPendente(updatedXmlData);
@@ -239,11 +242,15 @@ export default function OperacaoBorderoPage() {
     const handleSelectCedente = (cliente) => {
         setEmpresaCedente(cliente.nome);
         setEmpresaCedenteId(cliente.id);
+        setCedenteRamo(cliente.ramo_de_atividade || ''); // Define o ramo de atividade
     };
+
     const handleCedenteChange = (newName) => {
         setEmpresaCedente(newName);
         setEmpresaCedenteId(null);
+        setCedenteRamo(''); // Limpa o ramo ao digitar
     };
+
     const handleSelectSacado = (sacado) => {
         const condicoes = sacado.condicoes_pagamento || sacado.condicoesPagamento || [];
         setCondicoesSacado(condicoes);
@@ -305,7 +312,8 @@ export default function OperacaoBorderoPage() {
             clienteId: empresaCedenteId,
             contaBancariaId: parseInt(contaBancariaId),
             descontos: todosOsDescontos.map(({ id, ...rest }) => rest),
-            notasFiscais: notasFiscais.map(nf => ({ ...nf, peso: parseFloat(String(nf.peso).replace(',', '.')) || null }))
+            notasFiscais: notasFiscais.map(nf => ({ ...nf, peso: parseFloat(String(nf.peso).replace(',', '.')) || null })),
+            cedenteRamo, // Envia o ramo para a API
         };
         try {
             const response = await fetch(`/api/operacoes/salvar`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, body: JSON.stringify(payload) });
@@ -359,6 +367,7 @@ export default function OperacaoBorderoPage() {
         setTipoOperacaoId('');
         setEmpresaCedente('');
         setEmpresaCedenteId(null);
+        setCedenteRamo(''); 
         setNotasFiscais([]);
         setDescontos([]);
         setNovaNf({ nfCte: '', dataNf: '', valorNf: '', clienteSacado: '', parcelas: '1', prazos: '', peso: '' });
@@ -375,6 +384,13 @@ export default function OperacaoBorderoPage() {
         }
         return combined;
     }, [descontos, tipoOperacaoId, tiposOperacao, ignoreDespesasBancarias]);
+    
+    // Calcula se o campo de peso deve ser exibido
+    const showPeso = useMemo(() => {
+        const selectedOperacao = tiposOperacao.find(op => op.id === parseInt(tipoOperacaoId));
+        return selectedOperacao?.usarPesoNoValorFixo || false;
+    }, [tipoOperacaoId, tiposOperacao]);
+
     const totais = useMemo(() => {
         const valorTotalBruto = notasFiscais.reduce((acc, nf) => acc + nf.valorNf, 0);
         const desagioTotal = notasFiscais.reduce((acc, nf) => acc + (nf.jurosCalculado || 0), 0);
@@ -440,13 +456,16 @@ export default function OperacaoBorderoPage() {
                     handleAddNotaFiscal={handleAddNotaFiscal} isLoading={isLoading} 
                     onSelectSacado={handleSelectSacado} fetchSacados={fetchSacados} 
                     condicoesSacado={condicoesSacado} setNovaNf={setNovaNf}
+                    cedenteRamo={cedenteRamo} 
+                    showPeso={showPeso} 
                 />
                 <OperacaoDetalhes 
                     notasFiscais={notasFiscais} descontos={todosOsDescontos} totais={totais} 
                     handleSalvarOperacao={handleSalvarOperacao} handleLimparTudo={handleLimparTudo} 
                     isSaving={isSaving} onAddDescontoClick={() => setIsDescontoModalOpen(true)} 
                     onRemoveDesconto={handleRemoveDesconto} contasBancarias={contasBancarias} 
-                    contaBancariaId={contaBancariaId} setContaBancariaId={setContaBancariaId} 
+                    contaBancariaId={contaBancariaId} setContaBancariaId={setContaBancariaId}
+                    cedenteRamo={cedenteRamo} 
                 />
             </main>
         </>

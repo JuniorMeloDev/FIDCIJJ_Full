@@ -14,17 +14,19 @@ export async function POST(request) {
         const valorTotalJuros = body.notasFiscais.reduce((acc, nf) => acc + nf.jurosCalculado, 0);
         const valorTotalDescontos = body.descontos.reduce((acc, d) => acc + d.valor, 0);
 
-        const duplicatasParaSalvar = body.notasFiscais.flatMap(nf =>
-            nf.parcelasCalculadas.map(p => ({
-                nfCte: `${nf.nfCte}.${p.numeroParcela}`,
+        const duplicatasParaSalvar = body.notasFiscais.flatMap(nf => {
+            // Se for transportadora e tiver apenas uma parcela, não adiciona sufixo
+            const isCteSingleParcela = body.cedenteRamo === 'Transportes' && nf.parcelasCalculadas.length === 1;
+
+            return nf.parcelasCalculadas.map(p => ({
+                nfCte: isCteSingleParcela ? nf.nfCte : `${nf.nfCte}.${p.numeroParcela}`,
                 clienteSacado: nf.clienteSacado,
                 valorParcela: p.valorParcela,
                 jurosParcela: p.jurosParcela,
                 dataVencimento: p.dataVencimento,
-            }))
-        );
+            }));
+        });
 
-        // A chamada para a função rpc agora passa os arrays diretamente, sem JSON.stringify
         const { data: operacaoId, error } = await supabase.rpc('salvar_operacao_completa', {
             p_data_operacao: body.dataOperacao,
             p_tipo_operacao_id: body.tipoOperacaoId,
@@ -33,8 +35,8 @@ export async function POST(request) {
             p_valor_total_bruto: valorTotalBruto,
             p_valor_total_juros: valorTotalJuros,
             p_valor_total_descontos: valorTotalDescontos,
-            p_duplicatas: duplicatasParaSalvar, // <--- CORRIGIDO
-            p_descontos: body.descontos // <--- CORRIGIDO
+            p_duplicatas: duplicatasParaSalvar,
+            p_descontos: body.descontos
         });
 
         if (error) throw error;
