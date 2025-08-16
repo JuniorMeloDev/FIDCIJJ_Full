@@ -19,7 +19,7 @@ export async function GET(request) {
     const diasVencimento = parseInt(searchParams.get('diasVencimento') || '5', 10);
     const topNLimit = parseInt(searchParams.get('topNLimit') || '5', 10);
 
-    // Parâmetros padronizados com prefixo 'p_'
+    // Parâmetros padronizados que serão enviados para TODAS as funções RPC
     const rpcParams = {
       p_data_inicio: dataInicio,
       p_data_fim: dataFim,
