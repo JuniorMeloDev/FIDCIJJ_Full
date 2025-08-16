@@ -24,12 +24,14 @@ export async function GET(request) {
       p_tipo_operacao_id: tipoOperacaoId,
     };
 
-    // --- LÓGICA DE VENCIMENTOS AGORA DENTRO DA API ---
+    // --- LÓGICA DE VENCIMENTOS ATUALIZADA ---
     const hoje = new Date();
     const dataLimite = new Date();
     dataLimite.setDate(hoje.getDate() + diasVencimento);
 
-    // Constrói a query para buscar duplicatas a vencer
+    // Constrói a query para buscar duplicatas pendentes
+    // A condição agora busca tudo que está pendente E com data de vencimento até a data limite.
+    // Isso inclui tanto as vencidas quanto as a vencer no período.
     let vencimentosQuery = supabase
       .from('duplicatas')
       .select(`
@@ -44,8 +46,7 @@ export async function GET(request) {
         )
       `)
       .eq('status_recebimento', 'Pendente')
-      .gte('data_vencimento', format(hoje, 'yyyy-MM-dd'))
-      .lte('data_vencimento', format(dataLimite, 'yyyy-MM-dd'));
+      .lte('data_vencimento', format(dataLimite, 'yyyy-MM-dd')); // Pega tudo até a data limite
     
     // Aplica filtros da tela de resumo na query de vencimentos
     if (dataInicio) {
@@ -63,13 +64,13 @@ export async function GET(request) {
       topClientesRes,
       topSacadosRes,
       totaisFinanceirosRes,
-      vencimentosProximosRes, // Agora é uma query direta, não um RPC
+      vencimentosProximosRes,
     ] = await Promise.all([
       supabase.rpc('get_valor_operado', rpcParams),
       supabase.rpc('get_top_clientes', rpcParams),
       supabase.rpc('get_top_sacados', rpcParams),
       supabase.rpc('get_totais_financeiros', rpcParams),
-      vencimentosQuery, // Executa a query que construímos
+      vencimentosQuery,
     ]);
 
     const errors = [

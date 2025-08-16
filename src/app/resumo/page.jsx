@@ -25,10 +25,16 @@ export default function ResumoPage() {
     
     const [debouncedFilters, setDebouncedFilters] = useState(filters);
     const [diasVencimento, setDiasVencimento] = useState(5)
-    const [loading, setLoading] = useState(true) // Controla o carregamento geral e inicial
+    const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const [isRelatorioModalOpen, setIsRelatorioModalOpen] = useState(false)
     const [topFiveChartType, setTopFiveChartType] = useState('cedentes');
+    const [today, setToday] = useState('');
+
+    useEffect(() => {
+        // Define a data de hoje no formato YYYY-MM-DD para comparação
+        setToday(new Date().toISOString().split('T')[0]);
+    }, []);
 
     const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
@@ -68,7 +74,6 @@ export default function ResumoPage() {
 
     useEffect(() => {
         ;(async () => {
-          // Mantém o loading principal apenas na primeira carga
           if (!metrics) setLoading(true) 
           setError(null)
 
@@ -130,7 +135,7 @@ export default function ResumoPage() {
 
     const totalGeral = saldos.reduce((sum, c) => sum + (c.saldo || 0), 0)
     
-    if (loading) { // Exibe o loading apenas na carga inicial da página
+    if (loading) {
         return (
           <main className="min-h-screen pt-16 flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
             <p className="text-gray-400 text-xl">Carregando resumo...</p>
@@ -196,7 +201,7 @@ export default function ResumoPage() {
 
             {error && <div className="text-center py-4 text-red-500">{error}</div>}
 
-            {metrics && ( // Adiciona uma verificação para garantir que 'metrics' não é nulo
+            {metrics && (
                 <div className="transition-opacity duration-300 opacity-100">
                     <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {saldos.map((conta, index) => (
@@ -294,52 +299,42 @@ export default function ResumoPage() {
                       >
                         <div className="flex justify-between items-center mb-4">
                           <h3 className="text-lg font-semibold text-gray-100">
-                            Vencimentos Próximos
+                            Duplicatas a receber
                           </h3>
                           <select
                             value={diasVencimento}
                             onChange={(e) => setDiasVencimento(Number(e.target.value))}
                             className="bg-gray-800 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
                           >
-                            <option value={5}>5 dias</option>
-                            <option value={15}>15 dias</option>
-                            <option value={30}>30 dias</option>
+                            <option value={5}>Próximos 5 dias</option>
+                            <option value={15}>Próximos 15 dias</option>
+                            <option value={30}>Próximos 30 dias</option>
                           </select>
                         </div>
                         <div className="space-y-3 max-h-80 overflow-auto pr-2">
                           {metrics.vencimentosProximos?.length > 0 ? (
                             metrics.vencimentosProximos
-                              .sort(
-                                (a, b) =>
-                                  new Date(a.dataVencimento) -
-                                  new Date(b.dataVencimento)
-                              )
-                              .map((dup) => (
-                                <div
-                                  key={dup.id}
-                                  className="flex justify-between items-center text-sm border-b border-gray-600 pb-2 last:border-none"
-                                >
-                                  <div>
-                                    <p className="font-medium text-gray-200">
-                                      {dup.clienteSacado}
-                                    </p>
-                                    <p className="text-xs text-gray-400">
-                                      NF {dup.nfCte}
-                                    </p>
+                              .sort((a, b) => new Date(a.dataVencimento) - new Date(b.dataVencimento))
+                              .map((dup) => {
+                                const isVencido = dup.dataVencimento < today;
+                                return (
+                                  <div key={dup.id} className="flex justify-between items-center text-sm border-b border-gray-600 pb-2 last:border-none">
+                                    <div>
+                                      <p className="font-medium text-gray-200">{dup.clienteSacado}</p>
+                                      <p className="text-xs text-gray-400">NF {dup.nfCte}</p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className={`font-semibold ${isVencido ? 'text-red-500' : 'text-yellow-400'}`}>
+                                        {formatDate(dup.dataVencimento)}
+                                      </p>
+                                      <p className="text-gray-300">{formatBRLNumber(dup.valorBruto)}</p>
+                                    </div>
                                   </div>
-                                  <div className="text-right">
-                                    <p className="font-semibold text-red-400">
-                                      {formatDate(dup.dataVencimento)}
-                                    </p>
-                                    <p className="text-gray-300">
-                                      {formatBRLNumber(dup.valorBruto)}
-                                    </p>
-                                  </div>
-                                </div>
-                              ))
+                                );
+                              })
                           ) : (
                             <p className="text-gray-400">
-                              Nenhuma duplicata a vencer nos próximos {diasVencimento} dias.
+                              Nenhuma duplicata vencida ou a vencer nos próximos {diasVencimento} dias.
                             </p>
                           )}
                         </div>
