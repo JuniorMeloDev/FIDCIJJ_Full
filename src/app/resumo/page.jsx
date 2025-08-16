@@ -15,7 +15,6 @@ export default function ResumoPage() {
     const [tiposOperacao, setTiposOperacao] = useState([])
     const [contasBancarias, setContasBancarias] = useState([])
     
-    // Define o estado inicial dos filtros com o primeiro e último dia do mês atual
     const [filters, setFilters] = useState({
         dataInicio: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
         dataFim: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
@@ -32,6 +31,7 @@ export default function ResumoPage() {
     const [error, setError] = useState(null)
     const [isRelatorioModalOpen, setIsRelatorioModalOpen] = useState(false)
     const [topFiveChartType, setTopFiveChartType] = useState('cedentes');
+    const [topNLimit, setTopNLimit] = useState(5); // Novo estado para o limite do Top N
     const [today, setToday] = useState('');
 
     useEffect(() => {
@@ -83,6 +83,7 @@ export default function ResumoPage() {
             const params = new URLSearchParams()
             Object.entries(debouncedFilters).forEach(([k, v]) => v && params.append(k, v))
             params.append('diasVencimento', diasVencimento)
+            params.append('topNLimit', topNLimit); // Adiciona o novo limite na chamada da API
 
             const headers = getAuthHeader()
             const [saldosRes, metricsRes] = await Promise.all([
@@ -100,7 +101,7 @@ export default function ResumoPage() {
             setLoading(false)
           }
         })()
-    }, [debouncedFilters, diasVencimento])
+    }, [debouncedFilters, diasVencimento, topNLimit]) // Adiciona topNLimit como dependência
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target
@@ -205,6 +206,7 @@ export default function ResumoPage() {
 
             {metrics && (
                 <div className="transition-opacity duration-300 opacity-100">
+                    {/* Seção de Saldos e Total Geral permanece igual */}
                     <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {saldos.map((conta, index) => (
                         <motion.div
@@ -350,21 +352,33 @@ export default function ResumoPage() {
                       >
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-semibold text-gray-100">
-                                {topFiveChartType === 'cedentes' ? 'Top 5 Cedentes por Valor' : 'Top 5 Sacados por Valor'}
+                                {`Top ${topNLimit} ${topFiveChartType === 'cedentes' ? 'Cedentes' : 'Sacados'} por Valor`}
                             </h3>
-                            <div className="flex space-x-1 rounded-lg bg-gray-800 p-1 w-auto">
-                                <button
-                                    onClick={() => setTopFiveChartType('cedentes')}
-                                    className={`px-4 py-1 text-sm font-medium rounded-md transition ${topFiveChartType === 'cedentes' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                            <div className="flex items-center gap-2">
+                                <select
+                                    value={topNLimit}
+                                    onChange={(e) => setTopNLimit(Number(e.target.value))}
+                                    className="bg-gray-800 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
                                 >
-                                    Cedentes
-                                </button>
-                                <button
-                                    onClick={() => setTopFiveChartType('sacados')}
-                                    className={`px-4 py-1 text-sm font-medium rounded-md transition ${topFiveChartType === 'sacados' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
-                                >
-                                    Sacados
-                                </button>
+                                    <option value={5}>Top 5</option>
+                                    <option value={10}>Top 10</option>
+                                    <option value={15}>Top 15</option>
+                                    <option value={20}>Top 20</option>
+                                </select>
+                                <div className="flex space-x-1 rounded-lg bg-gray-800 p-1 w-auto">
+                                    <button
+                                        onClick={() => setTopFiveChartType('cedentes')}
+                                        className={`px-4 py-1 text-sm font-medium rounded-md transition ${topFiveChartType === 'cedentes' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                                    >
+                                        Cedentes
+                                    </button>
+                                    <button
+                                        onClick={() => setTopFiveChartType('sacados')}
+                                        className={`px-4 py-1 text-sm font-medium rounded-md transition ${topFiveChartType === 'sacados' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                                    >
+                                        Sacados
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         

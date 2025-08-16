@@ -17,47 +17,33 @@ export async function GET(request) {
     const dataFim = searchParams.get('dataFim') || null;
     const tipoOperacaoId = searchParams.get('tipoOperacaoId') || null;
     const diasVencimento = parseInt(searchParams.get('diasVencimento') || '5', 10);
+    const topNLimit = parseInt(searchParams.get('topNLimit') || '5', 10); // Captura o novo limite
 
     const rpcParams = {
       data_inicio: dataInicio,
       data_fim: dataFim,
       p_tipo_operacao_id: tipoOperacaoId,
     };
+    
+    // Adiciona o limite aos parâmetros do Top N
+    const topNParams = { ...rpcParams, p_limit: topNLimit };
 
-    // --- LÓGICA DE VENCIMENTOS ATUALIZADA ---
     const hoje = new Date();
     const dataLimite = new Date();
     dataLimite.setDate(hoje.getDate() + diasVencimento);
 
-    // Constrói a query para buscar duplicatas pendentes
-    // A condição agora busca tudo que está pendente E com data de vencimento até a data limite.
-    // Isso inclui tanto as vencidas quanto as a vencer no período.
     let vencimentosQuery = supabase
       .from('duplicatas')
       .select(`
-        id,
-        nf_cte,
-        data_vencimento,
-        valor_bruto,
-        cliente_sacado,
-        operacao:operacoes!inner(
-          tipo_operacao_id,
-          data_operacao
-        )
+        id, nf_cte, data_vencimento, valor_bruto, cliente_sacado,
+        operacao:operacoes!inner(tipo_operacao_id, data_operacao)
       `)
       .eq('status_recebimento', 'Pendente')
-      .lte('data_vencimento', format(dataLimite, 'yyyy-MM-dd')); // Pega tudo até a data limite
+      .lte('data_vencimento', format(dataLimite, 'yyyy-MM-dd'));
     
-    // Aplica filtros da tela de resumo na query de vencimentos
-    if (dataInicio) {
-        vencimentosQuery = vencimentosQuery.gte('operacao.data_operacao', dataInicio);
-    }
-    if (dataFim) {
-        vencimentosQuery = vencimentosQuery.lte('operacao.data_operacao', dataFim);
-    }
-    if (tipoOperacaoId) {
-        vencimentosQuery = vencimentosQuery.eq('operacao.tipo_operacao_id', tipoOperacaoId);
-    }
+    if (dataInicio) vencimentosQuery = vencimentosQuery.gte('operacao.data_operacao', dataInicio);
+    if (dataFim) vencimentosQuery = vencimentosQuery.lte('operacao.data_operacao', dataFim);
+    if (tipoOperacaoId) vencimentosQuery = vencimentosQuery.eq('operacao.tipo_operacao_id', tipoOperacaoId);
 
     const [
       valorOperadoRes,
@@ -67,8 +53,8 @@ export async function GET(request) {
       vencimentosProximosRes,
     ] = await Promise.all([
       supabase.rpc('get_valor_operado', rpcParams),
-      supabase.rpc('get_top_clientes', rpcParams),
-      supabase.rpc('get_top_sacados', rpcParams),
+      supabase.rpc('get_top_clientes', topNParams), // Usa os parâmetros com o limite
+      supabase.rpc('get_top_sacados', topNParams),   // Usa os parâmetros com o limite
       supabase.rpc('get_totais_financeiros', rpcParams),
       vencimentosQuery,
     ]);
@@ -86,11 +72,7 @@ export async function GET(request) {
       throw new Error('Uma ou mais consultas de métricas falharam.');
     }
 
-    const totais = totaisFinanceirosRes.data?.[0] || {
-      total_juros: 0,
-      total_despesas: 0,
-    };
-
+    const totais = totaisFinanceirosRes.data?.[0] || { total_juros: 0, total_despesas: 0 };
     const lucroLiquido = (totais.total_juros || 0) - (totais.total_despesas || 0);
 
     const metrics = {
@@ -113,8 +95,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('Erro no endpoint de métricas:', error.message);
     return NextResponse.json(
-      { message: error.message || 'Erro interno do servidor' },
-      { status: 500 }
+      { message: error.message || 'Erro interno do servidor' }, { status: 500 }
     );
   }
 }
