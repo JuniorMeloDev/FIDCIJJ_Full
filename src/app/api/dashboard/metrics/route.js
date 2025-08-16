@@ -17,15 +17,15 @@ export async function GET(request) {
     const dataFim = searchParams.get('dataFim') || null;
     const tipoOperacaoId = searchParams.get('tipoOperacaoId') || null;
     const diasVencimento = parseInt(searchParams.get('diasVencimento') || '5', 10);
-    const topNLimit = parseInt(searchParams.get('topNLimit') || '5', 10); // Captura o novo limite
+    const topNLimit = parseInt(searchParams.get('topNLimit') || '5', 10);
 
+    // Parâmetros padronizados com prefixo 'p_'
     const rpcParams = {
-      data_inicio: dataInicio,
-      data_fim: dataFim,
+      p_data_inicio: dataInicio,
+      p_data_fim: dataFim,
       p_tipo_operacao_id: tipoOperacaoId,
     };
     
-    // Adiciona o limite aos parâmetros do Top N
     const topNParams = { ...rpcParams, p_limit: topNLimit };
 
     const hoje = new Date();
@@ -53,8 +53,8 @@ export async function GET(request) {
       vencimentosProximosRes,
     ] = await Promise.all([
       supabase.rpc('get_valor_operado', rpcParams),
-      supabase.rpc('get_top_clientes', topNParams), // Usa os parâmetros com o limite
-      supabase.rpc('get_top_sacados', topNParams),   // Usa os parâmetros com o limite
+      supabase.rpc('get_top_clientes', topNParams),
+      supabase.rpc('get_top_sacados', topNParams),
       supabase.rpc('get_totais_financeiros', rpcParams),
       vencimentosQuery,
     ]);
