@@ -9,7 +9,7 @@ import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 import EmailModal from '@/app/components/EmailModal';
 import Pagination from '@/app/components/Pagination';
 import FiltroLateralConsultas from '@/app/components/FiltroLateralConsultas';
-import SelectionActionsBar from '@/app/components/SelectionActionsBar'; // Importe o novo componente
+import SelectionActionsBar from '@/app/components/SelectionActionsBar';
 import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 
 const ITEMS_PER_PAGE = 7;
@@ -22,7 +22,6 @@ export default function ConsultasPage() {
     const [contasMaster, setContasMaster] = useState([]);
     const [tiposOperacao, setTiposOperacao] = useState([]);
     
-    // Estados para o modo de seleção
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedItems, setSelectedItems] = useState(new Set());
     
@@ -181,7 +180,6 @@ export default function ConsultasPage() {
 
     const showNotification = (message, type) => { setNotification({ message, type }); setTimeout(() => setNotification({ message: '', type: '' }), 5000); };
     
-    // Abre o modal de liquidação para um ou vários itens
     const handleAbrirModalLiquidacao = () => {
         let itemsParaLiquidar = [];
         if (isSelectionMode && selectedItems.size > 0) {
@@ -196,7 +194,6 @@ export default function ConsultasPage() {
         }
     };
 
-    // Lida com a confirmação da liquidação
     const handleConfirmarLiquidacao = async (duplicataIds, dataLiquidacao, jurosMora, contaBancariaId) => {
         const url = `/api/duplicatas/liquidar-em-massa`;
         try {
@@ -297,7 +294,7 @@ export default function ConsultasPage() {
 
     const handleToggleSelectionMode = () => {
         setIsSelectionMode(!isSelectionMode);
-        setSelectedItems(new Set()); // Limpa a seleção ao sair do modo
+        setSelectedItems(new Set());
     };
 
     const handleToggleSelectItem = (id) => {
@@ -363,9 +360,7 @@ export default function ConsultasPage() {
                                         <thead className="bg-gray-700">
                                         <tr>
                                             {isSelectionMode && (
-                                                <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left">
-                                                    {/* Checkbox para selecionar todos (opcional) */}
-                                                </th>
+                                                <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left"></th>
                                             )}
                                             <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataOperacao')} className="flex items-center gap-1">Data Op. {getSortIcon('dataOperacao')}</button></th>
                                             <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase min-w-[120px]"><button onClick={() => handleSort('nfCte')} className="flex items-center gap-1">NF/CT-e {getSortIcon('nfCte')}</button></th>
@@ -402,9 +397,15 @@ export default function ConsultasPage() {
                                                             {formatDate(dup.dataVencimento)}
                                                             {isLiquidado && dup.dataLiquidacao && (
                                                                 <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-900 bg-opacity-80 pointer-events-none transition-opacity duration-300">
-                                                                    <span className="bg-green-800 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
-                                                                        Recebido em {formatDate(dup.dataLiquidacao)} na conta {dup.contaLiquidacao}
-                                                                    </span>
+                                                                    {dup.contaLiquidacao ? (
+                                                                        <span className="bg-green-800 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
+                                                                            Recebido em {formatDate(dup.dataLiquidacao)} na conta {dup.contaLiquidacao}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="bg-gray-900 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
+                                                                            Baixado em {formatDate(dup.dataLiquidacao)}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </td>

@@ -10,8 +10,6 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // 1. FAZ UMA CONSULTA MAIS SIMPLES E ABRANGENTE
-        // Busca as duplicatas e os seus dados relacionados
         let { data: duplicatas, error } = await supabase
             .from('duplicatas')
             .select(`
@@ -27,7 +25,7 @@ export async function GET(request) {
 
         if (error) throw error;
 
-        // 2. APLICA OS FILTROS EM JAVASCRIPT (MAIS SEGURO)
+        // Filtros em JavaScript
         const sacadoFilter = searchParams.get('sacado');
         const statusFilter = searchParams.get('status');
         const dataOpInicio = searchParams.get('dataOpInicio');
@@ -39,7 +37,7 @@ export async function GET(request) {
         const tipoOperacaoIdFilter = searchParams.get('tipoOperacaoId');
 
         const filteredData = duplicatas.filter(dup => {
-            if (!dup.operacao) return false; // Garante que a duplicata tem uma operação associada
+            if (!dup.operacao) return false;
             if (sacadoFilter && !dup.cliente_sacado.toLowerCase().includes(sacadoFilter.toLowerCase())) return false;
             if (statusFilter && statusFilter !== 'Todos' && dup.status_recebimento !== statusFilter) return false;
             if (dataOpInicio && dup.data_operacao < dataOpInicio) return false;
@@ -52,17 +50,19 @@ export async function GET(request) {
             return true;
         });
 
-        // 3. FORMATA OS DADOS PARA O FRONTEND
+        // FORMATAÇÃO DOS DADOS PARA O FRONTEND
         let formattedData = filteredData.map(d => ({
             id: d.id, operacaoId: d.operacao_id, clienteId: d.operacao?.cliente_id,
             dataOperacao: d.data_operacao, nfCte: d.nf_cte, empresaCedente: d.operacao?.cliente?.nome,
             valorBruto: d.valor_bruto, valorJuros: d.valor_juros, clienteSacado: d.cliente_sacado,
             dataVencimento: d.data_vencimento, tipoOperacaoNome: d.operacao?.tipo_operacao?.nome,
-            statusRecebimento: d.status_recebimento, dataLiquidacao: d.movimentacao?.data_movimento,
+            statusRecebimento: d.status_recebimento, 
+            // CORREÇÃO APLICADA AQUI: Usa a data da movimentação se existir, senão, a data da duplicata.
+            dataLiquidacao: d.movimentacao?.data_movimento || d.data_liquidacao,
             contaLiquidacao: d.movimentacao?.conta_bancaria
         }));
 
-        // 4. APLICA A ORDENAÇÃO EM JAVASCRIPT
+        // ORDENAÇÃO
         const sortKey = searchParams.get('sort');
         const sortDirection = searchParams.get('direction');
 
