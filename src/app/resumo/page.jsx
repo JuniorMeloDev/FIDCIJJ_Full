@@ -7,15 +7,18 @@ import { formatBRLNumber, formatDate } from '../utils/formatters'
 import RelatorioModal from '@/app/components/RelatorioModal' 
 import DashboardFiltros from '@/app/components/DashboardFiltros'
 import { FaChartLine, FaDollarSign, FaClock } from 'react-icons/fa'
+import { startOfMonth, endOfMonth, format } from 'date-fns';
 
 export default function ResumoPage() {
     const [saldos, setSaldos] = useState([])
     const [metrics, setMetrics] = useState(null);
     const [tiposOperacao, setTiposOperacao] = useState([])
     const [contasBancarias, setContasBancarias] = useState([])
+    
+    // Define o estado inicial dos filtros com o primeiro e último dia do mês atual
     const [filters, setFilters] = useState({
-        dataInicio: '',
-        dataFim: '',
+        dataInicio: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+        dataFim: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
         tipoOperacaoId: '',
         clienteId: '',
         clienteNome: '',
@@ -32,7 +35,6 @@ export default function ResumoPage() {
     const [today, setToday] = useState('');
 
     useEffect(() => {
-        // Define a data de hoje no formato YYYY-MM-DD para comparação
         setToday(new Date().toISOString().split('T')[0]);
     }, []);
 
@@ -299,7 +301,7 @@ export default function ResumoPage() {
                       >
                         <div className="flex justify-between items-center mb-4">
                           <h3 className="text-lg font-semibold text-gray-100">
-                            Duplicatas a receber
+                            Pendências e Vencimentos
                           </h3>
                           <select
                             value={diasVencimento}
