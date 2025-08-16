@@ -10,6 +10,7 @@ import DescontoModal from '@/app/components/DescontoModal';
 import EditClienteModal from '@/app/components/EditClienteModal';
 import EditSacadoModal from '@/app/components/EditSacadoModal';
 import EmailModal from '@/app/components/EmailModal';
+import PartialDebitModal from '@/app/components/PartialDebitModal'; // Importar
 import { formatBRLInput, parseBRL } from '@/app/utils/formatters';
 
 export default function OperacaoBorderoPage() {
@@ -17,7 +18,7 @@ export default function OperacaoBorderoPage() {
     const [tipoOperacaoId, setTipoOperacaoId] = useState('');
     const [empresaCedente, setEmpresaCedente] = useState('');
     const [empresaCedenteId, setEmpresaCedenteId] = useState(null);
-    const [cedenteRamo, setCedenteRamo] = useState(''); // Novo estado para o ramo de atividade
+    const [cedenteRamo, setCedenteRamo] = useState('');
     const [novaNf, setNovaNf] = useState({ nfCte: '', dataNf: '', valorNf: '', clienteSacado: '', parcelas: '1', prazos: '', peso: '' });
     const [notasFiscais, setNotasFiscais] = useState([]);
     const [descontos, setDescontos] = useState([]);
@@ -34,6 +35,9 @@ export default function OperacaoBorderoPage() {
     const [savedOperacaoInfo, setSavedOperacaoInfo] = useState(null);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
 
+    // Novos estados para o débito parcial
+    const [isPartialDebit, setIsPartialDebit] = useState(false);
+    const [isPartialDebitModalOpen, setIsPartialDebitModalOpen] = useState(false);
 
     const fileInputRef = useRef(null);
     const cteFileInputRef = useRef(null);
@@ -80,6 +84,7 @@ export default function OperacaoBorderoPage() {
     const fetchClientes = (query) => fetchApiData(`/api/cadastros/clientes/search?nome=${query}`);
     const fetchSacados = (query) => fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
     
+    // ... (as outras funções como handleXmlUpload, etc, permanecem as mesmas)
     const handleCtePdfUpload = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -170,7 +175,6 @@ export default function OperacaoBorderoPage() {
         });
         setEmpresaCedente(data.emitente.nome || '');
         setEmpresaCedenteId(data.emitente.id || null);
-        // Atualiza o ramo do cedente
         setCedenteRamo(data.emitente.ramo_de_atividade || '');
         showNotification("Dados do ficheiro preenchidos com sucesso!", "success");
         setXmlDataPendente(null);
@@ -242,13 +246,13 @@ export default function OperacaoBorderoPage() {
     const handleSelectCedente = (cliente) => {
         setEmpresaCedente(cliente.nome);
         setEmpresaCedenteId(cliente.id);
-        setCedenteRamo(cliente.ramo_de_atividade || ''); // Define o ramo de atividade
+        setCedenteRamo(cliente.ramo_de_atividade || '');
     };
 
     const handleCedenteChange = (newName) => {
         setEmpresaCedente(newName);
         setEmpresaCedenteId(null);
-        setCedenteRamo(''); // Limpa o ramo ao digitar
+        setCedenteRamo('');
     };
 
     const handleSelectSacado = (sacado) => {
@@ -296,7 +300,9 @@ export default function OperacaoBorderoPage() {
             setIsLoading(false);
         }
     };
-    const handleSalvarOperacao = async () => {
+    
+    // Função principal que decide o fluxo de salvamento
+    const handleSalvarOperacao = () => {
         if (notasFiscais.length === 0 || !contaBancariaId) {
             showNotification('Adicione ao menos uma NF e selecione uma conta bancária.', 'error');
             return;
@@ -305,7 +311,20 @@ export default function OperacaoBorderoPage() {
             showNotification('Selecione um cedente válido da lista antes de salvar.', 'error');
             return;
         }
+
+        if (isPartialDebit) {
+            setIsPartialDebitModalOpen(true);
+        } else {
+            // Chama com valor null para indicar débito total
+            confirmarSalvamento(null, null);
+        }
+    };
+
+    // Função que efetivamente envia para a API
+    const confirmarSalvamento = async (valorDebito, dataDebito) => {
+        setIsPartialDebitModalOpen(false);
         setIsSaving(true);
+        
         const payload = {
             dataOperacao,
             tipoOperacaoId: parseInt(tipoOperacaoId),
@@ -313,8 +332,11 @@ export default function OperacaoBorderoPage() {
             contaBancariaId: parseInt(contaBancariaId),
             descontos: todosOsDescontos.map(({ id, ...rest }) => rest),
             notasFiscais: notasFiscais.map(nf => ({ ...nf, peso: parseFloat(String(nf.peso).replace(',', '.')) || null })),
-            cedenteRamo, // Envia o ramo para a API
+            cedenteRamo,
+            valorDebito: valorDebito, // Pode ser null para débito total
+            dataDebito: dataDebito, // Pode ser null
         };
+
         try {
             const response = await fetch(`/api/operacoes/salvar`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, body: JSON.stringify(payload) });
             if (!response.ok) {
@@ -330,6 +352,7 @@ export default function OperacaoBorderoPage() {
             setIsSaving(false);
         }
     };
+
     const finalizarOperacao = () => {
         if (savedOperacaoInfo) {
             showNotification(`Operação salva com sucesso!`, 'success');
@@ -367,12 +390,13 @@ export default function OperacaoBorderoPage() {
         setTipoOperacaoId('');
         setEmpresaCedente('');
         setEmpresaCedenteId(null);
-        setCedenteRamo(''); 
+        setCedenteRamo('');
         setNotasFiscais([]);
         setDescontos([]);
         setNovaNf({ nfCte: '', dataNf: '', valorNf: '', clienteSacado: '', parcelas: '1', prazos: '', peso: '' });
         setCondicoesSacado([]);
         setIgnoreDespesasBancarias(false);
+        setIsPartialDebit(false); // Reseta o checkbox de débito parcial
         if (showMsg) showNotification('Formulário limpo.', 'success');
     };
     const todosOsDescontos = useMemo(() => {
@@ -385,7 +409,6 @@ export default function OperacaoBorderoPage() {
         return combined;
     }, [descontos, tipoOperacaoId, tiposOperacao, ignoreDespesasBancarias]);
     
-    // Calcula se o campo de peso deve ser exibido
     const showPeso = useMemo(() => {
         const selectedOperacao = tiposOperacao.find(op => op.id === parseInt(tipoOperacaoId));
         return selectedOperacao?.usarPesoNoValorFixo || false;
@@ -405,6 +428,7 @@ export default function OperacaoBorderoPage() {
 
         return { valorTotalBruto, desagioTotal, totalOutrosDescontos, liquidoOperacao };
     }, [notasFiscais, todosOsDescontos, tipoOperacaoId, tiposOperacao]);
+
     const handleRemoveDesconto = (idToRemove) => {
         if (idToRemove === 'despesas-bancarias') {
             setIgnoreDespesasBancarias(true);
@@ -427,6 +451,13 @@ export default function OperacaoBorderoPage() {
                 onSend={handleSendEmail}
                 isSending={isSendingEmail}
                 clienteId={savedOperacaoInfo?.clienteId}
+            />
+
+            <PartialDebitModal
+                isOpen={isPartialDebitModalOpen}
+                onClose={() => setIsPartialDebitModalOpen(false)}
+                onConfirm={confirmarSalvamento}
+                totalValue={totais.liquidoOperacao}
             />
 
             <main className="min-h-screen pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
@@ -456,8 +487,8 @@ export default function OperacaoBorderoPage() {
                     handleAddNotaFiscal={handleAddNotaFiscal} isLoading={isLoading} 
                     onSelectSacado={handleSelectSacado} fetchSacados={fetchSacados} 
                     condicoesSacado={condicoesSacado} setNovaNf={setNovaNf}
-                    cedenteRamo={cedenteRamo} 
-                    showPeso={showPeso} 
+                    cedenteRamo={cedenteRamo}
+                    showPeso={showPeso}
                 />
                 <OperacaoDetalhes 
                     notasFiscais={notasFiscais} descontos={todosOsDescontos} totais={totais} 
@@ -465,7 +496,9 @@ export default function OperacaoBorderoPage() {
                     isSaving={isSaving} onAddDescontoClick={() => setIsDescontoModalOpen(true)} 
                     onRemoveDesconto={handleRemoveDesconto} contasBancarias={contasBancarias} 
                     contaBancariaId={contaBancariaId} setContaBancariaId={setContaBancariaId}
-                    cedenteRamo={cedenteRamo} 
+                    cedenteRamo={cedenteRamo}
+                    isPartialDebit={isPartialDebit} 
+                    setIsPartialDebit={setIsPartialDebit} 
                 />
             </main>
         </>

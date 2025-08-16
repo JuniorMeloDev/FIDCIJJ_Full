@@ -14,7 +14,9 @@ export default function OperacaoDetalhes({
     contasBancarias,
     contaBancariaId,
     setContaBancariaId,
-    cedenteRamo // Nova prop
+    cedenteRamo,
+    isPartialDebit,      // Nova prop
+    setIsPartialDebit    // Nova prop
 }) {
     const docType = cedenteRamo === 'Transportes' ? 'CT-e' : 'NF-e';
 
@@ -110,6 +112,19 @@ export default function OperacaoDetalhes({
                                 </option>
                             ))}
                         </select>
+                    </div>
+
+                    {/* Checkbox para débito parcial */}
+                    <div className="pt-2">
+                        <label className="flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={isPartialDebit}
+                                onChange={(e) => setIsPartialDebit(e.target.checked)}
+                                className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
+                            />
+                            <span className="ml-2 text-sm text-gray-200">Debitar Valor Parcial</span>
+                        </label>
                     </div>
                 </div>
             </div>
