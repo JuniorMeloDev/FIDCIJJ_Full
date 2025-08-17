@@ -11,33 +11,30 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        const defaultEndDate = new Date();
-        const defaultStartDate = new Date(defaultEndDate.getFullYear(), defaultEndDate.getMonth(), 1);
-
-        const dataInicio = searchParams.get('dataInicio') || format(defaultStartDate, 'yyyy-MM-dd');
-        const dataFim = searchParams.get('dataFim') || format(defaultEndDate, 'yyyy-MM-dd');
+        const dataInicio = searchParams.get('dataInicio') || null;
+        const dataFim = searchParams.get('dataFim') || null;
         const tipoOperacaoId = searchParams.get('tipoOperacaoId') || null;
 
         const rpcParams = { 
-            data_inicio: dataInicio, 
-            data_fim: dataFim, 
+            p_data_inicio: dataInicio, 
+            p_data_fim: dataFim, 
             p_tipo_operacao_id: tipoOperacaoId 
         };
 
-        // Agora buscamos também os totais financeiros
+        // Chama as novas funções dedicadas para a análise ABC
         const [
             valorOperadoRes, 
-            topClientesRes, 
-            topSacadosRes,
+            clientesAbcRes, 
+            sacadosAbcRes,
             totaisFinanceirosRes 
         ] = await Promise.all([
             supabase.rpc('get_valor_operado', rpcParams),
-            supabase.rpc('get_top_clientes', rpcParams),
-            supabase.rpc('get_top_sacados', rpcParams),
+            supabase.rpc('get_abc_clientes', rpcParams),
+            supabase.rpc('get_abc_sacados', rpcParams),
             supabase.rpc('get_totais_financeiros', rpcParams)
         ]);
 
-        const errors = [valorOperadoRes.error, topClientesRes.error, topSacadosRes.error, totaisFinanceirosRes.error].filter(Boolean);
+        const errors = [valorOperadoRes.error, clientesAbcRes.error, sacadosAbcRes.error, totaisFinanceirosRes.error].filter(Boolean);
         if (errors.length > 0) {
             console.error("Erros ao buscar métricas para relatório:", errors);
             throw new Error("Uma ou mais consultas para o relatório falharam.");
@@ -48,8 +45,9 @@ export async function GET(request) {
 
         const metrics = {
             valorOperadoNoMes: valorOperadoRes.data || 0,
-            topClientes: topClientesRes.data || [],
-            topSacados: topSacadosRes.data || [],
+            // Agora retorna a lista completa para a análise ABC
+            clientes: clientesAbcRes.data || [],
+            sacados: sacadosAbcRes.data || [],
             totalJuros: totais.total_juros || 0,
             totalDespesas: totais.total_despesas || 0,
             lucroLiquido: lucroLiquido,
