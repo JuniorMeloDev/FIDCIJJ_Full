@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
-import { format } from 'date-fns';
 
 export async function GET(request) {
     try {
@@ -14,14 +13,17 @@ export async function GET(request) {
         const dataInicio = searchParams.get('dataInicio') || null;
         const dataFim = searchParams.get('dataFim') || null;
         const tipoOperacaoId = searchParams.get('tipoOperacaoId') || null;
+        const clienteId = searchParams.get('clienteId') || null; // Novo filtro
+        const sacadoNome = searchParams.get('sacado') || null;   // Novo filtro
 
         const rpcParams = { 
             p_data_inicio: dataInicio, 
             p_data_fim: dataFim, 
-            p_tipo_operacao_id: tipoOperacaoId 
+            p_tipo_operacao_id: tipoOperacaoId,
+            p_cliente_id: clienteId, // Novo parâmetro
+            p_sacado_nome: sacadoNome  // Novo parâmetro
         };
 
-        // Chama as novas funções dedicadas para a análise ABC
         const [
             valorOperadoRes, 
             clientesAbcRes, 
@@ -45,7 +47,6 @@ export async function GET(request) {
 
         const metrics = {
             valorOperadoNoMes: valorOperadoRes.data || 0,
-            // Agora retorna a lista completa para a análise ABC
             clientes: clientesAbcRes.data || [],
             sacados: sacadosAbcRes.data || [],
             totalJuros: totais.total_juros || 0,
@@ -60,6 +61,6 @@ export async function GET(request) {
         if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
             return NextResponse.json({ message: 'Token inválido ou expirado' }, { status: 403 });
         }
-        return NextResponse.json({ message: error.message }, { status: 500 });
+        return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
     }
 }

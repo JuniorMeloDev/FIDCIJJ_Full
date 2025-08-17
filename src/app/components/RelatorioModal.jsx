@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import AutocompleteSearch from './AutoCompleteSearch';
-import AbcChart from './AbcChart'; // Importa o novo componente de gráfico
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -42,7 +41,6 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
     const [contas, setContas] = useState([]);
     const [format, setFormat] = useState('pdf');
     const [logoBase64, setLogoBase64] = useState(null);
-    const [abcData, setAbcData] = useState(null); // Estado para guardar os dados do gráfico
 
     useEffect(() => {
         const image = new Image();
@@ -65,7 +63,6 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
 
     useEffect(() => {
         if (isOpen) {
-            setAbcData(null); // Limpa os dados do gráfico ao abrir
             const fetchContas = async () => {
                 try {
                     const res = await fetch(`/api/dashboard/saldos`, { headers: getAuthHeader() });
@@ -80,10 +77,6 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             fetchContas();
         }
     }, [isOpen]);
-
-    useEffect(() => {
-        setAbcData(null); // Limpa a pré-visualização ao mudar o tipo de relatório
-    }, [reportType]);
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
@@ -102,7 +95,6 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
 
     const handleGenerateReport = async () => {
         setIsGenerating(true);
-        setAbcData(null);
         const params = new URLSearchParams();
         const endpointMap = {
             fluxoCaixa: 'fluxo-caixa',
@@ -112,7 +104,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         const endpoint = endpointMap[reportType];
 
         Object.entries(filters).forEach(([key, value]) => {
-            if(value && key !== 'clienteNome') params.append(key, value);
+            if(value && value !== 'Todos' && key !== 'clienteNome') params.append(key, value);
         });
 
         try {
@@ -132,29 +124,14 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
 
             if (!hasData(reportType, data)) {
                  alert("Nenhum dado encontrado para os filtros selecionados.");
-                 setIsGenerating(false);
-                 return;
-            } 
-            
-            if (reportType === 'totalOperado') {
-                const processedCedentes = processAbcData(data.clientes);
-                const processedSacados = processAbcData(data.sacados);
-                const fullData = { ...data, abc: { cedentes: processedCedentes, sacados: processedSacados }};
-                setAbcData({ cedentes: processedCedentes, sacados: processedSacados });
-
-                if (format === 'pdf') {
-                    generatePdf(fullData, reportType, filters);
-                } else {
-                    generateExcel(fullData, reportType, filters);
-                }
             } else {
                 if (format === 'pdf') {
                     generatePdf(data, reportType, filters);
                 } else {
                     generateExcel(data, reportType, filters);
                 }
+                onClose();
             }
-            // onClose(); // Comentado para permitir a visualização do gráfico
 
         } catch (error) {
           console.error('Erro ao gerar relatório:', error);
@@ -180,6 +157,8 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         if (currentFilters.dataInicio || currentFilters.dataFim) {
             filterText += `Período de ${formatDate(currentFilters.dataInicio) || '...'} a ${formatDate(currentFilters.dataFim) || '...'}. `;
         }
+        if (currentFilters.clienteNome) filterText += `Cedente: ${currentFilters.clienteNome}. `;
+        if (currentFilters.sacado) filterText += `Sacado: ${currentFilters.sacado}. `;
         doc.setFontSize(8);
         doc.text(filterText, 14, 30);
 
@@ -201,25 +180,28 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 autoTable(doc, { startY: 35, head, body });
                 break;
             case 'totalOperado':
+                const processedCedentes = processAbcData(data.clientes);
+                const processedSacados = processAbcData(data.sacados);
+
                 doc.setFontSize(12);
                 doc.text(`Total Operado no Período: ${formatBRLNumber(data.valorOperadoNoMes)}`, 14, 40);
                 doc.text(`Total de Juros: ${formatBRLNumber(data.totalJuros)}`, 14, 45);
                 doc.text(`Total de Despesas: ${formatBRLNumber(data.totalDespesas)}`, 14, 50);
                 doc.text(`Lucro Líquido: ${formatBRLNumber(data.lucroLiquido)}`, 14, 55);
                 
-                if (data.abc.cedentes.length > 0) {
+                if (processedCedentes.length > 0) {
                     autoTable(doc, {
                         startY: 65,
                         head: [['Classe', 'Cedente', 'Valor', '% Acumulado']],
-                        body: data.abc.cedentes.map(c => [c.classe, c.name, formatBRLNumber(c.valor), `${c.acumulado.toFixed(2)}%`])
+                        body: processedCedentes.map(c => [c.classe, c.name, formatBRLNumber(c.valor), `${c.acumulado.toFixed(2)}%`])
                     });
                 }
                 
-                if (data.abc.sacados.length > 0) {
+                if (processedSacados.length > 0) {
                     autoTable(doc, {
                         startY: doc.lastAutoTable.finalY + 10,
                         head: [['Classe', 'Sacado', 'Valor', '% Acumulado']],
-                        body: data.abc.sacados.map(s => [s.classe, s.name, formatBRLNumber(s.valor), `${s.acumulado.toFixed(2)}%`])
+                        body: processedSacados.map(s => [s.classe, s.name, formatBRLNumber(s.valor), `${s.acumulado.toFixed(2)}%`])
                     });
                 }
                 break;
@@ -233,56 +215,28 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
 
         switch (type) {
             case 'fluxoCaixa':
-                ws_data = data.map(row => ({
-                    Data: formatDate(row.data_movimento),
-                    Descrição: row.descricao,
-                    Conta: row.conta_bancaria,
-                    Categoria: row.categoria,
-                    Valor: row.valor
-                }));
+                ws_data = data.map(row => ({ Data: formatDate(row.data_movimento), Descrição: row.descricao, Conta: row.conta_bancaria, Categoria: row.categoria, Valor: row.valor }));
                 break;
             case 'duplicatas':
                 const showTipoOperacao = !currentFilters.tipoOperacaoId;
-                ws_data = data.map(row => ({
-                    'Data Op.': formatDate(row.data_operacao),
-                    'NF/CT-e': row.nf_cte,
-                    'Cedente': row.empresa_cedente,
-                    'Sacado': row.cliente_sacado,
-                    ...(showTipoOperacao && { 'Tipo Operação': row.tipo_operacao_nome }),
-                    'Vencimento': formatDate(row.data_vencimento),
-                    'Status': row.status_recebimento,
-                    'Valor Bruto': row.valor_bruto
+                ws_data = data.map(row => ({ 
+                    'Data Op.': formatDate(row.data_operacao), 'NF/CT-e': row.nf_cte, 'Cedente': row.empresa_cedente, 
+                    'Sacado': row.cliente_sacado, ...(showTipoOperacao && { 'Tipo Operação': row.tipo_operacao_nome }),
+                    'Vencimento': formatDate(row.data_vencimento), 'Status': row.status_recebimento, 'Valor Bruto': row.valor_bruto 
                 }));
                 break;
             case 'totalOperado':
-                const summary = [
-                    { Item: 'Total Operado no Período', Valor: data.valorOperadoNoMes },
-                    { Item: 'Total de Juros', Valor: data.totalJuros },
-                    { Item: 'Total de Despesas', Valor: data.totalDespesas },
-                    { Item: 'Lucro Líquido', Valor: data.lucroLiquido },
-                ];
+                const summary = [ { Item: 'Total Operado no Período', Valor: data.valorOperadoNoMes }, { Item: 'Total de Juros', Valor: data.totalJuros }, { Item: 'Total de Despesas', Valor: data.totalDespesas }, { Item: 'Lucro Líquido', Valor: data.lucroLiquido }, ];
+                const cedentesABC = processAbcData(data.clientes).map(c => ({ Classe: c.classe, Cedente: c.name, Valor: c.valor, '% Acumulado': c.acumulado }));
+                const sacadosABC = processAbcData(data.sacados).map(s => ({ Classe: s.classe, Sacado: s.name, Valor: s.valor, '% Acumulado': s.acumulado }));
                 
-                const cedentesABC = data.abc.cedentes.map(c => ({
-                    Classe: c.classe,
-                    Cedente: c.name,
-                    Valor: c.valor,
-                    '% Acumulado': c.acumulado
-                }));
-
-                const sacadosABC = data.abc.sacados.map(s => ({
-                    Classe: s.classe,
-                    Sacado: s.name,
-                    Valor: s.valor,
-                    '% Acumulado': s.acumulado
-                }));
-
                 const ws = XLSX.utils.json_to_sheet(summary);
                 XLSX.utils.sheet_add_json(ws, cedentesABC, { origin: 'A7', header: ['Classe', 'Cedente', 'Valor', '% Acumulado'] });
-                XLSX.utils.sheet_add_json(ws, sacadosABC, { origin: -1, header: ['Classe', 'Sacado', 'Valor', '% Acumulado'] }); // -1 appends to the end
+                XLSX.utils.sheet_add_json(ws, sacadosABC, { origin: -1, header: ['Classe', 'Sacado', 'Valor', '% Acumulado'] });
                 
                 XLSX.utils.book_append_sheet(wb, ws, 'Análise ABC');
                 XLSX.writeFile(wb, `relatorio_${type}.xlsx`);
-                return; // Retorna para evitar a criação de uma segunda planilha
+                return;
         }
         
         const ws = XLSX.utils.json_to_sheet(ws_data);
@@ -294,129 +248,108 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
     
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
-            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-4xl text-white">
+            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg text-white">
                 <h2 className="text-xl font-bold mb-4">Gerar Relatório</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-                    {/* Coluna de Filtros */}
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300">Tipo de Relatório</label>
-                                <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-sm">
-                                    <option value="fluxoCaixa">Fluxo de Caixa</option>
-                                    <option value="duplicatas">Consulta de Duplicatas</option>
-                                    <option value="totalOperado">Total Operado (ABC)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300">Formato</label>
-                                <select value={format} onChange={(e) => setFormat(e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-sm">
-                                    <option value="pdf">PDF</option>
-                                    <option value="excel">Excel (XLSX)</option>
-                                </select>
-                            </div>
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300">Tipo de Relatório</label>
+                            <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-sm">
+                                <option value="fluxoCaixa">Fluxo de Caixa</option>
+                                <option value="duplicatas">Consulta de Duplicatas</option>
+                                <option value="totalOperado">Total Operado (ABC)</option>
+                            </select>
                         </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-700 pt-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300">Data Início</label>
-                                <input type="date" name="dataInicio" value={filters.dataInicio} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300">Data Fim</label>
-                                <input type="date" name="dataFim" value={filters.dataFim} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
-                            </div>
-
-                            {reportType !== 'fluxoCaixa' && (
-                                <>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-300">Tipo de Operação</label>
-                                        <select name="tipoOperacaoId" value={filters.tipoOperacaoId} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
-                                            <option value="">Todos</option>
-                                            {tiposOperacao.map(op => <option key={op.id} value={op.id}>{op.nome}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-300">Cedente</label>
-                                        <AutocompleteSearch name="clienteNome" value={filters.clienteNome} onChange={handleFilterChange} onSelect={(c) => handleAutocompleteSelect('cliente', c)} fetchSuggestions={fetchClientes} placeholder="Todos"/>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-300">Sacado</label>
-                                        <AutocompleteSearch name="sacado" value={filters.sacado} onChange={handleFilterChange} onSelect={(s) => handleAutocompleteSelect('sacado', s)} fetchSuggestions={fetchSacados} placeholder="Todos"/>
-                                    </div>
-                                </>
-                            )}
-
-                            {reportType === 'fluxoCaixa' && (
-                                <>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-300">Conta</label>
-                                        <select name="conta" value={filters.conta} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
-                                            <option value="">Todas</option>
-                                            {contas.map(conta => <option key={conta} value={conta}>{conta}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-300">Categoria</label>
-                                        <select name="categoria" value={filters.categoria} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
-                                            <option value="Todos">Todas</option>
-                                            <option value="Recebimento">Recebimento</option>
-                                            <option value="Pagamento de Borderô">Pagamento de Borderô</option>
-                                            <option value="Receita Avulsa">Receita Avulsa</option>
-                                            <option value="Despesa Avulsa">Despesa Avulsa</option>
-                                            <option value="Movimentação Avulsa">Movimentação Avulsa</option>
-                                            <option value="Transferencia Enviada">Transferência Enviada</option>
-                                            <option value="Transferencia Recebida">Transferência Recebida</option>
-                                        </select>
-                                    </div>
-                                     <div>
-                                        <label className="block text-sm font-medium text-gray-300">Tipo</label>
-                                        <select name="tipoValor" value={filters.tipoValor} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
-                                            <option value="Todos">Todos</option>
-                                            <option value="credito">Crédito</option>
-                                            <option value="debito">Débito</option>
-                                        </select>
-                                    </div>
-                                </>
-                            )}
-
-                            {reportType === 'duplicatas' && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300">Status</label>
-                                    <select name="status" value={filters.status} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
-                                        <option value="Todos">Todos</option>
-                                        <option value="Pendente">Pendente</option>
-                                        <option value="Recebido">Recebido</option>
-                                    </select>
-                                </div>
-                            )}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300">Formato</label>
+                            <select value={format} onChange={(e) => setFormat(e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-sm">
+                                <option value="pdf">PDF</option>
+                                <option value="excel">Excel (XLSX)</option>
+                            </select>
                         </div>
                     </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-700 pt-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300">Data Início</label>
+                            <input type="date" name="dataInicio" value={filters.dataInicio} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300">Data Fim</label>
+                            <input type="date" name="dataFim" value={filters.dataFim} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
+                        </div>
 
-                    {/* Coluna do Gráfico */}
-                    <div className="border-t md:border-t-0 md:border-l border-gray-700 pt-4 md:pt-0 md:pl-8">
-                        <h3 className="text-lg font-semibold mb-2 text-center">Pré-visualização da Análise</h3>
-                        {reportType === 'totalOperado' && abcData ? (
+                        {reportType !== 'fluxoCaixa' && (
                             <>
-                                <h4 className="text-md font-semibold mb-2 text-gray-300">Cedentes</h4>
-                                <AbcChart data={abcData.cedentes} />
-                                <h4 className="text-md font-semibold mt-4 mb-2 text-gray-300">Sacados</h4>
-                                <AbcChart data={abcData.sacados} />
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300">Tipo de Operação</label>
+                                    <select name="tipoOperacaoId" value={filters.tipoOperacaoId} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
+                                        <option value="">Todos</option>
+                                        {tiposOperacao.map(op => <option key={op.id} value={op.id}>{op.nome}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300">Cedente</label>
+                                    <AutocompleteSearch name="clienteNome" value={filters.clienteNome} onChange={handleFilterChange} onSelect={(c) => handleAutocompleteSelect('cliente', c)} fetchSuggestions={fetchClientes} placeholder="Todos"/>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300">Sacado</label>
+                                    <AutocompleteSearch name="sacado" value={filters.sacado} onChange={handleFilterChange} onSelect={(s) => handleAutocompleteSelect('sacado', s)} fetchSuggestions={fetchSacados} placeholder="Todos"/>
+                                </div>
                             </>
-                        ) : (
-                            <div className="flex items-center justify-center h-full">
-                                <p className="text-gray-500">{isGenerating ? 'A processar dados...' : 'A pré-visualização aparecerá aqui.'}</p>
+                        )}
+
+                        {reportType === 'fluxoCaixa' && (
+                            <>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300">Conta</label>
+                                    <select name="conta" value={filters.conta} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
+                                        <option value="">Todas</option>
+                                        {contas.map(conta => <option key={conta} value={conta}>{conta}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300">Categoria</label>
+                                    <select name="categoria" value={filters.categoria} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
+                                        <option value="Todos">Todas</option>
+                                        <option value="Recebimento">Recebimento</option>
+                                        <option value="Pagamento de Borderô">Pagamento de Borderô</option>
+                                        <option value="Receita Avulsa">Receita Avulsa</option>
+                                        <option value="Despesa Avulsa">Despesa Avulsa</option>
+                                        <option value="Movimentação Avulsa">Movimentação Avulsa</option>
+                                        <option value="Transferencia Enviada">Transferência Enviada</option>
+                                        <option value="Transferencia Recebida">Transferência Recebida</option>
+                                    </select>
+                                </div>
+                                 <div>
+                                    <label className="block text-sm font-medium text-gray-300">Tipo</label>
+                                    <select name="tipoValor" value={filters.tipoValor} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
+                                        <option value="Todos">Todos</option>
+                                        <option value="credito">Crédito</option>
+                                        <option value="debito">Débito</option>
+                                    </select>
+                                </div>
+                            </>
+                        )}
+
+                        {reportType === 'duplicatas' && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300">Status</label>
+                                <select name="status" value={filters.status} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
+                                    <option value="Todos">Todos</option>
+                                    <option value="Pendente">Pendente</option>
+                                    <option value="Recebido">Recebido</option>
+                                </select>
                             </div>
                         )}
                     </div>
                 </div>
-
                 <div className="mt-6 flex justify-between items-center border-t border-gray-700 pt-4">
                     <button onClick={clearFilters} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition text-sm">Limpar Filtros</button>
                     <div className="flex gap-2">
                         <button onClick={onClose} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition text-sm">Fechar</button>
                         <button onClick={handleGenerateReport} disabled={isGenerating} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition text-sm disabled:bg-orange-400">
-                            {isGenerating ? 'Gerando...' : 'Gerar e Descarregar'}
+                            {isGenerating ? 'Gerando...' : 'Gerar Relatório'}
                         </button>
                     </div>
                 </div>
