@@ -13,20 +13,31 @@ export async function GET(request) {
 
     const { searchParams } = new URL(request.url);
 
+    // Captura todos os filtros possíveis da URL
     const dataInicio = searchParams.get('dataInicio') || null;
     const dataFim = searchParams.get('dataFim') || null;
     const tipoOperacaoId = searchParams.get('tipoOperacaoId') || null;
+    const clienteId = searchParams.get('clienteId') || null;
+    const sacadoNome = searchParams.get('sacado') || null;
     const diasVencimento = parseInt(searchParams.get('diasVencimento') || '5', 10);
     const topNLimit = parseInt(searchParams.get('topNLimit') || '5', 10);
 
-    // Parâmetros padronizados com prefixo 'p_' para todas as funções
+    // Parâmetros padronizados para as funções que usam todos os filtros
     const rpcParams = {
       p_data_inicio: dataInicio,
       p_data_fim: dataFim,
       p_tipo_operacao_id: tipoOperacaoId,
+      p_cliente_id: clienteId,
+      p_sacado_nome: sacadoNome
     };
     
-    const topNParams = { ...rpcParams, p_limit: topNLimit };
+    // Parâmetros para as funções de Top N, que usam um subconjunto de filtros + o limite
+    const topNParams = {
+        p_data_inicio: dataInicio,
+        p_data_fim: dataFim,
+        p_tipo_operacao_id: tipoOperacaoId,
+        p_limit: topNLimit
+    };
 
     const hoje = new Date();
     const dataLimite = new Date();
@@ -36,7 +47,7 @@ export async function GET(request) {
       .from('duplicatas')
       .select(`
         id, nf_cte, data_vencimento, valor_bruto, cliente_sacado,
-        operacao:operacoes!inner(tipo_operacao_id, data_operacao)
+        operacao:operacoes!inner(tipo_operacao_id, data_operacao, cliente_id)
       `)
       .eq('status_recebimento', 'Pendente')
       .lte('data_vencimento', format(dataLimite, 'yyyy-MM-dd'));
@@ -44,6 +55,9 @@ export async function GET(request) {
     if (dataInicio) vencimentosQuery = vencimentosQuery.gte('operacao.data_operacao', dataInicio);
     if (dataFim) vencimentosQuery = vencimentosQuery.lte('operacao.data_operacao', dataFim);
     if (tipoOperacaoId) vencimentosQuery = vencimentosQuery.eq('operacao.tipo_operacao_id', tipoOperacaoId);
+    if (clienteId) vencimentosQuery = vencimentosQuery.eq('operacao.cliente_id', clienteId);
+    if (sacadoNome) vencimentosQuery = vencimentosQuery.ilike('cliente_sacado', `%${sacadoNome}%`);
+
 
     const [
       valorOperadoRes,
