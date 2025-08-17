@@ -19,14 +19,20 @@ export async function GET(request) {
     const diasVencimento = parseInt(searchParams.get('diasVencimento') || '5', 10);
     const topNLimit = parseInt(searchParams.get('topNLimit') || '5', 10);
 
-    // Parâmetros padronizados que serão enviados para TODAS as funções RPC
+    // Parâmetros para as funções que NÃO precisam do 'limit'
     const rpcParams = {
-      p_data_inicio: dataInicio,
-      p_data_fim: dataFim,
+      data_inicio: dataInicio,
+      data_fim: dataFim,
       p_tipo_operacao_id: tipoOperacaoId,
     };
     
-    const topNParams = { ...rpcParams, p_limit: topNLimit };
+    // Parâmetros APENAS para as funções de Top N, incluindo o novo limite
+    const topNParams = {
+      data_inicio: dataInicio,
+      data_fim: dataFim,
+      p_tipo_operacao_id: tipoOperacaoId,
+      p_limit: topNLimit
+    };
 
     const hoje = new Date();
     const dataLimite = new Date();
