@@ -10,18 +10,20 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
+        // Captura todos os filtros da URL
         const dataInicio = searchParams.get('dataInicio') || null;
         const dataFim = searchParams.get('dataFim') || null;
         const tipoOperacaoId = searchParams.get('tipoOperacaoId') || null;
-        const clienteId = searchParams.get('clienteId') || null; // Novo filtro
-        const sacadoNome = searchParams.get('sacado') || null;   // Novo filtro
+        const clienteId = searchParams.get('clienteId') || null;
+        const sacadoNome = searchParams.get('sacado') || null;
 
+        // Monta o objeto de parâmetros que será enviado para TODAS as funções
         const rpcParams = { 
             p_data_inicio: dataInicio, 
             p_data_fim: dataFim, 
             p_tipo_operacao_id: tipoOperacaoId,
-            p_cliente_id: clienteId, // Novo parâmetro
-            p_sacado_nome: sacadoNome  // Novo parâmetro
+            p_cliente_id: clienteId,
+            p_sacado_nome: sacadoNome
         };
 
         const [
