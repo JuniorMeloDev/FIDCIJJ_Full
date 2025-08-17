@@ -31,7 +31,7 @@ export default function ResumoPage() {
     const [error, setError] = useState(null)
     const [isRelatorioModalOpen, setIsRelatorioModalOpen] = useState(false)
     const [topFiveChartType, setTopFiveChartType] = useState('cedentes');
-    const [topNLimit, setTopNLimit] = useState(5);
+    const [topNLimit, setTopNLimit] = useState(5); // Novo estado para o limite do Top N
     const [today, setToday] = useState('');
 
     useEffect(() => {
@@ -83,7 +83,7 @@ export default function ResumoPage() {
             const params = new URLSearchParams()
             Object.entries(debouncedFilters).forEach(([k, v]) => v && params.append(k, v))
             params.append('diasVencimento', diasVencimento)
-            params.append('topNLimit', topNLimit);
+            params.append('topNLimit', topNLimit); // Adiciona o novo limite na chamada da API
 
             const headers = getAuthHeader()
             const [saldosRes, metricsRes] = await Promise.all([
@@ -91,8 +91,7 @@ export default function ResumoPage() {
               fetch(`/api/dashboard/metrics?${params}`, { headers }),
             ])
             if (!saldosRes.ok || !metricsRes.ok) {
-              const errorText = await metricsRes.json();
-              throw new Error(errorText.message || 'Falha ao buscar dados do dashboard.')
+              throw new Error('Falha ao buscar dados do dashboard.')
             }
             setSaldos(await saldosRes.json())
             setMetrics(await metricsRes.json())
@@ -102,7 +101,7 @@ export default function ResumoPage() {
             setLoading(false)
           }
         })()
-    }, [debouncedFilters, diasVencimento, topNLimit])
+    }, [debouncedFilters, diasVencimento, topNLimit]) // Adiciona topNLimit como dependência
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target
@@ -207,6 +206,7 @@ export default function ResumoPage() {
 
             {metrics && (
                 <div className="transition-opacity duration-300 opacity-100">
+                    {/* Seção de Saldos e Total Geral permanece igual */}
                     <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {saldos.map((conta, index) => (
                         <motion.div
@@ -249,10 +249,30 @@ export default function ResumoPage() {
                     
                     <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
                       {[
-                        { label: 'Juros Total', value: metrics.totalJuros || 0, icon: <FaDollarSign className="w-6 h-6 text-green-400" />, border: 'border-l-4 border-green-400', },
-                        { label: 'Despesas Totais', value: metrics.totalDespesas || 0, icon: <FaDollarSign className="w-6 h-6 text-red-400" />, border: 'border-l-4 border-red-400', },
-                        { label: 'Lucro Líquido', value: metrics.lucroLiquido || 0, icon: <FaClock className="w-6 h-6 text-yellow-300" />, border: 'border-l-4 border-yellow-300', },
-                        { label: 'Total Operado', value: metrics.valorOperadoNoMes || 0, icon: <FaChartLine className="w-6 h-6 text-gray-400" />, border: 'border-l-4 border-gray-400', },
+                        {
+                          label: 'Juros Total',
+                          value: metrics.totalJuros || 0,
+                          icon: <FaDollarSign className="w-6 h-6 text-green-400" />,
+                          border: 'border-l-4 border-green-400',
+                        },
+                        {
+                          label: 'Despesas Totais',
+                          value: metrics.totalDespesas || 0,
+                          icon: <FaDollarSign className="w-6 h-6 text-red-400" />,
+                          border: 'border-l-4 border-red-400',
+                        },
+                        {
+                          label: 'Lucro Líquido',
+                          value: metrics.lucroLiquido || 0,
+                          icon: <FaClock className="w-6 h-6 text-yellow-300" />,
+                          border: 'border-l-4 border-yellow-300',
+                        },
+                        {
+                          label: 'Total Operado',
+                          value: metrics.valorOperadoNoMes || 0,
+                          icon: <FaChartLine className="w-6 h-6 text-gray-400" />,
+                          border: 'border-l-4 border-gray-400',
+                        },
                       ].map((item, idx) => (
                         <motion.div
                           key={item.label}
@@ -265,7 +285,9 @@ export default function ResumoPage() {
                             {item.icon}
                             <div>
                               <p className="text-sm text-gray-300">{item.label}</p>
-                              <p className="text-lg font-semibold text-gray-100">{formatBRLNumber(item.value)}</p>
+                              <p className="text-lg font-semibold text-gray-100">
+                                {formatBRLNumber(item.value)}
+                              </p>
                             </div>
                           </div>
                         </motion.div>
@@ -273,10 +295,21 @@ export default function ResumoPage() {
                     </section>
 
                     <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-                      <motion.div className="p-6 rounded-lg shadow-lg transition bg-gray-700" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }} >
+                      <motion.div
+                        className="p-6 rounded-lg shadow-lg transition bg-gray-700"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.8 }}
+                      >
                         <div className="flex justify-between items-center mb-4">
-                          <h3 className="text-lg font-semibold text-gray-100">Pendências e Vencimentos</h3>
-                          <select value={diasVencimento} onChange={(e) => setDiasVencimento(Number(e.target.value))} className="bg-gray-800 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500" >
+                          <h3 className="text-lg font-semibold text-gray-100">
+                            Pendências e Vencimentos
+                          </h3>
+                          <select
+                            value={diasVencimento}
+                            onChange={(e) => setDiasVencimento(Number(e.target.value))}
+                            className="bg-gray-800 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+                          >
                             <option value={5}>Próximos 5 dias</option>
                             <option value={15}>Próximos 15 dias</option>
                             <option value={30}>Próximos 30 dias</option>
@@ -284,7 +317,9 @@ export default function ResumoPage() {
                         </div>
                         <div className="space-y-3 max-h-80 overflow-auto pr-2">
                           {metrics.vencimentosProximos?.length > 0 ? (
-                            metrics.vencimentosProximos .sort((a, b) => new Date(a.dataVencimento) - new Date(b.dataVencimento)) .map((dup) => {
+                            metrics.vencimentosProximos
+                              .sort((a, b) => new Date(a.dataVencimento) - new Date(b.dataVencimento))
+                              .map((dup) => {
                                 const isVencido = dup.dataVencimento < today;
                                 return (
                                   <div key={dup.id} className="flex justify-between items-center text-sm border-b border-gray-600 pb-2 last:border-none">
@@ -293,38 +328,63 @@ export default function ResumoPage() {
                                       <p className="text-xs text-gray-400">NF {dup.nfCte}</p>
                                     </div>
                                     <div className="text-right">
-                                      <p className={`font-semibold ${isVencido ? 'text-red-500' : 'text-yellow-400'}`}>{formatDate(dup.dataVencimento)}</p>
+                                      <p className={`font-semibold ${isVencido ? 'text-red-500' : 'text-yellow-400'}`}>
+                                        {formatDate(dup.dataVencimento)}
+                                      </p>
                                       <p className="text-gray-300">{formatBRLNumber(dup.valorBruto)}</p>
                                     </div>
                                   </div>
                                 );
                               })
                           ) : (
-                            <p className="text-gray-400">Nenhuma duplicata vencida ou a vencer nos próximos {diasVencimento} dias.</p>
+                            <p className="text-gray-400">
+                              Nenhuma duplicata vencida ou a vencer nos próximos {diasVencimento} dias.
+                            </p>
                           )}
                         </div>
                       </motion.div>
 
-                      <motion.div className="lg:col-span-2 bg-gray-700 p-6 rounded-lg shadow-lg" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
+                      <motion.div
+                        className="lg:col-span-2 bg-gray-700 p-6 rounded-lg shadow-lg"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.9 }}
+                      >
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-semibold text-gray-100">
                                 {`Top ${topNLimit} ${topFiveChartType === 'cedentes' ? 'Cedentes' : 'Sacados'} por Valor`}
                             </h3>
                             <div className="flex items-center gap-2">
-                                <select value={topNLimit} onChange={(e) => setTopNLimit(Number(e.target.value))} className="bg-gray-800 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500" >
+                                <select
+                                    value={topNLimit}
+                                    onChange={(e) => setTopNLimit(Number(e.target.value))}
+                                    className="bg-gray-800 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                >
                                     <option value={5}>Top 5</option>
                                     <option value={10}>Top 10</option>
                                     <option value={15}>Top 15</option>
                                     <option value={20}>Top 20</option>
                                 </select>
                                 <div className="flex space-x-1 rounded-lg bg-gray-800 p-1 w-auto">
-                                    <button onClick={() => setTopFiveChartType('cedentes')} className={`px-4 py-1 text-sm font-medium rounded-md transition ${topFiveChartType === 'cedentes' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:bg-gray-700'}`} > Cedentes </button>
-                                    <button onClick={() => setTopFiveChartType('sacados')} className={`px-4 py-1 text-sm font-medium rounded-md transition ${topFiveChartType === 'sacados' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:bg-gray-700'}`} > Sacados </button>
+                                    <button
+                                        onClick={() => setTopFiveChartType('cedentes')}
+                                        className={`px-4 py-1 text-sm font-medium rounded-md transition ${topFiveChartType === 'cedentes' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                                    >
+                                        Cedentes
+                                    </button>
+                                    <button
+                                        onClick={() => setTopFiveChartType('sacados')}
+                                        className={`px-4 py-1 text-sm font-medium rounded-md transition ${topFiveChartType === 'sacados' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                                    >
+                                        Sacados
+                                    </button>
                                 </div>
                             </div>
                         </div>
                         
-                        <TopFiveApex data={topFiveChartType === 'cedentes' ? (metrics.topClientes || []) : (metrics.topSacados || [])} />
+                        <TopFiveApex
+                          data={topFiveChartType === 'cedentes' ? (metrics.topClientes || []) : (metrics.topSacados || [])}
+                        />
                       </motion.div>
                     </section>
                 </div>
