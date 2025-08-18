@@ -12,10 +12,9 @@ import FiltroLateralConsultas from '@/app/components/FiltroLateralConsultas';
 import SelectionActionsBar from '@/app/components/SelectionActionsBar';
 import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 
-const ITEMS_PER_PAGE = 10; // Aumentado para preencher mais a tela
+const ITEMS_PER_PAGE = 20;
 
 export default function ConsultasPage() {
-    // ... (toda a sua lógica de states e funções permanece a mesma)
     const [duplicatas, setDuplicatas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -325,7 +324,7 @@ export default function ConsultasPage() {
     const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
     const currentItems = duplicatas.slice(indexOfFirstItem, indexOfLastItem);
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
-    
+
     return (
         <>
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
@@ -333,7 +332,7 @@ export default function ConsultasPage() {
             <LiquidacaoModal isOpen={isLiquidarModalOpen} onClose={() => setIsLiquidarModalOpen(false)} onConfirm={handleConfirmarLiquidacao} duplicata={duplicataParaLiquidar} contasMaster={contasMaster} />
             <EmailModal isOpen={isEmailModalOpen} onClose={() => setIsEmailModalOpen(false)} onSend={handleSendEmail} isSending={isSendingEmail} clienteId={operacaoParaEmail?.clienteId} />
 
-            <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+            <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
                 <motion.header 
                     className="mb-4 border-b-2 border-orange-500 pb-4 flex-shrink-0"
                     initial={{ y: -20, opacity: 0 }}

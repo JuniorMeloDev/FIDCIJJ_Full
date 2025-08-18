@@ -12,7 +12,7 @@ import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 
-const ITEMS_PER_PAGE = 7;
+const ITEMS_PER_PAGE = 20;
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -397,7 +397,7 @@ export default function FluxoDeCaixaPage() {
         clienteId={contextMenu.selectedItem?.operacao?.cliente?.id}
       />
 
-      <main className="min-h-screen pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+      <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
         <motion.header
           className="mb-4 flex justify-between items-center border-b-2 border-orange-500 pb-4"
           initial={{ y: -20, opacity: 0 }}
