@@ -12,7 +12,7 @@ import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 
-const ITEMS_PER_PAGE = 15; // Aumentado para melhor preenchimento
+const ITEMS_PER_PAGE = 15; // Aumentado para melhor uso do espaço
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -125,6 +125,7 @@ export default function FluxoDeCaixaPage() {
         const masterContasData = await masterContasResponse.json();
         const clientesData = await clientesResponse.json();
         const masterContasFormatadas = masterContasData.map((c) => ({
+          id: c.id,
           contaBancaria: `${c.banco} - ${c.agencia}/${c.conta_corrente}`,
         }));
         setContasMaster(masterContasFormatadas);
