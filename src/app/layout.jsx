@@ -16,7 +16,7 @@ export default function RootLayout({ children }) {
       <body className={`${inter.className} h-screen flex flex-col`}>
           <SetupChecker>
             <Navbar />
-            <div className="flex-grow pt-16 flex flex-col">
+              <div className="flex-grow pt-16 flex flex-col overflow-hidden">
               {children}
             </div>
           </SetupChecker>
