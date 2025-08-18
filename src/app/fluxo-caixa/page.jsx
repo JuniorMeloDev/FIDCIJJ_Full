@@ -12,7 +12,7 @@ import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 
-const ITEMS_PER_PAGE = 15; // Aumentado para melhor uso do espaço
+const ITEMS_PER_PAGE = 15;
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -429,7 +429,7 @@ export default function FluxoDeCaixaPage() {
           </motion.div>
         </div>
 
-        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
+        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 overflow-y-auto lg:overflow-y-hidden">
           <FiltroLateral
             filters={filters}
             saldos={saldos}

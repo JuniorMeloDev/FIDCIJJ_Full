@@ -12,7 +12,7 @@ import FiltroLateralConsultas from "@/app/components/FiltroLateralConsultas";
 import SelectionActionsBar from "@/app/components/SelectionActionsBar";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 
-const ITEMS_PER_PAGE = 15; // Aumentado para melhor uso do espaço
+const ITEMS_PER_PAGE = 15;
 
 export default function ConsultasPage() {
   // ... (toda a sua lógica de states e funções permanece a mesma)
@@ -474,7 +474,7 @@ export default function ConsultasPage() {
           </motion.header>
         </div>
 
-        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 px-6 pb-6">
+        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 px-6 pb-6 overflow-y-auto lg:overflow-y-hidden">
           <FiltroLateralConsultas
             filters={filters}
             onFilterChange={handleFilterChange}
