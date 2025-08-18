@@ -7,6 +7,7 @@ import { formatDate } from '@/app/utils/formatters';
 import Notification from '@/app/components/Notification';
 import AnotacaoModal from '@/app/components/AnotacaoModal';
 import ConfirmacaoModal from '@/app/components/ConfirmacaoModal';
+import AnotacaoActionsBar from '@/app/components/AnotacaoActionsBar'; // Importe a nova barra
 
 export default function AgendaPage() {
     const [anotacoes, setAnotacoes] = useState([]);
@@ -61,7 +62,6 @@ export default function AgendaPage() {
         return () => clearTimeout(handler);
     }, [filters]);
     
-    // Efeito para fechar o menu de contexto ao clicar fora
     useEffect(() => {
         const handleClickOutside = () => setContextMenu({ ...contextMenu, visible: false });
         document.addEventListener('click', handleClickOutside);
@@ -104,6 +104,10 @@ export default function AgendaPage() {
             } else {
                 newSet.add(id);
             }
+            // Sai do modo de seleção se não houver mais itens selecionados
+            if (newSet.size === 0) {
+                setIsSelectionMode(false);
+            }
             return newSet;
         });
     };
@@ -112,12 +116,11 @@ export default function AgendaPage() {
         const idsToDelete = Array.isArray(ids) ? ids : [ids];
         if (idsToDelete.length === 0) return;
         setItemParaExcluir(idsToDelete);
-        setIsModalOpen(false); // Fecha o modal de edição se a exclusão for iniciada por ele
+        setIsModalOpen(false);
     };
 
     const handleConfirmDelete = async () => {
         if (!itemParaExcluir) return;
-
         try {
             const response = await fetch('/api/agenda', {
                 method: 'DELETE',
@@ -146,7 +149,7 @@ export default function AgendaPage() {
     };
 
     return (
-        <main className="min-h-screen pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+        <main className="min-h-screen flex flex-col pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
             <AnotacaoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} anotacao={editingAnotacao} onDelete={(id) => handleDeleteRequest([id])} />
             <ConfirmacaoModal 
@@ -158,7 +161,7 @@ export default function AgendaPage() {
             />
 
             <motion.header 
-                className="mb-6 border-b-2 border-orange-500 pb-4 flex justify-between items-center"
+                className="mb-6 border-b-2 border-orange-500 pb-4 flex justify-between items-center flex-shrink-0"
                 initial={{ y: -20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
             >
@@ -169,7 +172,7 @@ export default function AgendaPage() {
             </motion.header>
 
             {/* Filtros */}
-            <div className="bg-gray-800 p-4 rounded-lg shadow-md mb-6 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div className="bg-gray-800 p-4 rounded-lg shadow-md mb-6 grid grid-cols-1 md:grid-cols-4 gap-4 items-end flex-shrink-0">
                 <div>
                     <label className="text-sm">De:</label>
                     <input type="date" name="dataInicio" value={filters.dataInicio} onChange={handleFilterChange} className="w-full bg-gray-700 p-2 rounded" />
@@ -184,62 +187,60 @@ export default function AgendaPage() {
                 </div>
                 <button onClick={clearFilters} className="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-md transition">Limpar Filtros</button>
             </div>
-
-            {/* Barra de Ações de Seleção */}
-            {isSelectionMode && (
-                 <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    className="bg-gray-700 p-3 rounded-lg mb-4 flex justify-between items-center"
-                 >
-                    <span>{selectedItems.size} anotação(ões) selecionada(s)</span>
-                    <div className="flex gap-4">
-                        <button onClick={() => handleDeleteRequest(Array.from(selectedItems))} disabled={selectedItems.size === 0} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded flex items-center gap-2 disabled:bg-red-400">
-                            <FaTrash /> Excluir
-                        </button>
-                        <button onClick={clearSelection} className="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-md transition">
-                            Cancelar
-                        </button>
-                    </div>
-                 </motion.div>
-            )}
-
-            {loading ? <p>Carregando...</p> : error ? <p className="text-red-500">{error}</p> : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {anotacoes.map(anotacao => (
-                        <motion.div 
-                            key={anotacao.id}
-                            className={`bg-gray-800 p-5 rounded-lg shadow-lg border-l-4 ${selectedItems.has(anotacao.id) ? 'border-blue-500' : 'border-orange-500'} cursor-pointer hover:shadow-orange-400/20 relative`}
-                            onClick={() => {
-                                if (isSelectionMode) {
-                                    handleToggleSelection(anotacao.id);
-                                } else {
-                                    setEditingAnotacao(anotacao); setIsModalOpen(true);
-                                }
-                            }}
-                            onContextMenu={(e) => handleContextMenu(e, anotacao)}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3 }}
-                        >
-                            {isSelectionMode && (
-                                <input
-                                    type="checkbox"
-                                    checked={selectedItems.has(anotacao.id)}
-                                    readOnly
-                                    className="absolute top-4 right-4 h-5 w-5 rounded text-orange-500 bg-gray-700 border-gray-600 focus:ring-orange-500 pointer-events-none"
-                                />
-                            )}
-                            <div className="flex justify-between items-start">
-                                <h3 className="text-xl font-bold text-orange-400">{anotacao.assunto}</h3>
-                                <span className="text-sm text-gray-400">{formatDate(anotacao.data)}</span>
+            
+            {/* Área de Rolagem das Anotações */}
+            <div className="flex-grow overflow-y-auto pr-2">
+                {loading ? <p className="text-center pt-10">Carregando...</p> : error ? <p className="text-red-500 text-center pt-10">{error}</p> : (
+                    <>
+                        {anotacoes.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {anotacoes.map(anotacao => (
+                                    <motion.div 
+                                        key={anotacao.id}
+                                        className={`bg-gray-800 p-5 rounded-lg shadow-lg border-l-4 ${selectedItems.has(anotacao.id) ? 'border-blue-500 ring-2 ring-blue-500' : 'border-orange-500'} cursor-pointer hover:shadow-orange-400/20 relative`}
+                                        onClick={() => {
+                                            if (isSelectionMode) {
+                                                handleToggleSelection(anotacao.id);
+                                            } else {
+                                                setEditingAnotacao(anotacao); setIsModalOpen(true);
+                                            }
+                                        }}
+                                        onContextMenu={(e) => handleContextMenu(e, anotacao)}
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.3 }}
+                                    >
+                                        {isSelectionMode && (
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedItems.has(anotacao.id)}
+                                                readOnly
+                                                className="absolute top-4 right-4 h-5 w-5 rounded text-orange-500 bg-gray-700 border-gray-600 focus:ring-orange-500 pointer-events-none"
+                                            />
+                                        )}
+                                        <div className="flex justify-between items-start">
+                                            <h3 className="text-xl font-bold text-orange-400">{anotacao.assunto}</h3>
+                                            <span className="text-sm text-gray-400">{formatDate(anotacao.data)}</span>
+                                        </div>
+                                        <p className="mt-3 text-gray-300 whitespace-pre-wrap">{anotacao.conteudo}</p>
+                                    </motion.div>
+                                ))}
                             </div>
-                            <p className="mt-3 text-gray-300 whitespace-pre-wrap">{anotacao.conteudo}</p>
-                        </motion.div>
-                    ))}
-                </div>
+                        ) : (
+                            <div className="text-center py-10 text-gray-400">Nenhuma anotação encontrada.</div>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {/* Barra de Ações na parte inferior */}
+            {isSelectionMode && (
+                <AnotacaoActionsBar
+                    selectedCount={selectedItems.size}
+                    onDelete={() => handleDeleteRequest(Array.from(selectedItems))}
+                    onClear={clearSelection}
+                />
             )}
-             { !loading && anotacoes.length === 0 && <div className="text-center py-10 text-gray-400">Nenhuma anotação encontrada.</div>}
             
             {/* Menu de Contexto */}
             {contextMenu.visible && (
