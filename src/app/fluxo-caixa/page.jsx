@@ -48,7 +48,6 @@ export default function FluxoDeCaixaPage() {
   const menuRef = useRef(null);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
-
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
 
@@ -377,63 +376,67 @@ export default function FluxoDeCaixaPage() {
         clienteId={operacaoParaEmail?.clienteId}
       />
 
-      <main className="h-full overflow-y-auto p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
-        <motion.header
-          className="mb-4 flex justify-between items-center border-b-2 border-orange-500 pb-4"
-          initial={{ y: -20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-        >
-          <div>
-            <h1 className="text-3xl font-bold">Fluxo de Caixa</h1>
-            <p className="text-sm text-gray-300">
-              Visão geral das suas movimentações financeiras.
-            </p>
-          </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition"
+      <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+        <div className="flex-shrink-0">
+          <motion.header
+            className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
           >
-            + Novo Lançamento
-          </button>
-        </motion.header>
+            <div className="mb-4 md:mb-0">
+              <h1 className="text-3xl font-bold">Fluxo de Caixa</h1>
+              <p className="text-sm text-gray-300">
+                Visão geral das suas movimentações financeiras.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition w-full md:w-auto"
+            >
+              + Novo Lançamento
+            </button>
+          </motion.header>
 
-        <motion.div
-          className="mb-6"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-        >
-          <h2 className="text-lg font-semibold text-gray-100 mb-2">
-            {saldosTitle}
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {saldos.map((saldo, index) => (
-              <div
-                key={index}
-                className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
-              >
-                <p className="text-sm text-gray-400 truncate">
-                  {saldo.contaBancaria}
-                </p>
-                <p
-                  className={`text-xl font-bold ${
-                    saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
-                  }`}
+          <motion.div
+            className="mb-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+          >
+            <h2 className="text-lg font-semibold text-gray-100 mb-2">
+              {saldosTitle}
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {saldos.map((saldo, index) => (
+                <div
+                  key={index}
+                  className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
                 >
-                  {formatBRLNumber(saldo.saldo)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
+                  <p className="text-sm text-gray-400 truncate">
+                    {saldo.contaBancaria}
+                  </p>
+                  <p
+                    className={`text-xl font-bold ${
+                      saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
+                    }`}
+                  >
+                    {formatBRLNumber(saldo.saldo)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        </div>
 
-        <div className="flex flex-col lg:flex-row gap-6">
-          <FiltroLateral
-            filters={filters}
-            saldos={saldos}
-            onFilterChange={handleFilterChange}
-            onClear={clearFilters}
-          />
+        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
+          <div className="w-full lg:w-72 flex-shrink-0">
+            <FiltroLateral
+              filters={filters}
+              saldos={saldos}
+              onFilterChange={handleFilterChange}
+              onClear={clearFilters}
+            />
+          </div>
           <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
             <div className="overflow-auto flex-grow">
               <table className="min-w-full divide-y divide-gray-700">
