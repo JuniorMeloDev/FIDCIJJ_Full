@@ -491,7 +491,7 @@ export default function ConsultasPage() {
               <p className="text-red-400 text-center py-10">{error}</p>
             ) : (
               <>
-                <div className="flex-grow overflow-y-auto">
+                <div className="flex-grow overflow-auto">
                   <table className="min-w-full divide-y divide-gray-700">
                     <thead className="bg-gray-700 sticky top-0 z-10">
                       <tr>

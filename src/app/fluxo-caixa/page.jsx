@@ -48,6 +48,7 @@ export default function FluxoDeCaixaPage() {
   const menuRef = useRef(null);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
 
@@ -434,9 +435,9 @@ export default function FluxoDeCaixaPage() {
             onClear={clearFilters}
           />
           <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
-            <div className="overflow-x-auto">
+            <div className="overflow-auto flex-grow">
               <table className="min-w-full divide-y divide-gray-700">
-                <thead className="bg-gray-700">
+                <thead className="bg-gray-700 sticky top-0 z-10">
                   <tr>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                       <button
@@ -515,12 +516,14 @@ export default function FluxoDeCaixaPage() {
                 </tbody>
               </table>
             </div>
-            <Pagination
-              totalItems={movimentacoes.length}
-              itemsPerPage={ITEMS_PER_PAGE}
-              currentPage={currentPage}
-              onPageChange={(page) => setCurrentPage(page)}
-            />
+            <div className="flex-shrink-0 pt-4">
+              <Pagination
+                totalItems={movimentacoes.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                currentPage={currentPage}
+                onPageChange={(page) => setCurrentPage(page)}
+              />
+            </div>
           </div>
         </div>
       </main>
