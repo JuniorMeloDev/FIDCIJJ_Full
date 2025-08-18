@@ -48,7 +48,6 @@ export default function FluxoDeCaixaPage() {
   const menuRef = useRef(null);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
-
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
 
@@ -377,8 +376,8 @@ export default function FluxoDeCaixaPage() {
         clienteId={operacaoParaEmail?.clienteId}
       />
 
-      <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
-        <div className="flex-shrink-0">
+      <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+        <div className="flex-shrink-0 px-6 pt-6">
           <motion.header
             className="mb-4 flex justify-between items-center border-b-2 border-orange-500 pb-4"
             initial={{ y: -20, opacity: 0 }}
@@ -429,7 +428,7 @@ export default function FluxoDeCaixaPage() {
           </motion.div>
         </div>
 
-        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 overflow-y-auto lg:overflow-y-hidden">
+        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 px-6 pb-6 overflow-y-auto lg:overflow-y-hidden">
           <FiltroLateral
             filters={filters}
             saldos={saldos}
