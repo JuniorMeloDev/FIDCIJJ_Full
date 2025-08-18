@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { FaPlus, FaTrash } from 'react-icons/fa';
 import { formatDate } from '@/app/utils/formatters';
@@ -17,9 +17,11 @@ export default function AgendaPage() {
     const [notification, setNotification] = useState({ message: '', type: '' });
     const [itemParaExcluir, setItemParaExcluir] = useState(null);
     
-    // Novos estados para seleção
+    // Estados para seleção e menu de contexto
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedItems, setSelectedItems] = useState(new Set());
+    const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, selectedItem: null });
+    const menuRef = useRef(null);
 
     const [filters, setFilters] = useState({
         dataInicio: '',
@@ -58,6 +60,13 @@ export default function AgendaPage() {
         }, 500);
         return () => clearTimeout(handler);
     }, [filters]);
+    
+    // Efeito para fechar o menu de contexto ao clicar fora
+    useEffect(() => {
+        const handleClickOutside = () => setContextMenu({ ...contextMenu, visible: false });
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, [contextMenu]);
 
     const handleSave = async (anotacaoData) => {
         const isUpdating = !!anotacaoData.id;
@@ -103,6 +112,7 @@ export default function AgendaPage() {
         const idsToDelete = Array.isArray(ids) ? ids : [ids];
         if (idsToDelete.length === 0) return;
         setItemParaExcluir(idsToDelete);
+        setIsModalOpen(false); // Fecha o modal de edição se a exclusão for iniciada por ele
     };
 
     const handleConfirmDelete = async () => {
@@ -130,10 +140,15 @@ export default function AgendaPage() {
         setIsSelectionMode(false);
     };
 
+    const handleContextMenu = (event, item) => {
+        event.preventDefault();
+        setContextMenu({ visible: true, x: event.pageX, y: event.pageY, selectedItem: item });
+    };
+
     return (
         <main className="min-h-screen pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
-            <AnotacaoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} anotacao={editingAnotacao} />
+            <AnotacaoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} anotacao={editingAnotacao} onDelete={(id) => handleDeleteRequest([id])} />
             <ConfirmacaoModal 
                 isOpen={!!itemParaExcluir} 
                 onClose={() => setItemParaExcluir(null)} 
@@ -148,14 +163,9 @@ export default function AgendaPage() {
                 animate={{ y: 0, opacity: 1 }}
             >
                 <h1 className="text-3xl font-bold">Agenda de Anotações</h1>
-                <div className="flex items-center gap-4">
-                    <button onClick={() => setIsSelectionMode(!isSelectionMode)} className="bg-gray-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition">
-                        {isSelectionMode ? 'Cancelar Seleção' : 'Selecionar'}
-                    </button>
-                    <button onClick={() => { setEditingAnotacao(null); setIsModalOpen(true); }} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition flex items-center gap-2">
-                        <FaPlus /> Nova Anotação
-                    </button>
-                </div>
+                <button onClick={() => { setEditingAnotacao(null); setIsModalOpen(true); }} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition flex items-center gap-2">
+                    <FaPlus /> Nova Anotação
+                </button>
             </motion.header>
 
             {/* Filtros */}
@@ -176,16 +186,21 @@ export default function AgendaPage() {
             </div>
 
             {/* Barra de Ações de Seleção */}
-            {isSelectionMode && selectedItems.size > 0 && (
+            {isSelectionMode && (
                  <motion.div
                     initial={{ y: 20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     className="bg-gray-700 p-3 rounded-lg mb-4 flex justify-between items-center"
                  >
                     <span>{selectedItems.size} anotação(ões) selecionada(s)</span>
-                    <button onClick={() => handleDeleteRequest(Array.from(selectedItems))} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded flex items-center gap-2">
-                        <FaTrash /> Excluir Selecionadas
-                    </button>
+                    <div className="flex gap-4">
+                        <button onClick={() => handleDeleteRequest(Array.from(selectedItems))} disabled={selectedItems.size === 0} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded flex items-center gap-2 disabled:bg-red-400">
+                            <FaTrash /> Excluir
+                        </button>
+                        <button onClick={clearSelection} className="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-md transition">
+                            Cancelar
+                        </button>
+                    </div>
                  </motion.div>
             )}
 
@@ -202,6 +217,7 @@ export default function AgendaPage() {
                                     setEditingAnotacao(anotacao); setIsModalOpen(true);
                                 }
                             }}
+                            onContextMenu={(e) => handleContextMenu(e, anotacao)}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3 }}
@@ -210,8 +226,8 @@ export default function AgendaPage() {
                                 <input
                                     type="checkbox"
                                     checked={selectedItems.has(anotacao.id)}
-                                    onChange={() => handleToggleSelection(anotacao.id)}
-                                    className="absolute top-4 right-4 h-5 w-5 rounded text-orange-500 bg-gray-700 border-gray-600 focus:ring-orange-500"
+                                    readOnly
+                                    className="absolute top-4 right-4 h-5 w-5 rounded text-orange-500 bg-gray-700 border-gray-600 focus:ring-orange-500 pointer-events-none"
                                 />
                             )}
                             <div className="flex justify-between items-start">
@@ -219,19 +235,26 @@ export default function AgendaPage() {
                                 <span className="text-sm text-gray-400">{formatDate(anotacao.data)}</span>
                             </div>
                             <p className="mt-3 text-gray-300 whitespace-pre-wrap">{anotacao.conteudo}</p>
-                            {!isSelectionMode && (
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); handleDeleteRequest([anotacao.id]); }}
-                                    className="absolute bottom-2 right-2 text-gray-500 hover:text-red-500"
-                                >
-                                    <FaTrash />
-                                </button>
-                            )}
                         </motion.div>
                     ))}
                 </div>
             )}
              { !loading && anotacoes.length === 0 && <div className="text-center py-10 text-gray-400">Nenhuma anotação encontrada.</div>}
+            
+            {/* Menu de Contexto */}
+            {contextMenu.visible && (
+                <div ref={menuRef} style={{ top: contextMenu.y, left: contextMenu.x }} className="absolute origin-top-right w-48 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-50">
+                    <div className="py-1" onClick={(e) => e.stopPropagation()}>
+                        <a href="#" onClick={(e) => { e.preventDefault(); setIsSelectionMode(true); handleToggleSelection(contextMenu.selectedItem.id); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">
+                            {isSelectionMode ? 'Adicionar à Seleção' : 'Selecionar'}
+                        </a>
+                        <div className="border-t border-gray-600 my-1"></div>
+                        <a href="#" onClick={(e) => { e.preventDefault(); handleDeleteRequest([contextMenu.selectedItem.id]); }} className="block px-4 py-2 text-sm text-red-400 hover:bg-gray-600">
+                            Excluir
+                        </a>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }
