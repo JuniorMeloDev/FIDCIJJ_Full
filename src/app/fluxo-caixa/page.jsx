@@ -376,59 +376,57 @@ export default function FluxoDeCaixaPage() {
         clienteId={operacaoParaEmail?.clienteId}
       />
 
-      <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
-        <div className="flex-shrink-0 px-6 pt-6">
-          <motion.header
-            className="mb-4 flex justify-between items-center border-b-2 border-orange-500 pb-4"
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
+      <main className="h-full overflow-y-auto p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+        <motion.header
+          className="mb-4 flex justify-between items-center border-b-2 border-orange-500 pb-4"
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+        >
+          <div>
+            <h1 className="text-3xl font-bold">Fluxo de Caixa</h1>
+            <p className="text-sm text-gray-300">
+              Visão geral das suas movimentações financeiras.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition"
           >
-            <div>
-              <h1 className="text-3xl font-bold">Fluxo de Caixa</h1>
-              <p className="text-sm text-gray-300">
-                Visão geral das suas movimentações financeiras.
-              </p>
-            </div>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition"
-            >
-              + Novo Lançamento
-            </button>
-          </motion.header>
+            + Novo Lançamento
+          </button>
+        </motion.header>
 
-          <motion.div
-            className="mb-6"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-          >
-            <h2 className="text-lg font-semibold text-gray-100 mb-2">
-              {saldosTitle}
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {saldos.map((saldo, index) => (
-                <div
-                  key={index}
-                  className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
+        <motion.div
+          className="mb-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
+          <h2 className="text-lg font-semibold text-gray-100 mb-2">
+            {saldosTitle}
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {saldos.map((saldo, index) => (
+              <div
+                key={index}
+                className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
+              >
+                <p className="text-sm text-gray-400 truncate">
+                  {saldo.contaBancaria}
+                </p>
+                <p
+                  className={`text-xl font-bold ${
+                    saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
+                  }`}
                 >
-                  <p className="text-sm text-gray-400 truncate">
-                    {saldo.contaBancaria}
-                  </p>
-                  <p
-                    className={`text-xl font-bold ${
-                      saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
-                    }`}
-                  >
-                    {formatBRLNumber(saldo.saldo)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
+                  {formatBRLNumber(saldo.saldo)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
 
-        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 px-6 pb-6 overflow-y-auto lg:overflow-y-hidden">
+        <div className="flex flex-col lg:flex-row gap-6">
           <FiltroLateral
             filters={filters}
             saldos={saldos}
@@ -436,9 +434,9 @@ export default function FluxoDeCaixaPage() {
             onClear={clearFilters}
           />
           <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
-            <div className="overflow-y-auto flex-grow">
+            <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-700">
-                <thead className="bg-gray-700 sticky top-0 z-10">
+                <thead className="bg-gray-700">
                   <tr>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                       <button
@@ -517,14 +515,12 @@ export default function FluxoDeCaixaPage() {
                 </tbody>
               </table>
             </div>
-            <div className="flex-shrink-0 pt-4">
-              <Pagination
-                totalItems={movimentacoes.length}
-                itemsPerPage={ITEMS_PER_PAGE}
-                currentPage={currentPage}
-                onPageChange={(page) => setCurrentPage(page)}
-              />
-            </div>
+            <Pagination
+              totalItems={movimentacoes.length}
+              itemsPerPage={ITEMS_PER_PAGE}
+              currentPage={currentPage}
+              onPageChange={(page) => setCurrentPage(page)}
+            />
           </div>
         </div>
       </main>
