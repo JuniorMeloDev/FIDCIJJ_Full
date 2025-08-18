@@ -49,7 +49,6 @@ export default function FluxoDeCaixaPage() {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
-  // Novos estados para o modal de edição
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
 
@@ -351,7 +350,7 @@ export default function FluxoDeCaixaPage() {
   const currentItems = movimentacoes.slice(indexOfFirstItem, indexOfLastItem);
 
   if (loading && movimentacoes.length === 0)
-    return <div className="text-center p-10">A carregar...</div>;
+    return <div className="text-center p-10">Carregando...</div>;
   if (error)
     return <div className="text-center p-10 text-red-500">Erro: {error}</div>;
 
@@ -374,7 +373,6 @@ export default function FluxoDeCaixaPage() {
         contasMaster={contasMaster}
         clienteMasterNome={clienteMasterNome}
       />
-      {/* Novo modal de edição */}
       <EditLancamentoModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
@@ -397,7 +395,8 @@ export default function FluxoDeCaixaPage() {
         clienteId={contextMenu.selectedItem?.operacao?.cliente?.id}
       />
 
-      <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+      <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+        <div className="flex-shrink-0">
         <motion.header
           className="mb-4 flex justify-between items-center border-b-2 border-orange-500 pb-4"
           initial={{ y: -20, opacity: 0 }}
@@ -543,6 +542,7 @@ export default function FluxoDeCaixaPage() {
               onPageChange={(page) => setCurrentPage(page)}
             />
           </div>
+        </div>
         </div>
       </main>
 
