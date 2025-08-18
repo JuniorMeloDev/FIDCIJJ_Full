@@ -37,8 +37,8 @@ export async function POST(request) {
             p_valor_total_descontos: valorTotalDescontos,
             p_duplicatas: duplicatasParaSalvar,
             p_descontos: body.descontos,
-            p_valor_debito_parcial: body.valorDebito, // Novo parâmetro
-            p_data_debito_parcial: body.dataDebito   // Novo parâmetro
+            p_valor_debito_parcial: body.valorDebito, 
+            p_data_debito_parcial: body.dataDebito  
         });
 
         if (error) throw error;
