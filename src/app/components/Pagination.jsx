@@ -6,7 +6,7 @@ export default function Pagination({ totalItems, itemsPerPage, currentPage, onPa
 
     const getPageNumbers = () => {
         const pageNumbers = [];
-        const maxPagesToShow = 5; // Máximo de botões de página a serem exibidos
+        const maxPagesToShow = 5; 
         const halfPages = Math.floor(maxPagesToShow / 2);
 
         if (totalPages <= maxPagesToShow) {
@@ -48,11 +48,11 @@ export default function Pagination({ totalItems, itemsPerPage, currentPage, onPa
     const pageNumbers = getPageNumbers();
 
     return (
-        <div className="mt-6 flex items-center justify-between text-gray-400">
-            <div className="text-sm">
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-gray-400">
+            <div className="text-sm text-center sm:text-left">
                 A mostrar <span className="font-medium text-gray-200">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-medium text-gray-200">{Math.min(currentPage * itemsPerPage, totalItems)}</span> de <span className="font-medium text-gray-200">{totalItems}</span> resultados
             </div>
-            <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+            <nav className="relative z-0 inline-flex flex-wrap justify-center rounded-md shadow-sm -space-x-px" aria-label="Pagination">
                 <button
                     onClick={() => onPageChange(currentPage - 1)}
                     disabled={currentPage === 1}
