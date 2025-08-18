@@ -376,7 +376,7 @@ export default function FluxoDeCaixaPage() {
         clienteId={operacaoParaEmail?.clienteId}
       />
 
-      <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+      <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white lg:overflow-y-hidden">
         <div className="flex-shrink-0">
           <motion.header
             className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
@@ -428,7 +428,7 @@ export default function FluxoDeCaixaPage() {
           </motion.div>
         </div>
 
-        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
+        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 overflow-y-auto lg:overflow-y-hidden">
           <div className="w-full lg:w-72 flex-shrink-0">
             <FiltroLateral
               filters={filters}
