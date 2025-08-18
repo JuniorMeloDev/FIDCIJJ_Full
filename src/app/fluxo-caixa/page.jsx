@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import LancamentoModal from "@/app/components/LancamentoModal";
-import EditLancamentoModal from "@/app/components/EditLancamentoModal"; // Importe o novo modal
+import EditLancamentoModal from "@/app/components/EditLancamentoModal";
 import Notification from "@/app/components/Notification";
 import ConfirmacaoModal from "@/app/components/ConfirmacaoModal";
 import EmailModal from "@/app/components/EmailModal";
@@ -12,7 +12,7 @@ import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 15; // Aumentado para melhor preenchimento
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -51,7 +51,6 @@ export default function FluxoDeCaixaPage() {
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
-
 
   const getAuthHeader = () => {
     const token = sessionStorage.getItem("authToken");
@@ -197,7 +196,7 @@ export default function FluxoDeCaixaPage() {
         throw new Error(errorText.message || "Falha ao salvar lançamento.");
       }
       showNotification("Lançamento salvo com sucesso!", "success");
-      fetchMovimentacoes(filters, sortConfig); // Recarrega os dados
+      fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
       return true;
     } catch (error) {
@@ -206,29 +205,27 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
-  // Nova função para salvar a edição
   const handleUpdateLancamento = async (payload) => {
     try {
-        const response = await fetch(`/api/movimentacoes-caixa/${payload.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-            body: JSON.stringify(payload)
-        });
-        if (!response.ok) {
-            const errorText = await response.json();
-            throw new Error(errorText.message || 'Falha ao atualizar lançamento.');
-        }
-        showNotification("Lançamento atualizado com sucesso!", "success");
-        fetchMovimentacoes(filters, sortConfig);
-        fetchSaldos(filters);
-        return true;
+      const response = await fetch(`/api/movimentacoes-caixa/${payload.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const errorText = await response.json();
+        throw new Error(errorText.message || "Falha ao atualizar lançamento.");
+      }
+      showNotification("Lançamento atualizado com sucesso!", "success");
+      fetchMovimentacoes(filters, sortConfig);
+      fetchSaldos(filters);
+      return true;
     } catch (error) {
-        showNotification(error.message, 'error');
-        return false;
+      showNotification(error.message, "error");
+      return false;
     }
   };
-  
-  // Nova função para abrir o modal de edição
+
   const handleEditRequest = () => {
     if (!contextMenu.selectedItem) return;
     setItemParaEditar(contextMenu.selectedItem);
@@ -263,6 +260,10 @@ export default function FluxoDeCaixaPage() {
 
   const handleAbrirEmailModal = () => {
     if (!contextMenu.selectedItem) return;
+    setOperacaoParaEmail({
+      id: contextMenu.selectedItem.operacaoId,
+      clienteId: contextMenu.selectedItem.operacao?.cliente_id,
+    });
     setIsEmailModalOpen(true);
   };
 
@@ -290,50 +291,35 @@ export default function FluxoDeCaixaPage() {
       setIsEmailModalOpen(false);
     }
   };
+
   const handleGeneratePdf = async () => {
-        if (!contextMenu.selectedItem) return;
-        const operacaoId = contextMenu.selectedItem.operacaoId;
-        if (!operacaoId) {
-            alert("Este lançamento não está associado a um borderô para gerar PDF.");
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, { 
-                headers: getAuthHeader() 
-            });
-
-            if (!response.ok) {
-                try {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || 'Não foi possível gerar o PDF.');
-                } catch {
-                    throw new Error(`Erro do servidor: ${response.status} ${response.statusText}`);
-                }
-            }
-            
-            const contentDisposition = response.headers.get('content-disposition');
-            let filename = `bordero-${operacaoId}.pdf`;
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-                if (filenameMatch && filenameMatch.length > 1) {
-                    filename = filenameMatch[1];
-                }
-            }
-            
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-        } catch (err) {
-            alert(err.message);
-        }
-    };
+    if (!contextMenu.selectedItem) return;
+    const operacaoId = contextMenu.selectedItem.operacaoId;
+    if (!operacaoId) {
+      alert("Este lançamento não está associado a um borderô para gerar PDF.");
+      return;
+    }
+    try {
+      const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, {
+        headers: getAuthHeader(),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Não foi possível gerar o PDF.");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `bordero-${operacaoId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const handleContextMenu = (event, item) => {
     event.preventDefault();
@@ -348,11 +334,6 @@ export default function FluxoDeCaixaPage() {
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
   const currentItems = movimentacoes.slice(indexOfFirstItem, indexOfLastItem);
-
-  if (loading && movimentacoes.length === 0)
-    return <div className="text-center p-10">Carregando...</div>;
-  if (error)
-    return <div className="text-center p-10 text-red-500">Erro: {error}</div>;
 
   const saldosTitle =
     filters.dataInicio && filters.dataFim
@@ -392,71 +373,72 @@ export default function FluxoDeCaixaPage() {
         onClose={() => setIsEmailModalOpen(false)}
         onSend={handleSendEmail}
         isSending={isSendingEmail}
-        clienteId={contextMenu.selectedItem?.operacao?.cliente?.id}
+        clienteId={operacaoParaEmail?.clienteId}
       />
 
-      <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+      <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
         <div className="flex-shrink-0">
-        <motion.header
-          className="mb-4 flex justify-between items-center border-b-2 border-orange-500 pb-4"
-          initial={{ y: -20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-        >
-          <div>
-            <h1 className="text-3xl font-bold">Fluxo de Caixa</h1>
-            <p className="text-sm text-gray-300">
-              Visão geral das suas movimentações financeiras.
-            </p>
-          </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition"
+          <motion.header
+            className="mb-4 flex justify-between items-center border-b-2 border-orange-500 pb-4"
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
           >
-            + Novo Lançamento
-          </button>
-        </motion.header>
+            <div>
+              <h1 className="text-3xl font-bold">Fluxo de Caixa</h1>
+              <p className="text-sm text-gray-300">
+                Visão geral das suas movimentações financeiras.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition"
+            >
+              + Novo Lançamento
+            </button>
+          </motion.header>
 
-        <motion.div
-          className="mb-6"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-        >
-          <h2 className="text-lg font-semibold text-gray-100 mb-2">
-            {saldosTitle}
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {saldos.map((saldo, index) => (
-              <div
-                key={index}
-                className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
-              >
-                <p className="text-sm text-gray-400 truncate">
-                  {saldo.contaBancaria}
-                </p>
-                <p
-                  className={`text-xl font-bold ${
-                    saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
-                  }`}
+          <motion.div
+            className="mb-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+          >
+            <h2 className="text-lg font-semibold text-gray-100 mb-2">
+              {saldosTitle}
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {saldos.map((saldo, index) => (
+                <div
+                  key={index}
+                  className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
                 >
-                  {formatBRLNumber(saldo.saldo)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
+                  <p className="text-sm text-gray-400 truncate">
+                    {saldo.contaBancaria}
+                  </p>
+                  <p
+                    className={`text-xl font-bold ${
+                      saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
+                    }`}
+                  >
+                    {formatBRLNumber(saldo.saldo)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        </div>
 
-        <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
           <FiltroLateral
             filters={filters}
             saldos={saldos}
             onFilterChange={handleFilterChange}
             onClear={clearFilters}
           />
-          <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md min-w-0">
-            <div className="overflow-x-auto">
+          <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
+            <div className="overflow-y-auto flex-grow">
               <table className="min-w-full divide-y divide-gray-700">
-                <thead className="bg-gray-700">
+                <thead className="bg-gray-700 sticky top-0 z-10">
                   <tr>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                       <button
@@ -535,14 +517,15 @@ export default function FluxoDeCaixaPage() {
                 </tbody>
               </table>
             </div>
-            <Pagination
-              totalItems={movimentacoes.length}
-              itemsPerPage={ITEMS_PER_PAGE}
-              currentPage={currentPage}
-              onPageChange={(page) => setCurrentPage(page)}
-            />
+            <div className="flex-shrink-0 pt-4">
+              <Pagination
+                totalItems={movimentacoes.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                currentPage={currentPage}
+                onPageChange={(page) => setCurrentPage(page)}
+              />
+            </div>
           </div>
-        </div>
         </div>
       </main>
 
@@ -554,12 +537,15 @@ export default function FluxoDeCaixaPage() {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="py-1">
-             <a
-                href="#"
-                onClick={(e) => { e.preventDefault(); handleEditRequest(); }}
-                className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleEditRequest();
+              }}
+              className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
             >
-                Editar Lançamento
+              Editar Lançamento
             </a>
             {contextMenu.selectedItem?.operacaoId && (
               <>
@@ -586,20 +572,22 @@ export default function FluxoDeCaixaPage() {
                 </a>
               </>
             )}
-             <div className="border-t border-gray-600 my-1"></div>
+            <div className="border-t border-gray-600 my-1"></div>
             <button
               onClick={(e) => {
                 e.preventDefault();
                 handleDeleteRequest();
               }}
               className={`block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 ${
-                ['Pagamento de Borderô', 'Recebimento'].includes(contextMenu.selectedItem?.categoria)
+                ["Pagamento de Borderô", "Recebimento"].includes(
+                  contextMenu.selectedItem?.categoria
+                )
                   ? "opacity-50 cursor-not-allowed"
                   : ""
               }`}
-              disabled={
-                ['Pagamento de Borderô', 'Recebimento'].includes(contextMenu.selectedItem?.categoria)
-              }
+              disabled={["Pagamento de Borderô", "Recebimento"].includes(
+                contextMenu.selectedItem?.categoria
+              )}
             >
               Excluir Lançamento
             </button>
