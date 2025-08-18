@@ -56,14 +56,13 @@ export async function POST(request) {
 
         const body = await request.json();
         
-        // Validação básica
         if (!body.data || !body.assunto) {
             return NextResponse.json({ message: 'Data e Assunto são obrigatórios.' }, { status: 400 });
         }
 
         const { data, error } = await supabase
             .from('anotacoes')
-            .insert([{ ...body, user_id: userId }]) // Insere com o user_id correto (UUID)
+            .insert([{ ...body, user_id: userId }])
             .select()
             .single();
 
@@ -74,6 +73,32 @@ export async function POST(request) {
         return NextResponse.json(data, { status: 201 });
     } catch (error) {
         console.error('Erro na API POST /api/agenda:', error);
-        return NextResponse.json({ message: error.message || 'Erro interno no servidor' }, { status: 500 });
+        return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
+    }
+}
+
+// DELETE: Apaga múltiplas anotações
+export async function DELETE(request) {
+    try {
+        const token = request.headers.get('Authorization')?.split(' ')[1];
+        const userId = await getUserIdFromToken(token);
+        if (!userId) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
+
+        const { ids } = await request.json();
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return NextResponse.json({ message: 'Nenhum ID fornecido para exclusão.' }, { status: 400 });
+        }
+
+        const { error } = await supabase
+            .from('anotacoes')
+            .delete()
+            .in('id', ids)
+            .eq('user_id', userId); // Garante que o usuário só pode apagar suas próprias anotações
+
+        if (error) throw error;
+        return new NextResponse(null, { status: 204 });
+    } catch (error) {
+        return NextResponse.json({ message: error.message }, { status: 500 });
     }
 }
