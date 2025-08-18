@@ -7,7 +7,7 @@ import { formatDate } from '@/app/utils/formatters';
 import Notification from '@/app/components/Notification';
 import AnotacaoModal from '@/app/components/AnotacaoModal';
 import ConfirmacaoModal from '@/app/components/ConfirmacaoModal';
-import AnotacaoActionsBar from '@/app/components/AnotacaoActionsBar'; // Importe a nova barra
+import AnotacaoActionsBar from '@/app/components/AnotacaoActionsBar';
 
 export default function AgendaPage() {
     const [anotacoes, setAnotacoes] = useState([]);
@@ -18,7 +18,6 @@ export default function AgendaPage() {
     const [notification, setNotification] = useState({ message: '', type: '' });
     const [itemParaExcluir, setItemParaExcluir] = useState(null);
     
-    // Estados para seleção e menu de contexto
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, selectedItem: null });
@@ -104,7 +103,6 @@ export default function AgendaPage() {
             } else {
                 newSet.add(id);
             }
-            // Sai do modo de seleção se não houver mais itens selecionados
             if (newSet.size === 0) {
                 setIsSelectionMode(false);
             }
@@ -149,7 +147,8 @@ export default function AgendaPage() {
     };
 
     return (
-        <main className="min-h-screen flex flex-col pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+        // A MUDANÇA PRINCIPAL ESTÁ AQUI: "h-full" no lugar de "min-h-screen"
+        <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
             <AnotacaoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} anotacao={editingAnotacao} onDelete={(id) => handleDeleteRequest([id])} />
             <ConfirmacaoModal 

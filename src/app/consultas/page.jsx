@@ -12,9 +12,10 @@ import FiltroLateralConsultas from '@/app/components/FiltroLateralConsultas';
 import SelectionActionsBar from '@/app/components/SelectionActionsBar';
 import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 
-const ITEMS_PER_PAGE = 7;
+const ITEMS_PER_PAGE = 10; // Aumentado para preencher mais a tela
 
 export default function ConsultasPage() {
+    // ... (toda a sua lógica de states e funções permanece a mesma)
     const [duplicatas, setDuplicatas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -332,9 +333,9 @@ export default function ConsultasPage() {
             <LiquidacaoModal isOpen={isLiquidarModalOpen} onClose={() => setIsLiquidarModalOpen(false)} onConfirm={handleConfirmarLiquidacao} duplicata={duplicataParaLiquidar} contasMaster={contasMaster} />
             <EmailModal isOpen={isEmailModalOpen} onClose={() => setIsEmailModalOpen(false)} onSend={handleSendEmail} isSending={isSendingEmail} clienteId={operacaoParaEmail?.clienteId} />
 
-            <main className="min-h-screen pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+            <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
                 <motion.header 
-                    className="mb-4 border-b-2 border-orange-500 pb-4"
+                    className="mb-4 border-b-2 border-orange-500 pb-4 flex-shrink-0"
                     initial={{ y: -20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                 >
@@ -342,7 +343,7 @@ export default function ConsultasPage() {
                     <p className="text-sm text-gray-300">Histórico completo de todas as duplicatas processadas.</p>
                 </motion.header>
 
-                <div className="flex-grow flex flex-col lg:flex-row gap-6">
+                <div className="flex-grow flex flex-row gap-6 min-h-0">
                     <FiltroLateralConsultas
                         filters={filters}
                         onFilterChange={handleFilterChange}
@@ -355,21 +356,19 @@ export default function ConsultasPage() {
                     <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
                          {loading ? <p className="text-center py-10 text-gray-400">A carregar...</p> : error ? <p className="text-red-400 text-center py-10">{error}</p> : (
                             <>
-                                <div className="overflow-auto">
+                                <div className="flex-grow overflow-y-auto">
                                     <table className="min-w-full divide-y divide-gray-700">
-                                        <thead className="bg-gray-700">
-                                        <tr>
-                                            {isSelectionMode && (
-                                                <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left"></th>
-                                            )}
-                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataOperacao')} className="flex items-center gap-1">Data Op. {getSortIcon('dataOperacao')}</button></th>
-                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase min-w-[120px]"><button onClick={() => handleSort('nfCte')} className="flex items-center gap-1">NF/CT-e {getSortIcon('nfCte')}</button></th>
-                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('empresaCedente')} className="flex items-center gap-1">Cedente {getSortIcon('empresaCedente')}</button></th>
-                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('clienteSacado')} className="flex items-center gap-1">Sacado {getSortIcon('clienteSacado')}</button></th>
-                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('valorBruto')} className="flex items-center gap-1 float-right">Valor Bruto {getSortIcon('valorBruto')}</button></th>
-                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('valorJuros')} className="flex items-center gap-1 float-right">Juros {getSortIcon('valorJuros')}</button></th>
-                                            <th className="sticky top-0 bg-gray-700 z-10 px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataVencimento')} className="flex items-center gap-1">Data Venc. {getSortIcon('dataVencimento')}</button></th>
-                                        </tr>
+                                        <thead className="bg-gray-700 sticky top-0 z-10">
+                                            <tr>
+                                                {isSelectionMode && <th className="px-4 py-2 text-left"></th>}
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataOperacao')} className="flex items-center gap-1">Data Op. {getSortIcon('dataOperacao')}</button></th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase min-w-[120px]"><button onClick={() => handleSort('nfCte')} className="flex items-center gap-1">NF/CT-e {getSortIcon('nfCte')}</button></th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('empresaCedente')} className="flex items-center gap-1">Cedente {getSortIcon('empresaCedente')}</button></th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('clienteSacado')} className="flex items-center gap-1">Sacado {getSortIcon('clienteSacado')}</button></th>
+                                                <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('valorBruto')} className="flex items-center gap-1 float-right">Valor Bruto {getSortIcon('valorBruto')}</button></th>
+                                                <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('valorJuros')} className="flex items-center gap-1 float-right">Juros {getSortIcon('valorJuros')}</button></th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort('dataVencimento')} className="flex items-center gap-1">Data Venc. {getSortIcon('dataVencimento')}</button></th>
+                                            </tr>
                                         </thead>
                                         <tbody className="bg-gray-800 divide-y divide-gray-700">
                                             {currentItems.map((dup) => {
@@ -415,7 +414,9 @@ export default function ConsultasPage() {
                                         </tbody>
                                     </table>
                                 </div>
-                                <Pagination totalItems={duplicatas.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={paginate} />
+                                <div className="flex-shrink-0">
+                                    <Pagination totalItems={duplicatas.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={paginate} />
+                                </div>
                             </>
                         )}
                     </div>
