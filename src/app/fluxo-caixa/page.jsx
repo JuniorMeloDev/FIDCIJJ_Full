@@ -400,9 +400,9 @@ export default function FluxoDeCaixaPage() {
         </div>
 
         {/* Conteúdo principal: saldos, filtros e tabela */}
-        <div className="flex flex-col lg:flex-row gap-6 min-h-0 flex-grow">
+        <div className="flex flex-col lg:flex-row gap-6 flex-grow">
           {/* Lateral: saldos + filtros */}
-          <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
+          <div className="w-full flex-shrink-0 flex flex-col gap-4 lg:w-72 lg:overflow-y-auto lg:max-h-[calc(100vh-120px)]">
             {/* Saldos */}
             <motion.div
               className=""
@@ -480,10 +480,7 @@ export default function FluxoDeCaixaPage() {
                 <tbody className="bg-gray-800 divide-y divide-gray-700">
                   {loading ? (
                     <tr>
-                      <td
-                        colSpan="4"
-                        className="text-center py-10 text-gray-400"
-                      >
+                      <td colSpan="4" className="text-center py-10 text-gray-400">
                         A carregar...
                       </td>
                     </tr>
@@ -514,10 +511,7 @@ export default function FluxoDeCaixaPage() {
                     ))
                   ) : (
                     <tr>
-                      <td
-                        colSpan="4"
-                        className="text-center py-10 text-gray-400"
-                      >
+                      <td colSpan="4" className="text-center py-10 text-gray-400">
                         Nenhuma movimentação encontrada.
                       </td>
                     </tr>
