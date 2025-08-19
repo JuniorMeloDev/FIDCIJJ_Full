@@ -154,35 +154,37 @@ export default function ClientesPage() {
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
     return (
-        <main className="min-h-screen pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+        <main className="min-h-screen pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
             <EditClienteModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} cliente={editingCliente} onSave={handleSaveCliente} onDelete={handleDeleteRequest} />
             <ConfirmacaoModal isOpen={!!clienteParaExcluir} onClose={() => setClienteParaExcluir(null)} onConfirm={handleConfirmarExclusao} title="Confirmar Exclusão" message={`Deseja excluir o cliente "${clienteParaExcluir?.nome}"?`} />
 
-            <motion.header 
-                className="mb-4 border-b-2 border-orange-500 pb-4"
-                initial={{ y: -20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-            >
-                <h1 className="text-3xl font-bold">Cadastros</h1>
-                <p className="text-sm text-gray-300">Gestão de Clientes, Sacados, Operações e Usuários</p>
-            </motion.header>
-            <div className="mb-4 border-b border-gray-700">
-                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                    <Link href="/cadastros/clientes" className="border-orange-500 text-orange-400 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Clientes (Cedentes)</Link>
-                    <Link href="/cadastros/sacados" className="border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Sacados (Devedores)</Link>
-                    <Link href="/cadastros/tipos-operacao" className="border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                        Tipos de Operação
-                    </Link>
-                    {isAdmin && (
-                        <Link href="/cadastros/usuarios" className="border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                            Usuários
+            <div className="flex-shrink-0">
+                <motion.header 
+                    className="mb-4 border-b-2 border-orange-500 pb-4"
+                    initial={{ y: -20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                >
+                    <h1 className="text-3xl font-bold">Cadastros</h1>
+                    <p className="text-sm text-gray-300">Gestão de Clientes, Sacados, Operações e Usuários</p>
+                </motion.header>
+                <div className="mb-4 border-b border-gray-700">
+                    <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                        <Link href="/cadastros/clientes" className="border-orange-500 text-orange-400 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Clientes (Cedentes)</Link>
+                        <Link href="/cadastros/sacados" className="border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Sacados (Devedores)</Link>
+                        <Link href="/cadastros/tipos-operacao" className="border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                            Tipos de Operação
                         </Link>
-                    )}
-                </nav>
+                        {isAdmin && (
+                            <Link href="/cadastros/usuarios" className="border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                                Usuários
+                            </Link>
+                        )}
+                    </nav>
+                </div>
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-6 w-full">
+            <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
               <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
                 <FiltroLateralClientes 
                   filters={filters}
@@ -194,19 +196,19 @@ export default function ClientesPage() {
                 overflow-x-auto
                 lg:overflow-y-auto
                 lg:max-h-[calc(100vh-260px)]">
-                <div className="flex justify-end mb-4">
+                <div className="flex justify-end mb-4 flex-shrink-0">
                   <button onClick={handleOpenAddModal} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition">
                     Novo Cliente
                   </button>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="flex-grow overflow-auto">
                   {loading ? (
                     <p className="text-center py-10 text-gray-400">A carregar...</p>
                   ) : error ? (
                     <p className="text-red-400 text-center py-10">{error}</p>
                   ) : (
                     <table className="min-w-full divide-y divide-gray-700">
-                      <thead className="bg-gray-700">
+                      <thead className="bg-gray-700 sticky top-0">
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">ID</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Nome</th>
@@ -227,7 +229,9 @@ export default function ClientesPage() {
                     </table>
                   )}
                 </div>
-                <Pagination totalItems={filteredClientes.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={paginate} />
+                <div className="flex-shrink-0 mt-4">
+                    <Pagination totalItems={filteredClientes.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={paginate} />
+                </div>
               </div>
             </div>
         </main>
