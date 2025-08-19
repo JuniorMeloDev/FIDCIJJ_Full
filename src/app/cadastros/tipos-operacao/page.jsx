@@ -14,6 +14,7 @@ import useAuth from "@/app/hooks/useAuth";
 const ITEMS_PER_PAGE = 7;
 
 export default function TiposOperacaoPage() {
+  // ... (todo o código dos states e funções permanece o mesmo) ...
   const { isAdmin } = useAuth();
   const [tiposOperacao, setTiposOperacao] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +31,7 @@ export default function TiposOperacaoPage() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
+  // ... (restante das funções) ...
   const showNotification = (message, type) => {
     setNotification({ message, type });
     setTimeout(() => setNotification({ message: "", type: "" }), 5000);
@@ -222,14 +224,14 @@ export default function TiposOperacaoPage() {
       </div>
 
       <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
-        <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
+        <div className="w-full lg:w-72 flex-shrink-0">
           <FiltroLateralTiposOperacao
             filters={filters}
             onFilterChange={handleFilterChange}
             onClear={clearFilters}
           />
         </div>
-        <div className="w-full lg:flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col">
+        <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-h-0">
           <div className="flex justify-end mb-4 flex-shrink-0">
             <button
               onClick={handleOpenAddModal}
@@ -245,7 +247,7 @@ export default function TiposOperacaoPage() {
               <p className="text-red-400 text-center py-10">{error}</p>
             ) : (
               <table className="min-w-full divide-y divide-gray-700">
-                <thead className="bg-gray-700 sticky top-0">
+                <thead className="bg-gray-700 sticky top-0 z-10">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">
                       Nome

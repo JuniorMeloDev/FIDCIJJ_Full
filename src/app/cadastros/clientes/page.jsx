@@ -17,10 +17,9 @@ export default function ClientesPage() {
     const { isAdmin } = useAuth();
     const [clientes, setClientes] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingCliente, setEditingCliente] = useState(null);
-    const [notification, setNotification] = useState({ message: '', type: '' });
+    // ... (restante do código dos states permanece igual) ...
+
+    // ... (todas as funções como getAuthHeader, fetchClientes, etc., permanecem iguais) ...
     const [clienteParaExcluir, setClienteParaExcluir] = useState(null);
 
     const [currentPage, setCurrentPage] = useState(1);
@@ -182,14 +181,14 @@ export default function ClientesPage() {
             </div>
 
             <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
-              <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
+              <div className="w-full lg:w-72 flex-shrink-0">
                 <FiltroLateralClientes 
                   filters={filters}
                   onFilterChange={handleFilterChange}
                   onClear={clearFilters}
                 />
               </div>
-              <div className="w-full lg:flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col">
+              <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-h-0">
                 <div className="flex justify-end mb-4 flex-shrink-0">
                   <button onClick={handleOpenAddModal} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition">
                     Novo Cliente
@@ -202,7 +201,7 @@ export default function ClientesPage() {
                     <p className="text-red-400 text-center py-10">{error}</p>
                   ) : (
                     <table className="min-w-full divide-y divide-gray-700">
-                      <thead className="bg-gray-700 sticky top-0">
+                      <thead className="bg-gray-700 sticky top-0 z-10">
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">ID</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Nome</th>
@@ -215,7 +214,7 @@ export default function ClientesPage() {
                           <tr key={cliente.id} onClick={() => handleOpenEditModal(cliente)} className="hover:bg-gray-700 cursor-pointer">
                             <td className="px-6 py-4 text-sm text-gray-400">{cliente.id}</td>
                             <td className="px-6 py-4 text-sm font-medium text-gray-100">{cliente.nome}</td>
-                            <td className="px-6 py-4 text-sm text-gray-400">{formatCnpjCpf(cliente.cnpj)}</td>
+                            <td className="px-6 py-4 text-sm text-gray-400 whitespace-nowrap">{formatCnpjCpf(cliente.cnpj)}</td>
                             <td className="px-6 py-4 text-sm text-gray-400">{cliente.municipio ? `${cliente.municipio} - ${cliente.uf}` : ''}</td>
                           </tr>
                         ))}

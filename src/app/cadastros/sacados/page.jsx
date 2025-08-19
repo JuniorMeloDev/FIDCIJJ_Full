@@ -14,6 +14,7 @@ import useAuth from '@/app/hooks/useAuth';
 const ITEMS_PER_PAGE = 10;
 
 export default function SacadosPage() {
+    // ... (todo o código dos states e funções permanece o mesmo) ...
     const { isAdmin } = useAuth();
     const [sacados, setSacados] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -23,14 +24,14 @@ export default function SacadosPage() {
     const [notification, setNotification] = useState({ message: '', type: '' });
     const [currentPage, setCurrentPage] = useState(1);
     const [filters, setFilters] = useState({ nome: '', cnpj: '' });
-
     const [sacadoParaExcluir, setSacadoParaExcluir] = useState(null);
 
     const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     };
-
+    
+    // ... (restante das funções) ...
     const showNotification = (message, type) => {
         setNotification({ message, type });
         setTimeout(() => setNotification({ message: '', type: '' }), 5000);
@@ -143,22 +144,8 @@ export default function SacadosPage() {
     return (
         <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
-
-            <EditSacadoModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                sacado={editingSacado}
-                onSave={handleSaveSacado}
-                onDelete={handleDeleteRequest}
-            />
-
-            <ConfirmacaoModal
-                isOpen={!!sacadoParaExcluir}
-                onClose={() => setSacadoParaExcluir(null)}
-                onConfirm={handleConfirmarExclusao}
-                title="Confirmar Exclusão"
-                message={`Deseja excluir o sacado "${sacadoParaExcluir?.nome}"?`}
-            />
+            <EditSacadoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} sacado={editingSacado} onSave={handleSaveSacado} onDelete={handleDeleteRequest} />
+            <ConfirmacaoModal isOpen={!!sacadoParaExcluir} onClose={() => setSacadoParaExcluir(null)} onConfirm={handleConfirmarExclusao} title="Confirmar Exclusão" message={`Deseja excluir o sacado "${sacadoParaExcluir?.nome}"?`} />
 
             <div className="flex-shrink-0">
                 <motion.header 
@@ -183,14 +170,14 @@ export default function SacadosPage() {
             
             <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
                 <FiltroLateralSacados filters={filters} onFilterChange={handleFilterChange} onClear={clearFilters} />
-                <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col">
+                <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-h-0">
                     <div className="flex justify-end mb-4 flex-shrink-0">
                         <button onClick={handleOpenAddModal} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition">Novo Sacado</button>
                     </div>
                     <div className="flex-grow overflow-auto">
                         {loading ? <p className="text-center py-10 text-gray-400">A carregar...</p> : error ? <p className="text-red-400 text-center py-10">{error}</p> : (
                             <table className="min-w-full divide-y divide-gray-700">
-                                <thead className="bg-gray-700 sticky top-0">
+                                <thead className="bg-gray-700 sticky top-0 z-10">
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Nome</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">CNPJ</th>
