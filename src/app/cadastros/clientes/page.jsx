@@ -8,20 +8,20 @@ import Notification from '@/app/components/Notification';
 import ConfirmacaoModal from '@/app/components/ConfirmacaoModal';
 import Pagination from '@/app/components/Pagination';
 import FiltroLateralClientes from '@/app/components/FiltroLateralClientes';
-import { formatCnpjCpf } from '@/app/utils/formatters'; 
+import { formatCnpjCpf } from '@/app/utils/formatters';
 import useAuth from '@/app/hooks/useAuth';
 
-const ITEMS_PER_PAGE = 10; 
+const ITEMS_PER_PAGE = 10;
 
 export default function ClientesPage() {
     const { isAdmin } = useAuth();
     const [clientes, setClientes] = useState([]);
     const [loading, setLoading] = useState(true);
-    // ... (restante do código dos states permanece igual) ...
-
-    // ... (todas as funções como getAuthHeader, fetchClientes, etc., permanecem iguais) ...
+    const [error, setError] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingCliente, setEditingCliente] = useState(null);
+    const [notification, setNotification] = useState({ message: '', type: '' });
     const [clienteParaExcluir, setClienteParaExcluir] = useState(null);
-
     const [currentPage, setCurrentPage] = useState(1);
     const [filters, setFilters] = useState({ nome: '', cnpj: '' });
 
@@ -91,7 +91,7 @@ export default function ClientesPage() {
             const url = isUpdating ? `/api/cadastros/clientes/${id}` : `/api/cadastros/clientes`;
             const method = isUpdating ? 'PUT' : 'POST';
 
-             const payload = {
+            const payload = {
                 ...data,
                 ramo_de_atividade: data.ramoDeAtividade,
                 contasBancarias: data.contasBancarias.map(c => ({
@@ -129,7 +129,7 @@ export default function ClientesPage() {
     const handleConfirmarExclusao = async () => {
         if (!clienteParaExcluir) return;
         try {
-            const response = await fetch(`/api/cadastros/clientes/${clienteParaExcluir.id}`, { 
+            const response = await fetch(`/api/cadastros/clientes/${clienteParaExcluir.id}`, {
                 method: 'DELETE',
                 headers: getAuthHeader()
             });
@@ -156,7 +156,7 @@ export default function ClientesPage() {
             <ConfirmacaoModal isOpen={!!clienteParaExcluir} onClose={() => setClienteParaExcluir(null)} onConfirm={handleConfirmarExclusao} title="Confirmar Exclusão" message={`Deseja excluir o cliente "${clienteParaExcluir?.nome}"?`} />
 
             <div className="flex-shrink-0">
-                <motion.header 
+                <motion.header
                     className="mb-4 border-b-2 border-orange-500 pb-4"
                     initial={{ y: -20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
@@ -182,7 +182,7 @@ export default function ClientesPage() {
 
             <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
               <div className="w-full lg:w-72 flex-shrink-0">
-                <FiltroLateralClientes 
+                <FiltroLateralClientes
                   filters={filters}
                   onFilterChange={handleFilterChange}
                   onClear={clearFilters}
