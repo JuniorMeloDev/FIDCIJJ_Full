@@ -430,10 +430,10 @@ export default function FluxoDeCaixaPage() {
         </motion.div>
       </div>
 
-      {/* Conteúdo principal com rolagem */}
-      <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 overflow-y-auto lg:overflow-hidden">
+      {/* Conteúdo principal com rolagem e responsividade */}
+      <div className="flex-grow flex flex-col gap-6 min-h-0 overflow-y-auto lg:flex-row lg:overflow-hidden">
         {/* Filtro lateral */}
-        <div className="w-full lg:w-72 flex-shrink-0 overflow-y-auto">
+        <div className="w-full lg:w-72 flex-shrink-0 mb-4 lg:mb-0">
           <FiltroLateral
             filters={filters}
             saldos={saldos}
@@ -443,7 +443,7 @@ export default function FluxoDeCaixaPage() {
         </div>
 
         {/* Tabela */}
-        <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0 overflow-hidden">
+        <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0 overflow-x-auto">
           <div className="overflow-y-auto flex-grow">
             <table className="min-w-full divide-y divide-gray-700">
               <thead className="bg-gray-700 sticky top-0 z-10">
@@ -480,10 +480,7 @@ export default function FluxoDeCaixaPage() {
               <tbody className="bg-gray-800 divide-y divide-gray-700">
                 {loading ? (
                   <tr>
-                    <td
-                      colSpan="4"
-                      className="text-center py-10 text-gray-400"
-                    >
+                    <td colSpan="4" className="text-center py-10 text-gray-400">
                       A carregar...
                     </td>
                   </tr>
@@ -514,10 +511,7 @@ export default function FluxoDeCaixaPage() {
                   ))
                 ) : (
                   <tr>
-                    <td
-                      colSpan="4"
-                      className="text-center py-10 text-gray-400"
-                    >
+                    <td colSpan="4" className="text-center py-10 text-gray-400">
                       Nenhuma movimentação encontrada.
                     </td>
                   </tr>
