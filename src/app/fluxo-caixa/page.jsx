@@ -341,261 +341,262 @@ export default function FluxoDeCaixaPage() {
       : "Saldos Atuais";
 
   return (
-  <>
-    <Notification
-      message={notification.message}
-      type={notification.type}
-      onClose={() => setNotification({ message: "", type: "" })}
-    />
-    <LancamentoModal
-      isOpen={isModalOpen}
-      onClose={() => setIsModalOpen(false)}
-      onSave={handleSaveLancamento}
-      contasMaster={contasMaster}
-      clienteMasterNome={clienteMasterNome}
-    />
-    <EditLancamentoModal
-      isOpen={isEditModalOpen}
-      onClose={() => setIsEditModalOpen(false)}
-      onSave={handleUpdateLancamento}
-      lancamento={itemParaEditar}
-      contasMaster={contasMaster}
-    />
-    <ConfirmacaoModal
-      isOpen={!!itemParaExcluir}
-      onClose={() => setItemParaExcluir(null)}
-      onConfirm={handleConfirmDelete}
-      title="Confirmar Exclusão"
-      message="Tem a certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita."
-    />
-    <EmailModal
-      isOpen={isEmailModalOpen}
-      onClose={() => setIsEmailModalOpen(false)}
-      onSend={handleSendEmail}
-      isSending={isSendingEmail}
-      clienteId={operacaoParaEmail?.clienteId}
-    />
+    <>
+      <Notification
+        message={notification.message}
+        type={notification.type}
+        onClose={() => setNotification({ message: "", type: "" })}
+      />
+      <LancamentoModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveLancamento}
+        contasMaster={contasMaster}
+        clienteMasterNome={clienteMasterNome}
+      />
+      <EditLancamentoModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleUpdateLancamento}
+        lancamento={itemParaEditar}
+        contasMaster={contasMaster}
+      />
+      <ConfirmacaoModal
+        isOpen={!!itemParaExcluir}
+        onClose={() => setItemParaExcluir(null)}
+        onConfirm={handleConfirmDelete}
+        title="Confirmar Exclusão"
+        message="Tem a certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita."
+      />
+      <EmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => setIsEmailModalOpen(false)}
+        onSend={handleSendEmail}
+        isSending={isSendingEmail}
+        clienteId={operacaoParaEmail?.clienteId}
+      />
 
-<main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">      {/* Header e Saldos */}
-      <div className="flex-shrink-0">
-        <motion.header
-          className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
-          initial={{ y: -20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-        >
-          <div className="mb-4 md:mb-0">
-            <h1 className="text-3xl font-bold">Fluxo de Caixa</h1>
-            <p className="text-sm text-gray-300">
-              Visão geral das suas movimentações financeiras.
-            </p>
-          </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition w-full md:w-auto"
+      <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+        {/* Header */}
+        <div className="flex-shrink-0">
+          <motion.header
+            className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
           >
-            + Novo Lançamento
-          </button>
-        </motion.header>
-
-        {/* Saldos */}
-        <motion.div
-          className="mb-6 relative lg:sticky lg:top-0"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-        >
-          <h2 className="text-lg font-semibold text-gray-100 mb-2">
-            {saldosTitle}
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {saldos.map((saldo, index) => (
-              <div
-                key={index}
-                className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
-              >
-                <p className="text-sm text-gray-400 truncate">
-                  {saldo.contaBancaria}
-                </p>
-                <p
-                  className={`text-xl font-bold ${
-                    saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
-                  }`}
-                >
-                  {formatBRLNumber(saldo.saldo)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Conteúdo principal com rolagem e responsividade */}
-      <div className="flex-grow flex flex-col gap-6 min-h-0 overflow-y-auto lg:flex-row lg:overflow-hidden">
-        {/* Filtro lateral */}
-        <div className="w-full lg:w-72 flex-shrink-0 mb-4 lg:mb-0">
-          <FiltroLateral
-            filters={filters}
-            saldos={saldos}
-            onFilterChange={handleFilterChange}
-            onClear={clearFilters}
-          />
+            <div className="mb-4 md:mb-0">
+              <h1 className="text-3xl font-bold">Fluxo de Caixa</h1>
+              <p className="text-sm text-gray-300">
+                Visão geral das suas movimentações financeiras.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition w-full md:w-auto"
+            >
+              + Novo Lançamento
+            </button>
+          </motion.header>
         </div>
 
-        {/* Tabela */}
-        <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0 overflow-x-auto">
-          <div className="overflow-y-auto flex-grow">
-            <table className="min-w-full divide-y divide-gray-700">
-              <thead className="bg-gray-700 sticky top-0 z-10">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    <button
-                      onClick={() => handleSort("data_movimento")}
-                      className="flex items-center gap-2"
+        {/* Conteúdo principal: saldos, filtros e tabela */}
+        <div className="flex-grow flex flex-col min-h-0 overflow-y-auto lg:flex-row lg:overflow-hidden gap-6">
+          {/* Lateral: saldos + filtros */}
+          <div className="w-full lg:w-72 flex-shrink-0 mb-4 lg:mb-0 flex flex-col gap-4">
+            {/* Saldos */}
+            <motion.div
+              className=""
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              <h2 className="text-lg font-semibold text-gray-100 mb-2">
+                {saldosTitle}
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
+                {saldos.map((saldo, index) => (
+                  <div
+                    key={index}
+                    className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
+                  >
+                    <p className="text-sm text-gray-400 truncate">
+                      {saldo.contaBancaria}
+                    </p>
+                    <p
+                      className={`text-xl font-bold ${
+                        saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
+                      }`}
                     >
-                      Data {getSortIcon("data_movimento")}
-                    </button>
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    <button
-                      onClick={() => handleSort("descricao")}
-                      className="flex items-center gap-2"
-                    >
-                      Descrição {getSortIcon("descricao")}
-                    </button>
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Conta
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    <button
-                      onClick={() => handleSort("valor")}
-                      className="flex items-center gap-2 float-right"
-                    >
-                      Valor {getSortIcon("valor")}
-                    </button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-gray-800 divide-y divide-gray-700">
-                {loading ? (
-                  <tr>
-                    <td colSpan="4" className="text-center py-10 text-gray-400">
-                      A carregar...
-                    </td>
-                  </tr>
-                ) : currentItems.length > 0 ? (
-                  currentItems.map((mov) => (
-                    <tr
-                      key={mov.id}
-                      onContextMenu={(e) => handleContextMenu(e, mov)}
-                      className="hover:bg-gray-700 cursor-pointer"
-                    >
-                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
-                        {formatDate(mov.dataMovimento)}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle">
-                        {mov.descricao}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
-                        {mov.contaBancaria}
-                      </td>
-                      <td
-                        className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${
-                          mov.valor >= 0 ? "text-green-400" : "text-red-400"
-                        }`}
-                      >
-                        {formatBRLNumber(mov.valor)}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="4" className="text-center py-10 text-gray-400">
-                      Nenhuma movimentação encontrada.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex-shrink-0 pt-4">
-            <Pagination
-              totalItems={movimentacoes.length}
-              itemsPerPage={ITEMS_PER_PAGE}
-              currentPage={currentPage}
-              onPageChange={(page) => setCurrentPage(page)}
+                      {formatBRLNumber(saldo.saldo)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+            {/* Filtro lateral */}
+            <FiltroLateral
+              filters={filters}
+              saldos={saldos}
+              onFilterChange={handleFilterChange}
+              onClear={clearFilters}
             />
           </div>
-        </div>
-      </div>
-    </main>
 
-    {/* Menu de contexto */}
-    {contextMenu.visible && (
-      <div
-        ref={menuRef}
-        style={{ top: contextMenu.y, left: contextMenu.x }}
-        className="absolute origin-top-right w-56 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-20"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="py-1">
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              handleEditRequest();
-            }}
-            className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-          >
-            Editar Lançamento
-          </a>
-          {contextMenu.selectedItem?.operacaoId && (
-            <>
-              <div className="border-t border-gray-600 my-1"></div>
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleGeneratePdf();
-                }}
-                className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-              >
-                Gerar PDF do Borderô
-              </a>
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleAbrirEmailModal();
-                }}
-                className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-              >
-                Enviar Borderô por E-mail
-              </a>
-            </>
-          )}
-          <div className="border-t border-gray-600 my-1"></div>
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              handleDeleteRequest();
-            }}
-            className={`block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 ${
-              ["Pagamento de Borderô", "Recebimento"].includes(
-                contextMenu.selectedItem?.categoria
-              )
-                ? "opacity-50 cursor-not-allowed"
-                : ""
-            }`}
-            disabled={["Pagamento de Borderô", "Recebimento"].includes(
-              contextMenu.selectedItem?.categoria
-            )}
-          >
-            Excluir Lançamento
-          </button>
+          {/* Tabela de lançamentos */}
+          <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0 overflow-x-auto">
+            <div className="overflow-y-auto flex-grow">
+              <table className="min-w-full divide-y divide-gray-700">
+                <thead className="bg-gray-700 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      <button
+                        onClick={() => handleSort("data_movimento")}
+                        className="flex items-center gap-2"
+                      >
+                        Data {getSortIcon("data_movimento")}
+                      </button>
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      <button
+                        onClick={() => handleSort("descricao")}
+                        className="flex items-center gap-2"
+                      >
+                        Descrição {getSortIcon("descricao")}
+                      </button>
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Conta
+                    </th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      <button
+                        onClick={() => handleSort("valor")}
+                        className="flex items-center gap-2 float-right"
+                      >
+                        Valor {getSortIcon("valor")}
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-gray-800 divide-y divide-gray-700">
+                  {loading ? (
+                    <tr>
+                      <td colSpan="4" className="text-center py-10 text-gray-400">
+                        A carregar...
+                      </td>
+                    </tr>
+                  ) : currentItems.length > 0 ? (
+                    currentItems.map((mov) => (
+                      <tr
+                        key={mov.id}
+                        onContextMenu={(e) => handleContextMenu(e, mov)}
+                        className="hover:bg-gray-700 cursor-pointer"
+                      >
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
+                          {formatDate(mov.dataMovimento)}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle">
+                          {mov.descricao}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
+                          {mov.contaBancaria}
+                        </td>
+                        <td
+                          className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${
+                            mov.valor >= 0 ? "text-green-400" : "text-red-400"
+                          }`}
+                        >
+                          {formatBRLNumber(mov.valor)}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4" className="text-center py-10 text-gray-400">
+                        Nenhuma movimentação encontrada.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex-shrink-0 pt-4">
+              <Pagination
+                totalItems={movimentacoes.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                currentPage={currentPage}
+                onPageChange={(page) => setCurrentPage(page)}
+              />
+            </div>
+          </div>
         </div>
-      </div>
-    )}
-  </>
-);
+      </main>
+
+      {/* Menu de contexto */}
+      {contextMenu.visible && (
+        <div
+          ref={menuRef}
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="absolute origin-top-right w-56 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-20"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="py-1">
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleEditRequest();
+              }}
+              className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+            >
+              Editar Lançamento
+            </a>
+            {contextMenu.selectedItem?.operacaoId && (
+              <>
+                <div className="border-t border-gray-600 my-1"></div>
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleGeneratePdf();
+                  }}
+                  className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                >
+                  Gerar PDF do Borderô
+                </a>
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleAbrirEmailModal();
+                  }}
+                  className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                >
+                  Enviar Borderô por E-mail
+                </a>
+              </>
+            )}
+            <div className="border-t border-gray-600 my-1"></div>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteRequest();
+              }}
+              className={`block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 ${
+                ["Pagamento de Borderô", "Recebimento"].includes(
+                  contextMenu.selectedItem?.categoria
+                )
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
+              }`}
+              disabled={["Pagamento de Borderô", "Recebimento"].includes(
+                contextMenu.selectedItem?.categoria
+              )}
+            >
+              Excluir Lançamento
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
