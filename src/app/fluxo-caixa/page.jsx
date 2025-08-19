@@ -376,8 +376,7 @@ export default function FluxoDeCaixaPage() {
       clienteId={operacaoParaEmail?.clienteId}
     />
 
-    <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white overflow-y-auto lg:overflow-hidden">
-      {/* Header e Saldos */}
+<main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">      {/* Header e Saldos */}
       <div className="flex-shrink-0">
         <motion.header
           className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
