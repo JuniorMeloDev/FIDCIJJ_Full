@@ -14,12 +14,13 @@ export default function RootLayout({ children }) {
   return (
     <html lang="pt-br" className="bg-gray-900">
       <body className={`${inter.className} h-screen flex flex-col`}>
-          <SetupChecker>
-            <Navbar />
-              <div className="flex-grow pt-16 flex flex-col overflow-hidden">
-              {children}
-            </div>
-          </SetupChecker>
+        <SetupChecker>
+          <Navbar />
+          {/* wrapper principal com rolagem em telas menores */}
+          <div className="flex-grow pt-16 flex flex-col overflow-y-auto">
+            {children}
+          </div>
+        </SetupChecker>
       </body>
     </html>
   );
