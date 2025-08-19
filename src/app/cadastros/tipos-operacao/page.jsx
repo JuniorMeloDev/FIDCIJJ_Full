@@ -23,7 +23,6 @@ export default function TiposOperacaoPage() {
   const [editingOperacao, setEditingOperacao] = useState(null);
   const [notification, setNotification] = useState({ message: "", type: "" });
   const [filters, setFilters] = useState({ nome: "" });
-
   const [operacaoParaExcluir, setOperacaoParaExcluir] = useState(null);
 
   const getAuthHeader = () => {
@@ -46,7 +45,6 @@ export default function TiposOperacaoPage() {
         throw new Error("Falha ao carregar os tipos de operação.");
       const data = await response.json();
 
-      // Mapeamos os dados recebidos da API
       const formattedData = data.map((item) => ({
         id: item.id,
         nome: item.nome,
@@ -54,10 +52,9 @@ export default function TiposOperacaoPage() {
         taxaJuros: item.taxa_juros,
         valorFixo: item.valor_fixo,
         despesasBancarias: item.despesas_bancarias,
-        usarPrazoSacado: item.usar_prazo_sacado, // snake_case -> camelCase
-        usarPesoNoValorFixo: item.usar_peso_no_valor_fixo, // snake_case -> camelCase
+        usarPrazoSacado: item.usar_prazo_sacado,
+        usarPesoNoValorFixo: item.usar_peso_no_valor_fixo,
       }));
-
       setTiposOperacao(formattedData);
     } catch (err) {
       setError(err.message);
@@ -160,7 +157,7 @@ export default function TiposOperacaoPage() {
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   return (
-    <main className="min-h-screen pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
+    <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
       <Notification
         message={notification.message}
         type={notification.type}
@@ -232,10 +229,7 @@ export default function TiposOperacaoPage() {
             onClear={clearFilters}
           />
         </div>
-        <div className="w-full lg:flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col
-          overflow-x-auto
-          lg:overflow-y-auto
-          lg:max-h-[calc(100vh-260px)]">
+        <div className="w-full lg:flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col">
           <div className="flex justify-end mb-4 flex-shrink-0">
             <button
               onClick={handleOpenAddModal}

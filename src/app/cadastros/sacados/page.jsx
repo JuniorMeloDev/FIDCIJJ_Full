@@ -43,7 +43,6 @@ export default function SacadosPage() {
             if (!response.ok) throw new Error('Falha ao carregar sacados.');
 
             const data = await response.json();
-            // Mapeia os nomes das colunas (snake_case) para o que o frontend espera (camelCase)
             const formattedData = data.map(sacado => ({
                 ...sacado,
                 condicoesPagamento: sacado.condicoes_pagamento || []
@@ -87,10 +86,9 @@ export default function SacadosPage() {
             const url = isUpdating ? `/api/cadastros/sacados/${id}` : `/api/cadastros/sacados`;
             const method = isUpdating ? 'PUT' : 'POST';
 
-            // Prepara o payload para o backend (snake_case)
             const payload = {
                 ...data,
-                condicoesPagamento: data.condicoesPagamento.map(({id, ...rest}) => rest) // Remove o ID temporário do frontend
+                condicoesPagamento: data.condicoesPagamento.map(({id, ...rest}) => rest)
             };
 
             const response = await fetch(url, { 
@@ -143,7 +141,7 @@ export default function SacadosPage() {
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
     return (
-        <main className="min-h-screen pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
+        <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
 
             <EditSacadoModal
@@ -204,9 +202,9 @@ export default function SacadosPage() {
                                     {currentItems.map((sacado) => (
                                         <tr key={sacado.id} onClick={() => handleOpenEditModal(sacado)} className="hover:bg-gray-700 cursor-pointer">
                                             <td className="px-6 py-4 text-sm font-medium text-gray-100">{sacado.nome}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-400">{formatCnpjCpf(sacado.cnpj)}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-400 whitespace-nowrap">{formatCnpjCpf(sacado.cnpj)}</td>
                                             <td className="px-6 py-4 text-sm text-gray-400">{sacado.municipio ? `${sacado.municipio} - ${sacado.uf}`: ''}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-400">{formatTelefone(sacado.fone)}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-400 whitespace-nowrap">{formatTelefone(sacado.fone)}</td>
                                         </tr>
                                     ))}
                                 </tbody>

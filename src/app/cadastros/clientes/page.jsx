@@ -43,7 +43,6 @@ export default function ClientesPage() {
             if (!response.ok) throw new Error('Falha ao carregar clientes. Verifique se está logado.');
             const data = await response.json();
 
-            // Mapeia os dados da API (snake_case) para o formato do frontend (camelCase)
             const formattedData = data.map(cliente => ({
                 ...cliente,
                 ramoDeAtividade: cliente.ramo_de_atividade,
@@ -51,7 +50,7 @@ export default function ClientesPage() {
                     ...conta,
                     contaCorrente: conta.conta_corrente
                 })),
-                emails: cliente.cliente_emails.map(e => e.email) // Extrai apenas o valor do email
+                emails: cliente.cliente_emails.map(e => e.email)
             }));
 
             setClientes(formattedData);
@@ -93,7 +92,6 @@ export default function ClientesPage() {
             const url = isUpdating ? `/api/cadastros/clientes/${id}` : `/api/cadastros/clientes`;
             const method = isUpdating ? 'PUT' : 'POST';
 
-            // Prepara o payload para o backend (snake_case)
              const payload = {
                 ...data,
                 ramo_de_atividade: data.ramoDeAtividade,
@@ -102,7 +100,6 @@ export default function ClientesPage() {
                     conta_corrente: c.contaCorrente
                 }))
             };
-
 
             const response = await fetch(url, {
                 method: method,
@@ -154,7 +151,7 @@ export default function ClientesPage() {
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
     return (
-        <main className="min-h-screen pt-16 p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
+        <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
             <EditClienteModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} cliente={editingCliente} onSave={handleSaveCliente} onDelete={handleDeleteRequest} />
             <ConfirmacaoModal isOpen={!!clienteParaExcluir} onClose={() => setClienteParaExcluir(null)} onConfirm={handleConfirmarExclusao} title="Confirmar Exclusão" message={`Deseja excluir o cliente "${clienteParaExcluir?.nome}"?`} />
@@ -192,10 +189,7 @@ export default function ClientesPage() {
                   onClear={clearFilters}
                 />
               </div>
-              <div className="w-full lg:flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col
-                overflow-x-auto
-                lg:overflow-y-auto
-                lg:max-h-[calc(100vh-260px)]">
+              <div className="w-full lg:flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col">
                 <div className="flex justify-end mb-4 flex-shrink-0">
                   <button onClick={handleOpenAddModal} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition">
                     Novo Cliente
