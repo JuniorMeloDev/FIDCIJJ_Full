@@ -376,7 +376,7 @@ export default function FluxoDeCaixaPage() {
       clienteId={operacaoParaEmail?.clienteId}
     />
 
-    <main className="h-screen flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white overflow-hidden">
+    <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white overflow-y-auto lg:overflow-hidden">
       {/* Header e Saldos */}
       <div className="flex-shrink-0">
         <motion.header
@@ -431,9 +431,9 @@ export default function FluxoDeCaixaPage() {
       </div>
 
       {/* Conteúdo principal com rolagem */}
-      <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 overflow-hidden">
+      <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 overflow-y-auto lg:overflow-hidden">
         {/* Filtro lateral */}
-        <div className="w-full lg:w-72 flex-shrink-0 overflow-auto">
+        <div className="w-full lg:w-72 flex-shrink-0 overflow-y-auto">
           <FiltroLateral
             filters={filters}
             saldos={saldos}
@@ -444,7 +444,7 @@ export default function FluxoDeCaixaPage() {
 
         {/* Tabela */}
         <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0 overflow-hidden">
-          <div className="overflow-auto flex-grow">
+          <div className="overflow-y-auto flex-grow">
             <table className="min-w-full divide-y divide-gray-700">
               <thead className="bg-gray-700 sticky top-0 z-10">
                 <tr>
