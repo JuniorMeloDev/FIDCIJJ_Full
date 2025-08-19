@@ -376,160 +376,160 @@ export default function FluxoDeCaixaPage() {
         clienteId={operacaoParaEmail?.clienteId}
       />
 
-      <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
-        {/* Header */}
-        <div className="flex-shrink-0">
-          <motion.header
-            className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-          >
-            <div className="mb-4 md:mb-0">
-              <h1 className="text-3xl font-bold">Fluxo de Caixa</h1>
-              <p className="text-sm text-gray-300">
-                Visão geral das suas movimentações financeiras.
+      <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white overflow-y-auto">
+  {/* Header */}
+  <div className="flex-shrink-0">
+    <motion.header
+      className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
+      initial={{ y: -20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+    >
+      <div className="mb-4 md:mb-0">
+        <h1 className="text-3xl font-bold">Fluxo de Caixa</h1>
+        <p className="text-sm text-gray-300">
+          Visão geral das suas movimentações financeiras.
+        </p>
+      </div>
+      <button
+        onClick={() => setIsModalOpen(true)}
+        className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition w-full md:w-auto"
+      >
+        + Novo Lançamento
+      </button>
+    </motion.header>
+  </div>
+
+  {/* Conteúdo principal: saldos, filtros e tabela */}
+  <div className="flex flex-col lg:flex-row gap-6 min-h-0">
+    {/* Lateral: saldos + filtros */}
+    <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
+      {/* Saldos */}
+      <motion.div
+        className=""
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+      >
+        <h2 className="text-lg font-semibold text-gray-100 mb-2">
+          {saldosTitle}
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
+          {saldos.map((saldo, index) => (
+            <div
+              key={index}
+              className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
+            >
+              <p className="text-sm text-gray-400 truncate">
+                {saldo.contaBancaria}
+              </p>
+              <p
+                className={`text-xl font-bold ${
+                  saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
+                }`}
+              >
+                {formatBRLNumber(saldo.saldo)}
               </p>
             </div>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition w-full md:w-auto"
-            >
-              + Novo Lançamento
-            </button>
-          </motion.header>
+          ))}
         </div>
+      </motion.div>
+      {/* Filtro lateral */}
+      <FiltroLateral
+        filters={filters}
+        saldos={saldos}
+        onFilterChange={handleFilterChange}
+        onClear={clearFilters}
+      />
+    </div>
 
-        {/* Conteúdo principal: saldos, filtros e tabela */}
-        <div className="flex-grow flex flex-col min-h-0 overflow-y-auto lg:flex-row lg:overflow-hidden gap-6">
-          {/* Lateral: saldos + filtros */}
-          <div className="w-full lg:w-72 flex-shrink-0 mb-4 lg:mb-0 flex flex-col gap-4">
-            {/* Saldos */}
-            <motion.div
-              className=""
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              <h2 className="text-lg font-semibold text-gray-100 mb-2">
-                {saldosTitle}
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
-                {saldos.map((saldo, index) => (
-                  <div
-                    key={index}
-                    className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
+    {/* Tabela de lançamentos */}
+    <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
+      <div className="flex-grow">
+        <table className="min-w-full divide-y divide-gray-700 overflow-x-auto">
+          <thead className="bg-gray-700 sticky top-0 z-10">
+            <tr>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                <button
+                  onClick={() => handleSort("data_movimento")}
+                  className="flex items-center gap-2"
+                >
+                  Data {getSortIcon("data_movimento")}
+                </button>
+              </th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                <button
+                  onClick={() => handleSort("descricao")}
+                  className="flex items-center gap-2"
+                >
+                  Descrição {getSortIcon("descricao")}
+                </button>
+              </th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                Conta
+              </th>
+              <th className="px-3 py-2 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                <button
+                  onClick={() => handleSort("valor")}
+                  className="flex items-center gap-2 float-right"
+                >
+                  Valor {getSortIcon("valor")}
+                </button>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-gray-800 divide-y divide-gray-700">
+            {loading ? (
+              <tr>
+                <td colSpan="4" className="text-center py-10 text-gray-400">
+                  A carregar...
+                </td>
+              </tr>
+            ) : currentItems.length > 0 ? (
+              currentItems.map((mov) => (
+                <tr
+                  key={mov.id}
+                  onContextMenu={(e) => handleContextMenu(e, mov)}
+                  className="hover:bg-gray-700 cursor-pointer"
+                >
+                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
+                    {formatDate(mov.dataMovimento)}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle">
+                    {mov.descricao}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
+                    {mov.contaBancaria}
+                  </td>
+                  <td
+                    className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${
+                      mov.valor >= 0 ? "text-green-400" : "text-red-400"
+                    }`}
                   >
-                    <p className="text-sm text-gray-400 truncate">
-                      {saldo.contaBancaria}
-                    </p>
-                    <p
-                      className={`text-xl font-bold ${
-                        saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
-                      }`}
-                    >
-                      {formatBRLNumber(saldo.saldo)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-            {/* Filtro lateral */}
-            <FiltroLateral
-              filters={filters}
-              saldos={saldos}
-              onFilterChange={handleFilterChange}
-              onClear={clearFilters}
-            />
-          </div>
-
-          {/* Tabela de lançamentos */}
-          <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0 overflow-x-auto">
-            <div className="overflow-y-auto flex-grow">
-              <table className="min-w-full divide-y divide-gray-700">
-                <thead className="bg-gray-700 sticky top-0 z-10">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort("data_movimento")}
-                        className="flex items-center gap-2"
-                      >
-                        Data {getSortIcon("data_movimento")}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort("descricao")}
-                        className="flex items-center gap-2"
-                      >
-                        Descrição {getSortIcon("descricao")}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Conta
-                    </th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort("valor")}
-                        className="flex items-center gap-2 float-right"
-                      >
-                        Valor {getSortIcon("valor")}
-                      </button>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-gray-800 divide-y divide-gray-700">
-                  {loading ? (
-                    <tr>
-                      <td colSpan="4" className="text-center py-10 text-gray-400">
-                        A carregar...
-                      </td>
-                    </tr>
-                  ) : currentItems.length > 0 ? (
-                    currentItems.map((mov) => (
-                      <tr
-                        key={mov.id}
-                        onContextMenu={(e) => handleContextMenu(e, mov)}
-                        className="hover:bg-gray-700 cursor-pointer"
-                      >
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
-                          {formatDate(mov.dataMovimento)}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle">
-                          {mov.descricao}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
-                          {mov.contaBancaria}
-                        </td>
-                        <td
-                          className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${
-                            mov.valor >= 0 ? "text-green-400" : "text-red-400"
-                          }`}
-                        >
-                          {formatBRLNumber(mov.valor)}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="4" className="text-center py-10 text-gray-400">
-                        Nenhuma movimentação encontrada.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex-shrink-0 pt-4">
-              <Pagination
-                totalItems={movimentacoes.length}
-                itemsPerPage={ITEMS_PER_PAGE}
-                currentPage={currentPage}
-                onPageChange={(page) => setCurrentPage(page)}
-              />
-            </div>
-          </div>
-        </div>
-      </main>
+                    {formatBRLNumber(mov.valor)}
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="4" className="text-center py-10 text-gray-400">
+                  Nenhuma movimentação encontrada.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex-shrink-0 pt-4">
+        <Pagination
+          totalItems={movimentacoes.length}
+          itemsPerPage={ITEMS_PER_PAGE}
+          currentPage={currentPage}
+          onPageChange={(page) => setCurrentPage(page)}
+        />
+      </div>
+    </div>
+  </div>
+</main>
 
       {/* Menu de contexto */}
       {contextMenu.visible && (
