@@ -400,7 +400,7 @@ export default function FluxoDeCaixaPage() {
 
         {/* Saldos */}
         <motion.div
-          className="mb-6"
+          className="mb-6 relative lg:sticky lg:top-0"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
