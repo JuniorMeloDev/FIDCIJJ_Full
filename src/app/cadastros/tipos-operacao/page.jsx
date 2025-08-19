@@ -222,13 +222,18 @@ export default function TiposOperacaoPage() {
         </nav>
       </div>
 
-      <div className="flex-grow flex flex-col lg:flex-row gap-6">
-        <FiltroLateralTiposOperacao
-          filters={filters}
-          onFilterChange={handleFilterChange}
-          onClear={clearFilters}
-        />
-        <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col">
+      <div className="flex flex-col lg:flex-row gap-6 w-full">
+        <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
+          <FiltroLateralTiposOperacao
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            onClear={clearFilters}
+          />
+        </div>
+        <div className="w-full lg:flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col
+          overflow-x-auto
+          lg:overflow-y-auto
+          lg:max-h-[calc(100vh-260px)]">
           <div className="flex justify-end mb-4">
             <button
               onClick={handleOpenAddModal}
