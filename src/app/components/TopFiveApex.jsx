@@ -11,9 +11,11 @@ export default function TopFiveApex({ data = [] }) {
         );
     }
 
+    // Mantém o valor mas limita o nome
     const chartData = data.map(item => ({
-        name: item.nome.length > 30 ? `${item.nome.substring(0, 28)}...` : item.nome,
+        name: item.nome.split(" ")[0], // pega só a primeira palavra
         value: item.valorTotal,
+        fullName: item.nome // guardamos o original para tooltip
     }));
 
     const abbreviateValue = val => {
@@ -22,19 +24,19 @@ export default function TopFiveApex({ data = [] }) {
         return `R$${val}`;
     };
 
-    const CustomTooltip = ({ active, payload, label }) => {
+    const CustomTooltip = ({ active, payload }) => {
         if (active && payload && payload.length) {
-            const originalName = data.find(d => d.nome.startsWith(label.substring(0, 28)))?.nome || label;
+            const fullName = payload[0].payload.fullName;
             return (
                 <div className="bg-gray-600 p-2 border border-gray-500 rounded-md shadow-lg">
-                    <p className="text-gray-200">{`${originalName} : ${formatBRLNumber(payload[0].value)}`}</p>
+                    <p className="text-gray-200">{`${fullName} : ${formatBRLNumber(payload[0].value)}`}</p>
                 </div>
             );
         }
         return null;
     };
 
-    const isManyItems = data.length > 10;
+    const isManyItems = data.length >= 10;
 
     return (
         <ResponsiveContainer width="100%" height={isManyItems ? 400 : 308}>
@@ -59,7 +61,7 @@ export default function TopFiveApex({ data = [] }) {
                             dataKey="name" 
                             stroke="#9ca3af" 
                             fontSize={12} 
-                            width={150} 
+                            width={120} 
                             interval={0}
                         />
                     </>
