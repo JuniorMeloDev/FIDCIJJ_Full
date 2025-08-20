@@ -52,8 +52,9 @@ export async function GET(request) {
       .eq('status_recebimento', 'Pendente')
       .lte('data_vencimento', format(dataLimite, 'yyyy-MM-dd'));
     
-    if (dataInicio) vencimentosQuery = vencimentosQuery.gte('operacao.data_operacao', dataInicio);
-    if (dataFim) vencimentosQuery = vencimentosQuery.lte('operacao.data_operacao', dataFim);
+    // MODIFICAÇÃO: Os filtros de data (dataInicio, dataFim) foram removidos desta consulta específica.
+    // Eles estavam filtrando pela data da operação, o que é incorreto para este card.
+    // Os filtros de cliente, sacado e tipo de operação foram mantidos, pois são relevantes.
     if (tipoOperacaoId) vencimentosQuery = vencimentosQuery.eq('operacao.tipo_operacao_id', tipoOperacaoId);
     if (clienteId) vencimentosQuery = vencimentosQuery.eq('operacao.cliente_id', clienteId);
     if (sacadoNome) vencimentosQuery = vencimentosQuery.ilike('cliente_sacado', `%${sacadoNome}%`);
