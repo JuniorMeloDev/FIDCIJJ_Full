@@ -35,13 +35,18 @@ export default function ResumoPage() {
   const [topFiveChartType, setTopFiveChartType] = useState("cedentes");
   const [topNLimit, setTopNLimit] = useState(5);
   const [today, setToday] = useState("");
-  
+
   const [notification, setNotification] = useState({ message: "", type: "" });
   const [isLiquidarModalOpen, setIsLiquidarModalOpen] = useState(false);
   const [duplicataParaLiquidar, setDuplicataParaLiquidar] = useState(null);
-  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, selectedItem: null });
+  const [contextMenu, setContextMenu] = useState({
+    visible: false,
+    x: 0,
+    y: 0,
+    selectedItem: null,
+  });
   const menuRef = useRef(null);
-  
+
   useEffect(() => {
     setToday(new Date().toISOString().split("T")[0]);
   }, []);
@@ -56,7 +61,7 @@ export default function ResumoPage() {
     setNotification({ message, type });
     setTimeout(() => setNotification({ message: "", type: "" }), 5000);
   };
-  
+
   const fetchApiData = async (url) => {
     try {
       const res = await fetch(url, { headers: getAuthHeader() });
@@ -68,33 +73,32 @@ export default function ResumoPage() {
   };
 
   const fetchDashboardData = async () => {
-      if (!metrics) setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        Object.entries(debouncedFilters).forEach(
-          ([k, v]) => v && params.append(k, v)
-        );
-        params.append("diasVencimento", diasVencimento);
-        params.append("topNLimit", topNLimit);
+    if (!metrics) setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      Object.entries(debouncedFilters).forEach(
+        ([k, v]) => v && params.append(k, v)
+      );
+      params.append("diasVencimento", diasVencimento);
+      params.append("topNLimit", topNLimit);
 
-        const headers = getAuthHeader();
-        const [saldosRes, metricsRes] = await Promise.all([
-          fetch(`/api/dashboard/saldos?${params}`, { headers }),
-          fetch(`/api/dashboard/metrics?${params}`, { headers }),
-        ]);
-        if (!saldosRes.ok || !metricsRes.ok) {
-          throw new Error("Falha ao buscar dados do dashboard.");
-        }
-        setSaldos(await saldosRes.json());
-        setMetrics(await metricsRes.json());
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      const headers = getAuthHeader();
+      const [saldosRes, metricsRes] = await Promise.all([
+        fetch(`/api/dashboard/saldos?${params}`, { headers }),
+        fetch(`/api/dashboard/metrics?${params}`, { headers }),
+      ]);
+      if (!saldosRes.ok || !metricsRes.ok) {
+        throw new Error("Falha ao buscar dados do dashboard.");
       }
+      setSaldos(await saldosRes.json());
+      setMetrics(await metricsRes.json());
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
-
 
   useEffect(() => {
     (async () => {
@@ -119,7 +123,8 @@ export default function ResumoPage() {
   }, [debouncedFilters, diasVencimento, topNLimit]);
 
   useEffect(() => {
-    const handleClick = () => setContextMenu({ ...contextMenu, visible: false });
+    const handleClick = () =>
+      setContextMenu({ ...contextMenu, visible: false });
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, [contextMenu]);
@@ -159,7 +164,12 @@ export default function ResumoPage() {
 
   const handleContextMenu = (event, item) => {
     event.preventDefault();
-    setContextMenu({ visible: true, x: event.pageX, y: event.pageY, selectedItem: item });
+    setContextMenu({
+      visible: true,
+      x: event.pageX,
+      y: event.pageY,
+      selectedItem: item,
+    });
   };
 
   const handleAbrirModalLiquidacao = () => {
@@ -169,12 +179,22 @@ export default function ResumoPage() {
     }
   };
 
-  const handleConfirmarLiquidacao = async (duplicataIds, dataLiquidacao, jurosMora, contaBancariaId) => {
+  const handleConfirmarLiquidacao = async (
+    duplicataIds,
+    dataLiquidacao,
+    jurosMora,
+    contaBancariaId
+  ) => {
     try {
-      const response = await fetch('/api/duplicatas/liquidar-em-massa', {
+      const response = await fetch("/api/duplicatas/liquidar-em-massa", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify({ ids: duplicataIds, dataLiquidacao, jurosMora, contaBancariaId }),
+        body: JSON.stringify({
+          ids: duplicataIds,
+          dataLiquidacao,
+          jurosMora,
+          contaBancariaId,
+        }),
       });
       if (!response.ok) throw new Error("Falha ao liquidar a duplicata.");
       showNotification(`Duplicata liquidada com sucesso!`, "success");
@@ -214,10 +234,14 @@ export default function ResumoPage() {
         isOpen={isRelatorioModalOpen}
         onClose={() => setIsRelatorioModalOpen(false)}
         tiposOperacao={tiposOperacao}
-        fetchClientes={(q) => fetchApiData(`/api/cadastros/clientes/search?nome=${q}`)}
-        fetchSacados={(q) => fetchApiData(`/api/cadastros/sacados/search?nome=${q}`)}
+        fetchClientes={(q) =>
+          fetchApiData(`/api/cadastros/clientes/search?nome=${q}`)
+        }
+        fetchSacados={(q) =>
+          fetchApiData(`/api/cadastros/sacados/search?nome=${q}`)
+        }
       />
-      
+
       {/* ... (resto do JSX da página) ... */}
       <motion.div
         className="max-w-7xl mx-auto space-y-8"
@@ -265,11 +289,12 @@ export default function ResumoPage() {
 
         {metrics && (
           <div className="transition-opacity duration-300 opacity-100">
-            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Contas Bancárias */}
+            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {saldos.map((conta, index) => (
                 <motion.div
                   key={conta.contaBancaria}
-                  className="p-4 rounded-lg shadow-lg transition border-l-4 bg-gray-700"
+                  className="p-4 rounded-lg shadow-lg transition bg-gray-700 border-l-4 flex flex-col justify-between"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 * index }}
@@ -277,16 +302,66 @@ export default function ResumoPage() {
                     borderColor: conta.saldo < 0 ? "#ef4444" : "#f97316",
                   }}
                 >
-                  <h3 className="text-sm font-medium text-gray-300 truncate">
-                    {conta.contaBancaria}
-                  </h3>
-                  <p
-                    className={`mt-2 text-2xl font-semibold ${
-                      conta.saldo < 0 ? "text-red-400" : "text-gray-100"
-                    }`}
-                  >
-                    {formatBRLNumber(conta.saldo)}
-                  </p>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-300 truncate">
+                      {conta.contaBancaria}
+                    </h3>
+                    <p
+                      className={`mt-2 text-2xl font-semibold ${
+                        conta.saldo < 0 ? "text-red-400" : "text-gray-100"
+                      }`}
+                    >
+                      {formatBRLNumber(conta.saldo)}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </section>
+
+            {/* Cards de Métricas */}
+            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
+              {[
+                {
+                  label: "Juros Total",
+                  value: metrics.totalJuros || 0,
+                  icon: <FaDollarSign className="w-6 h-6 text-green-400" />,
+                  border: "border-l-4 border-green-400",
+                },
+                {
+                  label: "Despesas Totais",
+                  value: metrics.totalDespesas || 0,
+                  icon: <FaDollarSign className="w-6 h-6 text-red-400" />,
+                  border: "border-l-4 border-red-400",
+                },
+                {
+                  label: "Lucro Líquido",
+                  value: metrics.lucroLiquido || 0,
+                  icon: <FaClock className="w-6 h-6 text-yellow-300" />,
+                  border: "border-l-4 border-yellow-300",
+                },
+                {
+                  label: "Total Operado",
+                  value: metrics.valorOperadoNoMes || 0,
+                  icon: <FaChartLine className="w-6 h-6 text-gray-400" />,
+                  border: "border-l-4 border-gray-400",
+                },
+              ].map((item, idx) => (
+                <motion.div
+                  key={item.label}
+                  className={`p-4 rounded-lg shadow-lg transition bg-gray-700 flex flex-col justify-between ${item.border}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 + idx * 0.1 }}
+                >
+                  <div className="flex items-center space-x-3">
+                    {item.icon}
+                    <div>
+                      <p className="text-sm text-gray-300">{item.label}</p>
+                      <p className="text-lg font-semibold text-gray-100">
+                        {formatBRLNumber(item.value)}
+                      </p>
+                    </div>
+                  </div>
                 </motion.div>
               ))}
             </section>
@@ -484,7 +559,6 @@ export default function ResumoPage() {
         )}
       </motion.div>
 
-      {/* --- NOVO MENU DE CONTEXTO --- */}
       {contextMenu.visible && (
         <div
           ref={menuRef}
