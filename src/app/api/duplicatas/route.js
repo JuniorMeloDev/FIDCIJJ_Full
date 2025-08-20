@@ -10,13 +10,13 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
+        // ALTERAÇÃO 1: Adicionado '*' para buscar todos os campos da operação
         let { data: duplicatas, error } = await supabase
             .from('duplicatas')
             .select(`
                 *,
                 operacao:operacoes (
-                    cliente_id,
-                    tipo_operacao_id,
+                    *,
                     cliente:clientes ( nome ),
                     tipo_operacao:tipos_operacao ( nome )
                 ),
@@ -25,7 +25,7 @@ export async function GET(request) {
 
         if (error) throw error;
 
-        // Filtros em JavaScript
+        // Filtros em JavaScript (sem alteração aqui)
         const sacadoFilter = searchParams.get('sacado');
         const statusFilter = searchParams.get('status');
         const dataOpInicio = searchParams.get('dataOpInicio');
@@ -50,19 +50,19 @@ export async function GET(request) {
             return true;
         });
 
-        // FORMATAÇÃO DOS DADOS PARA O FRONTEND
+        // ALTERAÇÃO 2: Adicionado o objeto 'operacao' completo ao retorno
         let formattedData = filteredData.map(d => ({
             id: d.id, operacaoId: d.operacao_id, clienteId: d.operacao?.cliente_id,
             dataOperacao: d.data_operacao, nfCte: d.nf_cte, empresaCedente: d.operacao?.cliente?.nome,
             valorBruto: d.valor_bruto, valorJuros: d.valor_juros, clienteSacado: d.cliente_sacado,
             dataVencimento: d.data_vencimento, tipoOperacaoNome: d.operacao?.tipo_operacao?.nome,
             statusRecebimento: d.status_recebimento, 
-            // CORREÇÃO APLICADA AQUI: Usa a data da movimentação se existir, senão, a data da duplicata.
             dataLiquidacao: d.movimentacao?.data_movimento || d.data_liquidacao,
-            contaLiquidacao: d.movimentacao?.conta_bancaria
+            contaLiquidacao: d.movimentacao?.conta_bancaria,
+            operacao: d.operacao // <-- LINHA ADICIONADA AQUI
         }));
 
-        // ORDENAÇÃO
+        // ORDENAÇÃO (sem alteração aqui)
         const sortKey = searchParams.get('sort');
         const sortDirection = searchParams.get('direction');
 

@@ -24,7 +24,6 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
         }, 0);
     }, [duplicata, isMultiple]);
 
-    // NOVO: Calcula o valor total a ser exibido, incluindo juros de mora
     const valorTotalComJuros = useMemo(() => {
         return totalValue + parseBRL(jurosMora);
     }, [totalValue, jurosMora]);
@@ -74,7 +73,6 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
             <div className="relative bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg text-white">
                 <h2 className="text-2xl font-bold mb-4">Confirmar Liquidação</h2>
                 <p className="mb-4 text-gray-300">
-                    {/* ALTERADO: Exibe o valor total com juros de mora */}
                     {isMultiple
                         ? <>Você está prestes a dar baixa em <span className="font-semibold text-orange-400">{duplicata.length} duplicatas</span>, somando o valor de <span className="font-semibold text-orange-400">{formatBRLNumber(valorTotalComJuros)}</span>.</>
                         : <>Você está a dar baixa na duplicata <span className="font-semibold text-orange-400">{firstNfCte}</span> no valor de <span className="font-semibold text-orange-400">{formatBRLNumber(valorTotalComJuros)}</span>.</>
