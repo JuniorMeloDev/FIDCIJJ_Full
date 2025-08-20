@@ -292,6 +292,7 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
+  // --- ALTERAÇÃO AQUI ---
   const handleGeneratePdf = async () => {
     if (!contextMenu.selectedItem) return;
     const operacaoId = contextMenu.selectedItem.operacaoId;
@@ -307,11 +308,22 @@ export default function FluxoDeCaixaPage() {
         const errorData = await response.json();
         throw new Error(errorData.message || "Não foi possível gerar o PDF.");
       }
+  
+      // Lógica para extrair o nome do arquivo do header da resposta
+      const contentDisposition = response.headers.get("content-disposition");
+      let filename = `bordero-${operacaoId}.pdf`; // Nome padrão
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+        if (filenameMatch && filenameMatch.length > 1) {
+          filename = filenameMatch[1];
+        }
+      }
+  
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `bordero-${operacaoId}.pdf`;
+      a.download = filename; // Usa o nome do arquivo extraído do header
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -320,6 +332,7 @@ export default function FluxoDeCaixaPage() {
       alert(err.message);
     }
   };
+  // --- FIM DA ALTERAÇÃO ---
 
   const handleContextMenu = (event, item) => {
     event.preventDefault();
