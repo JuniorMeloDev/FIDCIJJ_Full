@@ -2,15 +2,20 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { FaPlus, FaTrash } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaPaperclip } from 'react-icons/fa'; // Importar ícone
 import { formatDate } from '@/app/utils/formatters';
 import Notification from '@/app/components/Notification';
 import AnotacaoModal from '@/app/components/AnotacaoModal';
 import ConfirmacaoModal from '@/app/components/ConfirmacaoModal';
 import AnotacaoActionsBar from '@/app/components/AnotacaoActionsBar';
 
+// Componente simples para renderizar o conteúdo (para futura implementação de imagens inline)
+const RenderContent = ({ content }) => {
+    return <p className="mt-3 text-gray-300 whitespace-pre-wrap">{content}</p>;
+};
+
 export default function AgendaPage() {
-    // ... (toda a sua lógica de states e funções permanece a mesma)
+    // ... (os states existentes permanecem os mesmos) ...
     const [anotacoes, setAnotacoes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -29,6 +34,7 @@ export default function AgendaPage() {
         dataFim: '',
         assunto: '',
     });
+
 
     const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
@@ -54,7 +60,8 @@ export default function AgendaPage() {
             setLoading(false);
         }
     };
-
+    
+    // ... (useEffect e outras funções permanecem iguais) ...
     useEffect(() => {
         const handler = setTimeout(() => {
             fetchAnotacoes();
@@ -68,16 +75,18 @@ export default function AgendaPage() {
         return () => document.removeEventListener('click', handleClickOutside);
     }, [contextMenu]);
 
-    const handleSave = async (anotacaoData) => {
-        const isUpdating = !!anotacaoData.id;
-        const url = isUpdating ? `/api/agenda/${anotacaoData.id}` : '/api/agenda';
+
+    const handleSave = async (formDataPayload) => {
+        // Agora recebe FormData
+        const isUpdating = !!editingAnotacao?.id;
+        const url = isUpdating ? `/api/agenda/${editingAnotacao.id}` : '/api/agenda';
         const method = isUpdating ? 'PUT' : 'POST';
 
         try {
             const response = await fetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-                body: JSON.stringify(anotacaoData),
+                headers: { ...getAuthHeader() }, // Sem 'Content-Type', o browser define automaticamente
+                body: formDataPayload,
             });
             if (!response.ok) throw new Error(`Falha ao ${isUpdating ? 'atualizar' : 'criar'} anotação.`);
             showNotification(`Anotação ${isUpdating ? 'atualizada' : 'criada'} com sucesso!`, 'success');
@@ -88,6 +97,7 @@ export default function AgendaPage() {
         }
     };
     
+    // ... (restante do código)
     const handleFilterChange = (e) => {
         setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
@@ -148,7 +158,6 @@ export default function AgendaPage() {
     };
 
     return (
-        // MUDANÇA: 'p-6' removido daqui e adicionado nos filhos
         <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
             <AnotacaoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} anotacao={editingAnotacao} onDelete={(id) => handleDeleteRequest([id])} />
@@ -160,7 +169,6 @@ export default function AgendaPage() {
                 message={`Tem certeza que deseja excluir ${itemParaExcluir?.length} anotação(ões)?`}
             />
 
-            {/* MUDANÇA: Adicionado 'px-6 pt-6' */}
             <div className="px-6 pt-6 flex-shrink-0">
                 <motion.header 
                     className="mb-6 border-b-2 border-orange-500 pb-4 flex justify-between items-center"
@@ -172,9 +180,8 @@ export default function AgendaPage() {
                         <FaPlus /> Nova Anotação
                     </button>
                 </motion.header>
-
-                {/* Filtros */}
-                <div className="bg-gray-800 p-4 rounded-lg shadow-md mb-6 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                
+                 <div className="bg-gray-800 p-4 rounded-lg shadow-md mb-6 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div>
                         <label className="text-sm">De:</label>
                         <input type="date" name="dataInicio" value={filters.dataInicio} onChange={handleFilterChange} className="w-full bg-gray-700 p-2 rounded" />
@@ -191,7 +198,6 @@ export default function AgendaPage() {
                 </div>
             </div>
             
-            {/* MUDANÇA: Adicionado 'px-6 pb-6' */}
             <div className="flex-grow overflow-y-auto px-6 pb-6">
                 {loading ? <p className="text-center pt-10">Carregando...</p> : error ? <p className="text-red-500 text-center pt-10">{error}</p> : (
                     <>
@@ -200,7 +206,7 @@ export default function AgendaPage() {
                                 {anotacoes.map(anotacao => (
                                     <motion.div 
                                         key={anotacao.id}
-                                        className={`bg-gray-800 p-5 rounded-lg shadow-lg border-l-4 ${selectedItems.has(anotacao.id) ? 'border-blue-500 ring-2 ring-blue-500' : 'border-orange-500'} cursor-pointer hover:shadow-orange-400/20 relative`}
+                                        className={`bg-gray-800 p-5 rounded-lg shadow-lg border-l-4 ${selectedItems.has(anotacao.id) ? 'border-blue-500 ring-2 ring-blue-500' : 'border-orange-500'} cursor-pointer hover:shadow-orange-400/20 relative flex flex-col`}
                                         onClick={() => {
                                             if (isSelectionMode) {
                                                 handleToggleSelection(anotacao.id);
@@ -216,11 +222,23 @@ export default function AgendaPage() {
                                         {isSelectionMode && (
                                             <input type="checkbox" checked={selectedItems.has(anotacao.id)} readOnly className="absolute top-4 right-4 h-5 w-5 rounded text-orange-500 bg-gray-700 border-gray-600 focus:ring-orange-500 pointer-events-none"/>
                                         )}
-                                        <div className="flex justify-between items-start">
-                                            <h3 className="text-xl font-bold text-orange-400">{anotacao.assunto}</h3>
-                                            <span className="text-sm text-gray-400">{formatDate(anotacao.data)}</span>
+                                        <div className="flex-grow">
+                                            <div className="flex justify-between items-start">
+                                                <h3 className="text-xl font-bold text-orange-400">{anotacao.assunto}</h3>
+                                                <span className="text-sm text-gray-400">{formatDate(anotacao.data)}</span>
+                                            </div>
+                                            <RenderContent content={anotacao.conteudo} />
                                         </div>
-                                        <p className="mt-3 text-gray-300 whitespace-pre-wrap">{anotacao.conteudo}</p>
+                                        {anotacao.anexo_url && (
+                                            <div className="mt-4 flex-shrink-0 border-t border-gray-700 pt-3">
+                                                <a href={anotacao.anexo_url} target="_blank" rel="noopener noreferrer" 
+                                                   onClick={(e) => e.stopPropagation()}
+                                                   className="text-sm text-orange-400 hover:underline flex items-center gap-2">
+                                                    <FaPaperclip />
+                                                    Ver Anexo
+                                                </a>
+                                            </div>
+                                        )}
                                     </motion.div>
                                 ))}
                             </div>
