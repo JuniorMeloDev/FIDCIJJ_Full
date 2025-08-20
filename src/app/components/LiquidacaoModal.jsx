@@ -18,16 +18,11 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
 
         return items.reduce((sum, d) => {
             const op = d.operacao;
-            // Se não encontrar dados da operação, retorna o valor bruto como fallback
             if (!op) return sum + d.valorBruto;
 
-            // Verifica se os juros foram descontados na operação original
-            const jurosForamDescontados = Math.abs(
-                (op.valor_total_bruto - op.valor_total_juros - (op.valor_total_descontos || 0)) - op.valor_liquido
-            ) < 0.01;
-
-            // Se os juros não foram descontados, soma-os ao valor bruto para a liquidação
-            return sum + (jurosForamDescontados ? d.valorBruto : d.valorBruto + d.valorJuros);
+            // Nova lógica: se o juro da operação for zero, mas o da duplicata não, soma para a liquidação.
+            const jurosNaoDescontados = op.valor_total_juros < 0.01 && d.valorJuros > 0;
+            return sum + (jurosNaoDescontados ? d.valorBruto + d.valorJuros : d.valorBruto);
         }, 0);
     }, [duplicata, isMultiple]);
 
@@ -51,17 +46,14 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
         }
         setError('');
         
-        // Prepara o payload para a API, verificando se os juros devem ser somados
+        // A API já espera os juros da mora e os juros da operação separados.
+        // A lógica de somar já existe na API, precisamos enviar o juro da operação quando aplicável.
         const liquidacoes = duplicata.map(dup => {
             const op = dup.operacao;
-            // Lógica para verificar se os juros foram descontados na operação original
-            const jurosForamDescontados = Math.abs(
-                (op.valor_total_bruto - op.valor_total_juros - (op.valor_total_descontos || 0)) - op.valor_liquido
-            ) < 0.01;
-
+            const jurosNaoDescontados = op && op.valor_total_juros < 0.01 && dup.valorJuros > 0;
             return {
                 id: dup.id,
-                juros_a_somar: jurosForamDescontados ? 0 : dup.valorJuros
+                juros_a_somar: jurosNaoDescontados ? dup.valorJuros : 0
             };
         });
 

@@ -180,7 +180,7 @@ export default function ResumoPage() {
   };
 
   const handleConfirmarLiquidacao = async (
-    duplicataIds,
+    liquidacoes,
     dataLiquidacao,
     jurosMora,
     contaBancariaId
@@ -190,7 +190,7 @@ export default function ResumoPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({
-          ids: duplicataIds,
+          liquidacoes, // Enviando o payload modificado
           dataLiquidacao,
           jurosMora,
           contaBancariaId,
@@ -423,11 +423,17 @@ export default function ResumoPage() {
                       )
                       .map((dup) => {
                         const isVencido = dup.dataVencimento < today;
+                        const op = dup.operacao;
+                        
+                        // Nova lógica: se o juro da operação for zero, mas o da duplicata não, soma para exibição.
+                        const jurosNaoDescontados = op && op.valor_total_juros < 0.01 && dup.valorJuros > 0;
+                        const valorExibido = jurosNaoDescontados ? dup.valorBruto + dup.valorJuros : dup.valorBruto;
+                        
                         return (
                           <div
                             key={dup.id}
-                            onContextMenu={(e) => handleContextMenu(e, dup)} // <-- ADICIONADO AQUI
-                            className="flex justify-between items-center text-sm border-b border-gray-600 pb-2 last:border-none cursor-pointer hover:bg-gray-600 rounded-md p-2" // <-- ADICIONADO AQUI
+                            onContextMenu={(e) => handleContextMenu(e, dup)}
+                            className="flex justify-between items-center text-sm border-b border-gray-600 pb-2 last:border-none cursor-pointer hover:bg-gray-600 rounded-md p-2"
                           >
                             <div>
                               <p className="font-medium text-gray-200">
@@ -446,7 +452,7 @@ export default function ResumoPage() {
                                 {formatDate(dup.dataVencimento)}
                               </p>
                               <p className="text-gray-300">
-                                {formatBRLNumber(dup.valorBruto)}
+                                {formatBRLNumber(valorExibido)}
                               </p>
                             </div>
                           </div>
