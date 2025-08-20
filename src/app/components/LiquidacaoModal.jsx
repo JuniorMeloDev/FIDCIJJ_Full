@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { formatBRLInput, parseBRL, formatBRLNumber } from '@/app/utils/formatters';
 
 export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata, contasMaster }) {
@@ -10,9 +10,27 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
     const [error, setError] = useState('');
 
     const isMultiple = Array.isArray(duplicata);
-    const totalValue = isMultiple
-        ? duplicata.reduce((sum, d) => sum + d.valorBruto, 0)
-        : duplicata?.valorBruto;
+
+    // Lógica corrigida para calcular o valor total a ser exibido e creditado
+    const totalValue = useMemo(() => {
+        if (!duplicata) return 0;
+        const items = isMultiple ? duplicata : [duplicata];
+
+        return items.reduce((sum, d) => {
+            const op = d.operacao;
+            // Se não encontrar dados da operação, retorna o valor bruto como fallback
+            if (!op) return sum + d.valorBruto;
+
+            // Verifica se os juros foram descontados na operação original
+            const jurosForamDescontados = Math.abs(
+                (op.valor_total_bruto - op.valor_total_juros - (op.valor_total_descontos || 0)) - op.valor_liquido
+            ) < 0.01;
+
+            // Se os juros não foram descontados, soma-os ao valor bruto para a liquidação
+            return sum + (jurosForamDescontados ? d.valorBruto : d.valorBruto + d.valorJuros);
+        }, 0);
+    }, [duplicata, isMultiple]);
+
     const firstNfCte = isMultiple ? duplicata[0]?.nfCte : duplicata?.nfCte;
 
     useEffect(() => {
@@ -38,7 +56,7 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
             const op = dup.operacao;
             // Lógica para verificar se os juros foram descontados na operação original
             const jurosForamDescontados = Math.abs(
-                (op.valor_total_bruto - op.valor_total_juros - op.valor_total_descontos) - op.valor_liquido
+                (op.valor_total_bruto - op.valor_total_juros - (op.valor_total_descontos || 0)) - op.valor_liquido
             ) < 0.01;
 
             return {
