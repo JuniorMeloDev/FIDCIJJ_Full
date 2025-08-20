@@ -8,18 +8,18 @@ export async function POST(request) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { ids, dataLiquidacao, jurosMora, contaBancariaId } = await request.json();
+        // O corpo da requisição agora espera um array de objetos `liquidacoes`
+        const { liquidacoes, dataLiquidacao, jurosMora, contaBancariaId } = await request.json();
 
-        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        if (!liquidacoes || !Array.isArray(liquidacoes) || liquidacoes.length === 0) {
             return NextResponse.json({ message: 'Nenhuma duplicata selecionada.' }, { status: 400 });
         }
 
-        // Para cada ID, chama a função do Supabase para liquidar
-        const promises = ids.map(id => 
+        const promises = liquidacoes.map(item => 
             supabase.rpc('liquidar_duplicata', {
-                p_duplicata_id: id,
+                p_duplicata_id: item.id,
                 p_data_liquidacao: dataLiquidacao,
-                p_juros_mora: jurosMora || 0,
+                p_juros_mora: (jurosMora || 0) + (item.juros_a_somar || 0), // Soma juros da mora + juros da operação
                 p_conta_bancaria_id: contaBancariaId
             })
         );

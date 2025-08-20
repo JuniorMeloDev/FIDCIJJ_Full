@@ -32,15 +32,29 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
             return;
         }
         setError('');
-        const ids = isMultiple ? duplicata.map(d => d.id) : [duplicata.id];
-        onConfirm(ids, dataLiquidacao, parseBRL(jurosMora), contaBancariaId);
+        
+        // Prepara o payload para a API, verificando se os juros devem ser somados
+        const liquidacoes = duplicata.map(dup => {
+            const op = dup.operacao;
+            // Lógica para verificar se os juros foram descontados na operação original
+            const jurosForamDescontados = Math.abs(
+                (op.valor_total_bruto - op.valor_total_juros - op.valor_total_descontos) - op.valor_liquido
+            ) < 0.01;
+
+            return {
+                id: dup.id,
+                juros_a_somar: jurosForamDescontados ? 0 : dup.valorJuros
+            };
+        });
+
+        onConfirm(liquidacoes, dataLiquidacao, parseBRL(jurosMora), contaBancariaId);
         onClose();
     };
 
     const handleApenasBaixa = () => {
         setError('');
-        const ids = isMultiple ? duplicata.map(d => d.id) : [duplicata.id];
-        onConfirm(ids, null, null, null);
+        const liquidacoes = duplicata.map(d => ({ id: d.id, juros_a_somar: 0 }));
+        onConfirm(liquidacoes, null, null, null);
         onClose();
     };
 
