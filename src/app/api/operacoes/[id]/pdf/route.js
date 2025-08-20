@@ -44,7 +44,7 @@ export async function GET(request, { params }) {
 
         const operacao = { ...operacaoData, cliente: clienteData, tipo_operacao: tipoOpData, duplicatas: duplicatasData || [], descontos: descontosData || [] };
 
-        // --- LÓGICA PARA O NOME DINÂMICO DO FICHEIRO ---
+        // --- ALTERAÇÃO AQUI: LÓGICA PARA O NOME DINÂMICO DO FICHEIRO ---
         const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
         const rawFilename = `Borderô ${tipoDocumento} ${numeros}.pdf`;
@@ -52,7 +52,6 @@ export async function GET(request, { params }) {
 
         const doc = new jsPDF();
 
-        // ... (o resto da lógica de geração do PDF continua igual)
         const logoBase64 = getLogoBase64();
         if (logoBase64) {
             const logoWidth = 40;

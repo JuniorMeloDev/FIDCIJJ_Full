@@ -11,7 +11,6 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
 
         // 1. FAZ UMA CONSULTA MAIS SIMPLES E ABRANGENTE
-        // Busca as duplicatas e os seus dados relacionados
         let { data: duplicatas, error } = await supabase
             .from('duplicatas')
             .select(`
@@ -22,11 +21,13 @@ export async function GET(request) {
                     cliente:clientes ( nome ),
                     tipo_operacao:tipos_operacao ( nome )
                 )
-            `);
+            `)
+            // --- ALTERAÇÃO AQUI: Adicionada ordenação pela data da operação ---
+            .order('data_operacao', { ascending: true });
 
         if (error) throw error;
 
-        // 2. APLICA OS FILTROS EM JAVASCRIPT (MAIS SEGURO)
+        // 2. APLICA OS FILTROS EM JAVASCRIPT
         const sacadoFilter = searchParams.get('sacado');
         const statusFilter = searchParams.get('status');
         const dataInicio = searchParams.get('dataInicio');
@@ -35,7 +36,7 @@ export async function GET(request) {
         const tipoOperacaoIdFilter = searchParams.get('tipoOperacaoId');
 
         const filteredData = duplicatas.filter(dup => {
-            if (!dup.operacao) return false; // Garante que a duplicata tem uma operação associada
+            if (!dup.operacao) return false;
             if (sacadoFilter && !dup.cliente_sacado.toLowerCase().includes(sacadoFilter.toLowerCase())) return false;
             if (statusFilter && statusFilter !== 'Todos' && dup.status_recebimento !== statusFilter) return false;
             if (dataInicio && dup.data_operacao < dataInicio) return false;
