@@ -291,84 +291,44 @@ export default function ResumoPage() {
           <div className="transition-opacity duration-300 opacity-100">
             {/* Contas Bancárias */}
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {saldos.map((conta, index) => (
-                <motion.div
-                  key={conta.contaBancaria}
-                  className="p-4 rounded-lg shadow-lg transition bg-gray-700 border-l-4 flex flex-col justify-between"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 * index }}
-                  style={{
-                    borderColor: conta.saldo < 0 ? "#ef4444" : "#f97316",
-                  }}
-                >
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-300 truncate">
-                      {conta.contaBancaria}
-                    </h3>
-                    <p
-                      className={`mt-2 text-2xl font-semibold ${
-                        conta.saldo < 0 ? "text-red-400" : "text-gray-100"
-                      }`}
-                    >
-                      {formatBRLNumber(conta.saldo)}
-                    </p>
-                  </div>
-                </motion.div>
-              ))}
-            </section>
-
-            {/* Cards de Métricas */}
-            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-              {[
-                {
-                  label: "Juros Total",
-                  value: metrics.totalJuros || 0,
-                  icon: <FaDollarSign className="w-6 h-6 text-green-400" />,
-                  border: "border-l-4 border-green-400",
-                },
-                {
-                  label: "Despesas Totais",
-                  value: metrics.totalDespesas || 0,
-                  icon: <FaDollarSign className="w-6 h-6 text-red-400" />,
-                  border: "border-l-4 border-red-400",
-                },
-                {
-                  label: "Lucro Líquido",
-                  value: metrics.lucroLiquido || 0,
-                  icon: <FaClock className="w-6 h-6 text-yellow-300" />,
-                  border: "border-l-4 border-yellow-300",
-                },
-                {
-                  label: "Total Operado",
-                  value: metrics.valorOperadoNoMes || 0,
-                  icon: <FaChartLine className="w-6 h-6 text-gray-400" />,
-                  border: "border-l-4 border-gray-400",
-                },
-              ].map((item, idx) => (
-                <motion.div
-                  key={item.label}
-                  className={`p-4 rounded-lg shadow-lg transition bg-gray-700 flex flex-col justify-between ${item.border}`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 + idx * 0.1 }}
-                >
-                  <div className="flex items-center space-x-3">
-                    {item.icon}
+              {saldos.map((conta, index) => {
+                const cores = [
+                  "bg-blue-700 border-blue-400",
+                  "bg-green-700 border-green-400",
+                  "bg-purple-700 border-purple-400",
+                  "bg-pink-700 border-pink-400",
+                  "bg-indigo-700 border-indigo-400",
+                  "bg-teal-700 border-teal-400",
+                ];
+                const cor = cores[index % cores.length];
+                return (
+                  <motion.div
+                    key={conta.contaBancaria}
+                    className={`p-4 rounded-lg shadow-lg transition border-l-4 flex flex-col justify-between ${cor}`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 * index }}
+                  >
                     <div>
-                      <p className="text-sm text-gray-300">{item.label}</p>
-                      <p className="text-lg font-semibold text-gray-100">
-                        {formatBRLNumber(item.value)}
+                      <h3 className="text-sm font-medium text-gray-100 truncate">
+                        {conta.contaBancaria}
+                      </h3>
+                      <p
+                        className={`mt-2 text-2xl font-semibold ${
+                          conta.saldo < 0 ? "text-red-200" : "text-white"
+                        }`}
+                      >
+                        {formatBRLNumber(conta.saldo)}
                       </p>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </section>
 
-            <section className="mt-2 flex justify-center">
+            <section className="mt-2">
               <motion.div
-                className="p-4 rounded-lg shadow-xl transition border-l-8 bg-gray-700 border-yellow-400 w-full max-w-sm text-center"
+                className="p-4 rounded-lg shadow-xl transition border-l-8 bg-gray-700 border-yellow-400 w-full text-center"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
