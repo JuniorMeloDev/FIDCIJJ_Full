@@ -10,6 +10,13 @@ const getUserIdFromToken = async (token) => {
     return user?.id || null;
 };
 
+// Função para limpar o nome do arquivo
+const sanitizeFileName = (name) => {
+    // Substitui espaços por underscores e remove caracteres que não sejam letras, números, pontos, hífens ou underscores.
+    return name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9.\-_]/g, '');
+};
+
+
 // GET: Busca anotações (sem alterações)
 export async function GET(request) {
     try {
@@ -35,7 +42,7 @@ export async function GET(request) {
 }
 
 
-// POST: Cria uma nova anotação com anexo
+// POST: Cria uma nova anotação com anexo (COM CORREÇÃO)
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -55,7 +62,10 @@ export async function POST(request) {
         let anexoUrl = null;
 
         if (anexo && anexo.size > 0) {
-            const fileName = `${userId}/${Date.now()}-${anexo.name}`;
+            // *** LINHA MODIFICADA ***
+            const cleanName = sanitizeFileName(anexo.name);
+            const fileName = `${userId}/${Date.now()}-${cleanName}`;
+            
             const { error: uploadError } = await supabase.storage
                 .from('anexos_agenda')
                 .upload(fileName, anexo);
@@ -89,7 +99,7 @@ export async function POST(request) {
     }
 }
 
-// DELETE: Apaga múltiplas anotações e seus anexos
+// DELETE: Apaga múltiplas anotações e seus anexos (COM CORREÇÃO)
 export async function DELETE(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -102,7 +112,6 @@ export async function DELETE(request) {
             return NextResponse.json({ message: 'Nenhum ID fornecido para exclusão.' }, { status: 400 });
         }
         
-        // 1. Buscar as URLs dos anexos para apagar do storage
         const { data: anotacoesParaExcluir, error: selectError } = await supabase
             .from('anotacoes')
             .select('anexo_url')
@@ -111,18 +120,23 @@ export async function DELETE(request) {
 
         if(selectError) throw selectError;
 
-        // 2. Apagar os arquivos do storage
+        // *** BLOCO MODIFICADO ***
+        // Extrai o nome do arquivo da URL completa para remoção
         const arquivosParaRemover = anotacoesParaExcluir
-            .map(a => a.anexo_url ? a.anexo_url.split('/').pop() : null)
+            .map(a => {
+                if (!a.anexo_url) return null;
+                // Pega a última parte da URL, que é o nome do arquivo e o timestamp
+                const urlParts = a.anexo_url.split('/');
+                return urlParts[urlParts.length - 1];
+            })
             .filter(Boolean);
             
         if (arquivosParaRemover.length > 0) {
-            // Corrige o path para o storage
+            // Monta o caminho completo no storage para a remoção
             const filePaths = arquivosParaRemover.map(fileName => `${userId}/${fileName}`);
             await supabase.storage.from('anexos_agenda').remove(filePaths);
         }
 
-        // 3. Apagar os registros do banco de dados
         const { error: deleteError } = await supabase
             .from('anotacoes')
             .delete()
