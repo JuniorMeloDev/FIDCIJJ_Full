@@ -20,7 +20,7 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
             const op = d.operacao;
             if (!op) return sum + d.valorBruto;
 
-            // Nova lógica: se o juro da operação for zero, mas o da duplicata não, soma para a liquidação.
+            // A condição definitiva: se o juro total da operação é praticamente zero, significa que não foi descontado.
             const jurosNaoDescontados = op.valor_total_juros < 0.01 && d.valorJuros > 0;
             return sum + (jurosNaoDescontados ? d.valorBruto + d.valorJuros : d.valorBruto);
         }, 0);
@@ -46,8 +46,6 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
         }
         setError('');
         
-        // A API já espera os juros da mora e os juros da operação separados.
-        // A lógica de somar já existe na API, precisamos enviar o juro da operação quando aplicável.
         const liquidacoes = duplicata.map(dup => {
             const op = dup.operacao;
             const jurosNaoDescontados = op && op.valor_total_juros < 0.01 && dup.valorJuros > 0;
