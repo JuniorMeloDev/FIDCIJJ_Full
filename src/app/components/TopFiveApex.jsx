@@ -1,5 +1,3 @@
-'use client'
-
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 import { formatBRLNumber } from '@/app/utils/formatters';
@@ -14,7 +12,7 @@ export default function TopFiveApex({ data = [] }) {
     }
 
     const chartData = data.map(item => ({
-        name: item.nome.length > 15 ? `${item.nome.substring(0, 13)}...` : item.nome,
+        name: item.nome.length > 30 ? `${item.nome.substring(0, 28)}...` : item.nome,
         value: item.valorTotal,
     }));
 
@@ -26,69 +24,80 @@ export default function TopFiveApex({ data = [] }) {
 
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload && payload.length) {
-            const originalName = data.find(d => d.nome.startsWith(label.substring(0, 13)))?.nome || label;
+            const originalName = data.find(d => d.nome.startsWith(label.substring(0, 28)))?.nome || label;
             return (
                 <div className="bg-gray-600 p-2 border border-gray-500 rounded-md shadow-lg">
-                    <p className="text-gray-200">{`${originalName} : ${formatBRLNumber(payload(0).value)}`}</p>
+                    <p className="text-gray-200">{`${originalName} : ${formatBRLNumber(payload[0].value)}`}</p>
                 </div>
             );
         }
         return null;
     };
 
-    const useVerticalLayout = data.length >= 10;
-
-    const xAxisProps = {
-        dataKey: "name",
-        stroke: "#9ca3af",
-        fontSize: 12,
-        interval: 0,
-        angle: -35,
-        textAnchor: "end",
-        height: 60,
-    };
-
-    const yAxisProps = {
-        stroke: "#9ca3af",
-        fontSize: 12,
-        tickFormatter: abbreviateValue,
-        axisLine: false,
-        tickLine: false,
-        width: 80,
-        // Aplica a orientação vertical aos valores se necessário
-        orientation: useVerticalLayout ? 'left' : 'top',
-        tick: useVerticalLayout ? { angle: -90, position: 'insideLeft' } : {},
-    };
-
-    const chartMargin = {
-        top: 30,
-        right: 10,
-        left: useVerticalLayout ? 80 : 10, // Aumenta a margem esquerda para valores verticais
-        bottom: 20,
-    };
+    const isManyItems = data.length > 10;
 
     return (
-        <ResponsiveContainer width="100%" height={350}>
+        <ResponsiveContainer width="100%" height={isManyItems ? 400 : 308}>
             <BarChart
                 data={chartData}
-                margin={chartMargin}
+                layout={isManyItems ? "vertical" : "horizontal"}
+                margin={{ top: 30, right: 20, left: 20, bottom: 20 }}
+                barSize={isManyItems ? 25 : 50}
             >
-                <XAxis {...xAxisProps} />
-                <YAxis {...yAxisProps} />
-                <Tooltip
+                {isManyItems ? (
+                    <>
+                        <XAxis 
+                            type="number" 
+                            stroke="#9ca3af" 
+                            fontSize={12} 
+                            tickFormatter={abbreviateValue}
+                            axisLine={false}
+                            tickLine={false}
+                        />
+                        <YAxis 
+                            type="category" 
+                            dataKey="name" 
+                            stroke="#9ca3af" 
+                            fontSize={12} 
+                            width={150} 
+                            interval={0}
+                        />
+                    </>
+                ) : (
+                    <>
+                        <XAxis 
+                            dataKey="name" 
+                            stroke="#9ca3af" 
+                            fontSize={12} 
+                            interval={0}
+                            angle={-35}
+                            textAnchor="end"
+                            height={60}
+                        />
+                        <YAxis 
+                            stroke="#9ca3af" 
+                            fontSize={12} 
+                            tickFormatter={abbreviateValue}
+                            axisLine={false}
+                            tickLine={false}
+                            width={80}
+                        />
+                    </>
+                )}
+
+                <Tooltip 
                     cursor={{ fill: 'rgba(255, 255, 255, 0.1)' }}
                     content={<CustomTooltip />}
                 />
-                <Bar
-                    dataKey="value"
-                    fill="#f97316"
-                    radius={[4, 4, 0, 0]}
-                    barSize={useVerticalLayout ? 30 : 50}
+                <Bar 
+                    dataKey="value" 
+                    fill="#f97316" 
+                    radius={isManyItems ? [0, 4, 4, 0] : [4, 4, 0, 0]}
                 >
-                    <LabelList
-                        dataKey="value"
-                        position={useVerticalLayout ? 'left' : 'top'}
-                        style={{ fill: '#d1d5db', fontSize: 12, ... (useVerticalLayout && { textAnchor: 'end', dy: -10, dx: -5 }) }}
+                    <LabelList 
+                        dataKey="value" 
+                        position={isManyItems ? "right" : "top"}
+                        style={{ fill: '#d1d5db', fontSize: 12 }}
                         formatter={formatBRLNumber}
                     />
                 </Bar>
