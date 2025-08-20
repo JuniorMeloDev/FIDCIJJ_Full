@@ -44,6 +44,7 @@ export default function OperacaoBorderoPage() {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [savedOperacaoInfo, setSavedOperacaoInfo] = useState(null);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [incluirJuros, setIncluirJuros] = useState(true);
 
   const [isPartialDebit, setIsPartialDebit] = useState(false);
   const [isPartialDebitModalOpen, setIsPartialDebitModalOpen] = useState(false);
@@ -412,10 +413,12 @@ export default function OperacaoBorderoPage() {
       notasFiscais: notasFiscais.map((nf) => ({
         ...nf,
         peso: parseFloat(String(nf.peso).replace(",", ".")) || null,
+        // Se 'incluirJuros' for falso, envia juros como 0 para o backend
+        jurosCalculado: incluirJuros ? nf.jurosCalculado : 0,
       })),
-      cedenteRamo,
-      valorDebito: valorDebito,
-      dataDebito: dataDebito,
+      cedenteRamo, // Adicionado para garantir que o ramo seja passado
+      valorDebito: valorDebito, // Para débito parcial
+      dataDebito: dataDebito,   // Para débito parcial
     };
 
     try {
@@ -498,6 +501,7 @@ export default function OperacaoBorderoPage() {
     setCondicoesSacado([]);
     setIgnoreDespesasBancarias(false);
     setIsPartialDebit(false);
+    setIncluirJuros(true); // Reseta o novo checkbox para o padrão
     if (showMsg) showNotification("Formulário limpo.", "success");
   };
 
@@ -515,7 +519,7 @@ export default function OperacaoBorderoPage() {
       });
     }
     return combined;
-  }, [descontos, tipoOperacaoId, tiposOperacao, ignoreDespesasBancarias]);
+  }, [descontos, tipoOperacaoId, tiposOperacao, ignoreDespesasBancarias, incluirJuros]);
 
   const showPeso = useMemo(() => {
     const selectedOperacao = tiposOperacao.find(
@@ -537,17 +541,11 @@ export default function OperacaoBorderoPage() {
       (acc, d) => acc + d.valor,
       0
     );
-
-    const selectedOperacao = tiposOperacao.find(
-      (op) => op.id === parseInt(tipoOperacaoId)
-    );
-    const isOperacaoAVista =
-      selectedOperacao &&
-      selectedOperacao.nome.toLowerCase().includes("a vista");
-
-    const liquidoOperacao = isOperacaoAVista
-      ? valorTotalBruto - totalOutrosDescontos
-      : valorTotalBruto - desagioTotal - totalOutrosDescontos;
+    
+    // O cálculo do líquido agora depende diretamente do estado 'incluirJuros'
+    const liquidoOperacao = incluirJuros
+      ? valorTotalBruto - desagioTotal - totalOutrosDescontos
+      : valorTotalBruto - totalOutrosDescontos;
 
     return {
       valorTotalBruto,
@@ -555,7 +553,7 @@ export default function OperacaoBorderoPage() {
       totalOutrosDescontos,
       liquidoOperacao,
     };
-  }, [notasFiscais, todosOsDescontos, tipoOperacaoId, tiposOperacao]);
+  }, [notasFiscais, todosOsDescontos, tipoOperacaoId, tiposOperacao, incluirJuros]);
 
   const handleRemoveDesconto = (idToRemove) => {
     if (idToRemove === "despesas-bancarias") {
@@ -687,6 +685,8 @@ export default function OperacaoBorderoPage() {
           cedenteRamo={cedenteRamo}
           isPartialDebit={isPartialDebit}
           setIsPartialDebit={setIsPartialDebit}
+          incluirJuros={incluirJuros}
+          setIncluirJuros={setIncluirJuros}
         />
       </main>
     </>

@@ -15,8 +15,10 @@ export default function OperacaoDetalhes({
     contaBancariaId,
     setContaBancariaId,
     cedenteRamo,
-    isPartialDebit,      // Nova prop
-    setIsPartialDebit    // Nova prop
+    isPartialDebit,
+    setIsPartialDebit,
+    incluirJuros,
+    setIncluirJuros
 }) {
     const docType = cedenteRamo === 'Transportes' ? 'CT-e' : 'NF-e';
 
@@ -42,7 +44,9 @@ export default function OperacaoDetalhes({
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{nf.clienteSacado}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 text-right">{formatBRLNumber(nf.valorNf)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-red-400 text-right">-{formatBRLNumber(nf.jurosCalculado || 0)}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 text-right">{formatBRLNumber(nf.valorLiquidoCalculado || nf.valorNf)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 text-right">
+                                    {formatBRLNumber(incluirJuros ? (nf.valorLiquidoCalculado || nf.valorNf) : nf.valorNf)}
+                                </td>
                             </tr>
                         ))}
                         {notasFiscais.length === 0 && (
@@ -83,8 +87,8 @@ export default function OperacaoDetalhes({
                         <span>{formatBRLNumber(totais.valorTotalBruto)}</span>
                     </div>
                     <div className="flex justify-between text-sm font-medium text-red-400">
-                        <span>(-) Deságio Total:</span>
-                        <span>{formatBRLNumber(totais.desagioTotal)}</span>
+                        <span>{incluirJuros ? '(-) Deságio Total:' : 'Deságio Total:'}</span>
+                        <span>{incluirJuros ? '-' : ''}{formatBRLNumber(totais.desagioTotal)}</span>
                     </div>
                     <div className="flex justify-between text-sm font-medium text-red-400">
                         <span>(-) Outros Descontos:</span>
@@ -114,8 +118,8 @@ export default function OperacaoDetalhes({
                         </select>
                     </div>
 
-                    {/* Checkbox para débito parcial */}
-                    <div className="pt-2">
+                    {/* Checkboxes */}
+                    <div className="pt-2 space-y-2">
                         <label className="flex items-center cursor-pointer">
                             <input
                                 type="checkbox"
@@ -124,6 +128,15 @@ export default function OperacaoDetalhes({
                                 className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
                             />
                             <span className="ml-2 text-sm text-gray-200">Debitar Valor Parcial</span>
+                        </label>
+                         <label className="flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={incluirJuros}
+                                onChange={(e) => setIncluirJuros(e.target.checked)}
+                                className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
+                            />
+                            <span className="ml-2 text-sm text-gray-200">Incluir Juros</span>
                         </label>
                     </div>
                 </div>
