@@ -18,9 +18,11 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
 
         return items.reduce((sum, d) => {
             const op = d.operacao;
+            // Se não encontrar dados da operação, retorna o valor bruto como fallback
             if (!op) return sum + d.valorBruto;
 
-            // A condição definitiva: se o juro total da operação é praticamente zero, significa que não foi descontado.
+            // A condição definitiva: se o juro total da operação é praticamente zero, mas o juro individual da duplicata não é,
+            // significa que o juro não foi descontado na operação e deve ser somado agora.
             const jurosNaoDescontados = op.valor_total_juros < 0.01 && d.valorJuros > 0;
             return sum + (jurosNaoDescontados ? d.valorBruto + d.valorJuros : d.valorBruto);
         }, 0);
@@ -46,6 +48,7 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
         }
         setError('');
         
+        // Prepara o payload para a API, determinando se os juros da operação devem ser somados
         const liquidacoes = duplicata.map(dup => {
             const op = dup.operacao;
             const jurosNaoDescontados = op && op.valor_total_juros < 0.01 && dup.valorJuros > 0;
