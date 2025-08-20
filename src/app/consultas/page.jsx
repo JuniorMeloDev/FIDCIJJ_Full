@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import Notification from "@/app/components/Notification";
 import LiquidacaoModal from "@/app/components/LiquidacaoModal";
 import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal";
+import ConfirmacaoExclusaoModal from "@/app/components/ConfirmacaoExclusaoModal"; // Importar o novo modal
 import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
 import EmailModal from "@/app/components/EmailModal";
 import Pagination from "@/app/components/Pagination";
@@ -59,6 +60,8 @@ export default function ConsultasPage() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const menuRef = useRef(null);
   const [estornoInfo, setEstornoInfo] = useState(null);
+  const [itemParaExcluir, setItemParaExcluir] = useState(null); // State para o novo modal de exclusão
+
 
   const getAuthHeader = () => {
     const token = sessionStorage.getItem("authToken");
@@ -251,7 +254,7 @@ export default function ConsultasPage() {
   };
 
   const handleConfirmarLiquidacao = async (
-    duplicataIds,
+    liquidacoes,
     dataLiquidacao,
     jurosMora,
     contaBancariaId
@@ -262,7 +265,7 @@ export default function ConsultasPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({
-          ids: duplicataIds,
+          liquidacoes,
           dataLiquidacao,
           jurosMora,
           contaBancariaId,
@@ -303,6 +306,41 @@ export default function ConsultasPage() {
       setEstornoInfo(null);
     }
   };
+
+  // Nova função para abrir o modal de exclusão
+  const handleExcluir = () => {
+      if (!contextMenu.selectedItem) return;
+      setItemParaExcluir(contextMenu.selectedItem);
+  };
+
+  // Nova função para confirmar a exclusão
+  const handleConfirmarExclusao = async (tipoExclusao) => {
+    if (!itemParaExcluir) return;
+
+    const isOperacao = tipoExclusao === 'operacao';
+    const id = isOperacao ? itemParaExcluir.operacaoId : itemParaExcluir.id;
+    const url = isOperacao ? `/api/operacoes/${id}` : `/api/duplicatas/${id}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: getAuthHeader(),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Falha ao excluir a ${isOperacao ? 'operação' : 'duplicata'}.`);
+      }
+
+      showNotification(`${isOperacao ? 'Operação' : 'Duplicata'} excluída com sucesso!`, 'success');
+      fetchDuplicatas(filters, sortConfig); // Atualiza a lista
+    } catch (err) {
+      showNotification(err.message, 'error');
+    } finally {
+      setItemParaExcluir(null); // Fecha o modal
+    }
+  };
+
   const handleAbrirEmailModal = () => {
     if (!contextMenu.selectedItem) return;
     setOperacaoParaEmail({
@@ -456,6 +494,12 @@ export default function ConsultasPage() {
         onSend={handleSendEmail}
         isSending={isSendingEmail}
         clienteId={operacaoParaEmail?.clienteId}
+      />
+      <ConfirmacaoExclusaoModal
+          isOpen={!!itemParaExcluir}
+          onClose={() => setItemParaExcluir(null)}
+          onConfirm={handleConfirmarExclusao}
+          item={itemParaExcluir}
       />
 
       <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
@@ -732,6 +776,17 @@ export default function ConsultasPage() {
               className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
             >
               Enviar por E-mail
+            </a>
+            <div className="border-t border-gray-600 my-1"></div>
+            <a
+                href="#"
+                onClick={(e) => {
+                    e.preventDefault();
+                    handleExcluir();
+                }}
+                className="block px-4 py-2 text-sm text-red-400 hover:bg-gray-600"
+            >
+                Excluir...
             </a>
           </div>
         </div>
