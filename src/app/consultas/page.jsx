@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import Notification from "@/app/components/Notification";
 import LiquidacaoModal from "@/app/components/LiquidacaoModal";
 import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal";
-import ConfirmacaoExclusaoModal from "@/app/components/ConfirmacaoExclusaoModal"; // Importar o novo modal
+import ConfirmacaoExclusaoModal from "@/app/components/ConfirmacaoExclusaoModal";
 import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
 import EmailModal from "@/app/components/EmailModal";
 import Pagination from "@/app/components/Pagination";
@@ -16,7 +16,6 @@ import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 const ITEMS_PER_PAGE = 15;
 
 export default function ConsultasPage() {
-  // ... (toda a sua lógica de states e funções permanece a mesma)
   const [duplicatas, setDuplicatas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -60,8 +59,7 @@ export default function ConsultasPage() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const menuRef = useRef(null);
   const [estornoInfo, setEstornoInfo] = useState(null);
-  const [itemParaExcluir, setItemParaExcluir] = useState(null); // State para o novo modal de exclusão
-
+  const [itemParaExcluir, setItemParaExcluir] = useState(null);
 
   const getAuthHeader = () => {
     const token = sessionStorage.getItem("authToken");
@@ -307,13 +305,11 @@ export default function ConsultasPage() {
     }
   };
 
-  // Nova função para abrir o modal de exclusão
   const handleExcluir = () => {
       if (!contextMenu.selectedItem) return;
       setItemParaExcluir(contextMenu.selectedItem);
   };
 
-  // Nova função para confirmar a exclusão
   const handleConfirmarExclusao = async (tipoExclusao) => {
     if (!itemParaExcluir) return;
 
@@ -333,11 +329,11 @@ export default function ConsultasPage() {
       }
 
       showNotification(`${isOperacao ? 'Operação' : 'Duplicata'} excluída com sucesso!`, 'success');
-      fetchDuplicatas(filters, sortConfig); // Atualiza a lista
+      fetchDuplicatas(filters, sortConfig);
     } catch (err) {
       showNotification(err.message, 'error');
     } finally {
-      setItemParaExcluir(null); // Fecha o modal
+      setItemParaExcluir(null);
     }
   };
 

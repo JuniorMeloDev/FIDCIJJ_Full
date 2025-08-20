@@ -11,18 +11,37 @@ export async function DELETE(request, { params }) {
 
         const { id } = params;
 
-        // Utiliza uma função RPC no Supabase para garantir a exclusão atômica
-        const { error } = await supabase.rpc('excluir_operacao_completa', { p_operacao_id: id });
+        // 1. Verificar se alguma duplicata da operação já foi liquidada
+        const { data: duplicatasLiquidadas, error: checkError } = await supabase
+            .from('duplicatas')
+            .select('id')
+            .eq('operacao_id', id)
+            .eq('status_recebimento', 'Recebido')
+            .limit(1);
 
-        if (error) {
-            // Verifica se o erro é a exceção customizada da função
-            if (error.message.includes('liquidada')) {
-                return NextResponse.json({ message: 'Não é possível excluir uma operação que contém duplicatas já liquidadas.' }, { status: 400 });
-            }
-            throw error;
+        if (checkError) throw checkError;
+
+        if (duplicatasLiquidadas.length > 0) {
+            return NextResponse.json({ message: 'Não é possível excluir uma operação que contém duplicatas já liquidadas.' }, { status: 400 });
         }
 
+        // Se nenhuma estiver liquidada, prosseguir com a exclusão em cascata
+        
+        // 2. Excluir movimentações de caixa associadas
+        await supabase.from('movimentacoes_caixa').delete().eq('operacao_id', id);
+
+        // 3. Excluir descontos associados
+        await supabase.from('descontos').delete().eq('operacao_id', id);
+
+        // 4. Excluir duplicatas associadas (agora seguro, pois não estão liquidadas)
+        await supabase.from('duplicatas').delete().eq('operacao_id', id);
+
+        // 5. Excluir a operação principal
+        const { error: operacaoError } = await supabase.from('operacoes').delete().eq('id', id);
+        if (operacaoError) throw operacaoError;
+
         return new NextResponse(null, { status: 204 }); // No Content
+
     } catch (error) {
         console.error('Erro ao excluir operação:', error);
         return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
