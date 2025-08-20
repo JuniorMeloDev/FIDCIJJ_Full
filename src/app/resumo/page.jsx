@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
 import TopFiveApex from "../components/TopFiveApex";
 import { formatBRLNumber, formatDate } from "../utils/formatters";
 import RelatorioModal from "@/app/components/RelatorioModal";
 import DashboardFiltros from "@/app/components/DashboardFiltros";
+import LiquidacaoModal from "@/app/components/LiquidacaoModal"; // Importar o modal
+import Notification from "@/app/components/Notification"; // Importar notificações
 import { FaChartLine, FaDollarSign, FaClock } from "react-icons/fa";
 import { startOfMonth, endOfMonth, format } from "date-fns";
 
@@ -33,7 +35,13 @@ export default function ResumoPage() {
   const [topFiveChartType, setTopFiveChartType] = useState("cedentes");
   const [topNLimit, setTopNLimit] = useState(5);
   const [today, setToday] = useState("");
-
+  
+  const [notification, setNotification] = useState({ message: "", type: "" });
+  const [isLiquidarModalOpen, setIsLiquidarModalOpen] = useState(false);
+  const [duplicataParaLiquidar, setDuplicataParaLiquidar] = useState(null);
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, selectedItem: null });
+  const menuRef = useRef(null);
+  
   useEffect(() => {
     setToday(new Date().toISOString().split("T")[0]);
   }, []);
@@ -43,6 +51,12 @@ export default function ResumoPage() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
+  // --- NOVA FUNÇÃO DE NOTIFICAÇÃO ---
+  const showNotification = (message, type) => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification({ message: "", type: "" }), 5000);
+  };
+  
   const fetchApiData = async (url) => {
     try {
       const res = await fetch(url, { headers: getAuthHeader() });
@@ -53,32 +67,9 @@ export default function ResumoPage() {
     }
   };
 
-  useEffect(() => {
-    (async () => {
-      const [tiposData, contasData] = await Promise.all([
-        fetchApiData(`/api/cadastros/tipos-operacao`),
-        fetchApiData(`/api/cadastros/contas/master`),
-      ]);
-      setTiposOperacao(tiposData);
-      setContasBancarias(contasData);
-    })();
-  }, []);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedFilters(filters);
-    }, 500);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [filters]);
-
-  useEffect(() => {
-    (async () => {
+  const fetchDashboardData = async () => {
       if (!metrics) setLoading(true);
       setError(null);
-
       try {
         const params = new URLSearchParams();
         Object.entries(debouncedFilters).forEach(
@@ -102,8 +93,36 @@ export default function ResumoPage() {
       } finally {
         setLoading(false);
       }
+  };
+
+
+  useEffect(() => {
+    (async () => {
+      const [tiposData, contasData] = await Promise.all([
+        fetchApiData(`/api/cadastros/tipos-operacao`),
+        fetchApiData(`/api/cadastros/contas/master`),
+      ]);
+      setTiposOperacao(tiposData);
+      setContasBancarias(contasData);
     })();
+  }, []);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [filters]);
+
+  useEffect(() => {
+    fetchDashboardData();
   }, [debouncedFilters, diasVencimento, topNLimit]);
+
+  useEffect(() => {
+    const handleClick = () => setContextMenu({ ...contextMenu, visible: false });
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [contextMenu]);
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
@@ -138,6 +157,35 @@ export default function ResumoPage() {
       contaBancaria: "",
     });
 
+  const handleContextMenu = (event, item) => {
+    event.preventDefault();
+    setContextMenu({ visible: true, x: event.pageX, y: event.pageY, selectedItem: item });
+  };
+
+  const handleAbrirModalLiquidacao = () => {
+    if (contextMenu.selectedItem) {
+      setDuplicataParaLiquidar([contextMenu.selectedItem]); // O modal espera um array
+      setIsLiquidarModalOpen(true);
+    }
+  };
+
+  const handleConfirmarLiquidacao = async (duplicataIds, dataLiquidacao, jurosMora, contaBancariaId) => {
+    try {
+      const response = await fetch('/api/duplicatas/liquidar-em-massa', {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify({ ids: duplicataIds, dataLiquidacao, jurosMora, contaBancariaId }),
+      });
+      if (!response.ok) throw new Error("Falha ao liquidar a duplicata.");
+      showNotification(`Duplicata liquidada com sucesso!`, "success");
+      fetchDashboardData(); // Atualiza os dados do dashboard
+    } catch (err) {
+      showNotification(err.message, "error");
+    } finally {
+      setIsLiquidarModalOpen(false);
+    }
+  };
+
   const totalGeral = saldos.reduce((sum, c) => sum + (c.saldo || 0), 0);
 
   if (loading) {
@@ -150,18 +198,27 @@ export default function ResumoPage() {
 
   return (
     <main className="h-full overflow-y-auto p-6 bg-gradient-to-br from-gray-900 to-gray-800">
+      <Notification
+        message={notification.message}
+        type={notification.type}
+        onClose={() => setNotification({ message: "", type: "" })}
+      />
+      <LiquidacaoModal
+        isOpen={isLiquidarModalOpen}
+        onClose={() => setIsLiquidarModalOpen(false)}
+        onConfirm={handleConfirmarLiquidacao}
+        duplicata={duplicataParaLiquidar}
+        contasMaster={contasBancarias}
+      />
       <RelatorioModal
         isOpen={isRelatorioModalOpen}
         onClose={() => setIsRelatorioModalOpen(false)}
         tiposOperacao={tiposOperacao}
-        fetchClientes={(q) =>
-          fetchApiData(`/api/cadastros/clientes/search?nome=${q}`)
-        }
-        fetchSacados={(q) =>
-          fetchApiData(`/api/cadastros/sacados/search?nome=${q}`)
-        }
+        fetchClientes={(q) => fetchApiData(`/api/cadastros/clientes/search?nome=${q}`)}
+        fetchSacados={(q) => fetchApiData(`/api/cadastros/sacados/search?nome=${q}`)}
       />
-
+      
+      {/* ... (resto do JSX da página) ... */}
       <motion.div
         className="max-w-7xl mx-auto space-y-8"
         initial={{ opacity: 0 }}
@@ -300,7 +357,6 @@ export default function ResumoPage() {
                 </motion.div>
               ))}
             </section>
-
             <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
               <motion.div
                 className="p-6 rounded-lg shadow-lg transition bg-gray-700"
@@ -335,7 +391,8 @@ export default function ResumoPage() {
                         return (
                           <div
                             key={dup.id}
-                            className="flex justify-between items-center text-sm border-b border-gray-600 pb-2 last:border-none"
+                            onContextMenu={(e) => handleContextMenu(e, dup)} // <-- ADICIONADO AQUI
+                            className="flex justify-between items-center text-sm border-b border-gray-600 pb-2 last:border-none cursor-pointer hover:bg-gray-600 rounded-md p-2" // <-- ADICIONADO AQUI
                           >
                             <div>
                               <p className="font-medium text-gray-200">
@@ -426,6 +483,28 @@ export default function ResumoPage() {
           </div>
         )}
       </motion.div>
+
+      {/* --- NOVO MENU DE CONTEXTO --- */}
+      {contextMenu.visible && (
+        <div
+          ref={menuRef}
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="absolute origin-top-right w-48 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-50"
+        >
+          <div className="py-1" onClick={(e) => e.stopPropagation()}>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleAbrirModalLiquidacao();
+              }}
+              className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+            >
+              Liquidar Duplicata
+            </a>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
