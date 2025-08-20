@@ -11,22 +11,23 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
 
     const isMultiple = Array.isArray(duplicata);
 
-    // Lógica corrigida para calcular o valor total a ser exibido e creditado
     const totalValue = useMemo(() => {
         if (!duplicata) return 0;
         const items = isMultiple ? duplicata : [duplicata];
 
         return items.reduce((sum, d) => {
             const op = d.operacao;
-            // Se não encontrar dados da operação, retorna o valor bruto como fallback
             if (!op) return sum + d.valorBruto;
 
-            // A condição definitiva: se o juro total da operação é praticamente zero, mas o juro individual da duplicata não é,
-            // significa que o juro não foi descontado na operação e deve ser somado agora.
             const jurosNaoDescontados = op.valor_total_juros < 0.01 && d.valorJuros > 0;
             return sum + (jurosNaoDescontados ? d.valorBruto + d.valorJuros : d.valorBruto);
         }, 0);
     }, [duplicata, isMultiple]);
+
+    // NOVO: Calcula o valor total a ser exibido, incluindo juros de mora
+    const valorTotalComJuros = useMemo(() => {
+        return totalValue + parseBRL(jurosMora);
+    }, [totalValue, jurosMora]);
 
     const firstNfCte = isMultiple ? duplicata[0]?.nfCte : duplicata?.nfCte;
 
@@ -48,7 +49,6 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
         }
         setError('');
         
-        // Prepara o payload para a API, determinando se os juros da operação devem ser somados
         const liquidacoes = duplicata.map(dup => {
             const op = dup.operacao;
             const jurosNaoDescontados = op && op.valor_total_juros < 0.01 && dup.valorJuros > 0;
@@ -74,9 +74,10 @@ export default function LiquidacaoModal({ isOpen, onClose, onConfirm, duplicata,
             <div className="relative bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg text-white">
                 <h2 className="text-2xl font-bold mb-4">Confirmar Liquidação</h2>
                 <p className="mb-4 text-gray-300">
+                    {/* ALTERADO: Exibe o valor total com juros de mora */}
                     {isMultiple
-                        ? <>Você está prestes a dar baixa em <span className="font-semibold text-orange-400">{duplicata.length} duplicatas</span>, somando o valor de <span className="font-semibold text-orange-400">{formatBRLNumber(totalValue)}</span>.</>
-                        : <>Você está a dar baixa na duplicata <span className="font-semibold text-orange-400">{firstNfCte}</span> no valor de <span className="font-semibold text-orange-400">{formatBRLNumber(totalValue)}</span>.</>
+                        ? <>Você está prestes a dar baixa em <span className="font-semibold text-orange-400">{duplicata.length} duplicatas</span>, somando o valor de <span className="font-semibold text-orange-400">{formatBRLNumber(valorTotalComJuros)}</span>.</>
+                        : <>Você está a dar baixa na duplicata <span className="font-semibold text-orange-400">{firstNfCte}</span> no valor de <span className="font-semibold text-orange-400">{formatBRLNumber(valorTotalComJuros)}</span>.</>
                     }
                 </p>
                 
