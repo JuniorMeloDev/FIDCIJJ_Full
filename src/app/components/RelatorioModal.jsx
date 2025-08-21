@@ -141,7 +141,6 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         }
     };
 
-    // --- ALTERAÇÃO PRINCIPAL AQUI ---
     const generatePdf = (data, type, currentFilters) => {
         const doc = new jsPDF({ orientation: type === 'fluxoCaixa' || type === 'duplicatas' ? 'landscape' : 'portrait' });
         
@@ -171,6 +170,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 autoTable(doc, { startY: 35, head, body });
                 break;
             case 'duplicatas':
+                // --- ALTERAÇÃO AQUI ---
                 head = [['Data Op.', 'NF/CT-e', 'Cedente', 'Sacado', 'Venc.', 'Status', 'Juros Op.', 'Juros Mora', 'Valor Bruto']];
                 body = data.map(row => [
                     formatDate(row.data_operacao), row.nf_cte, row.empresa_cedente, 
@@ -178,20 +178,27 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                     formatBRLNumber(row.valor_juros || 0), formatBRLNumber(row.juros_mora || 0), formatBRLNumber(row.valor_bruto)
                 ]);
 
-                // Calcula os totais
                 const totalBruto = data.reduce((sum, row) => sum + (row.valor_bruto || 0), 0);
                 const totalJurosOp = data.reduce((sum, row) => sum + (row.valor_juros || 0), 0);
                 const totalJurosMora = data.reduce((sum, row) => sum + (row.juros_mora || 0), 0);
                 const totalJuros = totalJurosOp + totalJurosMora;
 
+                // Renderiza a tabela principal SEM o rodapé
                 autoTable(doc, {
                     startY: 35,
                     head: head,
                     body: body,
-                    foot: [
+                    // Remove o 'foot' para não repetir em todas as páginas
+                });
+
+                // Adiciona a linha de totais APENAS UMA VEZ no final da tabela
+                autoTable(doc, {
+                    startY: doc.lastAutoTable.finalY,
+                    body: [
                         ['', '', '', '', '', 'TOTAIS:', formatBRLNumber(totalJurosOp), formatBRLNumber(totalJurosMora), formatBRLNumber(totalBruto)]
                     ],
-                    footStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' }
+                    theme: 'grid',
+                    bodyStyles: { fontStyle: 'bold', fillColor: [41, 128, 185], textColor: 255 }
                 });
 
                 // Adiciona os cards de resumo no final
@@ -200,7 +207,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 doc.text('Resumo do Relatório', 14, finalY);
 
                 // Card 1: Valor Total
-                doc.setFillColor(241, 241, 241); // Cor de fundo
+                doc.setFillColor(241, 241, 241);
                 doc.roundedRect(14, finalY + 5, 90, 25, 3, 3, 'F');
                 doc.setTextColor(50, 50, 50);
                 doc.setFontSize(10);
@@ -220,6 +227,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 doc.setFont('helvetica', 'bold');
                 doc.text(formatBRLNumber(totalJuros), 114, finalY + 20);
                 break;
+                // --- FIM DA ALTERAÇÃO ---
             case 'totalOperado':
                 const processedCedentes = processAbcData(data.clientes);
                 const processedSacados = processAbcData(data.sacados);
