@@ -10,7 +10,7 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // ALTERAÇÃO 1: Adicionado '*' para buscar todos os campos da operação
+        // ALTERAÇÃO AQUI: Especifica a relação a ser usada no join
         let { data: duplicatas, error } = await supabase
             .from('duplicatas')
             .select(`
@@ -20,7 +20,7 @@ export async function GET(request) {
                     cliente:clientes ( nome ),
                     tipo_operacao:tipos_operacao ( nome )
                 ),
-                movimentacao:movimentacoes_caixa ( data_movimento, conta_bancaria )
+                movimentacao:movimentacoes_caixa!fk_movimentacao_caixa ( data_movimento, conta_bancaria )
             `);
 
         if (error) throw error;
@@ -50,7 +50,6 @@ export async function GET(request) {
             return true;
         });
 
-        // ALTERAÇÃO 2: Adicionado o objeto 'operacao' completo ao retorno
         let formattedData = filteredData.map(d => ({
             id: d.id, operacaoId: d.operacao_id, clienteId: d.operacao?.cliente_id,
             dataOperacao: d.data_operacao, nfCte: d.nf_cte, empresaCedente: d.operacao?.cliente?.nome,
@@ -59,7 +58,7 @@ export async function GET(request) {
             statusRecebimento: d.status_recebimento, 
             dataLiquidacao: d.movimentacao?.data_movimento || d.data_liquidacao,
             contaLiquidacao: d.movimentacao?.conta_bancaria,
-            operacao: d.operacao // <-- LINHA ADICIONADA AQUI
+            operacao: d.operacao
         }));
 
         // ORDENAÇÃO (sem alteração aqui)
