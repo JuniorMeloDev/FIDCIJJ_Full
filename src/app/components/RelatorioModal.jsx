@@ -141,6 +141,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         }
     };
 
+    // --- ALTERAÇÃO PRINCIPAL AQUI ---
     const generatePdf = (data, type, currentFilters) => {
         const doc = new jsPDF({ orientation: type === 'fluxoCaixa' || type === 'duplicatas' ? 'landscape' : 'portrait' });
         
@@ -170,14 +171,54 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 autoTable(doc, { startY: 35, head, body });
                 break;
             case 'duplicatas':
-                const showTipoOperacao = !currentFilters.tipoOperacaoId;
-                head = [['Data Op.', 'NF/CT-e', 'Cedente', 'Sacado', ...(showTipoOperacao ? ['Tipo Op.'] : []), 'Venc.', 'Status', 'Valor']];
+                head = [['Data Op.', 'NF/CT-e', 'Cedente', 'Sacado', 'Venc.', 'Status', 'Juros Op.', 'Juros Mora', 'Valor Bruto']];
                 body = data.map(row => [
                     formatDate(row.data_operacao), row.nf_cte, row.empresa_cedente, 
-                    row.cliente_sacado, ...(showTipoOperacao ? [row.tipo_operacao_nome] : []),
-                    formatDate(row.data_vencimento), row.status_recebimento, formatBRLNumber(row.valor_bruto)
+                    row.cliente_sacado, formatDate(row.data_vencimento), row.status_recebimento,
+                    formatBRLNumber(row.valor_juros || 0), formatBRLNumber(row.juros_mora || 0), formatBRLNumber(row.valor_bruto)
                 ]);
-                autoTable(doc, { startY: 35, head, body });
+
+                // Calcula os totais
+                const totalBruto = data.reduce((sum, row) => sum + (row.valor_bruto || 0), 0);
+                const totalJurosOp = data.reduce((sum, row) => sum + (row.valor_juros || 0), 0);
+                const totalJurosMora = data.reduce((sum, row) => sum + (row.juros_mora || 0), 0);
+                const totalJuros = totalJurosOp + totalJurosMora;
+
+                autoTable(doc, {
+                    startY: 35,
+                    head: head,
+                    body: body,
+                    foot: [
+                        ['', '', '', '', '', 'TOTAIS:', formatBRLNumber(totalJurosOp), formatBRLNumber(totalJurosMora), formatBRLNumber(totalBruto)]
+                    ],
+                    footStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' }
+                });
+
+                // Adiciona os cards de resumo no final
+                const finalY = doc.lastAutoTable.finalY + 15;
+                doc.setFontSize(12);
+                doc.text('Resumo do Relatório', 14, finalY);
+
+                // Card 1: Valor Total
+                doc.setFillColor(241, 241, 241); // Cor de fundo
+                doc.roundedRect(14, finalY + 5, 90, 25, 3, 3, 'F');
+                doc.setTextColor(50, 50, 50);
+                doc.setFontSize(10);
+                doc.text('Valor Total das Duplicatas', 18, finalY + 12);
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'bold');
+                doc.text(formatBRLNumber(totalBruto), 18, finalY + 20);
+
+                // Card 2: Juros Totais
+                doc.setFillColor(241, 241, 241);
+                doc.roundedRect(110, finalY + 5, 90, 25, 3, 3, 'F');
+                doc.setTextColor(50, 50, 50);
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                doc.text('Valor Total dos Juros (Op. + Mora)', 114, finalY + 12);
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'bold');
+                doc.text(formatBRLNumber(totalJuros), 114, finalY + 20);
                 break;
             case 'totalOperado':
                 const processedCedentes = processAbcData(data.clientes);
@@ -218,11 +259,16 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 ws_data = data.map(row => ({ Data: formatDate(row.data_movimento), Descrição: row.descricao, Conta: row.conta_bancaria, Categoria: row.categoria, Valor: row.valor }));
                 break;
             case 'duplicatas':
-                const showTipoOperacao = !currentFilters.tipoOperacaoId;
                 ws_data = data.map(row => ({ 
-                    'Data Op.': formatDate(row.data_operacao), 'NF/CT-e': row.nf_cte, 'Cedente': row.empresa_cedente, 
-                    'Sacado': row.cliente_sacado, ...(showTipoOperacao && { 'Tipo Operação': row.tipo_operacao_nome }),
-                    'Vencimento': formatDate(row.data_vencimento), 'Status': row.status_recebimento, 'Valor Bruto': row.valor_bruto 
+                    'Data Op.': formatDate(row.data_operacao), 
+                    'NF/CT-e': row.nf_cte, 
+                    'Cedente': row.empresa_cedente, 
+                    'Sacado': row.cliente_sacado,
+                    'Vencimento': formatDate(row.data_vencimento), 
+                    'Status': row.status_recebimento, 
+                    'Juros Op.': row.valor_juros || 0,
+                    'Juros Mora': row.juros_mora || 0,
+                    'Valor Bruto': row.valor_bruto 
                 }));
                 break;
             case 'totalOperado':
@@ -234,7 +280,6 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 XLSX.utils.sheet_add_json(ws, cedentesABC, { origin: 'A7', header: ['Classe', 'Cedente', 'Valor', '% Acumulado'] });
                 XLSX.utils.sheet_add_json(ws, sacadosABC, { origin: -1, header: ['Classe', 'Sacado', 'Valor', '% Acumulado'] });
                 
-                // Formatação de colunas
                 ws['!cols'] = [{ wch: 25 }, { wch: 15 }];
                 cedentesABC.forEach((_, i) => {
                     const rowIndex = 7 + i + 1;

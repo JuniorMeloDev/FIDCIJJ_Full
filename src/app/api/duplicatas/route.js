@@ -1,85 +1,109 @@
-import { NextResponse } from 'next/server';
-import { supabase } from '@/app/utils/supabaseClient';
-import jwt from 'jsonwebtoken';
+import { NextResponse } from "next/server";
+import { supabase } from "@/app/utils/supabaseClient";
+import jwt from "jsonwebtoken";
 
 export async function GET(request) {
-    try {
-        const token = request.headers.get('Authorization')?.split(' ')[1];
-        if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
-        jwt.verify(token, process.env.JWT_SECRET);
+  try {
+    const token = request.headers.get("Authorization")?.split(" ")[1];
+    if (!token)
+      return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
+    jwt.verify(token, process.env.JWT_SECRET);
 
-        const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(request.url);
 
-        // ALTERAÇÃO AQUI: Especifica a relação a ser usada no join
-        let { data: duplicatas, error } = await supabase
-            .from('duplicatas')
-            .select(`
+    let { data: duplicatas, error } = await supabase
+      .from("duplicatas")
+      .select(
+        `
                 *,
                 operacao:operacoes (
-                    *,
+                    cliente_id,
+                    tipo_operacao_id,
                     cliente:clientes ( nome ),
                     tipo_operacao:tipos_operacao ( nome )
-                ),
-                movimentacao:movimentacoes_caixa!fk_movimentacao_caixa ( data_movimento, conta_bancaria )
-            `);
+                )
+            `
+      )
+      .order("data_operacao", { ascending: true });
 
-        if (error) throw error;
+    if (error) throw error;
 
-        // Filtros em JavaScript (sem alteração aqui)
-        const sacadoFilter = searchParams.get('sacado');
-        const statusFilter = searchParams.get('status');
-        const dataOpInicio = searchParams.get('dataOpInicio');
-        const dataOpFim = searchParams.get('dataOpFim');
-        const dataVencInicio = searchParams.get('dataVencInicio');
-        const dataVencFim = searchParams.get('dataVencFim');
-        const nfCteFilter = searchParams.get('nfCte');
-        const clienteIdFilter = searchParams.get('clienteId');
-        const tipoOperacaoIdFilter = searchParams.get('tipoOperacaoId');
+    const sacadoFilter = searchParams.get("sacado");
+    const statusFilter = searchParams.get("status");
+    const dataInicio = searchParams.get("dataInicio");
+    const dataFim = searchParams.get("dataFim");
+    const clienteIdFilter = searchParams.get("clienteId");
+    const tipoOperacaoIdFilter = searchParams.get("tipoOperacaoId");
 
-        const filteredData = duplicatas.filter(dup => {
-            if (!dup.operacao) return false;
-            if (sacadoFilter && !dup.cliente_sacado.toLowerCase().includes(sacadoFilter.toLowerCase())) return false;
-            if (statusFilter && statusFilter !== 'Todos' && dup.status_recebimento !== statusFilter) return false;
-            if (dataOpInicio && dup.data_operacao < dataOpInicio) return false;
-            if (dataOpFim && dup.data_operacao > dataOpFim) return false;
-            if (dataVencInicio && dup.data_vencimento < dataVencInicio) return false;
-            if (dataVencFim && dup.data_vencimento > dataVencFim) return false;
-            if (nfCteFilter && !dup.nf_cte.includes(nfCteFilter)) return false;
-            if (clienteIdFilter && String(dup.operacao.cliente_id) !== clienteIdFilter) return false;
-            if (tipoOperacaoIdFilter && String(dup.operacao.tipo_operacao_id) !== tipoOperacaoIdFilter) return false;
-            return true;
-        });
+    const filteredData = duplicatas.filter((dup) => {
+      if (!dup.operacao) return false;
+      if (
+        sacadoFilter &&
+        !dup.cliente_sacado.toLowerCase().includes(sacadoFilter.toLowerCase())
+      )
+        return false;
+      if (
+        statusFilter &&
+        statusFilter !== "Todos" &&
+        dup.status_recebimento !== statusFilter
+      )
+        return false;
+      if (dataInicio && dup.data_operacao < dataInicio) return false;
+      if (dataFim && dup.data_operacao > dataFim) return false;
+      if (
+        clienteIdFilter &&
+        String(dup.operacao.cliente_id) !== clienteIdFilter
+      )
+        return false;
+      if (
+        tipoOperacaoIdFilter &&
+        String(dup.operacao.tipo_operacao_id) !== tipoOperacaoIdFilter
+      )
+        return false;
+      return true;
+    });
 
-        let formattedData = filteredData.map(d => ({
-            id: d.id, operacaoId: d.operacao_id, clienteId: d.operacao?.cliente_id,
-            dataOperacao: d.data_operacao, nfCte: d.nf_cte, empresaCedente: d.operacao?.cliente?.nome,
-            valorBruto: d.valor_bruto, valorJuros: d.valor_juros, clienteSacado: d.cliente_sacado,
-            dataVencimento: d.data_vencimento, tipoOperacaoNome: d.operacao?.tipo_operacao?.nome,
-            statusRecebimento: d.status_recebimento, 
-            dataLiquidacao: d.movimentacao?.data_movimento || d.data_liquidacao,
-            contaLiquidacao: d.movimentacao?.conta_bancaria,
-            operacao: d.operacao
-        }));
+    // Adiciona juros_mora ao objeto retornado
+    let formattedData = filteredData.map((d) => ({
+      id: d.id,
+      operacao_id: d.operacao_id,
+      cliente_id: d.operacao?.cliente_id,
+      data_operacao: d.data_operacao,
+      nf_cte: d.nf_cte,
+      empresa_cedente: d.operacao?.cliente?.nome,
+      valor_bruto: d.valor_bruto,
+      valor_juros: d.valor_juros,
+      juros_mora: d.juros_mora, // <-- ALTERAÇÃO AQUI
+      cliente_sacado: d.cliente_sacado,
+      data_vencimento: d.data_vencimento,
+      tipo_operacao_nome: d.operacao?.tipo_operacao?.nome,
+      status_recebimento: d.status_recebimento,
+    }));
 
-        // ORDENAÇÃO (sem alteração aqui)
-        const sortKey = searchParams.get('sort');
-        const sortDirection = searchParams.get('direction');
+    const uniqueData = Array.from(
+      new Map(
+        formattedData.map((item) => [
+          `${item.data_operacao}-${item.nf_cte}-${item.valor_bruto}`,
+          item,
+        ])
+      ).values()
+    );
 
-        if (sortKey && sortDirection) {
-            formattedData.sort((a, b) => {
-                const valA = a[sortKey];
-                const valB = b[sortKey];
-                if (valA === null) return 1; if (valB === null) return -1;
-                if (valA < valB) return sortDirection === 'ASC' ? -1 : 1;
-                if (valA > valB) return sortDirection === 'ASC' ? 1 : -1;
-                return 0;
-            });
-        }
-
-        return NextResponse.json(formattedData, { status: 200 });
-
-    } catch (error) {
-        console.error('Erro ao buscar duplicatas:', error);
-        return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
+    return NextResponse.json(uniqueData, { status: 200 });
+  } catch (error) {
+    console.error("Erro ao gerar relatório de duplicatas:", error);
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError"
+    ) {
+      return NextResponse.json(
+        { message: "Token inválido ou expirado" },
+        { status: 403 }
+      );
     }
+    return NextResponse.json(
+      { message: error.message || "Erro interno do servidor" },
+      { status: 500 }
+    );
+  }
 }
