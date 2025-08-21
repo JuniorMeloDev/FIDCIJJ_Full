@@ -164,13 +164,52 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
 
         let head, body;
         switch (type) {
+            // --- ALTERAÇÃO PRINCIPAL AQUI ---
             case 'fluxoCaixa':
                 head = [['Data', 'Descrição', 'Conta', 'Categoria', 'Valor']];
                 body = data.map(row => [formatDate(row.data_movimento), row.descricao, row.conta_bancaria, row.categoria, formatBRLNumber(row.valor)]);
                 autoTable(doc, { startY: 35, head, body });
+
+                // Calcula os totais por categoria
+                const totaisPorCategoria = data.reduce((acc, row) => {
+                    const { categoria, valor } = row;
+                    if (!acc[categoria]) {
+                        acc[categoria] = 0;
+                    }
+                    acc[categoria] += valor;
+                    return acc;
+                }, {});
+
+                // Adiciona os cards de resumo no final
+                let finalY = doc.lastAutoTable.finalY + 15;
+                doc.setFontSize(12);
+                doc.text('Resumo por Categoria', 14, finalY);
+                
+                let cardX = 14;
+                const cardWidth = 65;
+                const cardHeight = 25;
+                const cardMargin = 5;
+
+                Object.entries(totaisPorCategoria).forEach(([categoria, total]) => {
+                    if (cardX + cardWidth > pageWidth - 14) {
+                        cardX = 14;
+                        finalY += cardHeight + cardMargin;
+                    }
+                    
+                    doc.setFillColor(241, 241, 241); // Cor de fundo do card
+                    doc.roundedRect(cardX, finalY + 5, cardWidth, cardHeight, 3, 3, 'F');
+                    doc.setTextColor(50, 50, 50);
+                    doc.setFontSize(10);
+                    doc.text(categoria, cardX + 4, finalY + 12);
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(formatBRLNumber(total), cardX + 4, finalY + 20);
+
+                    cardX += cardWidth + cardMargin;
+                });
                 break;
+            // --- FIM DA ALTERAÇÃO ---
             case 'duplicatas':
-                // --- ALTERAÇÃO AQUI ---
                 head = [['Data Op.', 'NF/CT-e', 'Cedente', 'Sacado', 'Venc.', 'Status', 'Juros Op.', 'Juros Mora', 'Valor Bruto']];
                 body = data.map(row => [
                     formatDate(row.data_operacao), row.nf_cte, row.empresa_cedente, 
@@ -183,15 +222,12 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 const totalJurosMora = data.reduce((sum, row) => sum + (row.juros_mora || 0), 0);
                 const totalJuros = totalJurosOp + totalJurosMora;
 
-                // Renderiza a tabela principal SEM o rodapé
                 autoTable(doc, {
                     startY: 35,
                     head: head,
                     body: body,
-                    // Remove o 'foot' para não repetir em todas as páginas
                 });
 
-                // Adiciona a linha de totais APENAS UMA VEZ no final da tabela
                 autoTable(doc, {
                     startY: doc.lastAutoTable.finalY,
                     body: [
@@ -201,33 +237,29 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                     bodyStyles: { fontStyle: 'bold', fillColor: [41, 128, 185], textColor: 255 }
                 });
 
-                // Adiciona os cards de resumo no final
-                const finalY = doc.lastAutoTable.finalY + 15;
+                const finalYCards = doc.lastAutoTable.finalY + 15;
                 doc.setFontSize(12);
-                doc.text('Resumo do Relatório', 14, finalY);
+                doc.text('Resumo do Relatório', 14, finalYCards);
 
-                // Card 1: Valor Total
                 doc.setFillColor(241, 241, 241);
-                doc.roundedRect(14, finalY + 5, 90, 25, 3, 3, 'F');
+                doc.roundedRect(14, finalYCards + 5, 90, 25, 3, 3, 'F');
                 doc.setTextColor(50, 50, 50);
                 doc.setFontSize(10);
-                doc.text('Valor Total das Duplicatas', 18, finalY + 12);
+                doc.text('Valor Total das Duplicatas', 18, finalYCards + 12);
                 doc.setFontSize(14);
                 doc.setFont('helvetica', 'bold');
-                doc.text(formatBRLNumber(totalBruto), 18, finalY + 20);
+                doc.text(formatBRLNumber(totalBruto), 18, finalYCards + 20);
 
-                // Card 2: Juros Totais
                 doc.setFillColor(241, 241, 241);
-                doc.roundedRect(110, finalY + 5, 90, 25, 3, 3, 'F');
+                doc.roundedRect(110, finalYCards + 5, 90, 25, 3, 3, 'F');
                 doc.setTextColor(50, 50, 50);
                 doc.setFontSize(10);
                 doc.setFont('helvetica', 'normal');
-                doc.text('Valor Total dos Juros (Op. + Mora)', 114, finalY + 12);
+                doc.text('Valor Total dos Juros (Op. + Mora)', 114, finalYCards + 12);
                 doc.setFontSize(14);
                 doc.setFont('helvetica', 'bold');
-                doc.text(formatBRLNumber(totalJuros), 114, finalY + 20);
+                doc.text(formatBRLNumber(totalJuros), 114, finalYCards + 20);
                 break;
-                // --- FIM DA ALTERAÇÃO ---
             case 'totalOperado':
                 const processedCedentes = processAbcData(data.clientes);
                 const processedSacados = processAbcData(data.sacados);
