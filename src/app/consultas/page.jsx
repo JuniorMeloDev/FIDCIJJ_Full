@@ -38,10 +38,10 @@ export default function ConsultasPage() {
     clienteNome: "",
     tipoOperacaoId: "",
   });
-
-  // --- ALTERAÇÃO AQUI: Chaves de ordenação agora usam snake_case ---
+  
+  // --- GARANTINDO CONSISTÊNCIA: Chaves em camelCase ---
   const [sortConfig, setSortConfig] = useState({
-    key: "data_operacao",
+    key: "dataOperacao",
     direction: "DESC",
   });
 
@@ -315,7 +315,7 @@ export default function ConsultasPage() {
     if (!itemParaExcluir) return;
 
     const isOperacao = tipoExclusao === 'operacao';
-    const id = isOperacao ? itemParaExcluir.operacao_id : itemParaExcluir.id;
+    const id = isOperacao ? itemParaExcluir.operacaoId : itemParaExcluir.id;
     const url = isOperacao ? `/api/operacoes/${id}` : `/api/duplicatas/${id}`;
 
     try {
@@ -341,8 +341,8 @@ export default function ConsultasPage() {
   const handleAbrirEmailModal = () => {
     if (!contextMenu.selectedItem) return;
     setOperacaoParaEmail({
-      id: contextMenu.selectedItem.operacao_id,
-      clienteId: contextMenu.selectedItem.cliente_id,
+      id: contextMenu.selectedItem.operacaoId,
+      clienteId: contextMenu.selectedItem.clienteId,
     });
     setIsEmailModalOpen(true);
   };
@@ -387,7 +387,7 @@ export default function ConsultasPage() {
     const url =
       itemsToProcess.length > 1
         ? "/api/duplicatas/pdf-em-massa"
-        : `/api/operacoes/${contextMenu.selectedItem.operacao_id}/pdf`;
+        : `/api/operacoes/${contextMenu.selectedItem.operacaoId}/pdf`;
 
     try {
       const response = await fetch(url, {
@@ -456,7 +456,7 @@ export default function ConsultasPage() {
   const selectedValue = useMemo(() => {
     return duplicatas
       .filter((d) => selectedItems.has(d.id))
-      .reduce((sum, item) => sum + item.valor_bruto, 0);
+      .reduce((sum, item) => sum + item.valorBruto, 0);
   }, [selectedItems, duplicatas]);
 
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
@@ -490,7 +490,7 @@ export default function ConsultasPage() {
         onClose={() => setIsEmailModalOpen(false)}
         onSend={handleSendEmail}
         isSending={isSendingEmail}
-        clienteId={operacaoParaEmail?.cliente_id}
+        clienteId={operacaoParaEmail?.clienteId}
       />
       <ConfirmacaoExclusaoModal
           isOpen={!!itemParaExcluir}
@@ -540,20 +540,19 @@ export default function ConsultasPage() {
                           <th className="px-4 py-2 text-left"></th>
                         )}
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-                          {/* --- ALTERAÇÃO AQUI: Chaves de ordenação agora usam snake_case --- */}
                           <button
-                            onClick={() => handleSort("data_operacao")}
+                            onClick={() => handleSort("dataOperacao")}
                             className="flex items-center gap-1"
                           >
-                            Data Op. {getSortIcon("data_operacao")}
+                            Data Op. {getSortIcon("dataOperacao")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase min-w-[120px]">
                           <button
-                            onClick={() => handleSort("nf_cte")}
+                            onClick={() => handleSort("nfCte")}
                             className="flex items-center gap-1"
                           >
-                            NF/CT-e {getSortIcon("nf_cte")}
+                            NF/CT-e {getSortIcon("nfCte")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
@@ -566,43 +565,43 @@ export default function ConsultasPage() {
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("cliente_sacado")}
+                            onClick={() => handleSort("clienteSacado")}
                             className="flex items-center gap-1"
                           >
-                            Sacado {getSortIcon("cliente_sacado")}
+                            Sacado {getSortIcon("clienteSacado")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("valor_bruto")}
+                            onClick={() => handleSort("valorBruto")}
                             className="flex items-center gap-1 float-right"
                           >
-                            Valor Bruto {getSortIcon("valor_bruto")}
+                            Valor Bruto {getSortIcon("valorBruto")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("valor_juros")}
+                            onClick={() => handleSort("valorJuros")}
                             className="flex items-center gap-1 float-right"
                           >
-                            Juros {getSortIcon("valor_juros")}
+                            Juros {getSortIcon("valorJuros")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("data_vencimento")}
+                            onClick={() => handleSort("dataVencimento")}
                             className="flex items-center gap-1"
                           >
-                            Data Venc. {getSortIcon("data_vencimento")}
+                            Data Venc. {getSortIcon("dataVencimento")}
                           </button>
                         </th>
                       </tr>
                     </thead>
+                    {/* // --- ALTERAÇÃO PRINCIPAL AQUI: Voltando a usar camelCase --- // */}
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
-                      {/* // --- ALTERAÇÃO PRINCIPAL AQUI --- // */}
                       {currentItems.map((dup) => {
                         const isLiquidado =
-                          dup.status_recebimento === "Recebido";
+                          dup.statusRecebimento === "Recebido";
                         return (
                           <tr
                             key={dup.id}
@@ -627,14 +626,14 @@ export default function ConsultasPage() {
                                 isLiquidado ? "text-gray-500" : "text-gray-400"
                               }`}
                             >
-                              {formatDate(dup.data_operacao)}
+                              {formatDate(dup.dataOperacao)}
                             </td>
                             <td
                               className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle ${
                                 isLiquidado ? "text-gray-500" : "text-gray-100"
                               }`}
                             >
-                              {dup.nf_cte}
+                              {dup.nfCte}
                             </td>
                             <td
                               className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
@@ -648,40 +647,40 @@ export default function ConsultasPage() {
                                 isLiquidado ? "text-gray-500" : "text-gray-400"
                               }`}
                             >
-                              {dup.cliente_sacado}
+                              {dup.clienteSacado}
                             </td>
                             <td
                               className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${
                                 isLiquidado ? "text-gray-500" : "text-gray-100"
                               }`}
                             >
-                              {formatBRLNumber(dup.valor_bruto)}
+                              {formatBRLNumber(dup.valorBruto)}
                             </td>
                             <td
                               className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${
                                 isLiquidado ? "text-gray-500" : "text-red-400"
                               }`}
                             >
-                              {formatBRLNumber(dup.valor_juros)}
+                              {formatBRLNumber(dup.valorJuros)}
                             </td>
                             <td
                               className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
                                 isLiquidado ? "text-gray-500" : "text-gray-400"
                               }`}
                             >
-                              {formatDate(dup.data_vencimento)}
-                              {isLiquidado && dup.data_liquidacao && (
+                              {formatDate(dup.dataVencimento)}
+                              {isLiquidado && dup.dataLiquidacao && (
                                 <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-900 bg-opacity-80 pointer-events-none transition-opacity duration-300">
-                                  {dup.conta_liquidacao ? (
+                                  {dup.contaLiquidacao ? (
                                     <span className="bg-green-800 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
                                       Recebido em{" "}
-                                      {formatDate(dup.data_liquidacao)} na conta{" "}
-                                      {dup.conta_liquidacao}
+                                      {formatDate(dup.dataLiquidacao)} na conta{" "}
+                                      {dup.contaLiquidacao}
                                     </span>
                                   ) : (
                                     <span className="bg-gray-900 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
                                       Baixado em{" "}
-                                      {formatDate(dup.data_liquidacao)}
+                                      {formatDate(dup.dataLiquidacao)}
                                     </span>
                                   )}
                                 </div>
@@ -733,7 +732,7 @@ export default function ConsultasPage() {
               {isSelectionMode ? "Sair da Seleção" : "Selecionar"}
             </a>
             <div className="border-t border-gray-600 my-1"></div>
-            {contextMenu.selectedItem?.status_recebimento === "Recebido" ? (
+            {contextMenu.selectedItem?.statusRecebimento === "Recebido" ? (
               <a
                 href="#"
                 onClick={(e) => {
