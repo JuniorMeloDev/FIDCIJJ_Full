@@ -596,6 +596,7 @@ export default function ConsultasPage() {
                         </th>
                       </tr>
                     </thead>
+                    {/* // --- ALTERAÇÃO PRINCIPAL AQUI --- // */}
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
                       {currentItems.map((dup) => {
                         const isLiquidado =
@@ -688,6 +689,7 @@ export default function ConsultasPage() {
                         );
                       })}
                     </tbody>
+                    {/* // --- FIM DA ALTERAÇÃO --- // */}
                   </table>
                 </div>
                 <div className="flex-shrink-0 pt-4">
