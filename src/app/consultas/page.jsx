@@ -39,8 +39,9 @@ export default function ConsultasPage() {
     tipoOperacaoId: "",
   });
 
+  // --- ALTERAÇÃO AQUI: Chaves de ordenação agora usam snake_case ---
   const [sortConfig, setSortConfig] = useState({
-    key: "dataOperacao",
+    key: "data_operacao",
     direction: "DESC",
   });
 
@@ -314,7 +315,7 @@ export default function ConsultasPage() {
     if (!itemParaExcluir) return;
 
     const isOperacao = tipoExclusao === 'operacao';
-    const id = isOperacao ? itemParaExcluir.operacaoId : itemParaExcluir.id;
+    const id = isOperacao ? itemParaExcluir.operacao_id : itemParaExcluir.id;
     const url = isOperacao ? `/api/operacoes/${id}` : `/api/duplicatas/${id}`;
 
     try {
@@ -340,8 +341,8 @@ export default function ConsultasPage() {
   const handleAbrirEmailModal = () => {
     if (!contextMenu.selectedItem) return;
     setOperacaoParaEmail({
-      id: contextMenu.selectedItem.operacaoId,
-      clienteId: contextMenu.selectedItem.clienteId,
+      id: contextMenu.selectedItem.operacao_id,
+      clienteId: contextMenu.selectedItem.cliente_id,
     });
     setIsEmailModalOpen(true);
   };
@@ -386,7 +387,7 @@ export default function ConsultasPage() {
     const url =
       itemsToProcess.length > 1
         ? "/api/duplicatas/pdf-em-massa"
-        : `/api/operacoes/${contextMenu.selectedItem.operacaoId}/pdf`;
+        : `/api/operacoes/${contextMenu.selectedItem.operacao_id}/pdf`;
 
     try {
       const response = await fetch(url, {
@@ -455,7 +456,7 @@ export default function ConsultasPage() {
   const selectedValue = useMemo(() => {
     return duplicatas
       .filter((d) => selectedItems.has(d.id))
-      .reduce((sum, item) => sum + item.valorBruto, 0);
+      .reduce((sum, item) => sum + item.valor_bruto, 0);
   }, [selectedItems, duplicatas]);
 
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
@@ -489,7 +490,7 @@ export default function ConsultasPage() {
         onClose={() => setIsEmailModalOpen(false)}
         onSend={handleSendEmail}
         isSending={isSendingEmail}
-        clienteId={operacaoParaEmail?.clienteId}
+        clienteId={operacaoParaEmail?.cliente_id}
       />
       <ConfirmacaoExclusaoModal
           isOpen={!!itemParaExcluir}
@@ -539,19 +540,20 @@ export default function ConsultasPage() {
                           <th className="px-4 py-2 text-left"></th>
                         )}
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+                          {/* --- ALTERAÇÃO AQUI: Chaves de ordenação agora usam snake_case --- */}
                           <button
-                            onClick={() => handleSort("dataOperacao")}
+                            onClick={() => handleSort("data_operacao")}
                             className="flex items-center gap-1"
                           >
-                            Data Op. {getSortIcon("dataOperacao")}
+                            Data Op. {getSortIcon("data_operacao")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase min-w-[120px]">
                           <button
-                            onClick={() => handleSort("nfCte")}
+                            onClick={() => handleSort("nf_cte")}
                             className="flex items-center gap-1"
                           >
-                            NF/CT-e {getSortIcon("nfCte")}
+                            NF/CT-e {getSortIcon("nf_cte")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
@@ -564,43 +566,43 @@ export default function ConsultasPage() {
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("clienteSacado")}
+                            onClick={() => handleSort("cliente_sacado")}
                             className="flex items-center gap-1"
                           >
-                            Sacado {getSortIcon("clienteSacado")}
+                            Sacado {getSortIcon("cliente_sacado")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("valorBruto")}
+                            onClick={() => handleSort("valor_bruto")}
                             className="flex items-center gap-1 float-right"
                           >
-                            Valor Bruto {getSortIcon("valorBruto")}
+                            Valor Bruto {getSortIcon("valor_bruto")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("valorJuros")}
+                            onClick={() => handleSort("valor_juros")}
                             className="flex items-center gap-1 float-right"
                           >
-                            Juros {getSortIcon("valorJuros")}
+                            Juros {getSortIcon("valor_juros")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("dataVencimento")}
+                            onClick={() => handleSort("data_vencimento")}
                             className="flex items-center gap-1"
                           >
-                            Data Venc. {getSortIcon("dataVencimento")}
+                            Data Venc. {getSortIcon("data_vencimento")}
                           </button>
                         </th>
                       </tr>
                     </thead>
-                    {/* // --- ALTERAÇÃO PRINCIPAL AQUI --- // */}
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
+                      {/* // --- ALTERAÇÃO PRINCIPAL AQUI --- // */}
                       {currentItems.map((dup) => {
                         const isLiquidado =
-                          dup.statusRecebimento === "Recebido";
+                          dup.status_recebimento === "Recebido";
                         return (
                           <tr
                             key={dup.id}
@@ -625,14 +627,14 @@ export default function ConsultasPage() {
                                 isLiquidado ? "text-gray-500" : "text-gray-400"
                               }`}
                             >
-                              {formatDate(dup.dataOperacao)}
+                              {formatDate(dup.data_operacao)}
                             </td>
                             <td
                               className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle ${
                                 isLiquidado ? "text-gray-500" : "text-gray-100"
                               }`}
                             >
-                              {dup.nfCte}
+                              {dup.nf_cte}
                             </td>
                             <td
                               className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
@@ -646,40 +648,40 @@ export default function ConsultasPage() {
                                 isLiquidado ? "text-gray-500" : "text-gray-400"
                               }`}
                             >
-                              {dup.clienteSacado}
+                              {dup.cliente_sacado}
                             </td>
                             <td
                               className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${
                                 isLiquidado ? "text-gray-500" : "text-gray-100"
                               }`}
                             >
-                              {formatBRLNumber(dup.valorBruto)}
+                              {formatBRLNumber(dup.valor_bruto)}
                             </td>
                             <td
                               className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${
                                 isLiquidado ? "text-gray-500" : "text-red-400"
                               }`}
                             >
-                              {formatBRLNumber(dup.valorJuros)}
+                              {formatBRLNumber(dup.valor_juros)}
                             </td>
                             <td
                               className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
                                 isLiquidado ? "text-gray-500" : "text-gray-400"
                               }`}
                             >
-                              {formatDate(dup.dataVencimento)}
-                              {isLiquidado && dup.dataLiquidacao && (
+                              {formatDate(dup.data_vencimento)}
+                              {isLiquidado && dup.data_liquidacao && (
                                 <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-900 bg-opacity-80 pointer-events-none transition-opacity duration-300">
-                                  {dup.contaLiquidacao ? (
+                                  {dup.conta_liquidacao ? (
                                     <span className="bg-green-800 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
                                       Recebido em{" "}
-                                      {formatDate(dup.dataLiquidacao)} na conta{" "}
-                                      {dup.contaLiquidacao}
+                                      {formatDate(dup.data_liquidacao)} na conta{" "}
+                                      {dup.conta_liquidacao}
                                     </span>
                                   ) : (
                                     <span className="bg-gray-900 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
                                       Baixado em{" "}
-                                      {formatDate(dup.dataLiquidacao)}
+                                      {formatDate(dup.data_liquidacao)}
                                     </span>
                                   )}
                                 </div>
@@ -689,7 +691,6 @@ export default function ConsultasPage() {
                         );
                       })}
                     </tbody>
-                    {/* // --- FIM DA ALTERAÇÃO --- // */}
                   </table>
                 </div>
                 <div className="flex-shrink-0 pt-4">
@@ -732,7 +733,7 @@ export default function ConsultasPage() {
               {isSelectionMode ? "Sair da Seleção" : "Selecionar"}
             </a>
             <div className="border-t border-gray-600 my-1"></div>
-            {contextMenu.selectedItem?.statusRecebimento === "Recebido" ? (
+            {contextMenu.selectedItem?.status_recebimento === "Recebido" ? (
               <a
                 href="#"
                 onClick={(e) => {
