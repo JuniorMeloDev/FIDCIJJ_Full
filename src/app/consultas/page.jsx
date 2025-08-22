@@ -306,32 +306,38 @@ export default function ConsultasPage() {
   };
 
   const handleExcluir = () => {
-      if (!contextMenu.selectedItem) return;
-      setItemParaExcluir(contextMenu.selectedItem);
+    if (!contextMenu.selectedItem) return;
+    setItemParaExcluir(contextMenu.selectedItem);
   };
 
   const handleConfirmarExclusao = async (tipoExclusao) => {
     if (!itemParaExcluir) return;
 
-    const isOperacao = tipoExclusao === 'operacao';
+    const isOperacao = tipoExclusao === "operacao";
     const id = isOperacao ? itemParaExcluir.operacaoId : itemParaExcluir.id;
     const url = isOperacao ? `/api/operacoes/${id}` : `/api/duplicatas/${id}`;
 
     try {
       const response = await fetch(url, {
-        method: 'DELETE',
+        method: "DELETE",
         headers: getAuthHeader(),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || `Falha ao excluir a ${isOperacao ? 'operação' : 'duplicata'}.`);
+        throw new Error(
+          errorData.message ||
+            `Falha ao excluir a ${isOperacao ? "operação" : "duplicata"}.`
+        );
       }
 
-      showNotification(`${isOperacao ? 'Operação' : 'Duplicata'} excluída com sucesso!`, 'success');
+      showNotification(
+        `${isOperacao ? "Operação" : "Duplicata"} excluída com sucesso!`,
+        "success"
+      );
       fetchDuplicatas(filters, sortConfig);
     } catch (err) {
-      showNotification(err.message, 'error');
+      showNotification(err.message, "error");
     } finally {
       setItemParaExcluir(null);
     }
@@ -492,10 +498,10 @@ export default function ConsultasPage() {
         clienteId={operacaoParaEmail?.clienteId}
       />
       <ConfirmacaoExclusaoModal
-          isOpen={!!itemParaExcluir}
-          onClose={() => setItemParaExcluir(null)}
-          onConfirm={handleConfirmarExclusao}
-          item={itemParaExcluir}
+        isOpen={!!itemParaExcluir}
+        onClose={() => setItemParaExcluir(null)}
+        onConfirm={handleConfirmarExclusao}
+        item={itemParaExcluir}
       />
 
       <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
@@ -596,10 +602,10 @@ export default function ConsultasPage() {
                         </th>
                       </tr>
                     </thead>
-                    {/* // --- CORREÇÃO PRINCIPAL AQUI --- // */}
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
                       {currentItems.map((dup) => {
-                        const isLiquidado = dup.statusRecebimento === "Recebido";
+                        const isLiquidado =
+                          dup.statusRecebimento === "Recebido";
                         return (
                           <tr
                             key={dup.id}
@@ -619,26 +625,55 @@ export default function ConsultasPage() {
                                 />
                               </td>
                             )}
-                            <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
+                            <td
+                              className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
+                                isLiquidado ? "text-gray-500" : "text-gray-400"
+                              }`}
+                            >
                               {formatDate(dup.dataOperacao)}
                             </td>
-                            <td className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle ${isLiquidado ? "text-gray-500" : "text-gray-100"}`}>
+                            <td
+                              className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle ${
+                                isLiquidado ? "text-gray-500" : "text-gray-100"
+                              }`}
+                            >
                               {dup.nfCte}
                             </td>
-                            <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
+                            <td
+                              className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
+                                isLiquidado ? "text-gray-500" : "text-gray-400"
+                              }`}
+                            >
                               {dup.empresaCedente}
                             </td>
-                            <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
+                            <td
+                              className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
+                                isLiquidado ? "text-gray-500" : "text-gray-400"
+                              }`}
+                            >
                               {dup.clienteSacado}
                             </td>
-                            <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? "text-gray-500" : "text-gray-100"}`}>
+                            <td
+                              className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${
+                                isLiquidado ? "text-gray-500" : "text-gray-100"
+                              }`}
+                            >
                               {formatBRLNumber(dup.valorBruto)}
                             </td>
-                            <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? "text-gray-500" : "text-red-400"}`}>
+                            <td
+                              className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${
+                                isLiquidado ? "text-gray-500" : "text-red-400"
+                              }`}
+                            >
                               {formatBRLNumber(dup.valorJuros)}
                             </td>
-                            <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
+                            <td
+                              className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
+                                isLiquidado ? "text-gray-500" : "text-gray-400"
+                              }`}
+                            >
                               {formatDate(dup.dataVencimento)}
+                              {/* // --- CORREÇÃO PRINCIPAL AQUI --- // */}
                               {isLiquidado && dup.dataLiquidacao && (
                                 <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-900 bg-opacity-80 pointer-events-none transition-opacity duration-300">
                                   {dup.contaLiquidacao ? (
@@ -747,14 +782,14 @@ export default function ConsultasPage() {
             </a>
             <div className="border-t border-gray-600 my-1"></div>
             <a
-                href="#"
-                onClick={(e) => {
-                    e.preventDefault();
-                    handleExcluir();
-                }}
-                className="block px-4 py-2 text-sm text-red-400 hover:bg-gray-600"
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleExcluir();
+              }}
+              className="block px-4 py-2 text-sm text-red-400 hover:bg-gray-600"
             >
-                Excluir...
+              Excluir...
             </a>
           </div>
         </div>
