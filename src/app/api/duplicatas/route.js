@@ -10,6 +10,9 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
+        // --- ALTERAÇÃO PRINCIPAL AQUI ---
+        // Agora, consultamos as DUAS relações possíveis com a tabela de movimentações.
+        // Damos a elas nomes diferentes ('movimentacao_nova', 'movimentacao_antiga') para evitar ambiguidade.
         let { data: duplicatas, error } = await supabase
             .from('duplicatas')
             .select(`
@@ -19,12 +22,12 @@ export async function GET(request) {
                     cliente:clientes ( nome ),
                     tipo_operacao:tipos_operacao ( nome )
                 ),
-                movimentacao:movimentacoes_caixa!fk_movimentacao_caixa ( data_movimento, conta_bancaria )
+                movimentacao_nova:movimentacoes_caixa!fk_movimentacao_caixa ( data_movimento, conta_bancaria ),
+                movimentacao_antiga:movimentacoes_caixa!duplicatas_liquidacao_mov_id_fkey ( data_movimento, conta_bancaria )
             `);
 
         if (error) throw error;
 
-        // Filtros em JavaScript (sem alteração aqui)
         const sacadoFilter = searchParams.get('sacado');
         const statusFilter = searchParams.get('status');
         const dataOpInicio = searchParams.get('dataOpInicio');
@@ -48,27 +51,30 @@ export async function GET(request) {
             if (tipoOperacaoIdFilter && String(dup.operacao.tipo_operacao_id) !== tipoOperacaoIdFilter) return false;
             return true;
         });
+        
+        // Mapeia para o formato final, usando o resultado de qualquer uma das duas relações que retornar dados.
+        let formattedData = filteredData.map(d => {
+            const movimentacao = d.movimentacao_nova || d.movimentacao_antiga;
+            
+            return {
+                id: d.id,
+                operacaoId: d.operacao_id,
+                clienteId: d.operacao?.cliente_id,
+                dataOperacao: d.data_operacao,
+                nfCte: d.nf_cte,
+                empresaCedente: d.operacao?.cliente?.nome || 'N/A',
+                valorBruto: d.valor_bruto,
+                valorJuros: d.valor_juros,
+                clienteSacado: d.cliente_sacado,
+                dataVencimento: d.data_vencimento,
+                tipoOperacaoNome: d.operacao?.tipo_operacao?.nome,
+                statusRecebimento: d.status_recebimento,
+                dataLiquidacao: movimentacao?.data_movimento || d.data_liquidacao,
+                contaLiquidacao: movimentacao?.conta_bancaria,
+                operacao: d.operacao
+            };
+        });
 
-        // --- ALTERAÇÃO AQUI: Garante que todos os campos sejam formatados para camelCase ---
-        let formattedData = filteredData.map(d => ({
-            id: d.id,
-            operacaoId: d.operacao_id,
-            clienteId: d.operacao?.cliente_id,
-            dataOperacao: d.data_operacao,
-            nfCte: d.nf_cte,
-            empresaCedente: d.operacao?.cliente?.nome || 'N/A', // Garante que sempre haja um valor
-            valorBruto: d.valor_bruto,
-            valorJuros: d.valor_juros,
-            clienteSacado: d.cliente_sacado,
-            dataVencimento: d.data_vencimento,
-            tipoOperacaoNome: d.operacao?.tipo_operacao?.nome,
-            statusRecebimento: d.status_recebimento,
-            dataLiquidacao: d.movimentacao?.data_movimento || d.data_liquidacao,
-            contaLiquidacao: d.movimentacao?.conta_bancaria,
-            operacao: d.operacao
-        }));
-
-        // ORDENAÇÃO
         const sortKey = searchParams.get('sort');
         const sortDirection = searchParams.get('direction');
 
