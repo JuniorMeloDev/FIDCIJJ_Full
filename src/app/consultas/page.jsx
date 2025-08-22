@@ -40,7 +40,7 @@ export default function ConsultasPage() {
   });
 
   const [sortConfig, setSortConfig] = useState({
-    key: "data_operacao",
+    key: "dataOperacao",
     direction: "DESC",
   });
 
@@ -296,7 +296,7 @@ export default function ConsultasPage() {
         const errorData = await response.json();
         throw new Error(errorData.message || "Falha ao estornar a liquidação.");
       }
-      showNotification("Liquidação estornada com sucesso!`, "success");
+      showNotification("Liquidação estornada com sucesso!", "success");
       fetchDuplicatas(filters, sortConfig);
     } catch (err) {
       showNotification(err.message, "error");
@@ -314,7 +314,7 @@ export default function ConsultasPage() {
     if (!itemParaExcluir) return;
 
     const isOperacao = tipoExclusao === 'operacao';
-    const id = isOperacao ? itemParaExcluir.operacao_id : itemParaExcluir.id;
+    const id = isOperacao ? itemParaExcluir.operacaoId : itemParaExcluir.id;
     const url = isOperacao ? `/api/operacoes/${id}` : `/api/duplicatas/${id}`;
 
     try {
@@ -340,8 +340,8 @@ export default function ConsultasPage() {
   const handleAbrirEmailModal = () => {
     if (!contextMenu.selectedItem) return;
     setOperacaoParaEmail({
-      id: contextMenu.selectedItem.operacao_id,
-      clienteId: contextMenu.selectedItem.operacao?.cliente_id,
+      id: contextMenu.selectedItem.operacaoId,
+      clienteId: contextMenu.selectedItem.clienteId,
     });
     setIsEmailModalOpen(true);
   };
@@ -371,14 +371,36 @@ export default function ConsultasPage() {
   };
 
   const handleGeneratePdf = async () => {
-    if (!contextMenu.selectedItem) return;
-    const operacaoId = contextMenu.selectedItem.operacao_id;
-    if (!operacaoId) return;
+    const itemsToProcess =
+      isSelectionMode && selectedItems.size > 0
+        ? Array.from(selectedItems)
+        : contextMenu.selectedItem
+        ? [contextMenu.selectedItem.id]
+        : [];
 
-    const url = `/api/operacoes/${operacaoId}/pdf`;
+    if (itemsToProcess.length === 0) {
+      alert("Nenhuma duplicata selecionada.");
+      return;
+    }
+
+    const url =
+      itemsToProcess.length > 1
+        ? "/api/duplicatas/pdf-em-massa"
+        : `/api/operacoes/${contextMenu.selectedItem.operacaoId}/pdf`;
 
     try {
-      const response = await fetch(url, { headers: getAuthHeader() });
+      const response = await fetch(url, {
+        method: itemsToProcess.length > 1 ? "POST" : "GET",
+        headers:
+          itemsToProcess.length > 1
+            ? { "Content-Type": "application/json", ...getAuthHeader() }
+            : getAuthHeader(),
+        body:
+          itemsToProcess.length > 1
+            ? JSON.stringify({ ids: itemsToProcess })
+            : null,
+      });
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Não foi possível gerar o PDF.");
@@ -402,6 +424,7 @@ export default function ConsultasPage() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(downloadUrl);
+      clearSelection();
     } catch (err) {
       alert(err.message);
     }
@@ -432,7 +455,7 @@ export default function ConsultasPage() {
   const selectedValue = useMemo(() => {
     return duplicatas
       .filter((d) => selectedItems.has(d.id))
-      .reduce((sum, item) => sum + (item.valor_bruto || 0), 0);
+      .reduce((sum, item) => sum + item.valorBruto, 0);
   }, [selectedItems, duplicatas]);
 
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
@@ -517,60 +540,58 @@ export default function ConsultasPage() {
                         )}
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("data_operacao")}
+                            onClick={() => handleSort("dataOperacao")}
                             className="flex items-center gap-1"
                           >
-                            Data Op. {getSortIcon("data_operacao")}
+                            Data Op. {getSortIcon("dataOperacao")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase min-w-[120px]">
                           <button
-                            onClick={() => handleSort("nf_cte")}
+                            onClick={() => handleSort("nfCte")}
                             className="flex items-center gap-1"
                           >
-                            NF/CT-e {getSortIcon("nf_cte")}
+                            NF/CT-e {getSortIcon("nfCte")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
                           <button
-                            // Sorting on nested properties is complex and best handled server-side.
-                            // For now, we disable client-side sorting on this column.
-                            // onClick={() => handleSort("empresaCedente")}
+                            onClick={() => handleSort("empresaCedente")}
                             className="flex items-center gap-1"
                           >
-                            Cedente
+                            Cedente {getSortIcon("empresaCedente")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("cliente_sacado")}
+                            onClick={() => handleSort("clienteSacado")}
                             className="flex items-center gap-1"
                           >
-                            Sacado {getSortIcon("cliente_sacado")}
+                            Sacado {getSortIcon("clienteSacado")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("valor_bruto")}
+                            onClick={() => handleSort("valorBruto")}
                             className="flex items-center gap-1 float-right"
                           >
-                            Valor Bruto {getSortIcon("valor_bruto")}
+                            Valor Bruto {getSortIcon("valorBruto")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("valor_juros")}
+                            onClick={() => handleSort("valorJuros")}
                             className="flex items-center gap-1 float-right"
                           >
-                            Juros {getSortIcon("valor_juros")}
+                            Juros {getSortIcon("valorJuros")}
                           </button>
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
                           <button
-                            onClick={() => handleSort("data_vencimento")}
+                            onClick={() => handleSort("dataVencimento")}
                             className="flex items-center gap-1"
                           >
-                            Data Venc. {getSortIcon("data_vencimento")}
+                            Data Venc. {getSortIcon("dataVencimento")}
                           </button>
                         </th>
                       </tr>
@@ -578,7 +599,7 @@ export default function ConsultasPage() {
                     {/* // --- CORREÇÃO PRINCIPAL AQUI --- // */}
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
                       {currentItems.map((dup) => {
-                        const isLiquidado = dup.status_recebimento === "Recebido";
+                        const isLiquidado = dup.statusRecebimento === "Recebido";
                         return (
                           <tr
                             key={dup.id}
@@ -598,66 +619,38 @@ export default function ConsultasPage() {
                                 />
                               </td>
                             )}
-                            <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
-                                isLiquidado ? "text-gray-500" : "text-gray-400"
-                              }`}
-                            >
-                              {formatDate(dup.data_operacao)}
+                            <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
+                              {formatDate(dup.dataOperacao)}
                             </td>
-                            <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle ${
-                                isLiquidado ? "text-gray-500" : "text-gray-100"
-                              }`}
-                            >
-                              {dup.nf_cte}
+                            <td className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle ${isLiquidado ? "text-gray-500" : "text-gray-100"}`}>
+                              {dup.nfCte}
                             </td>
-                            <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
-                                isLiquidado ? "text-gray-500" : "text-gray-400"
-                              }`}
-                            >
-                              {dup.operacao?.cliente?.nome}
+                            <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
+                              {dup.empresaCedente}
                             </td>
-                            <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
-                                isLiquidado ? "text-gray-500" : "text-gray-400"
-                              }`}
-                            >
-                              {dup.cliente_sacado}
+                            <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
+                              {dup.clienteSacado}
                             </td>
-                            <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${
-                                isLiquidado ? "text-gray-500" : "text-gray-100"
-                              }`}
-                            >
-                              {formatBRLNumber(dup.valor_bruto)}
+                            <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? "text-gray-500" : "text-gray-100"}`}>
+                              {formatBRLNumber(dup.valorBruto)}
                             </td>
-                            <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${
-                                isLiquidado ? "text-gray-500" : "text-red-400"
-                              }`}
-                            >
-                              {formatBRLNumber(dup.valor_juros)}
+                            <td className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${isLiquidado ? "text-gray-500" : "text-red-400"}`}>
+                              {formatBRLNumber(dup.valorJuros)}
                             </td>
-                            <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
-                                isLiquidado ? "text-gray-500" : "text-gray-400"
-                              }`}
-                            >
-                              {formatDate(dup.data_vencimento)}
-                              {isLiquidado && dup.data_liquidacao && (
+                            <td className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
+                              {formatDate(dup.dataVencimento)}
+                              {isLiquidado && dup.dataLiquidacao && (
                                 <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-900 bg-opacity-80 pointer-events-none transition-opacity duration-300">
-                                  {dup.movimentacao?.conta_bancaria ? (
+                                  {dup.contaLiquidacao ? (
                                     <span className="bg-green-800 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
                                       Recebido em{" "}
-                                      {formatDate(dup.data_liquidacao)} na conta{" "}
-                                      {dup.movimentacao.conta_bancaria}
+                                      {formatDate(dup.dataLiquidacao)} na conta{" "}
+                                      {dup.contaLiquidacao}
                                     </span>
                                   ) : (
                                     <span className="bg-gray-900 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
                                       Baixado em{" "}
-                                      {formatDate(dup.data_liquidacao)}
+                                      {formatDate(dup.dataLiquidacao)}
                                     </span>
                                   )}
                                 </div>
@@ -709,7 +702,7 @@ export default function ConsultasPage() {
               {isSelectionMode ? "Sair da Seleção" : "Selecionar"}
             </a>
             <div className="border-t border-gray-600 my-1"></div>
-            {contextMenu.selectedItem?.status_recebimento === "Recebido" ? (
+            {contextMenu.selectedItem?.statusRecebimento === "Recebido" ? (
               <a
                 href="#"
                 onClick={(e) => {
