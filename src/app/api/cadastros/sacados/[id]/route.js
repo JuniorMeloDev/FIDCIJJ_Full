@@ -12,10 +12,10 @@ export async function PUT(request, { params }) {
         const { id } = params;
         const body = await request.json();
         
-        // --- ALTERAÇÃO AQUI: Separa os dados do sacado das condições de pagamento ---
+        // --- CORREÇÃO AQUI: Separa os dados do sacado das condições de pagamento ---
         const { condicoesPagamento, ...sacadoData } = body;
 
-        // 1. Atualiza os dados principais do sacado
+        // 1. Atualiza os dados principais do sacado (sem as condições de pagamento)
         const { error: sacadoError } = await supabase
             .from('sacados')
             .update(sacadoData)
@@ -24,13 +24,13 @@ export async function PUT(request, { params }) {
         if (sacadoError) throw sacadoError;
 
         // 2. Apaga as condições de pagamento antigas para depois inserir as novas
-        const { error: deleteError } = await supabase.from('condicoes_pagamento').delete().eq('sacado_id', id);
-        if (deleteError) throw deleteError;
+        await supabase.from('condicoes_pagamento').delete().eq('sacado_id', id);
 
         // 3. Insere as novas condições de pagamento, se existirem
         if (condicoesPagamento && condicoesPagamento.length > 0) {
             const condicoesToInsert = condicoesPagamento.map(cond => ({
-                ...cond,
+                parcelas: cond.parcelas,
+                prazos: cond.prazos,
                 sacado_id: id
             }));
             const { error: insertError } = await supabase.from('condicoes_pagamento').insert(condicoesToInsert);
@@ -39,6 +39,7 @@ export async function PUT(request, { params }) {
 
         return new NextResponse(null, { status: 204 });
     } catch (error) {
+        console.error("Erro ao atualizar sacado:", error);
         if (error.code === '23505') { 
             return NextResponse.json({ message: 'Já existe um sacado com este CNPJ.' }, { status: 409 });
         }
@@ -54,7 +55,6 @@ export async function DELETE(request, { params }) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const { id } = params;
-        // O Supabase irá apagar em cascata as condições de pagamento se a chave estrangeira foi configurada corretamente
         const { error } = await supabase.from('sacados').delete().eq('id', id);
 
         if (error) throw error;

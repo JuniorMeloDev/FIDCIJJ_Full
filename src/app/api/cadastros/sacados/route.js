@@ -11,7 +11,7 @@ export async function GET(request) {
 
         const { data, error } = await supabase
             .from('sacados')
-            .select('*, condicoes_pagamento(*)') // O '*' busca os dados do sacado e 'condicoes_pagamento(*)' busca os dados relacionados
+            .select('*, condicoes_pagamento(*)')
             .order('nome', { ascending: true });
 
         if (error) throw error;
@@ -30,7 +30,7 @@ export async function POST(request) {
 
         const body = await request.json();
         
-        // --- ALTERAÇÃO AQUI: Separa os dados do sacado das condições de pagamento ---
+        // --- CORREÇÃO AQUI: Separa os dados do sacado das condições de pagamento ---
         const { condicoesPagamento, ...sacadoData } = body;
 
         // 1. Insere o sacado
@@ -45,8 +45,9 @@ export async function POST(request) {
         // 2. Se houver condições de pagamento, associa-as ao novo sacado
         if (condicoesPagamento && condicoesPagamento.length > 0) {
             const condicoesToInsert = condicoesPagamento.map(cond => ({
-                ...cond,
-                sacado_id: newSacado.id // Adiciona o ID do sacado recém-criado
+                parcelas: cond.parcelas,
+                prazos: cond.prazos,
+                sacado_id: newSacado.id
             }));
             const { error: condicoesError } = await supabase.from('condicoes_pagamento').insert(condicoesToInsert);
             if (condicoesError) throw condicoesError;
@@ -54,7 +55,7 @@ export async function POST(request) {
 
         return NextResponse.json(newSacado, { status: 201 });
     } catch (error) {
-         // Trata erro de CNPJ duplicado
+        console.error("Erro ao criar sacado:", error);
         if (error.code === '23505') { 
             return NextResponse.json({ message: 'Já existe um sacado com este CNPJ.' }, { status: 409 });
         }
