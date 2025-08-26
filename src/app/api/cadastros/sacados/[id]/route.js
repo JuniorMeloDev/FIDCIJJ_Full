@@ -11,6 +11,8 @@ export async function PUT(request, { params }) {
 
         const { id } = params;
         const body = await request.json();
+        
+        // --- ALTERAÇÃO AQUI: Separa os dados do sacado das condições de pagamento ---
         const { condicoesPagamento, ...sacadoData } = body;
 
         // 1. Atualiza os dados principais do sacado
@@ -21,11 +23,11 @@ export async function PUT(request, { params }) {
 
         if (sacadoError) throw sacadoError;
 
-        // 2. Apaga as condições de pagamento antigas
+        // 2. Apaga as condições de pagamento antigas para depois inserir as novas
         const { error: deleteError } = await supabase.from('condicoes_pagamento').delete().eq('sacado_id', id);
         if (deleteError) throw deleteError;
 
-        // 3. Insere as novas condições de pagamento
+        // 3. Insere as novas condições de pagamento, se existirem
         if (condicoesPagamento && condicoesPagamento.length > 0) {
             const condicoesToInsert = condicoesPagamento.map(cond => ({
                 ...cond,

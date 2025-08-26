@@ -29,6 +29,8 @@ export async function POST(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const body = await request.json();
+        
+        // --- ALTERAÇÃO AQUI: Separa os dados do sacado das condições de pagamento ---
         const { condicoesPagamento, ...sacadoData } = body;
 
         // 1. Insere o sacado
