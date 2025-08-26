@@ -424,8 +424,7 @@ export default function ResumoPage() {
                       .map((dup) => {
                         const isVencido = dup.dataVencimento < today;
                         const op = dup.operacao;
-                        
-                        // Nova lógica: se o juro da operação for zero, mas o da duplicata não, soma para exibição.
+                      
                         const jurosNaoDescontados = op && op.valor_total_juros < 0.01 && dup.valorJuros > 0;
                         const valorExibido = jurosNaoDescontados ? dup.valorBruto + dup.valorJuros : dup.valorBruto;
                         
