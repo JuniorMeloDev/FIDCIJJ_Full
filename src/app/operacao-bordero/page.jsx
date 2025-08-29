@@ -638,12 +638,6 @@ export default function OperacaoBorderoPage() {
               onChange={handleCtePdfUpload}
               style={{ display: "none" }}
             />
-            <button
-              onClick={() => cteFileInputRef.current.click()}
-              className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-blue-700 transition"
-            >
-              Importar CT-e (PDF)
-            </button>
           </div>
         </motion.header>
 
