@@ -17,8 +17,8 @@ export default function OperacaoDetalhes({
     cedenteRamo,
     isPartialDebit,
     setIsPartialDebit,
-    incluirJuros,
-    setIncluirJuros
+    jurosPre,
+    setjurosPre
 }) {
     const docType = cedenteRamo === 'Transportes' ? 'CT-e' : 'NF-e';
 
@@ -45,7 +45,7 @@ export default function OperacaoDetalhes({
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 text-right">{formatBRLNumber(nf.valorNf)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-red-400 text-right">-{formatBRLNumber(nf.jurosCalculado || 0)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 text-right">
-                                    {formatBRLNumber(incluirJuros ? (nf.valorLiquidoCalculado || nf.valorNf) : nf.valorNf)}
+                                    {formatBRLNumber(jurosPre ? (nf.valorLiquidoCalculado || nf.valorNf) : nf.valorNf)}
                                 </td>
                             </tr>
                         ))}
@@ -87,8 +87,8 @@ export default function OperacaoDetalhes({
                         <span>{formatBRLNumber(totais.valorTotalBruto)}</span>
                     </div>
                     <div className="flex justify-between text-sm font-medium text-red-400">
-                        <span>{incluirJuros ? '(-) Deságio Total:' : 'Deságio Total:'}</span>
-                        <span>{incluirJuros ? '-' : ''}{formatBRLNumber(totais.desagioTotal)}</span>
+                        <span>{jurosPre ? '(-) Deságio Total:' : 'Deságio Total:'}</span>
+                        <span>{jurosPre ? '-' : ''}{formatBRLNumber(totais.desagioTotal)}</span>
                     </div>
                     <div className="flex justify-between text-sm font-medium text-red-400">
                         <span>(-) Outros Descontos:</span>
@@ -132,11 +132,11 @@ export default function OperacaoDetalhes({
                          <label className="flex items-center cursor-pointer">
                             <input
                                 type="checkbox"
-                                checked={incluirJuros}
-                                onChange={(e) => setIncluirJuros(e.target.checked)}
+                                checked={jurosPre}
+                                onChange={(e) => setjurosPre(e.target.checked)}
                                 className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
                             />
-                            <span className="ml-2 text-sm text-gray-200">Incluir Juros</span>
+                            <span className="ml-2 text-sm text-gray-200">Juros Pré</span>
                         </label>
                     </div>
                 </div>

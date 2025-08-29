@@ -44,7 +44,7 @@ export default function OperacaoBorderoPage() {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [savedOperacaoInfo, setSavedOperacaoInfo] = useState(null);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
-  const [incluirJuros, setIncluirJuros] = useState(true);
+  const [jurosPre, setjurosPre] = useState(true);
 
   const [isPartialDebit, setIsPartialDebit] = useState(false);
   const [isPartialDebitModalOpen, setIsPartialDebitModalOpen] = useState(false);
@@ -413,8 +413,8 @@ export default function OperacaoBorderoPage() {
       notasFiscais: notasFiscais.map((nf) => ({
         ...nf,
         peso: parseFloat(String(nf.peso).replace(",", ".")) || null,
-        // Se 'incluirJuros' for falso, envia juros como 0 para o backend
-        jurosCalculado: incluirJuros ? nf.jurosCalculado : 0,
+        // Se 'jurosPre' for falso, envia juros como 0 para o backend
+        jurosCalculado: jurosPre ? nf.jurosCalculado : 0,
       })),
       cedenteRamo, // Adicionado para garantir que o ramo seja passado
       valorDebito: valorDebito, // Para débito parcial
@@ -501,7 +501,7 @@ export default function OperacaoBorderoPage() {
     setCondicoesSacado([]);
     setIgnoreDespesasBancarias(false);
     setIsPartialDebit(false);
-    setIncluirJuros(true); // Reseta o novo checkbox para o padrão
+    setjurosPre(true); // Reseta o novo checkbox para o padrão
     if (showMsg) showNotification("Formulário limpo.", "success");
   };
 
@@ -519,7 +519,7 @@ export default function OperacaoBorderoPage() {
       });
     }
     return combined;
-  }, [descontos, tipoOperacaoId, tiposOperacao, ignoreDespesasBancarias, incluirJuros]);
+  }, [descontos, tipoOperacaoId, tiposOperacao, ignoreDespesasBancarias, jurosPre]);
 
   const showPeso = useMemo(() => {
     const selectedOperacao = tiposOperacao.find(
@@ -542,8 +542,8 @@ export default function OperacaoBorderoPage() {
       0
     );
     
-    // O cálculo do líquido agora depende diretamente do estado 'incluirJuros'
-    const liquidoOperacao = incluirJuros
+    // O cálculo do líquido agora depende diretamente do estado 'jurosPre'
+    const liquidoOperacao = jurosPre
       ? valorTotalBruto - desagioTotal - totalOutrosDescontos
       : valorTotalBruto - totalOutrosDescontos;
 
@@ -553,7 +553,7 @@ export default function OperacaoBorderoPage() {
       totalOutrosDescontos,
       liquidoOperacao,
     };
-  }, [notasFiscais, todosOsDescontos, tipoOperacaoId, tiposOperacao, incluirJuros]);
+  }, [notasFiscais, todosOsDescontos, tipoOperacaoId, tiposOperacao, jurosPre]);
 
   const handleRemoveDesconto = (idToRemove) => {
     if (idToRemove === "despesas-bancarias") {
@@ -613,7 +613,7 @@ export default function OperacaoBorderoPage() {
           <div>
             <h1 className="text-3xl font-bold">Criar Borderô</h1>
             <p className="text-sm text-gray-300 mt-1">
-              Preencha os dados abaixo ou importe um XML/PDF
+              Preencha os dados abaixo ou importe um XML
             </p>
           </div>
           <div className="flex gap-2">
@@ -628,7 +628,7 @@ export default function OperacaoBorderoPage() {
               onClick={() => fileInputRef.current.click()}
               className="bg-gray-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-gray-600 transition"
             >
-              Importar NF-e (XML)
+              Importar NF/CT-e (XML)
             </button>
 
             <input
@@ -679,8 +679,8 @@ export default function OperacaoBorderoPage() {
           cedenteRamo={cedenteRamo}
           isPartialDebit={isPartialDebit}
           setIsPartialDebit={setIsPartialDebit}
-          incluirJuros={incluirJuros}
-          setIncluirJuros={setIncluirJuros}
+          jurosPre={jurosPre}
+          setjurosPre={setjurosPre}
         />
       </main>
     </>
