@@ -24,16 +24,18 @@ export async function POST(request) {
     const xmlText = await file.text();
     const parsedXml = await parseStringPromise(xmlText, {
       explicitArray: true,
+      // MODIFICAÇÃO CHAVE: Ignora o elemento raiz (nfeProc/cteProc)
+      explicitRoot: false,
       ignoreAttrs: true,
-      // Garante que os namespaces (como <nfeProc> e <cteProc>) sejam removidos
       tagNameProcessors: [name => name.replace(/^.*:/, '')]
     });
 
     let inf, numeroDoc, valorTotal, parcelas = [], emitNode, sacadoNode;
 
     // --- LÓGICA DE DETECÇÃO CORRIGIDA E MAIS ROBUSTA ---
-    if (parsedXml.nfeProc && getVal(parsedXml, 'nfeProc.NFe.infNFe')) {
-        inf = getVal(parsedXml, 'nfeProc.NFe.infNFe');
+    // Agora verificamos diretamente a existência de <NFe> ou <CTe>
+    if (getVal(parsedXml, 'NFe.infNFe')) {
+        inf = getVal(parsedXml, 'NFe.infNFe');
         
         numeroDoc = getVal(inf, 'ide.nNF');
         valorTotal = parseFloat(getVal(inf, 'total.ICMSTot.vNF'));
@@ -47,8 +49,8 @@ export async function POST(request) {
             valor: parseFloat(getVal(p, 'vDup')),
         })) || [];
 
-    } else if (parsedXml.cteProc && getVal(parsedXml, 'cteProc.CTe.infCte')) {
-        inf = getVal(parsedXml, 'cteProc.CTe.infCte');
+    } else if (getVal(parsedXml, 'CTe.infCte')) {
+        inf = getVal(parsedXml, 'CTe.infCte');
 
         numeroDoc = getVal(inf, 'ide.nCT');
         valorTotal = parseFloat(getVal(inf, 'vPrest.vTPrest'));
@@ -65,7 +67,6 @@ export async function POST(request) {
         parcelas = [];
 
     } else {
-        // Se não encontrar nem nfeProc nem cteProc, o XML é inválido
         throw new Error("Estrutura do XML (NF-e ou CT-e) inválida ou não suportada.");
     }
     // --- FIM DA CORREÇÃO ---
