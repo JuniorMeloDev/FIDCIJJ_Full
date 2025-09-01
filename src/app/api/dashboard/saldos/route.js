@@ -9,13 +9,15 @@ export async function GET(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const { searchParams } = new URL(request.url);
-        
-        // A API ainda recebe dataInicio e dataFim, mas só usaremos dataFim.
+        const dataInicio = searchParams.get('dataInicio') || null;
         const dataFim = searchParams.get('dataFim') || null;
+        const tipoOperacaoId = searchParams.get('tipoOperacaoId') || null;
 
-        // Chamada RPC modificada para passar apenas o parâmetro p_data_fim.
+        // This RPC call now correctly matches the function signature in the database
         const { data, error } = await supabase.rpc('get_saldos_por_conta', {
-            p_data_fim: dataFim
+            data_inicio: dataInicio,
+            data_fim: dataFim,
+            p_tipo_operacao_id: tipoOperacaoId
         });
 
         if (error) throw error;
