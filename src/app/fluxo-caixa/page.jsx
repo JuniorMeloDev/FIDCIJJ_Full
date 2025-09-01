@@ -425,6 +425,7 @@ export default function FluxoDeCaixaPage() {
           onClose={() => setIsComplementModalOpen(false)}
           onSave={handleSaveComplemento}
           lancamentoOriginal={lancamentoParaComplemento}
+          contasMaster={contasMaster}
       />
 
       <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">

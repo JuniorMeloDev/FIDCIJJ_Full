@@ -1,12 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { formatBRLInput, parseBRL } from '@/app/utils/formatters';
 
-export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOriginal }) {
+// ADICIONADO: contasMaster como nova propriedade
+export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOriginal, contasMaster }) {
     const [valorComplemento, setValorComplemento] = useState('');
     const [dataComplemento, setDataComplemento] = useState(new Date().toISOString().split('T')[0]);
+    // ADICIONADO: State para a conta bancária
+    const [contaBancaria, setContaBancaria] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+
+    // ADICIONADO: useEffect para definir a conta inicial
+    useEffect(() => {
+        if (isOpen && lancamentoOriginal) {
+            setContaBancaria(lancamentoOriginal.contaBancaria || '');
+            setValorComplemento('');
+            setDataComplemento(new Date().toISOString().split('T')[0]);
+        }
+    }, [isOpen, lancamentoOriginal]);
+
 
     if (!isOpen) return null;
 
@@ -16,14 +29,13 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
             valor: parseBRL(valorComplemento),
             data: dataComplemento,
             operacao_id: lancamentoOriginal.operacaoId,
-            conta_bancaria: lancamentoOriginal.contaBancaria,
+            // MODIFICADO: Usa a conta selecionada no state
+            conta_bancaria: contaBancaria,
             empresa_associada: lancamentoOriginal.empresaAssociada
         };
         const success = await onSave(payload);
         if (success) {
-            setValorComplemento('');
-            setDataComplemento(new Date().toISOString().split('T')[0]);
-            onClose();
+            onClose(); // Limpeza de states agora é feita pelo useEffect
         }
         setIsSaving(false);
     };
@@ -43,6 +55,23 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
                         onChange={(e) => setDataComplemento(e.target.value)}
                         className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"
                     />
+                </div>
+                
+                {/* ADICIONADO: Campo de seleção de conta */}
+                <div className="mb-4">
+                    <label htmlFor="contaBancaria" className="block text-sm font-medium text-gray-300">Debitar da Conta</label>
+                    <select
+                        id="contaBancaria"
+                        value={contaBancaria}
+                        onChange={(e) => setContaBancaria(e.target.value)}
+                        required
+                        className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"
+                    >
+                        <option value="">Selecione uma conta...</option>
+                        {Array.isArray(contasMaster) && contasMaster.map(c => (
+                            <option key={c.contaBancaria} value={c.contaBancaria}>{c.contaBancaria}</option>
+                        ))}
+                    </select>
                 </div>
 
                 <div className="mb-6">

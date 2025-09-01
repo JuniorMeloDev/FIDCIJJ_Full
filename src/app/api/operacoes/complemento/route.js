@@ -1,5 +1,3 @@
-// src/app/api/operacoes/complemento/route.js
-
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
@@ -16,16 +14,31 @@ export async function POST(request) {
         if (!valor || !data || !operacao_id || !conta_bancaria) {
             return NextResponse.json({ message: 'Dados insuficientes para criar o complemento.' }, { status: 400 });
         }
+        
+        // --- LÓGICA ADICIONADA PARA BUSCAR NF/CTE ---
+        let descricaoLancamento = `COMPLEMENTO BORDERO #${operacao_id}`; // Fallback
 
-        // Cria o registro na tabela de movimentações
+        const { data: duplicatas, error: dupError } = await supabase
+            .from('duplicatas')
+            .select('nf_cte')
+            .eq('operacao_id', operacao_id);
+
+        if (dupError) {
+            console.error("Erro ao buscar duplicatas para descrição do complemento:", dupError);
+        } else if (duplicatas && duplicatas.length > 0) {
+            // Pega os números base das notas (ex: de '2180.1' e '2180.2' pega apenas '2180')
+            // e cria uma string única.
+            const numerosNf = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
+            descricaoLancamento = `COMPLEMENTO BORDERO NF ${numerosNf}`;
+        }
+        // --- FIM DA LÓGICA ADICIONADA ---
+
         const { error } = await supabase.from('movimentacoes_caixa').insert({
             data_movimento: data,
-            // A descrição é padronizada como solicitado
-            descricao: `Complemento Borderô #${operacao_id}`,
-            // O valor é sempre negativo, pois é uma saída/pagamento
+            // MODIFICADO: Usa a nova descrição dinâmica
+            descricao: descricaoLancamento,
             valor: -Math.abs(valor),
             conta_bancaria: conta_bancaria,
-            // A categoria é padronizada como solicitado
             categoria: 'Pagamento de Borderô',
             operacao_id: operacao_id,
             empresa_associada: empresa_associada,
@@ -36,7 +49,7 @@ export async function POST(request) {
             throw error;
         }
 
-        return new NextResponse(null, { status: 201 }); // 201 Created
+        return new NextResponse(null, { status: 201 });
 
     } catch (error) {
         console.error("Erro na API de complemento de borderô:", error);
