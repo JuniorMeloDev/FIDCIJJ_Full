@@ -15,27 +15,40 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Dados insuficientes para criar o complemento.' }, { status: 400 });
         }
         
-        // --- LÓGICA ADICIONADA PARA BUSCAR NF/CTE ---
-        let descricaoLancamento = `COMPLEMENTO BORDERO #${operacao_id}`; // Fallback
+        // --- LÓGICA CORRIGIDA PARA BUSCAR O TIPO DE DOCUMENTO ---
+        let descricaoLancamento = `Complemento Borderô #${operacao_id}`; // Fallback
 
-        const { data: duplicatas, error: dupError } = await supabase
-            .from('duplicatas')
-            .select('nf_cte')
-            .eq('operacao_id', operacao_id);
+        // 1. Busca a operação e o cliente associado para descobrir o ramo de atividade
+        const { data: operacaoData, error: operacaoError } = await supabase
+            .from('operacoes')
+            .select('*, cliente:clientes(ramo_de_atividade)')
+            .eq('id', operacao_id)
+            .single();
 
-        if (dupError) {
-            console.error("Erro ao buscar duplicatas para descrição do complemento:", dupError);
-        } else if (duplicatas && duplicatas.length > 0) {
-            // Pega os números base das notas (ex: de '2180.1' e '2180.2' pega apenas '2180')
-            // e cria uma string única.
-            const numerosNf = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
-            descricaoLancamento = `COMPLEMENTO BORDERO NF ${numerosNf}`;
+        if (operacaoError) {
+             console.error("Erro ao buscar operação para complemento:", operacaoError);
+        } else if (operacaoData) {
+            // 2. Busca as duplicatas para pegar os números
+            const { data: duplicatas, error: dupError } = await supabase
+                .from('duplicatas')
+                .select('nf_cte')
+                .eq('operacao_id', operacao_id);
+
+            if (dupError) {
+                console.error("Erro ao buscar duplicatas para descrição do complemento:", dupError);
+            } else if (duplicatas && duplicatas.length > 0) {
+                // 3. Define o tipo de documento com base no ramo de atividade
+                const docType = operacaoData.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
+                const numerosDoc = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
+                
+                // 4. Monta a descrição correta
+                descricaoLancamento = `Complemento Borderô ${docType} ${numerosDoc}`;
+            }
         }
-        // --- FIM DA LÓGICA ADICIONADA ---
+        // --- FIM DA CORREÇÃO ---
 
         const { error } = await supabase.from('movimentacoes_caixa').insert({
             data_movimento: data,
-            // MODIFICADO: Usa a nova descrição dinâmica
             descricao: descricaoLancamento,
             valor: -Math.abs(valor),
             conta_bancaria: conta_bancaria,
