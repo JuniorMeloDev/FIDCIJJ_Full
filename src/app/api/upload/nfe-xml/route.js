@@ -25,20 +25,20 @@ export async function POST(request) {
     const parsedXml = await parseStringPromise(xmlText, {
       explicitArray: true,
       ignoreAttrs: true,
+      // Garante que os namespaces (como <nfeProc> e <cteProc>) sejam removidos
       tagNameProcessors: [name => name.replace(/^.*:/, '')]
     });
 
-    let inf, docType, numeroDoc, valorTotal, parcelas = [], emitNode, sacadoNode;
+    let inf, numeroDoc, valorTotal, parcelas = [], emitNode, sacadoNode;
 
-    // --- LÓGICA DE DETECÇÃO (NF-e ou CT-e) ---
-    if (getVal(parsedXml, 'nfeProc.NFe.infNFe')) {
-        docType = 'nfe';
+    // --- LÓGICA DE DETECÇÃO CORRIGIDA E MAIS ROBUSTA ---
+    if (parsedXml.nfeProc && getVal(parsedXml, 'nfeProc.NFe.infNFe')) {
         inf = getVal(parsedXml, 'nfeProc.NFe.infNFe');
         
         numeroDoc = getVal(inf, 'ide.nNF');
         valorTotal = parseFloat(getVal(inf, 'total.ICMSTot.vNF'));
         emitNode = getVal(inf, 'emit');
-        sacadoNode = getVal(inf, 'dest'); // Na NF-e o sacado é sempre o destinatário
+        sacadoNode = getVal(inf, 'dest');
         
         const cobr = getVal(inf, 'cobr');
         parcelas = cobr?.dup?.map(p => ({
@@ -47,30 +47,28 @@ export async function POST(request) {
             valor: parseFloat(getVal(p, 'vDup')),
         })) || [];
 
-    } else if (getVal(parsedXml, 'cteProc.CTe.infCte')) {
-        docType = 'cte';
+    } else if (parsedXml.cteProc && getVal(parsedXml, 'cteProc.CTe.infCte')) {
         inf = getVal(parsedXml, 'cteProc.CTe.infCte');
 
         numeroDoc = getVal(inf, 'ide.nCT');
         valorTotal = parseFloat(getVal(inf, 'vPrest.vTPrest'));
         emitNode = getVal(inf, 'emit');
 
-        // No CT-e, o "sacado" (pagador do frete) é o "Tomador do Serviço"
-        const tomador = getVal(inf, 'ide.toma3.toma'); // 0=Remetente, 1=Expedidor, 2=Recebedor, 3=Destinatário
-        switch (tomador) {
+        const tomadorTipo = getVal(inf, 'ide.toma3.toma');
+        switch (tomadorTipo) {
             case '0': sacadoNode = getVal(inf, 'rem'); break;
             case '1': sacadoNode = getVal(inf, 'exped'); break;
             case '2': sacadoNode = getVal(inf, 'receb'); break;
             case '3': sacadoNode = getVal(inf, 'dest'); break;
-            default:  sacadoNode = getVal(inf, 'rem') || getVal(inf, 'dest'); // Fallback comum
+            default:  sacadoNode = getVal(inf, 'rem'); // Fallback para o remetente
         }
-        // CT-e geralmente não tem detalhamento de parcelas no XML
         parcelas = [];
 
     } else {
+        // Se não encontrar nem nfeProc nem cteProc, o XML é inválido
         throw new Error("Estrutura do XML (NF-e ou CT-e) inválida ou não suportada.");
     }
-    // --- FIM DA LÓGICA DE DETECÇÃO ---
+    // --- FIM DA CORREÇÃO ---
 
     const emitCnpj = getVal(emitNode, 'CNPJ');
     const sacadoCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
