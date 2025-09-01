@@ -6,8 +6,8 @@ import TopFiveApex from "../components/TopFiveApex";
 import { formatBRLNumber, formatDate } from "../utils/formatters";
 import RelatorioModal from "@/app/components/RelatorioModal";
 import DashboardFiltros from "@/app/components/DashboardFiltros";
-import LiquidacaoModal from "@/app/components/LiquidacaoModal"; // Importar o modal
-import Notification from "@/app/components/Notification"; // Importar notificações
+import LiquidacaoModal from "@/app/components/LiquidacaoModal"; 
+import Notification from "@/app/components/Notification"; 
 import { FaChartLine, FaDollarSign, FaClock } from "react-icons/fa";
 import { startOfMonth, endOfMonth, format } from "date-fns";
 
@@ -56,7 +56,6 @@ export default function ResumoPage() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  // --- NOVA FUNÇÃO DE NOTIFICAÇÃO ---
   const showNotification = (message, type) => {
     setNotification({ message, type });
     setTimeout(() => setNotification({ message: "", type: "" }), 5000);
@@ -174,7 +173,7 @@ export default function ResumoPage() {
 
   const handleAbrirModalLiquidacao = () => {
     if (contextMenu.selectedItem) {
-      setDuplicataParaLiquidar([contextMenu.selectedItem]); // O modal espera um array
+      setDuplicataParaLiquidar([contextMenu.selectedItem]); 
       setIsLiquidarModalOpen(true);
     }
   };
@@ -190,7 +189,7 @@ export default function ResumoPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({
-          liquidacoes, // Enviando o payload modificado
+          liquidacoes, 
           dataLiquidacao,
           jurosMora,
           contaBancariaId,
@@ -198,7 +197,7 @@ export default function ResumoPage() {
       });
       if (!response.ok) throw new Error("Falha ao liquidar a duplicata.");
       showNotification(`Duplicata liquidada com sucesso!`, "success");
-      fetchDashboardData(); // Atualiza os dados do dashboard
+      fetchDashboardData(); 
     } catch (err) {
       showNotification(err.message, "error");
     } finally {
@@ -207,6 +206,14 @@ export default function ResumoPage() {
   };
 
   const totalGeral = saldos.reduce((sum, c) => sum + (c.saldo || 0), 0);
+  
+  // *** NOVA LÓGICA AQUI ***
+  // Define quando os cards de Despesa e Lucro devem ser exibidos
+  const shouldShowGlobalMetrics = 
+    !filters.tipoOperacaoId && 
+    !filters.clienteId && 
+    !filters.sacado && 
+    !filters.contaBancaria;
 
   if (loading) {
     return (
@@ -242,7 +249,6 @@ export default function ResumoPage() {
         }
       />
 
-      {/* ... (resto do JSX da página) ... */}
       <motion.div
         className="max-w-7xl mx-auto space-y-8"
         initial={{ opacity: 0 }}
@@ -346,52 +352,85 @@ export default function ResumoPage() {
               </motion.div>
             </section>
 
+            {/* *** CARDS COM A LÓGICA APLICADA *** */}
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-              {[
-                {
-                  label: "Juros Total",
-                  value: metrics.totalJuros || 0,
-                  icon: <FaDollarSign className="w-6 h-6 text-green-400" />,
-                  border: "border-l-4 border-green-400",
-                },
-                {
-                  label: "Despesas Totais",
-                  value: metrics.totalDespesas || 0,
-                  icon: <FaDollarSign className="w-6 h-6 text-red-400" />,
-                  border: "border-l-4 border-red-400",
-                },
-                {
-                  label: "Lucro Líquido",
-                  value: metrics.lucroLiquido || 0,
-                  icon: <FaClock className="w-6 h-6 text-yellow-300" />,
-                  border: "border-l-4 border-yellow-300",
-                },
-                {
-                  label: "Total Operado",
-                  value: metrics.valorOperadoNoMes || 0,
-                  icon: <FaChartLine className="w-6 h-6 text-gray-400" />,
-                  border: "border-l-4 border-gray-400",
-                },
-              ].map((item, idx) => (
-                <motion.div
-                  key={item.label}
-                  className={`p-4 rounded-lg shadow-lg transition bg-gray-700 ${item.border}`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 + idx * 0.1 }}
-                >
-                  <div className="flex items-center space-x-3">
-                    {item.icon}
-                    <div>
-                      <p className="text-sm text-gray-300">{item.label}</p>
-                      <p className="text-lg font-semibold text-gray-100">
-                        {formatBRLNumber(item.value)}
-                      </p>
-                    </div>
+              <motion.div
+                key="juros"
+                className="p-4 rounded-lg shadow-lg transition bg-gray-700 border-l-4 border-green-400"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <div className="flex items-center space-x-3">
+                  <FaDollarSign className="w-6 h-6 text-green-400" />
+                  <div>
+                    <p className="text-sm text-gray-300">Juros Total</p>
+                    <p className="text-lg font-semibold text-gray-100">
+                      {formatBRLNumber(metrics.totalJuros || 0)}
+                    </p>
                   </div>
-                </motion.div>
-              ))}
+                </div>
+              </motion.div>
+
+              {shouldShowGlobalMetrics && (
+                <>
+                  <motion.div
+                    key="despesas"
+                    className="p-4 rounded-lg shadow-lg transition bg-gray-700 border-l-4 border-red-400"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <FaDollarSign className="w-6 h-6 text-red-400" />
+                      <div>
+                        <p className="text-sm text-gray-300">Despesas Totais</p>
+                        <p className="text-lg font-semibold text-gray-100">
+                          {formatBRLNumber(metrics.totalDespesas || 0)}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  <motion.div
+                    key="lucro"
+                    className="p-4 rounded-lg shadow-lg transition bg-gray-700 border-l-4 border-yellow-300"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <FaClock className="w-6 h-6 text-yellow-300" />
+                      <div>
+                        <p className="text-sm text-gray-300">Lucro Líquido</p>
+                        <p className="text-lg font-semibold text-gray-100">
+                          {formatBRLNumber(metrics.lucroLiquido || 0)}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                </>
+              )}
+              
+              <motion.div
+                key="operado"
+                className="p-4 rounded-lg shadow-lg transition bg-gray-700 border-l-4 border-gray-400"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <div className="flex items-center space-x-3">
+                  <FaChartLine className="w-6 h-6 text-gray-400" />
+                  <div>
+                    <p className="text-sm text-gray-300">Total Operado</p>
+                    <p className="text-lg font-semibold text-gray-100">
+                      {formatBRLNumber(metrics.valorOperadoNoMes || 0)}
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
             </section>
+            
             <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
               <motion.div
                 className="p-6 rounded-lg shadow-lg transition bg-gray-700"
