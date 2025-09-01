@@ -3,15 +3,12 @@
 import { useState, useEffect } from 'react';
 import { formatBRLInput, parseBRL } from '@/app/utils/formatters';
 
-// ADICIONADO: contasMaster como nova propriedade
 export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOriginal, contasMaster }) {
     const [valorComplemento, setValorComplemento] = useState('');
     const [dataComplemento, setDataComplemento] = useState(new Date().toISOString().split('T')[0]);
-    // ADICIONADO: State para a conta bancária
     const [contaBancaria, setContaBancaria] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
-    // ADICIONADO: useEffect para definir a conta inicial
     useEffect(() => {
         if (isOpen && lancamentoOriginal) {
             setContaBancaria(lancamentoOriginal.contaBancaria || '');
@@ -19,7 +16,6 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
             setDataComplemento(new Date().toISOString().split('T')[0]);
         }
     }, [isOpen, lancamentoOriginal]);
-
 
     if (!isOpen) return null;
 
@@ -29,22 +25,33 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
             valor: parseBRL(valorComplemento),
             data: dataComplemento,
             operacao_id: lancamentoOriginal.operacaoId,
-            // MODIFICADO: Usa a conta selecionada no state
             conta_bancaria: contaBancaria,
             empresa_associada: lancamentoOriginal.empresaAssociada
         };
         const success = await onSave(payload);
         if (success) {
-            onClose(); // Limpeza de states agora é feita pelo useEffect
+            onClose();
         }
         setIsSaving(false);
     };
+
+    // --- LÓGICA MODIFICADA PARA O TÍTULO ---
+    let displayTitle = `Lançamento referente ao Borderô #${lancamentoOriginal?.operacaoId || ''}`;
+    if (lancamentoOriginal?.descricao) {
+        // Tenta encontrar "NF XXX" ou "CTe YYY" na descrição original
+        const nfMatch = lancamentoOriginal.descricao.match(/(NF|CTe) [0-9.]+/);
+        if (nfMatch && nfMatch[0]) {
+            displayTitle = `Lançamento referente ao Borderô ${nfMatch[0]}`;
+        }
+    }
+    // --- FIM DA MODIFICAÇÃO ---
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50">
             <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md text-white">
                 <h2 className="text-2xl font-bold mb-4">Adicionar Complemento de Pagamento</h2>
-                <p className="text-sm text-gray-400 mb-4">Lançamento referente ao Borderô #{lancamentoOriginal.operacaoId}</p>
+                {/* MODIFICADO: Usa a nova variável para o título */}
+                <p className="text-sm text-gray-400 mb-4">{displayTitle}</p>
 
                 <div className="mb-4">
                     <label htmlFor="dataComplemento" className="block text-sm font-medium text-gray-300">Data do Pagamento</label>
@@ -57,7 +64,6 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
                     />
                 </div>
                 
-                {/* ADICIONADO: Campo de seleção de conta */}
                 <div className="mb-4">
                     <label htmlFor="contaBancaria" className="block text-sm font-medium text-gray-300">Debitar da Conta</label>
                     <select
