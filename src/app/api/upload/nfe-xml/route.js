@@ -3,10 +3,6 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js';
 
-// Função auxiliar para extrair valores de forma segura do XML convertido
-const getVal = (obj, path) =>
-  path.split('.').reduce((acc, key) => acc?.[key]?.[0], obj);
-
 export async function POST(request) {
   try {
     const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -25,85 +21,95 @@ export async function POST(request) {
     const parsedXml = await parseStringPromise(xmlText, {
       explicitArray: true,
       ignoreAttrs: true,
-      tagNameProcessors: [name => name.replace(/^.*:/, '')]
+      tagNameProcessors: [name => name.replace(/^.*:/, '')] // remove namespace
     });
 
-    let inf, numeroDoc, valorTotal, parcelas = [], emitNode, sacadoNode;
+    let numeroDoc, valorTotal, parcelas = [], emitNode, sacadoNode, dataEmissao;
 
-    // --- LÓGICA DE DETECÇÃO FINAL E ROBUSTA ---
-    // Tenta encontrar a informação da NFe (pode estar dentro de nfeProc ou diretamente na raiz)
-    inf = getVal(parsedXml, 'nfeProc.NFe.infNFe') || getVal(parsedXml, 'NFe.infNFe');
-    if (inf) {
-        numeroDoc = getVal(inf, 'ide.nNF');
-        valorTotal = parseFloat(getVal(inf, 'total.ICMSTot.vNF'));
-        emitNode = getVal(inf, 'emit');
-        sacadoNode = getVal(inf, 'dest');
-        
-        const cobr = getVal(inf, 'cobr');
-        parcelas = cobr?.dup?.map(p => ({
-            numero: getVal(p, 'nDup'),
-            dataVencimento: getVal(p, 'dVenc'),
-            valor: parseFloat(getVal(p, 'vDup')),
-        })) || [];
+    // --- NF-e ---
+    const infNFe = parsedXml?.NFe?.infNFe?.[0] || parsedXml?.nfeProc?.[0]?.NFe?.[0]?.infNFe?.[0];
+    if (infNFe) {
+      numeroDoc = infNFe.ide?.[0]?.nNF?.[0];
+      valorTotal = parseFloat(infNFe.total?.[0]?.ICMSTot?.[0]?.vNF?.[0] || 0);
+      emitNode = infNFe.emit?.[0];
+      sacadoNode = infNFe.dest?.[0];
+      dataEmissao = infNFe.ide?.[0]?.dhEmi?.[0]?.substring(0, 10);
 
-    // Se não for NFe, tenta encontrar a informação do CT-e (pode estar dentro de cteProc ou diretamente na raiz)
-    } else {
-        inf = getVal(parsedXml, 'cteProc.CTe.infCte') || getVal(parsedXml, 'CTe.infCte');
-        if (inf) {
-            numeroDoc = getVal(inf, 'ide.nCT');
-            valorTotal = parseFloat(getVal(inf, 'vPrest.vTPrest'));
-            emitNode = getVal(inf, 'emit');
-
-            // No CT-e, o "sacado" (pagador do frete) é o "Tomador do Serviço"
-            const tomadorTipo = getVal(inf, 'ide.toma3.toma') || getVal(inf, 'ide.toma4.toma'); // Suporte para toma3 e toma4
-            switch (tomadorTipo) {
-                case '0': sacadoNode = getVal(inf, 'rem'); break; // Remetente
-                case '1': sacadoNode = getVal(inf, 'exped'); break; // Expedidor
-                case '2': sacadoNode = getVal(inf, 'receb'); break; // Recebedor
-                case '3': sacadoNode = getVal(inf, 'dest'); break; // Destinatário
-                default:  sacadoNode = getVal(inf, 'rem'); // Fallback para o remetente
-            }
-            parcelas = []; // CT-e não costuma ter parcelas no XML
-        }
+      const cobr = infNFe.cobr?.[0];
+      parcelas = cobr?.dup?.map(p => ({
+        numero: p.nDup?.[0],
+        dataVencimento: p.dVenc?.[0],
+        valor: parseFloat(p.vDup?.[0] || 0),
+      })) || [];
     }
-    
-    // Se 'inf' continuar nulo depois das duas tentativas, o XML é inválido.
-    if (!inf) {
-        throw new Error("Estrutura do XML (NF-e ou CT-e) inválida ou não suportada.");
+
+    // --- CT-e ---
+    const infCte = parsedXml?.cteProc?.CTe?.[0]?.infCte?.[0] || parsedXml?.CTe?.infCte?.[0];
+    if (!infNFe && infCte) {
+      numeroDoc = infCte.ide?.[0]?.nCT?.[0];
+      valorTotal = parseFloat(infCte.vPrest?.[0]?.vTPrest?.[0] || 0);
+      emitNode = infCte.emit?.[0];
+      dataEmissao = infCte.ide?.[0]?.dhEmi?.[0]?.substring(0, 10);
+
+      // Tomador (quem paga o frete)
+      const toma = infCte.ide?.[0]?.toma3?.[0]?.toma?.[0] || infCte.ide?.[0]?.toma4?.[0]?.toma?.[0];
+      switch (toma) {
+        case '0': sacadoNode = infCte.rem?.[0]; break; // remetente
+        case '1': sacadoNode = infCte.exped?.[0]; break; // expedidor
+        case '2': sacadoNode = infCte.receb?.[0]; break; // recebedor
+        case '3': sacadoNode = infCte.dest?.[0]; break; // destinatário
+        default:  sacadoNode = infCte.rem?.[0]; // fallback
+      }
+
+      parcelas = []; // CT-e geralmente não tem parcelas
     }
-    // --- FIM DA CORREÇÃO ---
 
-    const emitCnpj = getVal(emitNode, 'CNPJ');
-    const sacadoCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
+    // Se nenhum dos dois foi detectado
+    if (!infNFe && !infCte) {
+      throw new Error("Estrutura do XML (NF-e ou CT-e) inválida ou não suportada.");
+    }
 
-    const { data: emitenteData } = await supabase.from('clientes').select('id, nome, ramo_de_atividade').eq('cnpj', emitCnpj).single();
-    const { data: sacadoData } = await supabase.from('sacados').select('id, nome').eq('cnpj', sacadoCnpjCpf).single();
-    
-    const enderSacado = getVal(sacadoNode, 'enderDest') || getVal(sacadoNode, 'enderReme');
+    // --- Emitente e Sacado ---
+    const emitCnpj = emitNode?.CNPJ?.[0];
+    const sacadoCnpjCpf = sacadoNode?.CNPJ?.[0] || sacadoNode?.CPF?.[0];
+
+    const { data: emitenteData } = await supabase
+      .from('clientes')
+      .select('id, nome, ramo_de_atividade')
+      .eq('cnpj', emitCnpj)
+      .single();
+
+    const { data: sacadoData } = await supabase
+      .from('sacados')
+      .select('id, nome')
+      .eq('cnpj', sacadoCnpjCpf)
+      .single();
+
+    const enderSacado = sacadoNode?.enderDest?.[0] || sacadoNode?.enderReme?.[0];
 
     const responseData = {
       numeroNf: numeroDoc,
-      dataEmissao: getVal(inf, 'ide.dhEmi')?.substring(0, 10),
-      valorTotal: valorTotal,
+      dataEmissao,
+      valorTotal,
       parcelas,
       emitente: {
         id: emitenteData?.id || null,
-        nome: getVal(emitNode, 'xNome'),
+        nome: emitNode?.xNome?.[0],
         cnpj: emitCnpj,
         ramo_de_atividade: emitenteData?.ramo_de_atividade
       },
       emitenteExiste: !!emitenteData,
       sacado: {
         id: sacadoData?.id || null,
-        nome: getVal(sacadoNode, 'xNome'),
+        nome: sacadoNode?.xNome?.[0],
         cnpj: sacadoCnpjCpf,
-        ie: getVal(sacadoNode, 'IE'),
-        endereco: getVal(enderSacado, 'xLgr'),
-        bairro: getVal(enderSacado, 'xBairro'),
-        municipio: getVal(enderSacado, 'xMun'),
-        uf: getVal(enderSacado, 'UF'),
-        cep: getVal(enderSacado, 'CEP'),
-        fone: getVal(enderSacado, 'fone'),
+        ie: sacadoNode?.IE?.[0],
+        endereco: enderSacado?.xLgr?.[0],
+        bairro: enderSacado?.xBairro?.[0],
+        municipio: enderSacado?.xMun?.[0],
+        uf: enderSacado?.UF?.[0],
+        cep: enderSacado?.CEP?.[0],
+        fone: enderSacado?.fone?.[0],
       },
       sacadoExiste: !!sacadoData
     };
