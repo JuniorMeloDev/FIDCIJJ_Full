@@ -24,19 +24,16 @@ export async function POST(request) {
     const xmlText = await file.text();
     const parsedXml = await parseStringPromise(xmlText, {
       explicitArray: true,
-      // MODIFICAÇÃO CHAVE: Ignora o elemento raiz (nfeProc/cteProc)
-      explicitRoot: false,
       ignoreAttrs: true,
       tagNameProcessors: [name => name.replace(/^.*:/, '')]
     });
 
     let inf, numeroDoc, valorTotal, parcelas = [], emitNode, sacadoNode;
 
-    // --- LÓGICA DE DETECÇÃO CORRIGIDA E MAIS ROBUSTA ---
-    // Agora verificamos diretamente a existência de <NFe> ou <CTe>
-    if (getVal(parsedXml, 'NFe.infNFe')) {
-        inf = getVal(parsedXml, 'NFe.infNFe');
-        
+    // --- LÓGICA DE DETECÇÃO FINAL E ROBUSTA ---
+    // Tenta encontrar a informação da NFe (pode estar dentro de nfeProc ou diretamente na raiz)
+    inf = getVal(parsedXml, 'nfeProc.NFe.infNFe') || getVal(parsedXml, 'NFe.infNFe');
+    if (inf) {
         numeroDoc = getVal(inf, 'ide.nNF');
         valorTotal = parseFloat(getVal(inf, 'total.ICMSTot.vNF'));
         emitNode = getVal(inf, 'emit');
@@ -49,24 +46,29 @@ export async function POST(request) {
             valor: parseFloat(getVal(p, 'vDup')),
         })) || [];
 
-    } else if (getVal(parsedXml, 'CTe.infCte')) {
-        inf = getVal(parsedXml, 'CTe.infCte');
-
-        numeroDoc = getVal(inf, 'ide.nCT');
-        valorTotal = parseFloat(getVal(inf, 'vPrest.vTPrest'));
-        emitNode = getVal(inf, 'emit');
-
-        const tomadorTipo = getVal(inf, 'ide.toma3.toma');
-        switch (tomadorTipo) {
-            case '0': sacadoNode = getVal(inf, 'rem'); break;
-            case '1': sacadoNode = getVal(inf, 'exped'); break;
-            case '2': sacadoNode = getVal(inf, 'receb'); break;
-            case '3': sacadoNode = getVal(inf, 'dest'); break;
-            default:  sacadoNode = getVal(inf, 'rem'); // Fallback para o remetente
-        }
-        parcelas = [];
-
+    // Se não for NFe, tenta encontrar a informação do CT-e (pode estar dentro de cteProc ou diretamente na raiz)
     } else {
+        inf = getVal(parsedXml, 'cteProc.CTe.infCte') || getVal(parsedXml, 'CTe.infCte');
+        if (inf) {
+            numeroDoc = getVal(inf, 'ide.nCT');
+            valorTotal = parseFloat(getVal(inf, 'vPrest.vTPrest'));
+            emitNode = getVal(inf, 'emit');
+
+            // No CT-e, o "sacado" (pagador do frete) é o "Tomador do Serviço"
+            const tomadorTipo = getVal(inf, 'ide.toma3.toma') || getVal(inf, 'ide.toma4.toma'); // Suporte para toma3 e toma4
+            switch (tomadorTipo) {
+                case '0': sacadoNode = getVal(inf, 'rem'); break; // Remetente
+                case '1': sacadoNode = getVal(inf, 'exped'); break; // Expedidor
+                case '2': sacadoNode = getVal(inf, 'receb'); break; // Recebedor
+                case '3': sacadoNode = getVal(inf, 'dest'); break; // Destinatário
+                default:  sacadoNode = getVal(inf, 'rem'); // Fallback para o remetente
+            }
+            parcelas = []; // CT-e não costuma ter parcelas no XML
+        }
+    }
+    
+    // Se 'inf' continuar nulo depois das duas tentativas, o XML é inválido.
+    if (!inf) {
         throw new Error("Estrutura do XML (NF-e ou CT-e) inválida ou não suportada.");
     }
     // --- FIM DA CORREÇÃO ---
