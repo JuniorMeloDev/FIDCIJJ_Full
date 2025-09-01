@@ -13,14 +13,17 @@ export async function GET(request) {
         const dataFim = searchParams.get('dataFim') || null;
         const tipoOperacaoId = searchParams.get('tipoOperacaoId') || null;
 
-        // This RPC call now correctly matches the function signature in the database
         const { data, error } = await supabase.rpc('get_saldos_por_conta', {
-            data_inicio: dataInicio,
-            data_fim: dataFim,
+            p_data_inicio: dataInicio,
+            p_data_fim: dataFim,
             p_tipo_operacao_id: tipoOperacaoId
         });
 
-        if (error) throw error;
+        if (error) {
+            // Se o erro persistir, ele será capturado e logado aqui para diagnóstico.
+            console.error('Erro retornado pela função RPC do Supabase:', error);
+            throw error;
+        }
 
         const formattedData = data.map(item => ({ contaBancaria: item.conta_bancaria, saldo: item.saldo }));
         return NextResponse.json(formattedData, { status: 200 });
