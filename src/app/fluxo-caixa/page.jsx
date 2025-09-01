@@ -11,6 +11,7 @@ import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
 import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
+import ComplementModal from "@/app/components/ComplementModal"; // Importar o novo modal
 
 const ITEMS_PER_PAGE = 8;
 
@@ -50,6 +51,10 @@ export default function FluxoDeCaixaPage() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
+
+  // NOVOS STATES: Para o modal de complemento
+  const [isComplementModalOpen, setIsComplementModalOpen] = useState(false);
+  const [lancamentoParaComplemento, setLancamentoParaComplemento] = useState(null);
 
   const getAuthHeader = () => {
     const token = sessionStorage.getItem("authToken");
@@ -292,7 +297,6 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
-  // --- ALTERAÇÃO AQUI ---
   const handleGeneratePdf = async () => {
     if (!contextMenu.selectedItem) return;
     const operacaoId = contextMenu.selectedItem.operacaoId;
@@ -309,9 +313,8 @@ export default function FluxoDeCaixaPage() {
         throw new Error(errorData.message || "Não foi possível gerar o PDF.");
       }
   
-      // Lógica para extrair o nome do arquivo do header da resposta
       const contentDisposition = response.headers.get("content-disposition");
-      let filename = `bordero-${operacaoId}.pdf`; // Nome padrão
+      let filename = `bordero-${operacaoId}.pdf`; 
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
         if (filenameMatch && filenameMatch.length > 1) {
@@ -323,7 +326,7 @@ export default function FluxoDeCaixaPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = filename; // Usa o nome do arquivo extraído do header
+      a.download = filename; 
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -332,7 +335,6 @@ export default function FluxoDeCaixaPage() {
       alert(err.message);
     }
   };
-  // --- FIM DA ALTERAÇÃO ---
 
   const handleContextMenu = (event, item) => {
     event.preventDefault();
@@ -342,6 +344,36 @@ export default function FluxoDeCaixaPage() {
       y: event.pageY,
       selectedItem: item,
     });
+  };
+
+  // NOVA FUNÇÃO: Para abrir o modal de complemento
+  const handleAbrirModalComplemento = () => {
+    if (!contextMenu.selectedItem) return;
+    setLancamentoParaComplemento(contextMenu.selectedItem);
+    setIsComplementModalOpen(true);
+  };
+
+  // NOVA FUNÇÃO: Para salvar o complemento
+  const handleSaveComplemento = async (payload) => {
+    try {
+      const response = await fetch(`/api/operacoes/complemento`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+          body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+          const errorText = await response.json();
+          throw new Error(errorText.message || 'Falha ao salvar complemento.');
+      }
+      showNotification('Complemento do borderô salvo com sucesso!', 'success');
+      fetchMovimentacoes(filters, sortConfig);
+      fetchSaldos(filters);
+      return true; // Indica sucesso para o modal fechar
+    } catch (error) {
+        showNotification(error.message, 'error');
+        return false; // Indica falha
+    }
   };
 
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
@@ -388,9 +420,14 @@ export default function FluxoDeCaixaPage() {
         isSending={isSendingEmail}
         clienteId={operacaoParaEmail?.clienteId}
       />
+      <ComplementModal
+          isOpen={isComplementModalOpen}
+          onClose={() => setIsComplementModalOpen(false)}
+          onSave={handleSaveComplemento}
+          lancamentoOriginal={lancamentoParaComplemento}
+      />
 
       <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
-        {/* Header */}
         <div className="flex-shrink-0">
           <motion.header
             className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
@@ -412,11 +449,8 @@ export default function FluxoDeCaixaPage() {
           </motion.header>
         </div>
 
-        {/* Conteúdo principal: saldos, filtros e tabela */}
         <div className="flex flex-col lg:flex-row gap-6 flex-grow">
-          {/* Lateral: saldos + filtros */}
           <div className="w-full flex-shrink-0 flex flex-col gap-4 lg:w-72 lg:overflow-y-auto lg:max-h-[calc(100vh-120px)]">
-            {/* Saldos */}
             <motion.div
               className=""
               initial={{ opacity: 0 }}
@@ -446,7 +480,6 @@ export default function FluxoDeCaixaPage() {
                 ))}
               </div>
             </motion.div>
-            {/* Filtro lateral */}
             <FiltroLateral
               filters={filters}
               saldos={saldos}
@@ -455,7 +488,6 @@ export default function FluxoDeCaixaPage() {
             />
           </div>
 
-          {/* Tabela de lançamentos */}
           <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0 overflow-x-auto">
             <div>
               <table className="min-w-full divide-y divide-gray-700">
@@ -544,7 +576,6 @@ export default function FluxoDeCaixaPage() {
         </div>
       </main>
 
-      {/* Menu de contexto */}
       {contextMenu.visible && (
         <div
           ref={menuRef}
@@ -563,6 +594,16 @@ export default function FluxoDeCaixaPage() {
             >
               Editar Lançamento
             </a>
+            {
+              contextMenu.selectedItem?.categoria === 'Pagamento de Borderô' &&
+              contextMenu.selectedItem?.operacao &&
+              Math.abs(contextMenu.selectedItem.valor) < contextMenu.selectedItem.operacao.valor_liquido &&
+              (
+                  <a href="#" onClick={(e) => { e.preventDefault(); handleAbrirModalComplemento(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">
+                      Complemento Borderô
+                  </a>
+              )
+            }
             {contextMenu.selectedItem?.operacaoId && (
               <>
                 <div className="border-t border-gray-600 my-1"></div>
@@ -601,7 +642,7 @@ export default function FluxoDeCaixaPage() {
                   ? "opacity-50 cursor-not-allowed"
                   : ""
               }`}
-              disabled={["Pagamento de Borderô", "Recebimento"].includes(
+              disabled={["Pagamento de Borderô", "Recebimento", "Transferencia Enviada", "Transferencia Recebida"].includes(
                 contextMenu.selectedItem?.categoria
               )}
             >
