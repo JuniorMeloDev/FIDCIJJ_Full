@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import PrimeiroAcesso from './PrimeiroAcesso';
 import { useInactivityTimeout } from '../hooks/useInactivityTimeout';
 import SessionTimeoutModal from './SessionTimeoutModal';
+import { jwtDecode } from 'jwt-decode'; // Importe o jwt-decode
 
 // Componente interno para ativar o gerenciador de inatividade
 function InactivityManager() {
@@ -25,7 +26,6 @@ export default function SetupChecker({ children }) {
     const pathname = usePathname();
     const router = useRouter();
 
-    // Função para obter o cabeçalho de autenticação
     const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
         return token ? { 'Authorization': `Bearer ${token}` } : {};
@@ -42,19 +42,37 @@ export default function SetupChecker({ children }) {
             setStatus(prev => ({...prev, loading: true}));
             try {
                 const token = sessionStorage.getItem('authToken');
-                const isAuthenticated = !!token;
-
-                if (!isAuthenticated) {
+                if (!token) {
                     router.push('/login');
                     setStatus({ loading: false, needsSetup: false, isAuthenticated: false });
                     return;
                 }
 
-                // Chama a nova rota de API local com o token de autenticação
+                // --- NOVA LÓGICA DE VERIFICAÇÃO DE PERMISSÃO ---
+                const decodedToken = jwtDecode(token);
+                const userRoles = decodedToken.roles || [];
+                const isClient = userRoles.includes('ROLE_CLIENTE');
+                const isAdmin = userRoles.includes('ROLE_ADMIN');
+
+                const isAdminRoute = !pathname.startsWith('/portal');
+
+                // 1. Se um cliente tentar acessar uma rota de admin, redirecione-o para o portal.
+                if (isAdminRoute && isClient && !isAdmin) {
+                    router.push('/portal/dashboard');
+                    return;
+                }
+                
+                // 2. Se um não-cliente tentar acessar o portal, o /portal/layout.jsx já o redireciona.
+                // Esta é uma segurança extra.
+                if (!isAdminRoute && !isClient) {
+                    router.push('/login');
+                    return;
+                }
+                // --- FIM DA NOVA LÓGICA ---
+
                 const response = await fetch(`/api/setup/status`, { headers: getAuthHeader() }); 
                 
                 if (!response.ok) {
-                    // Se o token for inválido (401/403), desloga o utilizador
                     if (response.status === 401 || response.status === 403) {
                         sessionStorage.removeItem('authToken');
                         router.push('/login');
@@ -64,10 +82,14 @@ export default function SetupChecker({ children }) {
                 }
                 const data = await response.json();
                 
-                setStatus({ loading: false, needsSetup: data.needsSetup, isAuthenticated });
+                setStatus({ loading: false, needsSetup: data.needsSetup, isAuthenticated: !!token });
                 
             } catch (err) {
                 console.error(err);
+                if (err.name === 'InvalidTokenError') {
+                    sessionStorage.removeItem('authToken');
+                    router.push('/login');
+                }
                 setError(err.message);
                 setStatus(prev => ({...prev, loading: false}));
             }
@@ -80,6 +102,7 @@ export default function SetupChecker({ children }) {
     const isAuthenticated = !!token;
 
     if (isAuthenticated && pathname === '/login') {
+        // Redireciona para o resumo, pois o checkStatus acima cuidará de redirecionar para o portal se for cliente
         router.push('/resumo');
         return null;
     }
