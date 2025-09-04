@@ -59,6 +59,7 @@ export default function Navbar() {
     { label: 'Fluxo de Caixa', href: '/fluxo-caixa' },
     { label: 'Cadastros', href: '/cadastros/clientes' },
     { label: 'Agenda', href: '/agenda' },
+    { label: 'Análise', href: '/analise' },
   ]
 
   return (
