@@ -6,11 +6,11 @@ import { motion } from "framer-motion";
 import { jwtDecode } from "jwt-decode";
 import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
 import { FaChevronRight } from "react-icons/fa";
-import Pagination from "@/app/components/Pagination"; // Importe o componente de paginação
+import Pagination from "@/app/components/Pagination";
 
-const ITEMS_PER_PAGE = 5; // Define quantos itens por página na tabela de operações
+const ITEMS_PER_PAGE = 5;
 
-// --- Subcomponente para a Aba "Minhas Operações" ---
+// --- Subcomponente para a Aba "Minhas Operações" (VERSÃO CORRIGIDA E COMPLETA) ---
 const MinhasOperacoesView = ({ operacoes, loading, error }) => {
     const [expandedRow, setExpandedRow] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -63,7 +63,44 @@ const MinhasOperacoesView = ({ operacoes, loading, error }) => {
                                         <td className="px-6 py-4 text-right">{formatBRLNumber(op.valor_liquido)}</td>
                                         <td className="px-6 py-4 text-center">{getStatusTag(op.status)}</td>
                                     </tr>
-                                    {expandedRow === op.id && ( /* Detalhes da Operação */ )}
+                                    {expandedRow === op.id && (
+                                        <tr className="bg-gray-900/50">
+                                            <td colSpan="6" className="p-0">
+                                                <motion.div 
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    className="overflow-hidden"
+                                                >
+                                                    <div className="p-4">
+                                                        <h4 className="font-semibold text-sm mb-2 text-orange-400">Detalhes da Operação #{op.id}</h4>
+                                                        <table className="min-w-full text-xs">
+                                                            <thead className="bg-gray-700/30">
+                                                                <tr>
+                                                                    <th className="px-3 py-1 text-left">NF/CT-e</th>
+                                                                    <th className="px-3 py-1 text-left">Sacado</th>
+                                                                    <th className="px-3 py-1 text-right">Valor</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {op.duplicatas.map(dup => (
+                                                                    <tr key={dup.id}>
+                                                                        <td className="px-3 py-1">{dup.nf_cte}</td>
+                                                                        <td className="px-3 py-1">{dup.cliente_sacado}</td>
+                                                                        <td className="px-3 py-1 text-right">{formatBRLNumber(dup.valor_bruto)}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                        <div className="text-right mt-2">
+                                                            <button className="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md">
+                                                                Baixar Borderô
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
+                                            </td>
+                                        </tr>
+                                    )}
                                 </React.Fragment>
                             ))
                         )}
