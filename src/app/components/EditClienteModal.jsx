@@ -6,15 +6,17 @@ import AutocompleteInput from './AutocompleteInput';
 
 export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onDelete }) {
     const initialState = {
-        nome: '', cnpj: '', ie: '', cep: '', endereco: '', bairro: '', municipio: '', uf: '', fone: '', contasBancarias: [], ramoDeAtividade: '', emails: []
+        nome: '', cnpj: '', ie: '', cep: '', endereco: '', bairro: '', municipio: '', uf: '', fone: '', 
+        email: '', // Campo de email principal
+        contasBancarias: [], 
+        ramoDeAtividade: '', 
+        emails: [] // Lista de emails para notificação
     };
     const [formData, setFormData] = useState(initialState);
     const [isFetchingCnpj, setIsFetchingCnpj] = useState(false);
     const [dataFetched, setDataFetched] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [modalError, setModalError] = useState('');
-
-    // --- STATES PARA DADOS DE ACESSO ---
     const [userData, setUserData] = useState({ username: '', password: '' });
     const [loadingUser, setLoadingUser] = useState(false);
 
@@ -36,7 +38,6 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
                          setUserData({ username: '', password: '' });
                     }
                 } catch (e) {
-                    console.error("Nenhum usuário encontrado para este cliente.");
                     setUserData({ username: '', password: '' });
                 } finally {
                     setLoadingUser(false);
@@ -46,7 +47,7 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
 
         if (isOpen) {
             setModalError('');
-            if (cliente) {
+            if (cliente) { 
                 const initialData = { ...initialState, ...cliente,
                     cnpj: cliente.cnpj ? formatCnpjCpf(cliente.cnpj) : '',
                     fone: cliente.fone ? formatTelefone(cliente.fone) : '',
@@ -55,13 +56,9 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
                     emails: cliente.emails ? [...cliente.emails] : []
                 };
                 setFormData(initialData);
-                if (!cliente.id && initialData.cnpj.replace(/\D/g, '').length === 14) {
-                    handleCnpjSearch(initialData.cnpj);
-                } else {
-                    setDataFetched(true);
-                }
+                setDataFetched(true);
                 fetchUserData();
-            } else {
+            } else { 
                 setFormData(initialState);
                 setUserData({ username: '', password: '' });
                 setDataFetched(false);
@@ -77,7 +74,17 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
             const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
             if (!response.ok) throw new Error('CNPJ não encontrado ou inválido.');
             const data = await response.json();
-            setFormData(prev => ({ ...prev, nome: data.razao_social || '', fone: data.ddd_telefone_1 ? formatTelefone(`${data.ddd_telefone_1}${data.telefone_1 || ''}`) : '', cep: data.cep ? formatCep(data.cep) : '', endereco: `${data.logradouro || ''}, ${data.numero || ''}`, bairro: data.bairro || '', municipio: data.municipio || '', uf: data.uf || '', ie: '' }));
+            setFormData(prev => ({ ...prev, 
+                nome: data.razao_social || '', 
+                fone: data.ddd_telefone_1 ? formatTelefone(`${data.ddd_telefone_1}${data.telefone_1 || ''}`) : '', 
+                email: data.email || '',
+                cep: data.cep ? formatCep(data.cep) : '', 
+                endereco: `${data.logradouro || ''}, ${data.numero || ''}`, 
+                bairro: data.bairro || '', 
+                municipio: data.municipio || '', 
+                uf: data.uf || '', 
+                ie: '' 
+            }));
             setDataFetched(true);
         } catch (error) {
             setModalError(error.message);
@@ -93,9 +100,7 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
         let formattedValue = value;
         if (name === 'cnpj') {
             formattedValue = formatCnpjCpf(value);
-            if (formattedValue.replace(/\D/g, '').length === 14) {
-                handleCnpjSearch(formattedValue);
-            }
+            if (formattedValue.replace(/\D/g, '').length === 14) handleCnpjSearch(formattedValue);
         }
         setFormData(prev => ({ ...prev, [name]: formattedValue }));
     };
@@ -104,13 +109,11 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
         const { name, value } = e.target;
         setUserData(prev => ({ ...prev, [name]: value }));
     };
-
+    
     const handleContaChange = (index, name, value) => {
         const contas = [...formData.contasBancarias];
-        if (contas[index]) {
-            contas[index][name] = value;
-            setFormData(prev => ({ ...prev, contasBancarias: contas }));
-        }
+        contas[index][name] = value;
+        setFormData(prev => ({ ...prev, contasBancarias: contas }));
     };
 
     const addConta = () => setFormData(prev => ({ ...prev, contasBancarias: [...prev.contasBancarias, { banco: '', agencia: '', contaCorrente: '' }] }));
@@ -148,9 +151,7 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
         };
         const result = await onSave(cliente?.id, dataToSave);
         setIsSaving(false);
-        if (!result.success) {
-            setModalError(result.message);
-        }
+        if (!result.success) setModalError(result.message);
     };
     
     if (!isOpen) return null;
@@ -188,7 +189,9 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
                                 </div>
                                 <div><label className="block text-xs font-bold text-gray-300">Inscrição Estadual</label><input type="text" name="ie" value={formData.ie || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
                                 <div><label className="block text-xs font-bold text-gray-300">Telefone</label><input type="text" name="fone" value={formData.fone || ''} onChange={(e) => setFormData(prev => ({...prev, fone: formatTelefone(e.target.value)}))} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Email Principal</label><input type="email" name="email" value={formData.email || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
                             </div>
+                            
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div><label className="block text-xs font-bold text-gray-300">CEP</label><input type="text" name="cep" value={formData.cep || ''} onChange={(e) => setFormData(prev => ({...prev, cep: formatCep(e.target.value)}))} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
                                 <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Endereço</label><input type="text" name="endereco" value={formData.endereco || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
