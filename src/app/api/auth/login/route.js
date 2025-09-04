@@ -28,11 +28,27 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Credenciais inválidas' }, { status: 401 });
         }
 
+        const userRoles = user.roles.split(',').map(role => role.trim());
+
         const claims = {
             username: user.username,
-            roles: user.roles.split(',').map(role => role.trim()),
+            roles: userRoles,
             sub: user.username,
         };
+
+        // MODIFICAÇÃO: Se for um cliente, busca o nome e adiciona o ID e nome ao token
+        if (userRoles.includes('ROLE_CLIENTE') && user.cliente_id) {
+            const { data: clienteData, error: clienteError } = await supabase
+                .from('clientes')
+                .select('nome')
+                .eq('id', user.cliente_id)
+                .single();
+            
+            if (clienteError) throw new Error('Não foi possível encontrar a empresa associada a este usuário.');
+
+            claims.cliente_id = user.cliente_id;
+            claims.cliente_nome = clienteData.nome;
+        }
 
         const token = jwt.sign(claims, process.env.JWT_SECRET, {
             expiresIn: '10h',
@@ -45,3 +61,4 @@ export async function POST(request) {
         return NextResponse.json({ message: 'Ocorreu um erro durante a autenticação' }, { status: 500 });
     }
 }
+
