@@ -189,7 +189,6 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
                                 </div>
                                 <div><label className="block text-xs font-bold text-gray-300">Inscrição Estadual</label><input type="text" name="ie" value={formData.ie || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
                                 <div><label className="block text-xs font-bold text-gray-300">Telefone</label><input type="text" name="fone" value={formData.fone || ''} onChange={(e) => setFormData(prev => ({...prev, fone: formatTelefone(e.target.value)}))} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Email Principal</label><input type="email" name="email" value={formData.email || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -198,6 +197,7 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
                                 <div><label className="block text-xs font-bold text-gray-300">Bairro</label><input type="text" name="bairro" value={formData.bairro || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
                                 <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Município</label><input type="text" name="municipio" value={formData.municipio || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
                                 <div><label className="block text-xs font-bold text-gray-300">UF</label><input type="text" name="uf" value={formData.uf || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Email Principal</label><input type="email" name="email" value={formData.email || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
                             </div>
 
                             <div className="border-t border-gray-700 pt-3 mt-3">
