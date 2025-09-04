@@ -2,20 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// Função para obter o cliente_id a partir do token de autenticação
-const getClienteIdFromToken = (request) => {
-    const token = request.headers.get('Authorization')?.split(' ')[1];
-    if (!token) return null;
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        // O cliente_id foi adicionado ao token no momento do login
-        return decoded.cliente_id || null; 
-    } catch (error) {
-        return null;
-    }
-};
-
-// GET: Busca as operações do cliente logado
+// GET: Busca as operações APENAS do cliente logado
 export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -28,11 +15,19 @@ export async function GET(request) {
             return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
         }
         
-        // A RLS (Row Level Security) já garante que o cliente só veja suas próprias operações.
-        // A função get_cliente_id() no Supabase usa o cliente_id do token.
+        // Pega o ID do cliente que está dentro do token
+        const clienteId = decoded.cliente_id;
+        
+        // Validação extra para garantir que um cliente tenha um ID associado
+        if (!clienteId) {
+            return NextResponse.json({ message: 'Usuário cliente sem empresa associada.' }, { status: 403 });
+        }
+
+        // Adiciona o filtro .eq('cliente_id', clienteId) à consulta
         const { data, error } = await supabase
             .from('operacoes')
             .select('*, duplicatas(*)')
+            .eq('cliente_id', clienteId) // <-- FILTRA APENAS PELO ID DO CLIENTE LOGADO
             .order('data_operacao', { ascending: false });
 
         if (error) throw error;
@@ -45,7 +40,7 @@ export async function GET(request) {
     }
 }
 
-// POST: Cliente submete uma nova operação para aprovação
+// A sua função POST para o cliente enviar operações continua igual e está correta.
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -60,9 +55,6 @@ export async function POST(request) {
         }
 
         const body = await request.json();
-
-        // Reutiliza a função de salvar, mas com dados controlados
-        // e o status default 'Pendente' da tabela será aplicado.
         const valorTotalBruto = body.notasFiscais.reduce((acc, nf) => acc + nf.valorNf, 0);
         const valorTotalJuros = body.notasFiscais.reduce((acc, nf) => acc + nf.jurosCalculado, 0);
         
@@ -79,11 +71,11 @@ export async function POST(request) {
         const { data: operacaoId, error } = await supabase.rpc('salvar_operacao_completa', {
             p_data_operacao: body.dataOperacao,
             p_tipo_operacao_id: body.tipoOperacaoId,
-            p_cliente_id: clienteId, // USA O ID DO CLIENTE DO TOKEN
-            p_conta_bancaria_id: null, // Admin definirá isso na aprovação
+            p_cliente_id: clienteId,
+            p_conta_bancaria_id: null,
             p_valor_total_bruto: valorTotalBruto,
             p_valor_total_juros: valorTotalJuros,
-            p_valor_total_descontos: 0, // Descontos são adicionados pelo admin
+            p_valor_total_descontos: 0,
             p_duplicatas: duplicatasParaSalvar,
             p_descontos: [],
             p_valor_debito_parcial: null, 

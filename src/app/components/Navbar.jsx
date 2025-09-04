@@ -14,8 +14,14 @@ export default function Navbar() {
   const [currentUser, setCurrentUser] = useState(null)
 
   const router = useRouter()
-  const pathname = usePathname()
+  const pathname = usePathname() // Hook para ler a URL atual
   const profileRef = useRef(null)
+
+
+  // Se a URL começar com /portal, este componente não renderiza nada.
+  if (pathname.startsWith('/portal')) {
+      return null;
+  }
 
   useEffect(() => {
     const token = sessionStorage.getItem('authToken')
@@ -55,11 +61,11 @@ export default function Navbar() {
   const links = [
     { label: 'Resumo', href: '/resumo' },
     { label: 'Criar Borderô', href: '/operacao-bordero' },
+    { label: 'Análise', href: '/analise' },
     { label: 'Consultas', href: '/consultas' },
     { label: 'Fluxo de Caixa', href: '/fluxo-caixa' },
     { label: 'Cadastros', href: '/cadastros/clientes' },
     { label: 'Agenda', href: '/agenda' },
-    { label: 'Análise', href: '/analise' },
   ]
 
   return (
@@ -77,7 +83,6 @@ export default function Navbar() {
               <span className="text-xl font-bold text-white">IJJ FIDC</span>
             </Link>
 
-            {/* Itens do menu para telas grandes */}
             <div className="hidden md:flex md:items-center md:space-x-4">
               {links.map(({ label, href }) => (
                 <Link key={href} href={href} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${pathname.startsWith(href) ? 'text-white bg-gray-700' : 'text-gray-300 hover:text-orange-400 hover:bg-gray-800'}`}>
@@ -86,7 +91,6 @@ export default function Navbar() {
               ))}
             </div>
 
-            {/* Ícone do menu para telas pequenas */}
             <div className="md:hidden flex items-center">
               <button
                 className="text-gray-400 hover:text-white"
@@ -96,7 +100,6 @@ export default function Navbar() {
               </button>
             </div>
 
-            {/* Dropdown do perfil (sempre visível em telas grandes) */}
             <div className="hidden md:block relative ml-4 flex-shrink-0" ref={profileRef}>
               <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-800 transition">
                 <span className="font-medium text-gray-200">{currentUser.username}</span>
@@ -118,7 +121,6 @@ export default function Navbar() {
         </div>
       </motion.nav>
 
-      {/* Menu lateral para telas pequenas */}
       <AnimatePresence>
         {isMenuOpen && (
           <motion.div
