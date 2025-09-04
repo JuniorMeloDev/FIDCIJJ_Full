@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { FiLogIn, FiUser, FiLock } from 'react-icons/fi';
+import { jwtDecode } from 'jwt-decode'; // <-- IMPORTANTE: Adicione esta linha
 
 const LoginPage = () => {
     const [username, setUsername] = useState('');
@@ -17,7 +18,6 @@ const LoginPage = () => {
         setError('');
 
         try {
-            // A URL agora aponta para a rota de API local do Next.js
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: {
@@ -32,11 +32,23 @@ const LoginPage = () => {
             }
 
             const data = await response.json();
-            
-            // Armazena o token no sessionStorage com a chave correta
             sessionStorage.setItem('authToken', data.token); 
 
-            router.push('/resumo'); // Redireciona para a página de resumo
+            // --- LÓGICA DE REDIRECIONAMENTO CORRIGIDA ---
+            // 1. Decodifica o token para ler as informações (roles)
+            const decodedToken = jwtDecode(data.token);
+            const userRoles = decodedToken.roles || [];
+
+            // 2. Verifica se o usuário é um cliente
+            if (userRoles.includes('ROLE_CLIENTE')) {
+                // Se for, redireciona para o dashboard do cliente
+                router.push('/portal/dashboard');
+            } else {
+                // Senão, redireciona para o resumo do admin
+                router.push('/resumo');
+            }
+            // --- FIM DA CORREÇÃO ---
+
         } catch (err) {
             setError(err.message);
         } finally {
@@ -96,5 +108,3 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
-
-//Pagina com Next.js 13 e Framer Motion para animações
