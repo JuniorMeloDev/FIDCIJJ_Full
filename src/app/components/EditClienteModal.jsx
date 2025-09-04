@@ -14,7 +14,7 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
     const [isSaving, setIsSaving] = useState(false);
     const [modalError, setModalError] = useState('');
 
-    // --- NOVOS STATES PARA DADOS DE ACESSO ---
+    // --- STATES PARA DADOS DE ACESSO ---
     const [userData, setUserData] = useState({ username: '', password: '' });
     const [loadingUser, setLoadingUser] = useState(false);
 
@@ -55,7 +55,11 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
                     emails: cliente.emails ? [...cliente.emails] : []
                 };
                 setFormData(initialData);
-                setDataFetched(true);
+                if (!cliente.id && initialData.cnpj.replace(/\D/g, '').length === 14) {
+                    handleCnpjSearch(initialData.cnpj);
+                } else {
+                    setDataFetched(true);
+                }
                 fetchUserData();
             } else {
                 setFormData(initialState);
@@ -100,7 +104,7 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
         const { name, value } = e.target;
         setUserData(prev => ({ ...prev, [name]: value }));
     };
-    
+
     const handleContaChange = (index, name, value) => {
         const contas = [...formData.contasBancarias];
         if (contas[index]) {
@@ -157,7 +161,7 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
             <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] overflow-y-auto">
                 <h2 className="text-xl font-bold mb-4">{isEditMode ? 'Editar Cliente' : 'Adicionar Novo Cliente'}</h2>
                 <div className="space-y-3">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-gray-300">CNPJ {isFetchingCnpj && <span className="text-xs text-orange-400">(A consultar...)</span>}</label>
                             <input type="text" name="cnpj" value={formData.cnpj} onChange={handleChange} placeholder="Digite para buscar..." className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
@@ -167,9 +171,32 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
                             <input type="text" name="nome" value={formData.nome || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
                         </div>
                     </div>
-                    {dataFetched && (
+
+                    {(dataFetched || isEditMode) && (
                         <>
-                           {/* ... Campos de dados do cliente ... */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-300">Ramo de Atividade</label>
+                                    <select name="ramoDeAtividade" value={formData.ramoDeAtividade || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
+                                        <option value="">Selecione...</option>
+                                        <option value="Transportes">Transportes</option>
+                                        <option value="Industria">Indústria</option>
+                                        <option value="Comercio">Comércio</option>
+                                        <option value="Servicos">Serviços</option>
+                                        <option value="Outro">Outro</option>
+                                    </select>
+                                </div>
+                                <div><label className="block text-xs font-bold text-gray-300">Inscrição Estadual</label><input type="text" name="ie" value={formData.ie || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                <div><label className="block text-xs font-bold text-gray-300">Telefone</label><input type="text" name="fone" value={formData.fone || ''} onChange={(e) => setFormData(prev => ({...prev, fone: formatTelefone(e.target.value)}))} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div><label className="block text-xs font-bold text-gray-300">CEP</label><input type="text" name="cep" value={formData.cep || ''} onChange={(e) => setFormData(prev => ({...prev, cep: formatCep(e.target.value)}))} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Endereço</label><input type="text" name="endereco" value={formData.endereco || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                <div><label className="block text-xs font-bold text-gray-300">Bairro</label><input type="text" name="bairro" value={formData.bairro || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Município</label><input type="text" name="municipio" value={formData.municipio || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                <div><label className="block text-xs font-bold text-gray-300">UF</label><input type="text" name="uf" value={formData.uf || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                            </div>
+
                             <div className="border-t border-gray-700 pt-3 mt-3">
                                 <h3 className="text-md font-semibold text-gray-100 mb-2">Acesso ao Portal do Cliente</h3>
                                 {loadingUser ? <p className="text-sm text-gray-400">Carregando dados de acesso...</p> : (
@@ -184,6 +211,39 @@ export default function EditClienteModal({ isOpen, onClose, cliente, onSave, onD
                                         </div>
                                     </div>
                                 )}
+                            </div>
+
+                            <div className="border-t border-gray-700 pt-3 mt-3">
+                                <div className="flex justify-between items-center mb-2">
+                                    <h3 className="text-md font-semibold text-gray-100">Contas Bancárias</h3>
+                                    <button type="button" onClick={addConta} className="text-sm font-medium text-orange-400 hover:text-orange-500 transition">+ Adicionar</button>
+                                </div>
+                                <div className="space-y-2 max-h-32 overflow-y-auto pr-2 border border-gray-700 rounded-md p-2">
+                                    {formData.contasBancarias?.length > 0 ? formData.contasBancarias.map((conta, index) => (
+                                        <div key={index} className="grid grid-cols-4 gap-2 items-center">
+                                            <div className="col-span-2"><AutocompleteInput value={conta.banco} onChange={(value) => handleContaChange(index, 'banco', value)} /></div>
+                                            <input type="text" name="agencia" placeholder="Agência" value={conta.agencia || ''} onChange={e => handleContaChange(index, 'agencia', e.target.value)} className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm" />
+                                            <div className="flex items-center gap-1">
+                                                <input type="text" name="contaCorrente" placeholder="Conta" value={conta.contaCorrente || ''} onChange={e => handleContaChange(index, 'contaCorrente', e.target.value)} className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm w-full" />
+                                                <button type="button" onClick={() => removeConta(index)} className="text-red-400 hover:text-red-500 font-bold">&times;</button>
+                                            </div>
+                                        </div>
+                                    )) : ( <p className="text-center text-sm text-gray-400 py-3">Nenhuma conta adicionada.</p> )}
+                                </div>
+                            </div>
+                            <div className="border-t border-gray-700 pt-3 mt-3">
+                                <div className="flex justify-between items-center mb-2">
+                                    <h3 className="text-md font-semibold text-gray-100">Emails para Notificação</h3>
+                                    <button type="button" onClick={addEmail} className="text-sm font-medium text-orange-400 hover:text-orange-500 transition">+ Adicionar</button>
+                                </div>
+                                <div className="space-y-2 max-h-32 overflow-y-auto pr-2 border border-gray-700 rounded-md p-2">
+                                    {formData.emails?.length > 0 ? formData.emails.map((email, index) => (
+                                        <div key={index} className="flex items-center gap-2">
+                                            <input type="email" placeholder="exemplo@email.com" value={email || ''} onChange={e => handleEmailChange(index, e.target.value)} className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm w-full" />
+                                            <button type="button" onClick={() => removeEmail(index)} className="text-red-400 hover:text-red-500 font-bold">&times;</button>
+                                        </div>
+                                    )) : ( <p className="text-center text-sm text-gray-400 py-3">Nenhum e-mail adicionado.</p> )}
+                                </div>
                             </div>
                         </>
                     )}
