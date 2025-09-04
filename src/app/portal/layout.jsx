@@ -2,16 +2,15 @@
 
 import { jwtDecode } from 'jwt-decode';
 import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { FaChartLine } from "react-icons/fa";
-import Link from "next/link";
 
 // Componente de Cabeçalho do Portal
 function PortalNavbar({ user, onLogout }) {
     if (!user) return null;
 
     return (
-        <nav className="bg-gray-900/80 backdrop-blur-sm border-b border-gray-700 fixed w-full z-10">
+        <nav className="bg-gray-900 border-b border-gray-700 fixed w-full z-20 top-0 left-0 h-16">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between items-center h-16">
                     <div className="flex items-center space-x-3">
@@ -33,7 +32,6 @@ export default function PortalLayout({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
-    const pathname = usePathname();
 
     useEffect(() => {
         const token = sessionStorage.getItem('authToken');
@@ -41,7 +39,6 @@ export default function PortalLayout({ children }) {
             try {
                 const decoded = jwtDecode(token);
                 const userRoles = decoded.roles || [];
-                // Se não for cliente, redireciona para o login (ou para o dashboard admin)
                 if (!userRoles.includes('ROLE_CLIENTE')) {
                     router.push('/login');
                     return;
@@ -70,12 +67,11 @@ export default function PortalLayout({ children }) {
     }
 
     return (
-        <>
+        <div className="flex flex-col h-screen bg-gray-900">
             <PortalNavbar user={user} onLogout={handleLogout} />
-            <main className="pt-16 bg-gray-900 min-h-screen">
+            <main className="flex-grow pt-16 overflow-y-auto">
                 {children}
             </main>
-        </>
+        </div>
     );
 }
-
