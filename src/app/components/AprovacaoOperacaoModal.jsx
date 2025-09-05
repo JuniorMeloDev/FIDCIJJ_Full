@@ -11,8 +11,10 @@ export default function AprovacaoOperacaoModal({ isOpen, onClose, onSave, operac
 
     useEffect(() => {
         if (isOpen && operacao) {
-            setStatus(operacao.status || 'Aprovada');
-            setContaBancariaId(operacao.conta_bancaria_id || '');
+            // CORREÇÃO: A ação padrão ao abrir o modal deve ser 'Aprovada',
+            // para que o campo de conta bancária seja exibido.
+            setStatus('Aprovada');
+            setContaBancariaId(''); // Limpa a seleção anterior
             setError('');
         }
     }, [isOpen, operacao]);
