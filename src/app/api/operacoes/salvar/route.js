@@ -26,8 +26,7 @@ export async function POST(request) {
             }));
         });
 
-        // A chamada para a função rpc agora passa os novos parâmetros
-        const { data: operacaoId, error } = await supabase.rpc('salvar_operacao_completa', {
+        const { data: operacaoId, error: rpcError } = await supabase.rpc('salvar_operacao_completa', {
             p_data_operacao: body.dataOperacao,
             p_tipo_operacao_id: body.tipoOperacaoId,
             p_cliente_id: body.clienteId,
@@ -41,7 +40,20 @@ export async function POST(request) {
             p_data_debito_parcial: body.dataDebito  
         });
 
-        if (error) throw error;
+        if (rpcError) throw rpcError;
+
+        // CORREÇÃO: Após criar a operação, define seu status como 'Aprovada'
+        // pois foi criada por um administrador e não precisa de análise.
+        const { error: updateError } = await supabase
+            .from('operacoes')
+            .update({ status: 'Aprovada' })
+            .eq('id', operacaoId);
+
+        if (updateError) {
+            console.error('Falha ao atualizar status da operação criada pelo admin:', updateError);
+            // Mesmo com este erro, a operação foi criada. Lançar erro para alertar sobre a inconsistência.
+            throw new Error('Operação salva, mas falha ao definir o status como Aprovada.');
+        }
 
         return NextResponse.json(operacaoId, { status: 201 });
 
