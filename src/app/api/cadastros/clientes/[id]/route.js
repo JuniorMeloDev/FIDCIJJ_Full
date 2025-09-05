@@ -17,11 +17,11 @@ export async function PUT(request, { params }) {
             contasBancarias, 
             emails, 
             ramoDeAtividade,
-            tiposOperacao, // Array com os IDs dos tipos de operação selecionados
+            tiposOperacao,
             ...clienteData 
         } = body;
 
-        // Limpa campos de relacionamento para evitar erros no update
+        // Remove campos de relacionamento que não devem estar no update principal
         delete clienteData.contas_bancarias; 
         delete clienteData.cliente_emails;
         delete clienteData.cliente_tipos_operacao;
@@ -40,6 +40,7 @@ export async function PUT(request, { params }) {
              const contasToInsert = contasBancarias.map(({id: contaId, ...c}) => ({ 
                 banco: c.banco,
                 agencia: c.agencia,
+                // CORREÇÃO: Garante que o nome da coluna esteja correto
                 conta_corrente: c.contaCorrente,
                 cliente_id: id 
             }));
@@ -56,8 +57,9 @@ export async function PUT(request, { params }) {
         // 4. ATUALIZA OS TIPOS DE OPERAÇÃO
         await supabase.from('cliente_tipos_operacao').delete().eq('cliente_id', id);
         if (tiposOperacao && tiposOperacao.length > 0) {
-            const tiposToInsert = tiposOperacao.map(tipo_id => ({ cliente_id: id, tipo_operacao_id: tipo_id }));
-            await supabase.from('cliente_tipos_operacao').insert(tiposToInsert);
+            const tiposToInsert = tiposOperacao.map(tipo_id => ({ cliente_id: parseInt(id), tipo_operacao_id: tipo_id }));
+            const { error: tiposError } = await supabase.from('cliente_tipos_operacao').insert(tiposToInsert);
+            if (tiposError) throw tiposError;
         }
 
         // 5. GERENCIA O USUÁRIO DE ACESSO
@@ -102,7 +104,6 @@ export async function DELETE(request, { params }) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const { id } = params;
-        // Graças ao ON DELETE CASCADE, só precisamos apagar o cliente
         const { error } = await supabase.from('clientes').delete().eq('id', id);
         
         if (error) throw error;
