@@ -18,14 +18,16 @@ export async function GET(request) {
             return NextResponse.json({ message: 'Usuário cliente sem empresa associada.' }, { status: 403 });
         }
 
-        // Busca todas as duplicatas pertencentes às operações do cliente logado
+        // CORREÇÃO: Adicionado .eq('operacao.status', 'Aprovada')
+        // para buscar apenas duplicatas de operações que já foram aprovadas.
         const { data, error } = await supabase
             .from('duplicatas')
             .select(`
                 *,
-                operacao:operacoes!inner(cliente_id)
+                operacao:operacoes!inner(cliente_id, status)
             `)
             .eq('operacao.cliente_id', clienteId)
+            .eq('operacao.status', 'Aprovada')
             .order('data_vencimento', { ascending: true });
 
         if (error) throw error;

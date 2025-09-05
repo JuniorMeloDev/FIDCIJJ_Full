@@ -15,12 +15,13 @@ export async function GET(request) {
             return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
         }
 
-        // Busca operações que estão com o status 'Pendente' de aprovação
+        // CORREÇÃO: A junção com a tabela de clientes foi tornada obrigatória (!inner)
+        // para garantir a integridade dos dados e evitar erros na consulta.
         const { data, error } = await supabase
             .from('operacoes')
             .select(`
                 *,
-                cliente:clientes ( nome ),
+                cliente:clientes!inner( nome ),
                 duplicatas ( * )
             `)
             .eq('status', 'Pendente') // O filtro principal acontece aqui
