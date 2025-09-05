@@ -19,8 +19,6 @@ export async function PUT(request, { params }) {
             acesso, 
             contasBancarias, 
             emails, 
-            ramoDeAtividade,
-            // Adicionamos estas para garantir que nenhuma variação passe
             contas_bancarias, 
             cliente_emails,
             ramo_de_atividade,
@@ -30,7 +28,7 @@ export async function PUT(request, { params }) {
         // 1. ATUALIZA OS DADOS DO CLIENTE (agora com certeza sem os campos extras)
         const { error: clienteError } = await supabase
             .from('clientes')
-            .update({ ...clienteData, ramo_de_atividade: ramoDeAtividade }) // Atualiza os dados puros + o ramo
+            .update({ ...clienteData, ramo_de_atividade }) // Atualiza os dados puros + o ramo
             .eq('id', id);
 
         if (clienteError) {
