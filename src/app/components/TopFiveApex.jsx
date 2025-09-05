@@ -36,7 +36,6 @@ export default function TopFiveApex({ data = [] }) {
         return null;
     };
 
-    // CORREÇÃO: Alterado o limite de 10 para 5 para a troca de layout.
     const isManyItems = data.length > 5;
 
     return (
@@ -44,7 +43,7 @@ export default function TopFiveApex({ data = [] }) {
             <BarChart
                 data={chartData}
                 layout={isManyItems ? "vertical" : "horizontal"}
-                margin={{ top: 30, right: 20, left: 20, bottom: 20 }}
+                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                 barSize={isManyItems ? 25 : 50}
             >
                 {isManyItems ? (
@@ -99,8 +98,9 @@ export default function TopFiveApex({ data = [] }) {
                 >
                     <LabelList 
                         dataKey="value" 
-                        position={isManyItems ? "right" : "top"}
-                        style={{ fill: '#d1d5db', fontSize: 12 }}
+                        // CORREÇÃO: Posição do valor muda para dentro da barra no modo horizontal
+                        position={isManyItems ? "insideRight" : "top"}
+                        style={{ fill: isManyItems ? '#ffffff' : '#d1d5db', fontSize: 12, fontWeight: 'bold' }}
                         formatter={formatBRLNumber}
                     />
                 </Bar>
