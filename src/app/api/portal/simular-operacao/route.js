@@ -57,23 +57,18 @@ const parseXml = async (xmlText) => {
     const emitCnpj = getVal(emitNode, 'CNPJ');
     const destCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
 
-    // MODIFICAÇÃO: Buscar também as condições de pagamento do sacado
     const { data: sacadoData } = await supabase.from('sacados').select('*, condicoes_pagamento(*)').eq('cnpj', destCnpjCpf).single();
     if (!sacadoData) throw new Error(`Sacado com CNPJ/CPF ${destCnpjCpf} não encontrado no sistema.`);
     
-    // --- NOVA LÓGICA ---
-    // Se o XML não tiver parcelas (como no CT-e), busca do cadastro do sacado
     if (parcelas.length === 0 && sacadoData.condicoes_pagamento && sacadoData.condicoes_pagamento.length > 0) {
         const condicaoPadrao = sacadoData.condicoes_pagamento[0];
         prazosString = condicaoPadrao.prazos;
         parcelas = Array(condicaoPadrao.parcelas).fill({});
     } else {
-        // Se tiver parcelas no XML, calcula os prazos a partir das datas
         prazosString = parcelas.map(p => 
             Math.ceil(Math.abs(new Date(p.dataVencimento) - new Date(dataEmissao)) / (1000 * 60 * 60 * 24))
         ).join('/');
     }
-    // --- FIM DA NOVA LÓGICA ---
 
     return {
         nfCte: numeroDoc,
@@ -81,13 +76,13 @@ const parseXml = async (xmlText) => {
         valorNf: valorTotal,
         clienteSacado: sacadoData.nome,
         parcelas: parcelas.length > 0 ? String(parcelas.length) : "1",
-        prazos: prazosString || "0", // Usa o prazo do cadastro ou 0 se não houver
+        prazos: prazosString || "0",
         cedenteCnpjVerificado: emitCnpj
     };
 };
 
 const parsePdf = async (buffer) => {
-    // Funções auxiliares de parsing de PDF
+    // ... (esta função não precisa de alterações)
     const normalize = (str) => (str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
     const CNPJ_ANY_RE = /(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}|\d{14})(?!\d)/;
 
@@ -116,8 +111,6 @@ const parsePdf = async (buffer) => {
         const m = text.match(/CNPJ[:\s]*([\d./-]{14,18})/i);
         return m ? m[1].replace(/\D/g, "") : null;
     }
-    // Fim das funções auxiliares
-
     const pdfParser = new PDFParser(this, 1);
     let pdfText = "";
     await new Promise((resolve, reject) => {
@@ -128,19 +121,14 @@ const parsePdf = async (buffer) => {
         });
         pdfParser.parseBuffer(buffer);
     });
-
     const cnpjEmitente = extrairCnpjEmitente(pdfText);
     let cnpjSacado = cnpjNearLabel(pdfText, ["TOMADOR DO SERVIÇO", "TOMADOR DO SERVICO"], 1400, 600) || cnpjNearLabel(pdfText, ["REMETENTE"], 1400, 600);
-
     if (!cnpjSacado) throw new Error("Não foi possível extrair o CNPJ do Tomador ou Remetente do CT-e.");
-
     const { data: sacadoData } = await supabase.from('sacados').select('id, nome').eq('cnpj', cnpjSacado).single();
     if (!sacadoData) throw new Error(`Sacado com CNPJ ${cnpjSacado} não encontrado no sistema.`);
-
     const numeroCteMatch = pdfText.match(/N[ÚU]MERO\s*([0-9]{1,10})\s*DATA E HORA DE EMISS[ÃA]O/i);
     const dataEmissaoMatch = pdfText.match(/DATA E HORA DE EMISS[ÃA]O\s*([0-3]?\d\/[01]?\d\/\d{4})/i);
     const valorTotalMatch = pdfText.match(/VALOR TOTAL DA PRESTA[ÇC][ÃA]O DO SERVI[ÇC]O\s*([\d.,]+)/i);
-
     return {
         nfCte: numeroCteMatch ? numeroCteMatch[1] : "",
         dataNf: dataEmissaoMatch ? dataEmissaoMatch[1].split('/').reverse().join('-') : "",
@@ -180,16 +168,13 @@ export async function POST(request) {
             throw new Error("Formato de arquivo não suportado.");
         }
 
-        // Validação: O CNPJ do emitente do arquivo é o mesmo do cliente logado?
         if (parsedData.cedenteCnpjVerificado !== clienteAtual.cnpj) {
             throw new Error('O CNPJ do emitente no arquivo não corresponde ao seu cadastro.');
         }
 
-        // Busca dados do tipo de operação
         const { data: tipoOp, error: tipoOpError } = await supabase.from('tipos_operacao').select('*').eq('id', tipoOperacaoId).single();
         if (tipoOpError) throw new Error('Tipo de operação não encontrado.');
 
-        // Lógica de cálculo de juros
         let totalJuros = 0;
         const parcelas = parseInt(parsedData.parcelas) || 1;
         const valorParcelaBase = parsedData.valorNf / parcelas;
@@ -201,16 +186,21 @@ export async function POST(request) {
             totalJuros = tipoOp.valor_fixo;
             const jurosPorParcela = totalJuros / parcelas;
             for (let i = 0; i < prazosArray.length; i++) {
-                const dataVencimento = new Date(parsedData.dataNf);
-                dataVencimento.setDate(dataVencimento.getDate() + prazosArray[i]);
+                const dataVencimento = new Date(parsedData.dataNf + 'T12:00:00Z');
+                dataVencimento.setUTCDate(dataVencimento.getUTCDate() + prazosArray[i]);
                 parcelasCalculadas.push({ numeroParcela: i + 1, dataVencimento: dataVencimento.toISOString().split('T')[0], valorParcela: valorParcelaBase, jurosParcela: jurosPorParcela });
             }
         } else {
             for (let i = 0; i < prazosArray.length; i++) {
                 const prazoDias = prazosArray[i];
-                const dataVenc = new Date(parsedData.dataNf);
-                // Adiciona 1 dia para corrigir problemas de fuso horário/cálculo de data
-                dataVenc.setDate(dataVenc.getDate() + prazoDias + 1);
+                
+                // --- CORREÇÃO APLICADA AQUI ---
+                // Cria a data em UTC para evitar problemas de fuso horário
+                const dataVenc = new Date(parsedData.dataNf + 'T12:00:00Z'); 
+                // Adiciona os dias do prazo
+                dataVenc.setUTCDate(dataVenc.getUTCDate() + prazoDias);
+                // --- FIM DA CORREÇÃO ---
+
                 const diasCorridos = tipoOp.usar_prazo_sacado ? prazoDias : Math.ceil((dataVenc - new Date(dataOperacao)) / (1000 * 60 * 60 * 24));
                 const jurosParcela = (valorParcelaBase * (tipoOp.taxa_juros / 100) / 30) * diasCorridos;
                 totalJuros += jurosParcela;
