@@ -14,7 +14,7 @@ const parseXml = async (xmlText) => {
         tagNameProcessors: [name => name.replace(/^.*:/, ''), name => name.replace(/{.*}/, '')] 
     });
 
-    let numeroDoc, valorTotal, parcelas = [], emitNode, sacadoNode, dataEmissao;
+    let numeroDoc, valorTotal, parcelas = [], emitNode, sacadoNode, dataEmissao, prazosString;
 
     // --- Lógica para NF-e ---
     const infNFe = parsedXml?.NFe?.infNFe?.[0] || parsedXml?.nfeProc?.[0]?.NFe?.[0]?.infNFe?.[0];
@@ -39,7 +39,6 @@ const parseXml = async (xmlText) => {
         emitNode = infCte.emit?.[0];
         dataEmissao = getVal(infCte, 'ide.dhEmi')?.substring(0, 10);
 
-        // Lógica para determinar o sacado (tomador do serviço) no CT-e
         const toma = getVal(infCte, 'ide.toma3.toma') || getVal(infCte, 'ide.toma4.toma');
         switch (toma) {
             case '0': sacadoNode = infCte.rem?.[0]; break;
@@ -48,7 +47,7 @@ const parseXml = async (xmlText) => {
             case '3': sacadoNode = infCte.dest?.[0]; break;
             default:  sacadoNode = infCte.rem?.[0];
         }
-        parcelas = []; // CT-e não tem parcelas no XML
+        parcelas = [];
     }
 
     if (!infNFe && !infCte) {
@@ -58,14 +57,23 @@ const parseXml = async (xmlText) => {
     const emitCnpj = getVal(emitNode, 'CNPJ');
     const destCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
 
-    const { data: sacadoData } = await supabase.from('sacados').select('id, nome').eq('cnpj', destCnpjCpf).single();
+    // MODIFICAÇÃO: Buscar também as condições de pagamento do sacado
+    const { data: sacadoData } = await supabase.from('sacados').select('*, condicoes_pagamento(*)').eq('cnpj', destCnpjCpf).single();
     if (!sacadoData) throw new Error(`Sacado com CNPJ/CPF ${destCnpjCpf} não encontrado no sistema.`);
     
-    // Calcula os prazos a partir das datas
-    const prazosArray = parcelas.map(p => 
-        Math.ceil(Math.abs(new Date(p.dataVencimento) - new Date(dataEmissao)) / (1000 * 60 * 60 * 24))
-    );
-    const prazos = prazosArray.join('/');
+    // --- NOVA LÓGICA ---
+    // Se o XML não tiver parcelas (como no CT-e), busca do cadastro do sacado
+    if (parcelas.length === 0 && sacadoData.condicoes_pagamento && sacadoData.condicoes_pagamento.length > 0) {
+        const condicaoPadrao = sacadoData.condicoes_pagamento[0];
+        prazosString = condicaoPadrao.prazos;
+        parcelas = Array(condicaoPadrao.parcelas).fill({});
+    } else {
+        // Se tiver parcelas no XML, calcula os prazos a partir das datas
+        prazosString = parcelas.map(p => 
+            Math.ceil(Math.abs(new Date(p.dataVencimento) - new Date(dataEmissao)) / (1000 * 60 * 60 * 24))
+        ).join('/');
+    }
+    // --- FIM DA NOVA LÓGICA ---
 
     return {
         nfCte: numeroDoc,
@@ -73,7 +81,7 @@ const parseXml = async (xmlText) => {
         valorNf: valorTotal,
         clienteSacado: sacadoData.nome,
         parcelas: parcelas.length > 0 ? String(parcelas.length) : "1",
-        prazos: prazos.length > 0 ? prazos : "0", // Padrão para CT-e
+        prazos: prazosString || "0", // Usa o prazo do cadastro ou 0 se não houver
         cedenteCnpjVerificado: emitCnpj
     };
 };
@@ -181,7 +189,7 @@ export async function POST(request) {
         const { data: tipoOp, error: tipoOpError } = await supabase.from('tipos_operacao').select('*').eq('id', tipoOperacaoId).single();
         if (tipoOpError) throw new Error('Tipo de operação não encontrado.');
 
-        // Lógica de cálculo de juros (adaptada da sua API existente)
+        // Lógica de cálculo de juros
         let totalJuros = 0;
         const parcelas = parseInt(parsedData.parcelas) || 1;
         const valorParcelaBase = parsedData.valorNf / parcelas;
@@ -201,7 +209,8 @@ export async function POST(request) {
             for (let i = 0; i < prazosArray.length; i++) {
                 const prazoDias = prazosArray[i];
                 const dataVenc = new Date(parsedData.dataNf);
-                dataVenc.setDate(dataVenc.getDate() + prazoDias);
+                // Adiciona 1 dia para corrigir problemas de fuso horário/cálculo de data
+                dataVenc.setDate(dataVenc.getDate() + prazoDias + 1);
                 const diasCorridos = tipoOp.usar_prazo_sacado ? prazoDias : Math.ceil((dataVenc - new Date(dataOperacao)) / (1000 * 60 * 60 * 24));
                 const jurosParcela = (valorParcelaBase * (tipoOp.taxa_juros / 100) / 30) * diasCorridos;
                 totalJuros += jurosParcela;
