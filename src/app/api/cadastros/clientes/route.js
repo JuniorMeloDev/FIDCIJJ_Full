@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 
 // GET: Busca todos os clientes
 export async function GET(request) {
+    // ... (código existente, sem alterações)
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
@@ -39,10 +40,12 @@ export async function POST(request) {
 
         const body = await request.json();
         
-        // CORREÇÃO: Pega o 'ramoDeAtividade' e o renomeia para o padrão do banco de dados.
         const { contasBancarias, emails, acesso, ramoDeAtividade, ...clienteData } = body;
 
-        // Adiciona o campo com o nome correto ao objeto que será salvo.
+        // CORREÇÃO: Remove a propriedade 'id' do objeto antes de salvar.
+        // Isso garante que o banco de dados irá gerar um novo ID automaticamente.
+        delete clienteData.id;
+
         const dataToSave = {
             ...clienteData,
             ramo_de_atividade: ramoDeAtividade
@@ -51,7 +54,7 @@ export async function POST(request) {
         // 1. Insere o cliente com os dados corretos
         const { data: newCliente, error: clienteError } = await supabase
             .from('clientes')
-            .insert(dataToSave) // Usa o novo objeto com o nome da coluna corrigido
+            .insert(dataToSave)
             .select()
             .single();
 
