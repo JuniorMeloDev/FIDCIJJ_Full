@@ -21,10 +21,9 @@ export async function PUT(request, { params }) {
                 return NextResponse.json({ message: 'Conta bancária é obrigatória para aprovação.' }, { status: 400 });
             }
 
-            // 1. Buscar os detalhes da operação para criar o movimento de caixa
             const { data: operacao, error: fetchError } = await supabase
                 .from('operacoes')
-                .select('valor_liquido, data_operacao')
+                .select('valor_liquido, data_operacao, cliente:clientes(ramo_de_atividade)')
                 .eq('id', id)
                 .single();
             
@@ -32,7 +31,6 @@ export async function PUT(request, { params }) {
                 throw new Error('Operação a ser aprovada não foi encontrada.');
             }
             
-            // 2. Buscar os detalhes da conta para a descrição do lançamento
             const { data: conta, error: contaError } = await supabase
                 .from('contas_bancarias')
                 .select('banco, agencia, conta_corrente')
@@ -43,17 +41,25 @@ export async function PUT(request, { params }) {
                 throw new Error('Conta bancária selecionada não foi encontrada.');
             }
             
-            // 3. Buscar o nome da empresa principal (FIDC) para associar ao lançamento
              const { data: clientes } = await supabase.from('clientes').select('nome').limit(1);
              const empresaMasterNome = clientes && clientes.length > 0 ? clientes[0].nome : 'FIDC IJJ';
 
-            // 4. Inserir o movimento de caixa (débito do valor líquido)
+            // Lógica para criar a descrição customizada
+            let descricaoLancamento = `Borderô #${id}`; // Fallback
+            const { data: duplicatas } = await supabase.from('duplicatas').select('nf_cte').eq('operacao_id', id);
+            if (duplicatas && duplicatas.length > 0 && operacao.cliente) {
+                const docType = operacao.cliente.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
+                const numerosDoc = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
+                // CORREÇÃO: Removido "Pagamento" do início da string.
+                descricaoLancamento = `Borderô ${docType} ${numerosDoc}`;
+            }
+
             const { error: movError } = await supabase
                 .from('movimentacoes_caixa')
                 .insert({
                     operacao_id: id,
                     data_movimento: operacao.data_operacao,
-                    descricao: `Pagamento Borderô #${id}`,
+                    descricao: descricaoLancamento,
                     valor: -Math.abs(operacao.valor_liquido),
                     categoria: 'Pagamento de Borderô',
                     conta_bancaria: `${conta.banco} - Ag. ${conta.agencia} / CC ${conta.conta_corrente}`,
@@ -62,7 +68,6 @@ export async function PUT(request, { params }) {
 
             if (movError) throw movError;
 
-            // 5. Finalmente, atualizar o status da operação
             const { error: updateError } = await supabase
                 .from('operacoes')
                 .update({ status: 'Aprovada', conta_bancaria_id: conta_bancaria_id })
@@ -70,7 +75,7 @@ export async function PUT(request, { params }) {
 
             if (updateError) throw updateError;
 
-        } else { // Caso a ação seja 'Rejeitar'
+        } else {
             const { error } = await supabase
                 .from('operacoes')
                 .update({ status: status })

@@ -1,26 +1,24 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
+import { jwtDecode } from "jwt-decode";
 import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
 import { FaChevronRight, FaHourglassHalf, FaCheckCircle, FaTimesCircle, FaCheck, FaExclamationCircle, FaClock, FaCloudUploadAlt, FaDownload, FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 import Pagination from "@/app/components/Pagination";
 import Notification from "@/app/components/Notification";
 
 const ITEMS_PER_PAGE_OPERATIONS = 5;
-const ITEMS_PER_PAGE_DUPLICATAS = 5;
+const ITEMS_PER_PAGE_DUPLICATAS = 10;
 
 // Ícones SVG para a nova view
 const UploadIcon = () => <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>;
 const CheckCircleIcon = () => <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>;
 
 
-// ===================================================================
-//  Hook Genérico para Ordenação de Tabelas
-// ===================================================================
 const useSortableData = (items, initialConfig = { key: null, direction: 'DESC' }) => {
     const [sortConfig, setSortConfig] = useState(initialConfig);
-
     const sortedItems = useMemo(() => {
         let sortableItems = [...items];
         if (sortConfig.key !== null) {
@@ -36,7 +34,6 @@ const useSortableData = (items, initialConfig = { key: null, direction: 'DESC' }
         }
         return sortableItems;
     }, [items, sortConfig]);
-
     const requestSort = (key) => {
         let direction = 'ASC';
         if (sortConfig.key === key && sortConfig.direction === 'ASC') {
@@ -44,25 +41,19 @@ const useSortableData = (items, initialConfig = { key: null, direction: 'DESC' }
         }
         setSortConfig({ key, direction });
     };
-    
     const getSortIcon = (key) => {
         if (sortConfig.key !== key) return <FaSort className="inline-block ml-1 text-gray-500" />;
         if (sortConfig.direction === 'ASC') return <FaSortUp className="inline-block ml-1" />;
         return <FaSortDown className="inline-block ml-1" />;
     };
-
     return { items: sortedItems, requestSort, getSortIcon };
 };
 
-// ===================================================================
-//  Subcomponente: Tabela de Histórico de Operações
-// ===================================================================
-const HistoricoOperacoesTable = ({ operacoes, loading, error }) => {
+const HistoricoOperacoesTable = ({ operacoes, loading, error, getAuthHeader, showNotification }) => {
     const [expandedRow, setExpandedRow] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
-    
+    const [downloadingId, setDownloadingId] = useState(null);
     const { items: sortedOperacoes, requestSort, getSortIcon } = useSortableData(operacoes, { key: 'data_operacao', direction: 'DESC' });
-
     const toggleRow = (id) => setExpandedRow(expandedRow === id ? null : id);
 
     const indexOfLastItem = currentPage * ITEMS_PER_PAGE_OPERATIONS;
@@ -73,6 +64,36 @@ const HistoricoOperacoesTable = ({ operacoes, loading, error }) => {
         const styles = { Pendente: "bg-orange-800 text-amber-100", Aprovada: "bg-green-800 text-green-100", Rejeitada: "bg-red-800 text-red-100" };
         const icons = { Pendente: <FaHourglassHalf />, Aprovada: <FaCheckCircle />, Rejeitada: <FaTimesCircle /> };
         return <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${styles[status] || 'bg-gray-600'}`}>{icons[status]} {status}</span>;
+    };
+
+    const handleDownloadBordero = async (operacaoId) => {
+        setDownloadingId(operacaoId);
+        try {
+            const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, { headers: getAuthHeader() });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Não foi possível gerar o PDF.");
+            }
+            const contentDisposition = response.headers.get("content-disposition");
+            let filename = `bordero-${operacaoId}.pdf`;
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+                if (filenameMatch && filenameMatch.length > 1) filename = filenameMatch[1];
+            }
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            showNotification(err.message, 'error');
+        } finally {
+            setDownloadingId(null);
+        }
     };
 
     return (
@@ -107,10 +128,41 @@ const HistoricoOperacoesTable = ({ operacoes, loading, error }) => {
                                {expandedRow === op.id && (
                                    <tr className="bg-gray-900/50">
                                        <td colSpan="6" className="p-0">
-                                           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="overflow-hidden p-4">
-                                               <h4 className="font-semibold text-sm mb-2 text-orange-400">Detalhes da Operação #{op.id}</h4>
-                                               <div className="text-right mt-2"><button className="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md flex items-center gap-2 ml-auto"><FaDownload />Baixar Borderô</button></div>
-                                           </motion.div>
+                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="overflow-hidden p-4 space-y-4">
+                                                <div className="flex justify-between items-center">
+                                                    <h4 className="font-semibold text-sm text-orange-400">Detalhes da Operação #{op.id}</h4>
+                                                    <button 
+                                                        onClick={() => handleDownloadBordero(op.id)}
+                                                        disabled={downloadingId === op.id}
+                                                        className="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md flex items-center gap-2 ml-auto disabled:bg-blue-400"
+                                                    >
+                                                        <FaDownload />
+                                                        {downloadingId === op.id ? 'Baixando...' : 'Baixar Borderô'}
+                                                    </button>
+                                                </div>
+                                                <table className="min-w-full text-xs">
+                                                    <thead className="bg-gray-700/50">
+                                                        <tr>
+                                                            <th className="px-3 py-2 text-left">NF/CT-e</th>
+                                                            <th className="px-3 py-2 text-left">Sacado</th>
+                                                            <th className="px-3 py-2 text-center">Vencimento</th>
+                                                            <th className="px-3 py-2 text-right">Valor Bruto</th>
+                                                            <th className="px-3 py-2 text-right">Juros (Deságio)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-700">
+                                                        {op.duplicatas.map(dup => (
+                                                            <tr key={dup.id}>
+                                                                <td className="px-3 py-2">{dup.nf_cte}</td>
+                                                                <td className="px-3 py-2">{dup.cliente_sacado}</td>
+                                                                <td className="px-3 py-2 text-center">{formatDate(dup.data_vencimento)}</td>
+                                                                <td className="px-3 py-2 text-right">{formatBRLNumber(dup.valor_bruto)}</td>
+                                                                <td className="px-3 py-2 text-right text-red-400">{formatBRLNumber(dup.valor_juros)}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </motion.div>
                                        </td>
                                    </tr>
                                )}
@@ -124,15 +176,10 @@ const HistoricoOperacoesTable = ({ operacoes, loading, error }) => {
     );
 };
 
-// ===================================================================
-//  Subcomponente: Tabela de Acompanhamento de Duplicatas
-// ===================================================================
 const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const { items: sortedDuplicatas, requestSort, getSortIcon } = useSortableData(duplicatas, { key: 'data_vencimento', direction: 'DESC' });
-    
     const currentDuplicatas = sortedDuplicatas.slice((currentPage - 1) * ITEMS_PER_PAGE_DUPLICATAS, currentPage * ITEMS_PER_PAGE_DUPLICATAS);
-
     const getDuplicataStatusTag = (dup) => {
         if (dup.status_recebimento === 'Recebido') {
             return <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-800 text-blue-100"><FaCheck /> Liquidada</span>;
@@ -147,7 +194,6 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
         }
         return <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-900 text-sky-100"><FaClock /> A Vencer</span>;
     };
-
     return (
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
             <h2 className="text-xl font-semibold mb-4 text-white">Acompanhamento de Duplicatas</h2>
@@ -183,11 +229,8 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
     );
 };
 
-
-// ===================================================================
-//  Subcomponente: Lógica e UI para Enviar Nova Operação
-// ===================================================================
 const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
+    // ... (código da view de nova operação permanece o mesmo)
     const [tiposOperacao, setTiposOperacao] = useState([]);
     const [selectedFile, setSelectedFile] = useState(null);
     const [tipoOperacaoId, setTipoOperacaoId] = useState("");
@@ -195,7 +238,6 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const fileInputRef = useRef(null);
-
     useEffect(() => {
         const fetchTiposOperacao = async () => {
             try {
@@ -210,7 +252,6 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
         };
         fetchTiposOperacao();
     }, [getAuthHeader, showNotification]);
-
     const handleFileChange = (event) => {
         const file = event.target.files[0];
         if (file && (file.type === 'text/xml' || file.type === 'application/pdf')) {
@@ -220,7 +261,6 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
             setSelectedFile(null);
         }
     };
-
     const handleSimulate = async () => {
         if (!selectedFile || !tipoOperacaoId) {
             showNotification("Por favor, selecione um arquivo e um tipo de operação.", 'error');
@@ -251,7 +291,6 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
             setIsLoading(false);
         }
     };
-    
     const handleConfirmSubmit = async () => {
         if (!simulationResult) return;
         setIsSubmitting(true);
@@ -280,7 +319,6 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
             setIsSubmitting(false);
         }
     };
-    
     const SimulationDetails = ({ result, onSubmit, onCancel }) => (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-gray-800 p-6 rounded-lg shadow-lg">
             <h3 className="text-xl font-semibold mb-4 text-orange-400">Simulação da Operação</h3>
@@ -334,7 +372,6 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
             </div>
         </motion.div>
     );
-
     return (
         <>
             {!simulationResult ? (
@@ -348,7 +385,6 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
                                 {tiposOperacao.map(op => ( <option key={op.id} value={op.id}>{op.nome} (Taxa: {op.taxaJuros}%, Fixo: {formatBRLNumber(op.valorFixo)})</option>))}
                             </select>
                         </div>
-                        
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">2. Faça o Upload do Arquivo (XML ou PDF)</label>
                             <div 
@@ -385,9 +421,6 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
     );
 }
 
-// ===================================================================
-//  Componente Principal da Página
-// ===================================================================
 export default function ClientDashboardPage() {
     const [operacoes, setOperacoes] = useState([]);
     const [duplicatas, setDuplicatas] = useState([]);
@@ -417,32 +450,23 @@ export default function ClientDashboardPage() {
                     fetch('/api/portal/operacoes', { headers }),
                     fetch('/api/portal/duplicatas', { headers })
                 ]);
-
                 if (!operacoesRes.ok) throw new Error('Falha ao buscar suas operações.');
                 if (!duplicatasRes.ok) throw new Error('Falha ao buscar suas duplicatas.');
-
                 const operacoesData = await operacoesRes.json();
                 const duplicatasData = await duplicatasRes.json();
-                
                 setOperacoes(operacoesData);
                 setDuplicatas(duplicatasData);
-
-                // TODO: Implementar API para buscar KPIs reais
-                setKpis({
-                    limiteDisponivel: 749250.00,
-                    totalAVencer: 269500.00,
-                    taxaMedia: 3.15,
-                    prazoMedio: 28,
-                });
-
+                setKpis({ limiteDisponivel: 749250.00, totalAVencer: 269500.00, taxaMedia: 3.15, prazoMedio: 28 });
             } catch (err) {
                 setError(err.message);
             } finally {
                 setLoading(false);
             }
         };
-        fetchData();
-    }, []);
+        if (activeView === 'consultas') {
+            fetchData();
+        }
+    }, [activeView]);
 
     const TabButton = ({ viewName, currentView, setView, children }) => (
         <button
@@ -470,7 +494,9 @@ export default function ClientDashboardPage() {
                             <HistoricoOperacoesTable 
                                 operacoes={operacoes} 
                                 loading={loading}
-                                error={error} 
+                                error={error}
+                                getAuthHeader={getAuthHeader}
+                                showNotification={showNotification}
                             />
                             <AcompanhamentoDuplicatasTable 
                                 duplicatas={duplicatas}
