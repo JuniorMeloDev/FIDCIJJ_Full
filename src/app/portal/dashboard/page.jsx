@@ -1,22 +1,19 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
-import { jwtDecode } from "jwt-decode";
 import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
 import { FaChevronRight, FaHourglassHalf, FaCheckCircle, FaTimesCircle, FaCheck, FaExclamationCircle, FaClock, FaCloudUploadAlt, FaDownload, FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 import Pagination from "@/app/components/Pagination";
 import Notification from "@/app/components/Notification";
+import TopFiveApex from "@/app/components/TopFiveApex";
+import VolumeOperadoChart from "@/app/components/VolumeOperadoChart";
 
+// ... (todo o código dos subcomponentes `useSortableData`, `HistoricoOperacoesTable`, `AcompanhamentoDuplicatasTable` e `NovaOperacaoView` permanece o mesmo)
 const ITEMS_PER_PAGE_OPERATIONS = 5;
 const ITEMS_PER_PAGE_DUPLICATAS = 10;
-
-// Ícones SVG para a nova view
 const UploadIcon = () => <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>;
 const CheckCircleIcon = () => <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>;
-
-
 const useSortableData = (items, initialConfig = { key: null, direction: 'DESC' }) => {
     const [sortConfig, setSortConfig] = useState(initialConfig);
     const sortedItems = useMemo(() => {
@@ -48,24 +45,20 @@ const useSortableData = (items, initialConfig = { key: null, direction: 'DESC' }
     };
     return { items: sortedItems, requestSort, getSortIcon };
 };
-
 const HistoricoOperacoesTable = ({ operacoes, loading, error, getAuthHeader, showNotification }) => {
     const [expandedRow, setExpandedRow] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [downloadingId, setDownloadingId] = useState(null);
     const { items: sortedOperacoes, requestSort, getSortIcon } = useSortableData(operacoes, { key: 'data_operacao', direction: 'DESC' });
     const toggleRow = (id) => setExpandedRow(expandedRow === id ? null : id);
-
     const indexOfLastItem = currentPage * ITEMS_PER_PAGE_OPERATIONS;
     const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE_OPERATIONS;
     const currentOperacoes = sortedOperacoes.slice(indexOfFirstItem, indexOfLastItem);
-
     const getStatusTag = (status) => {
         const styles = { Pendente: "bg-orange-800 text-amber-100", Aprovada: "bg-green-800 text-green-100", Rejeitada: "bg-red-800 text-red-100" };
         const icons = { Pendente: <FaHourglassHalf />, Aprovada: <FaCheckCircle />, Rejeitada: <FaTimesCircle /> };
         return <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${styles[status] || 'bg-gray-600'}`}>{icons[status]} {status}</span>;
     };
-
     const handleDownloadBordero = async (operacaoId) => {
         setDownloadingId(operacaoId);
         try {
@@ -95,7 +88,6 @@ const HistoricoOperacoesTable = ({ operacoes, loading, error, getAuthHeader, sho
             setDownloadingId(null);
         }
     };
-
     return (
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
             <h2 className="text-xl font-semibold mb-4 text-white">Histórico de Operações</h2>
@@ -175,7 +167,6 @@ const HistoricoOperacoesTable = ({ operacoes, loading, error, getAuthHeader, sho
         </div>
     );
 };
-
 const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const { items: sortedDuplicatas, requestSort, getSortIcon } = useSortableData(duplicatas, { key: 'data_vencimento', direction: 'DESC' });
@@ -228,9 +219,7 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
         </div>
     );
 };
-
 const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
-    // ... (código da view de nova operação permanece o mesmo)
     const [tiposOperacao, setTiposOperacao] = useState([]);
     const [selectedFile, setSelectedFile] = useState(null);
     const [tipoOperacaoId, setTipoOperacaoId] = useState("");
@@ -272,7 +261,6 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
         const formData = new FormData();
         formData.append('file', selectedFile);
         formData.append('tipoOperacaoId', tipoOperacaoId);
-
         try {
             const response = await fetch('/api/portal/simular-operacao', {
                 method: 'POST',
@@ -421,14 +409,22 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
     );
 }
 
+// ===================================================================
+//  Componente Principal da Página
+// ===================================================================
 export default function ClientDashboardPage() {
     const [operacoes, setOperacoes] = useState([]);
     const [duplicatas, setDuplicatas] = useState([]);
-    const [kpis, setKpis] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeView, setActiveView] = useState('consultas');
     const [notification, setNotification] = useState({ message: '', type: '' });
+    
+    // States para os novos gráficos
+    const [volumeFilter, setVolumeFilter] = useState('last_6_months');
+    const [volumeData, setVolumeData] = useState([]);
+    const [maioresSacadosData, setMaioresSacadosData] = useState([]);
+    const [chartsLoading, setChartsLoading] = useState(true);
 
     const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
@@ -441,7 +437,7 @@ export default function ClientDashboardPage() {
     };
     
     useEffect(() => {
-        const fetchData = async () => {
+        const fetchTableData = async () => {
             setLoading(true);
             setError(null);
             try {
@@ -456,17 +452,44 @@ export default function ClientDashboardPage() {
                 const duplicatasData = await duplicatasRes.json();
                 setOperacoes(operacoesData);
                 setDuplicatas(duplicatasData);
-                setKpis({ limiteDisponivel: 749250.00, totalAVencer: 269500.00, taxaMedia: 3.15, prazoMedio: 28 });
             } catch (err) {
                 setError(err.message);
             } finally {
                 setLoading(false);
             }
         };
+
         if (activeView === 'consultas') {
-            fetchData();
+            fetchTableData();
         }
     }, [activeView]);
+
+    // useEffect para buscar dados dos gráficos
+    useEffect(() => {
+        const fetchChartData = async () => {
+            setChartsLoading(true);
+            try {
+                const headers = getAuthHeader();
+                const [volumeRes, sacadosRes] = await Promise.all([
+                    fetch(`/api/portal/volume-operado?period=${volumeFilter}`, { headers }),
+                    fetch(`/api/portal/maiores-sacados?period=${volumeFilter}`, { headers })
+                ]);
+                if (!volumeRes.ok || !sacadosRes.ok) throw new Error('Falha ao carregar dados dos gráficos.');
+                const volume = await volumeRes.json();
+                const sacados = await sacadosRes.json();
+                setVolumeData(volume);
+                setMaioresSacadosData(sacados);
+            } catch (err) {
+                showNotification(err.message, 'error');
+            } finally {
+                setChartsLoading(false);
+            }
+        };
+        
+        if (activeView === 'consultas') {
+            fetchChartData();
+        }
+    }, [activeView, volumeFilter]);
 
     const TabButton = ({ viewName, currentView, setView, children }) => (
         <button
@@ -489,7 +512,7 @@ export default function ClientDashboardPage() {
                 </div>
 
                 <div id="page-content">
-                    {activeView === 'consultas' && kpis && (
+                    {activeView === 'consultas' && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                             <HistoricoOperacoesTable 
                                 operacoes={operacoes} 
@@ -505,12 +528,24 @@ export default function ClientDashboardPage() {
                             />
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                                 <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-                                    <h3 className="text-lg font-semibold text-white mb-4">Volume Operado (Últimos 6 Meses)</h3>
-                                    <div className="text-center text-gray-400 py-10">[Gráfico de Volume Operado]</div>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-lg font-semibold text-white">Volume Operado</h3>
+                                        <select 
+                                            value={volumeFilter}
+                                            onChange={(e) => setVolumeFilter(e.target.value)}
+                                            className="bg-gray-700 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                        >
+                                            <option value="last_6_months">Últimos 6 Meses</option>
+                                            <option value="current_month">Mês Atual</option>
+                                            <option value="last_month">Mês Passado</option>
+                                            <option value="current_year">Este Ano</option>
+                                        </select>
+                                    </div>
+                                    {chartsLoading ? <div className="h-[250px] flex items-center justify-center text-gray-400">Carregando...</div> : <VolumeOperadoChart data={volumeData} />}
                                 </div>
                                 <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
                                     <h3 className="text-lg font-semibold text-white mb-4">Maiores Sacados</h3>
-                                    <div className="text-center text-gray-400 py-10">[Gráfico de Maiores Sacados]</div>
+                                    {chartsLoading ? <div className="h-[250px] flex items-center justify-center text-gray-400">Carregando...</div> : <TopFiveApex data={maioresSacadosData} />}
                                 </div>
                             </div>
                         </motion.div>
