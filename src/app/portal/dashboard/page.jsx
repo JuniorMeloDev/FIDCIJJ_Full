@@ -87,54 +87,32 @@ const HistoricoOperacoesTable = ({ operacoes, loading, error }) => {
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
-                        {loading ? <tr><td colSpan="6" className="text-center py-8">Carregando...</td></tr> :
-                         error ? <tr><td colSpan="6" className="text-center py-8 text-red-400">{error}</td></tr> :
-                         currentOperacoes.length === 0 ? <tr><td colSpan="6" className="text-center py-8">Nenhuma operação encontrada.</td></tr> :
-                         currentOperacoes.map(op => (
-                            <React.Fragment key={op.id}>
-                                <tr onClick={() => toggleRow(op.id)} className={`cursor-pointer hover:bg-gray-700/50 ${expandedRow === op.id ? 'bg-gray-700/50' : ''}`}>
-                                    <td className="px-4 py-4"><FaChevronRight className={`text-gray-500 transition-transform duration-300 ${expandedRow === op.id ? 'rotate-90' : ''}`} /></td>
-                                    <td className="px-6 py-4 font-medium text-white">#{op.id}</td>
-                                    <td className="px-6 py-4 text-gray-300">{formatDate(op.data_operacao)}</td>
-                                    <td className="px-6 py-4 text-right text-gray-300">{formatBRLNumber(op.valor_total_bruto)}</td>
-                                    <td className="px-6 py-4 text-right text-gray-300">{formatBRLNumber(op.valor_liquido)}</td>
-                                    <td className="px-6 py-4 text-center">{getStatusTag(op.status)}</td>
-                                </tr>
-                                {expandedRow === op.id && (
-                                    <tr className="bg-gray-900/50">
-                                        <td colSpan="6" className="p-0">
-                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="overflow-hidden p-4">
-                                                <h4 className="font-semibold text-sm mb-2 text-orange-400">Detalhes da Operação #{op.id}</h4>
-                                                <table className="min-w-full text-xs">
-                                                    <thead className="bg-gray-700/30">
-                                                        <tr>
-                                                            <th className="px-3 py-1 text-left">NF/CT-e</th>
-                                                            <th className="px-3 py-1 text-left">Sacado</th>
-                                                            <th className="px-3 py-1 text-right">Valor</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {op.duplicatas.map(dup => (
-                                                            <tr key={dup.id}>
-                                                                <td className="px-3 py-1">{dup.nf_cte}</td>
-                                                                <td className="px-3 py-1">{dup.cliente_sacado}</td>
-                                                                <td className="px-3 py-1 text-right">{formatBRLNumber(dup.valor_bruto)}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                                <div className="text-right mt-2">
-                                                    <button className="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md flex items-center gap-2 ml-auto">
-                                                        <FaDownload />Baixar Borderô
-                                                    </button>
-                                                </div>
-                                            </motion.div>
-                                        </td>
-                                    </tr>
-                                )}
-                            </React.Fragment>
-                         ))}
-                    </tbody>
+                       {loading ? <tr><td colSpan="6" className="text-center py-8">Carregando...</td></tr> :
+                        error ? <tr><td colSpan="6" className="text-center py-8 text-red-400">{error}</td></tr> :
+                        currentOperacoes.length === 0 ? <tr><td colSpan="6" className="text-center py-8">Nenhuma operação encontrada.</td></tr> :
+                        currentOperacoes.map(op => (
+                           <React.Fragment key={op.id}>
+                               <tr onClick={() => toggleRow(op.id)} className={`cursor-pointer hover:bg-gray-700/50 ${expandedRow === op.id ? 'bg-gray-700/50' : ''}`}>
+                                   <td className="px-4 py-4"><FaChevronRight className={`text-gray-500 transition-transform duration-300 ${expandedRow === op.id ? 'rotate-90' : ''}`} /></td>
+                                   <td className="px-6 py-4 font-medium text-white">#{op.id}</td>
+                                   <td className="px-6 py-4 text-gray-300">{formatDate(op.data_operacao)}</td>
+                                   <td className="px-6 py-4 text-right text-gray-300">{formatBRLNumber(op.valor_total_bruto)}</td>
+                                   <td className="px-6 py-4 text-right text-gray-300">{formatBRLNumber(op.valor_liquido)}</td>
+                                   <td className="px-6 py-4 text-center">{getStatusTag(op.status)}</td>
+                               </tr>
+                               {expandedRow === op.id && (
+                                   <tr className="bg-gray-900/50">
+                                       <td colSpan="6" className="p-0">
+                                           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="overflow-hidden p-4">
+                                               <h4 className="font-semibold text-sm mb-2 text-orange-400">Detalhes da Operação #{op.id}</h4>
+                                               <div className="text-right mt-2"><button className="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md flex items-center gap-2 ml-auto"><FaDownload />Baixar Borderô</button></div>
+                                           </motion.div>
+                                       </td>
+                                   </tr>
+                               )}
+                           </React.Fragment>
+                        ))}
+                   </tbody>
                 </table>
             </div>
             <Pagination totalItems={operacoes.length} itemsPerPage={ITEMS_PER_PAGE_OPERATIONS} currentPage={currentPage} onPageChange={setCurrentPage} />
@@ -201,6 +179,33 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
     );
 };
 
+
+// ===================================================================
+//  Subcomponente para a Aba "Enviar Nova Operação"
+// ===================================================================
+const NovaOperacaoView = () => {
+    return (
+        <div className="bg-gray-800 p-8 rounded-lg shadow-lg">
+            <h2 className="text-2xl font-semibold text-white mb-2">Enviar Nova Operação</h2>
+            <p className="text-gray-400 mb-6">Faça o upload dos arquivos XML (NF-e) ou PDF (CT-e) para análise.</p>
+            <div className="mt-1 flex justify-center px-6 pt-10 pb-12 border-2 border-gray-600 border-dashed rounded-md cursor-pointer hover:border-orange-500 transition-all">
+                <div className="space-y-1 text-center">
+                    <FaCloudUploadAlt className="mx-auto h-12 w-12 text-gray-500" />
+                    <div className="flex text-sm text-gray-400">
+                        <label htmlFor="file-upload" className="relative cursor-pointer bg-gray-800 rounded-md font-medium text-orange-500 hover:text-orange-400 focus-within:outline-none">
+                            <span>Selecione os Arquivos</span>
+                            <input id="file-upload" name="file-upload" type="file" className="sr-only" multiple />
+                        </label>
+                        <p className="pl-1">ou arraste e solte aqui</p>
+                    </div>
+                    <p className="text-xs text-gray-500">XML ou PDF</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 // ===================================================================
 //  Componente Principal da Página
 // ===================================================================
@@ -244,6 +249,7 @@ export default function ClientDashboardPage() {
                     taxaMedia: 3.15,
                     prazoMedio: 28,
                 });
+
             } catch (err) {
                 setError(err.message);
             } finally {
@@ -269,16 +275,23 @@ export default function ClientDashboardPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="mb-6 bg-gray-800 p-2 rounded-lg inline-flex items-center space-x-2">
                     <TabButton viewName="consultas" currentView={activeView} setView={setActiveView}>Minhas Operações</TabButton>
-                    <Link href="/portal/enviar-operacao" className="font-semibold py-2 px-5 rounded-md transition-colors text-sm bg-gray-700 text-gray-300 hover:bg-gray-600">
-                        Enviar Nova Operação
-                    </Link>
+                    <TabButton viewName="nova-operacao" currentView={activeView} setView={setActiveView}>Enviar Nova Operação</TabButton>
                 </div>
 
                 <div id="page-content">
                     {activeView === 'consultas' && kpis && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                            <MinhasOperacoesView operacoes={operacoes} kpis={kpis} loading={loading} error={error} />
-                            <AcompanhamentoDuplicatasTable duplicatas={duplicatas} loading={loading} error={error} />
+                            <MinhasOperacoesView 
+                                operacoes={operacoes} 
+                                kpis={kpis}
+                                loading={loading}
+                                error={error} 
+                            />
+                            <AcompanhamentoDuplicatasTable 
+                                duplicatas={duplicatas}
+                                loading={loading}
+                                error={error}
+                            />
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                                 <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
                                     <h3 className="text-lg font-semibold text-white mb-4">Volume Operado (Últimos 6 Meses)</h3>
@@ -291,10 +304,10 @@ export default function ClientDashboardPage() {
                             </div>
                         </motion.div>
                     )}
+
                     {activeView === 'nova-operacao' && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                            {/* A página Enviar Operação agora é uma rota separada */}
-                            <p className="text-center text-gray-400">Você será redirecionado para a página de envio.</p>
+                            <NovaOperacaoView />
                         </motion.div>
                     )}
                 </div>
