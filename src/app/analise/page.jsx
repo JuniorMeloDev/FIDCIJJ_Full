@@ -58,6 +58,7 @@ export default function AnalisePage() {
 
     const handleSalvarAnalise = async (operacaoId, payload) => {
         try {
+            // CORREÇÃO: O endpoint correto é '/status', e não '/analisar'.
             const response = await fetch(`/api/operacoes/${operacaoId}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
@@ -79,7 +80,6 @@ export default function AnalisePage() {
     return (
         <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
-            {/* CORREÇÃO AQUI: A propriedade foi renomeada de 'contasMaster' para 'contasBancarias' */}
             <AprovacaoOperacaoModal 
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
