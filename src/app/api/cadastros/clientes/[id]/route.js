@@ -21,10 +21,8 @@ export async function PUT(request, { params }) {
             ...clienteData 
         } = body;
 
-        // Remove campos de relacionamento que não devem estar no update principal
-        delete clienteData.contas_bancarias; 
-        delete clienteData.cliente_emails;
-        delete clienteData.cliente_tipos_operacao;
+        // CORREÇÃO: As linhas que removiam os dados antes de salvar foram apagadas.
+        // O objeto `clienteData` agora contém apenas os campos da tabela `clientes`.
 
         // 1. ATUALIZA OS DADOS DO CLIENTE
         const { error: clienteError } = await supabase
@@ -40,7 +38,6 @@ export async function PUT(request, { params }) {
              const contasToInsert = contasBancarias.map(({id: contaId, ...c}) => ({ 
                 banco: c.banco,
                 agencia: c.agencia,
-                // CORREÇÃO: Garante que o nome da coluna esteja correto
                 conta_corrente: c.contaCorrente,
                 cliente_id: id 
             }));
