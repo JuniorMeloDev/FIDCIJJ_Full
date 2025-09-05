@@ -17,11 +17,20 @@ export async function PUT(request, { params }) {
         const { status, conta_bancaria_id } = await request.json();
 
         if (status === 'Aprovada') {
-            const { error } = await supabase.rpc('aprovar_operacao', {
+            // Primeiro, chama a função que cria a movimentação de caixa (débito)
+            const { error: rpcError } = await supabase.rpc('aprovar_operacao', {
                 p_operacao_id: parseInt(id, 10),
                 p_conta_bancaria_id: conta_bancaria_id,
             });
-            if (error) throw error;
+            if (rpcError) throw rpcError;
+            
+            // CORREÇÃO: Após a aprovação, atualiza explicitamente o status da operação
+            const { error: updateError } = await supabase
+                .from('operacoes')
+                .update({ status: 'Aprovada' })
+                .eq('id', id);
+            if (updateError) throw updateError;
+
         } else { // 'Rejeitada' ou outros status
             const { error } = await supabase
                 .from('operacoes')
