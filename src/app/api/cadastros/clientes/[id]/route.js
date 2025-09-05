@@ -12,17 +12,20 @@ export async function PUT(request, { params }) {
         const { id } = params;
         const body = await request.json();
         
+        // CORREÇÃO: Destruturação explícita de TODAS as propriedades que não são colunas da tabela 'clientes'.
+        // Isso garante que o objeto 'clienteData' conterá apenas os campos que realmente podem ser atualizados.
         const { 
             acesso, 
             contasBancarias, 
             emails, 
             ramoDeAtividade,
             tiposOperacao,
+            // Propriedades que vêm do objeto original do banco e que não devem ser enviadas no update:
+            contas_bancarias,
+            cliente_emails,
+            cliente_tipos_operacao,
             ...clienteData 
         } = body;
-
-        // CORREÇÃO: As linhas que removiam os dados antes de salvar foram apagadas.
-        // O objeto `clienteData` agora contém apenas os campos da tabela `clientes`.
 
         // 1. ATUALIZA OS DADOS DO CLIENTE
         const { error: clienteError } = await supabase
