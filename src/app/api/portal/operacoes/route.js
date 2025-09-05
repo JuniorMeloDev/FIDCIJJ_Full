@@ -15,19 +15,16 @@ export async function GET(request) {
             return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
         }
         
-        // Pega o ID do cliente que está dentro do token
         const clienteId = decoded.cliente_id;
         
-        // Validação extra para garantir que um cliente tenha um ID associado
         if (!clienteId) {
             return NextResponse.json({ message: 'Usuário cliente sem empresa associada.' }, { status: 403 });
         }
 
-        // Adiciona o filtro .eq('cliente_id', clienteId) à consulta
         const { data, error } = await supabase
             .from('operacoes')
             .select('*, duplicatas(*)')
-            .eq('cliente_id', clienteId) // <-- FILTRA APENAS PELO ID DO CLIENTE LOGADO
+            .eq('cliente_id', clienteId)
             .order('data_operacao', { ascending: false });
 
         if (error) throw error;
@@ -40,7 +37,8 @@ export async function GET(request) {
     }
 }
 
-// A sua função POST para o cliente enviar operações continua igual e está correta.
+
+// POST: Salva uma nova operação enviada pelo cliente com status 'Pendente'
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -55,39 +53,58 @@ export async function POST(request) {
         }
 
         const body = await request.json();
-        const valorTotalBruto = body.notasFiscais.reduce((acc, nf) => acc + nf.valorNf, 0);
-        const valorTotalJuros = body.notasFiscais.reduce((acc, nf) => acc + nf.jurosCalculado, 0);
+        const notaFiscal = body.notasFiscais[0]; // Portal envia uma de cada vez
         
-        const duplicatasParaSalvar = body.notasFiscais.flatMap(nf => 
-            nf.parcelasCalculadas.map(p => ({
-                nfCte: `${nf.nfCte}.${p.numeroParcela}`,
-                clienteSacado: nf.clienteSacado,
-                valorParcela: p.valorParcela,
-                jurosParcela: p.jurosParcela,
-                dataVencimento: p.dataVencimento,
-            }))
-        );
+        const valorTotalBruto = notaFiscal.valorNf;
+        const valorTotalJuros = notaFiscal.jurosCalculado;
+        const valorLiquido = notaFiscal.valorLiquidoCalculado;
 
-        const { data: operacaoId, error } = await supabase.rpc('salvar_operacao_completa', {
-            p_data_operacao: body.dataOperacao,
-            p_tipo_operacao_id: body.tipoOperacaoId,
-            p_cliente_id: clienteId,
-            p_conta_bancaria_id: null,
-            p_valor_total_bruto: valorTotalBruto,
-            p_valor_total_juros: valorTotalJuros,
-            p_valor_total_descontos: 0,
-            p_duplicatas: duplicatasParaSalvar,
-            p_descontos: [],
-            p_valor_debito_parcial: null, 
-            p_data_debito_parcial: null
-        });
+        // 1. Inserir a operação principal com status "Pendente"
+        const { data: newOperacao, error: operacaoError } = await supabase
+            .from('operacoes')
+            .insert({
+                data_operacao: body.dataOperacao,
+                tipo_operacao_id: body.tipoOperacaoId,
+                cliente_id: clienteId,
+                valor_total_bruto: valorTotalBruto,
+                valor_total_juros: valorTotalJuros,
+                valor_total_descontos: 0, // Descontos são adicionados pelo admin
+                valor_liquido: valorLiquido,
+                status: 'Pendente', // Status inicial é sempre pendente
+                conta_bancaria_id: null // Conta será definida na aprovação
+            })
+            .select()
+            .single();
 
-        if (error) {
-            console.error('Erro RPC ao salvar operação do cliente:', error);
-            throw error;
+        if (operacaoError) {
+            console.error("Erro do Supabase ao inserir operação:", operacaoError);
+            throw new Error("Não foi possível criar o registro da operação.");
         }
 
-        return NextResponse.json({ operacaoId, message: 'Operação enviada para análise com sucesso!' }, { status: 201 });
+        // 2. Preparar e inserir as duplicatas associadas à nova operação
+        const duplicatasParaSalvar = notaFiscal.parcelasCalculadas.map(p => ({
+            operacao_id: newOperacao.id,
+            data_operacao: body.dataOperacao,
+            nf_cte: `${notaFiscal.nfCte}.${p.numeroParcela}`,
+            cliente_sacado: notaFiscal.clienteSacado,
+            valor_bruto: p.valorParcela,
+            valor_juros: p.jurosParcela,
+            data_vencimento: p.dataVencimento,
+            status_recebimento: 'Pendente'
+        }));
+
+        const { error: duplicatasError } = await supabase
+            .from('duplicatas')
+            .insert(duplicatasParaSalvar);
+
+        if (duplicatasError) {
+            console.error("Erro do Supabase ao inserir duplicatas:", duplicatasError);
+            // Idealmente, aqui se faria o rollback da operação inserida, mas para simplicidade, lançamos o erro.
+            await supabase.from('operacoes').delete().eq('id', newOperacao.id);
+            throw new Error("Não foi possível salvar os detalhes das parcelas (duplicatas). A operação foi cancelada.");
+        }
+
+        return NextResponse.json({ operacaoId: newOperacao.id, message: 'Operação enviada para análise com sucesso!' }, { status: 201 });
 
     } catch (error) {
         console.error('Erro ao submeter operação:', error);
