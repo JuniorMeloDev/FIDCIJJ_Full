@@ -9,7 +9,7 @@ import { FaChevronRight, FaHourglassHalf, FaCheckCircle, FaTimesCircle, FaCheck,
 import Pagination from "@/app/components/Pagination";
 
 const ITEMS_PER_PAGE_OPERATIONS = 5;
-const ITEMS_PER_PAGE_DUPLICATAS = 10;
+const ITEMS_PER_PAGE_DUPLICATAS = 5;
 
 // ===================================================================
 //  Hook Genérico para Ordenação de Tabelas
@@ -271,7 +271,7 @@ export default function ClientDashboardPage() {
     );
 
     return (
-        <div className="pt-20">
+        <div className="pt-8">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="mb-6 bg-gray-800 p-2 rounded-lg inline-flex items-center space-x-2">
                     <TabButton viewName="consultas" currentView={activeView} setView={setActiveView}>Minhas Operações</TabButton>
