@@ -39,13 +39,19 @@ export async function POST(request) {
 
         const body = await request.json();
         
-        // CORREÇÃO: Separa os dados de 'acesso' do objeto principal do cliente.
-        const { contasBancarias, emails, acesso, ...clienteData } = body;
+        // CORREÇÃO: Pega o 'ramoDeAtividade' e o renomeia para o padrão do banco de dados.
+        const { contasBancarias, emails, acesso, ramoDeAtividade, ...clienteData } = body;
 
-        // 1. Insere o cliente (agora sem os dados de 'acesso')
+        // Adiciona o campo com o nome correto ao objeto que será salvo.
+        const dataToSave = {
+            ...clienteData,
+            ramo_de_atividade: ramoDeAtividade
+        };
+
+        // 1. Insere o cliente com os dados corretos
         const { data: newCliente, error: clienteError } = await supabase
             .from('clientes')
-            .insert(clienteData)
+            .insert(dataToSave) // Usa o novo objeto com o nome da coluna corrigido
             .select()
             .single();
 
@@ -63,18 +69,17 @@ export async function POST(request) {
             await supabase.from('cliente_emails').insert(emailsToInsert);
         }
         
-        // 4. CORREÇÃO: Cria o usuário de acesso se os dados foram fornecidos
+        // 4. Cria o usuário de acesso se os dados foram fornecidos
         if (acesso && acesso.username && acesso.password) {
             const hashedPassword = await bcrypt.hash(acesso.password, 10);
             const { error: userError } = await supabase.from('users').insert({
                 username: acesso.username,
                 password: hashedPassword,
-                roles: 'ROLE_CLIENTE', // Define o cargo padrão para clientes
-                cliente_id: newCliente.id // Associa o usuário ao cliente recém-criado
+                roles: 'ROLE_CLIENTE',
+                cliente_id: newCliente.id
             });
 
             if (userError) {
-                // Se der erro ao criar o usuário, remove o cliente que foi criado para não deixar dados inconsistentes.
                 await supabase.from('clientes').delete().eq('id', newCliente.id);
                 throw userError;
             }
