@@ -303,7 +303,7 @@ export default function ClientDashboardPage() {
                 <div id="page-content">
                     {activeView === 'consultas' && kpis && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                            <MinhasOperacoesView 
+                            <HistoricoOperacoesTable 
                                 operacoes={operacoes} 
                                 duplicatas={duplicatas}
                                 kpis={kpis}
