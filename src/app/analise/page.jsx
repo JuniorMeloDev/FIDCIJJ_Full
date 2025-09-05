@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { formatBRLNumber, formatDate } from '../utils/formatters';
 import Notification from '@/app/components/Notification';
 import AprovacaoOperacaoModal from '@/app/components/AprovacaoOperacaoModal';
+import EmailModal from '@/app/components/EmailModal'; // 1. Importar o EmailModal
 
 export default function AnalisePage() {
     const [operacoes, setOperacoes] = useState([]);
@@ -15,6 +16,12 @@ export default function AnalisePage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [operacaoSelecionada, setOperacaoSelecionada] = useState(null);
     const [contasMaster, setContasMaster] = useState([]);
+
+    // 2. Adicionar os novos estados para o modal de e-mail
+    const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+    const [operacaoParaEmail, setOperacaoParaEmail] = useState(null);
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
+
 
     const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
@@ -56,9 +63,9 @@ export default function AnalisePage() {
         setIsModalOpen(true);
     };
 
+    // 5. Modificar a função para abrir o modal de e-mail após a aprovação
     const handleSalvarAnalise = async (operacaoId, payload) => {
         try {
-            // CORREÇÃO: O endpoint correto é '/status', e não '/analisar'.
             const response = await fetch(`/api/operacoes/${operacaoId}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
@@ -69,17 +76,56 @@ export default function AnalisePage() {
                  throw new Error(errorData.message || "Falha ao atualizar operação.");
             }
             showNotification("Operação analisada com sucesso!", "success");
-            fetchPendentes(); // Re-carrega a lista de pendentes
-            return true;
+            fetchPendentes();
+
+            // Se a operação foi APROVADA, prepara para abrir o modal de email
+            if (payload.status === 'Aprovada') {
+                setOperacaoParaEmail({
+                    id: operacaoId,
+                    clienteId: operacaoSelecionada?.cliente?.id
+                });
+                setIsEmailModalOpen(true); // Abre o modal de email
+            }
+
+            return true; // Sinaliza sucesso para fechar o modal de aprovação
         } catch (err) {
             showNotification(err.message, "error");
             return false;
         }
     };
 
+    // 4. Adicionar a função para enviar o e-mail
+    const handleSendEmail = async (destinatarios) => {
+        if (!operacaoParaEmail) return;
+        setIsSendingEmail(true);
+        try {
+            const response = await fetch(
+                `/api/operacoes/${operacaoParaEmail.id}/enviar-email`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", ...getAuthHeader() },
+                    body: JSON.stringify({ destinatarios }),
+                }
+            );
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Falha ao enviar o e-mail.");
+            }
+            showNotification("E-mail(s) enviado(s) com sucesso!", "success");
+        } catch (err) {
+            showNotification(err.message, "error");
+        } finally {
+            setIsSendingEmail(false);
+            setIsEmailModalOpen(false); // Fecha o modal após enviar ou dar erro
+            setOperacaoParaEmail(null);
+        }
+    };
+
+
     return (
         <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
+            
             <AprovacaoOperacaoModal 
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
@@ -87,6 +133,19 @@ export default function AnalisePage() {
                 operacao={operacaoSelecionada}
                 contasBancarias={contasMaster}
             />
+
+            {/* 3. Adicionar o componente EmailModal ao JSX */}
+            <EmailModal
+                isOpen={isEmailModalOpen}
+                onClose={() => {
+                    setIsEmailModalOpen(false);
+                    setOperacaoParaEmail(null);
+                }}
+                onSend={handleSendEmail}
+                isSending={isSendingEmail}
+                clienteId={operacaoParaEmail?.clienteId}
+            />
+
 
             <motion.header 
                 className="mb-6 border-b-2 border-orange-500 pb-4"
