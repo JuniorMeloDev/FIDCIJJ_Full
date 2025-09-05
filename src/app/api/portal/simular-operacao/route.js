@@ -8,28 +8,72 @@ import PDFParser from "pdf2json";
 const getVal = (obj, path) => path.split('.').reduce((acc, key) => acc?.[key]?.[0], obj);
 
 const parseXml = async (xmlText) => {
-    const parsedXml = await parseStringPromise(xmlText, { explicitArray: true, ignoreAttrs: true, tagNameProcessors: [name => name.replace(/^.*:/, ''), name => name.replace(/{.*}/, '')] });
-    const infNFe = parsedXml?.NFe?.infNFe?.[0];
-    if (!infNFe) throw new Error("Estrutura do XML inválida ou não suportada.");
+    const parsedXml = await parseStringPromise(xmlText, { 
+        explicitArray: true, 
+        ignoreAttrs: true, 
+        tagNameProcessors: [name => name.replace(/^.*:/, ''), name => name.replace(/{.*}/, '')] 
+    });
 
-    const emitCnpj = getVal(infNFe, 'emit.CNPJ');
-    const destCnpjCpf = getVal(infNFe, 'dest.CNPJ') || getVal(infNFe, 'dest.CPF');
+    let numeroDoc, valorTotal, parcelas = [], emitNode, sacadoNode, dataEmissao;
+
+    // --- Lógica para NF-e ---
+    const infNFe = parsedXml?.NFe?.infNFe?.[0] || parsedXml?.nfeProc?.[0]?.NFe?.[0]?.infNFe?.[0];
+    if (infNFe) {
+        numeroDoc = getVal(infNFe, 'ide.nNF');
+        valorTotal = parseFloat(getVal(infNFe, 'total.ICMSTot.vNF') || 0);
+        emitNode = infNFe.emit?.[0];
+        sacadoNode = infNFe.dest?.[0];
+        dataEmissao = getVal(infNFe, 'ide.dhEmi')?.substring(0, 10);
+        
+        const cobr = infNFe.cobr?.[0];
+        parcelas = cobr?.dup?.map(p => ({
+            dataVencimento: getVal(p, 'dVenc'),
+        })) || [];
+    }
+
+    // --- Lógica para CT-e ---
+    const infCte = parsedXml?.cteProc?.CTe?.[0]?.infCte?.[0] || parsedXml?.CTe?.infCte?.[0];
+    if (!infNFe && infCte) {
+        numeroDoc = getVal(infCte, 'ide.nCT');
+        valorTotal = parseFloat(getVal(infCte, 'vPrest.vTPrest') || 0);
+        emitNode = infCte.emit?.[0];
+        dataEmissao = getVal(infCte, 'ide.dhEmi')?.substring(0, 10);
+
+        // Lógica para determinar o sacado (tomador do serviço) no CT-e
+        const toma = getVal(infCte, 'ide.toma3.toma') || getVal(infCte, 'ide.toma4.toma');
+        switch (toma) {
+            case '0': sacadoNode = infCte.rem?.[0]; break;
+            case '1': sacadoNode = infCte.exped?.[0]; break;
+            case '2': sacadoNode = infCte.receb?.[0]; break;
+            case '3': sacadoNode = infCte.dest?.[0]; break;
+            default:  sacadoNode = infCte.rem?.[0];
+        }
+        parcelas = []; // CT-e não tem parcelas no XML
+    }
+
+    if (!infNFe && !infCte) {
+        throw new Error("Estrutura do XML inválida ou não suportada.");
+    }
+
+    const emitCnpj = getVal(emitNode, 'CNPJ');
+    const destCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
 
     const { data: sacadoData } = await supabase.from('sacados').select('id, nome').eq('cnpj', destCnpjCpf).single();
     if (!sacadoData) throw new Error(`Sacado com CNPJ/CPF ${destCnpjCpf} não encontrado no sistema.`);
-
-    const cobr = getVal(infNFe, 'cobr');
-    const parcelas = cobr?.dup?.map(p => ({
-        dataVencimento: getVal(p, 'dVenc'),
-    })) || [];
     
+    // Calcula os prazos a partir das datas
+    const prazosArray = parcelas.map(p => 
+        Math.ceil(Math.abs(new Date(p.dataVencimento) - new Date(dataEmissao)) / (1000 * 60 * 60 * 24))
+    );
+    const prazos = prazosArray.join('/');
+
     return {
-        nfCte: getVal(infNFe, 'ide.nNF'),
-        dataNf: getVal(infNFe, 'ide.dhEmi')?.substring(0, 10),
-        valorNf: parseFloat(getVal(infNFe, 'total.ICMSTot.vNF')),
+        nfCte: numeroDoc,
+        dataNf: dataEmissao,
+        valorNf: valorTotal,
         clienteSacado: sacadoData.nome,
         parcelas: parcelas.length > 0 ? String(parcelas.length) : "1",
-        prazos: parcelas.map(p => Math.ceil(Math.abs(new Date(p.dataVencimento) - new Date(getVal(infNFe, 'ide.dhEmi'))) / (1000 * 60 * 60 * 24))).join('/'),
+        prazos: prazos.length > 0 ? prazos : "0", // Padrão para CT-e
         cedenteCnpjVerificado: emitCnpj
     };
 };
@@ -120,7 +164,7 @@ export async function POST(request) {
         let parsedData;
         const fileBuffer = Buffer.from(await file.arrayBuffer());
 
-        if (file.type === 'text/xml') {
+        if (file.type === 'text/xml' || file.name.endsWith('.xml')) {
             parsedData = await parseXml(fileBuffer.toString('utf-8'));
         } else if (file.type === 'application/pdf') {
             parsedData = await parsePdf(fileBuffer);
@@ -179,4 +223,3 @@ export async function POST(request) {
         return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
     }
 }
-
