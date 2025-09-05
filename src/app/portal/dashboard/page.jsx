@@ -100,40 +100,16 @@ const HistoricoOperacoesTable = ({ operacoes, loading, error }) => {
                                    <td className="px-6 py-4 text-right text-gray-300">{formatBRLNumber(op.valor_liquido)}</td>
                                    <td className="px-6 py-4 text-center">{getStatusTag(op.status)}</td>
                                </tr>
-                               {/* --- CORREÇÃO DEFINITIVA AQUI --- */}
                                {expandedRow === op.id && (
                                    <tr className="bg-gray-900/50">
                                        <td colSpan="6" className="p-0">
                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="overflow-hidden p-4">
                                                <h4 className="font-semibold text-sm mb-2 text-orange-400">Detalhes da Operação #{op.id}</h4>
-                                               <table className="min-w-full text-xs">
-                                                   <thead className="bg-gray-700/30">
-                                                       <tr>
-                                                           <th className="px-3 py-1 text-left">NF/CT-e</th>
-                                                           <th className="px-3 py-1 text-left">Sacado</th>
-                                                           <th className="px-3 py-1 text-right">Valor</th>
-                                                       </tr>
-                                                   </thead>
-                                                   <tbody>
-                                                       {op.duplicatas && op.duplicatas.map(dup => (
-                                                           <tr key={dup.id}>
-                                                               <td className="px-3 py-1">{dup.nf_cte}</td>
-                                                               <td className="px-3 py-1">{dup.cliente_sacado}</td>
-                                                               <td className="px-3 py-1 text-right">{formatBRLNumber(dup.valor_bruto)}</td>
-                                                           </tr>
-                                                       ))}
-                                                   </tbody>
-                                               </table>
-                                               <div className="text-right mt-2">
-                                                   <button className="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md flex items-center gap-2 ml-auto">
-                                                       <FaDownload />Baixar Borderô
-                                                   </button>
-                                               </div>
+                                               <div className="text-right mt-2"><button className="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md flex items-center gap-2 ml-auto"><FaDownload />Baixar Borderô</button></div>
                                            </motion.div>
                                        </td>
                                    </tr>
                                )}
-                               {/* --- FIM DA CORREÇÃO --- */}
                            </React.Fragment>
                         ))}
                    </tbody>
@@ -203,11 +179,11 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
     );
 };
 
+
 // ===================================================================
 //  Subcomponente para a Aba "Enviar Nova Operação"
 // ===================================================================
 const NovaOperacaoView = () => {
-    // A lógica da página /portal/enviar-operacao pode ser movida para cá
     return (
         <div className="bg-gray-800 p-8 rounded-lg shadow-lg">
             <h2 className="text-2xl font-semibold text-white mb-2">Enviar Nova Operação</h2>
@@ -228,6 +204,7 @@ const NovaOperacaoView = () => {
         </div>
     );
 };
+
 
 // ===================================================================
 //  Componente Principal da Página
@@ -272,6 +249,7 @@ export default function ClientDashboardPage() {
                     taxaMedia: 3.15,
                     prazoMedio: 28,
                 });
+
             } catch (err) {
                 setError(err.message);
             } finally {
@@ -305,11 +283,25 @@ export default function ClientDashboardPage() {
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                             <HistoricoOperacoesTable 
                                 operacoes={operacoes} 
-                                duplicatas={duplicatas}
                                 kpis={kpis}
                                 loading={loading}
                                 error={error} 
                             />
+                            <AcompanhamentoDuplicatasTable 
+                                duplicatas={duplicatas}
+                                loading={loading}
+                                error={error}
+                            />
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                                <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+                                    <h3 className="text-lg font-semibold text-white mb-4">Volume Operado (Últimos 6 Meses)</h3>
+                                    <div className="text-center text-gray-400 py-10">[Gráfico de Volume Operado]</div>
+                                </div>
+                                <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+                                    <h3 className="text-lg font-semibold text-white mb-4">Maiores Sacados</h3>
+                                    <div className="text-center text-gray-400 py-10">[Gráfico de Maiores Sacados]</div>
+                                </div>
+                            </div>
                         </motion.div>
                     )}
 
