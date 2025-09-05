@@ -1,9 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo } from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
-import { jwtDecode } from "jwt-decode";
 import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
 import { FaChevronRight, FaHourglassHalf, FaCheckCircle, FaTimesCircle, FaCheck, FaExclamationCircle, FaClock, FaCloudUploadAlt, FaDownload, FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 import Pagination from "@/app/components/Pagination";
@@ -271,7 +269,7 @@ export default function ClientDashboardPage() {
     );
 
     return (
-        <div className="pt-8">
+        <div className="py-8">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="mb-6 bg-gray-800 p-2 rounded-lg inline-flex items-center space-x-2">
                     <TabButton viewName="consultas" currentView={activeView} setView={setActiveView}>Minhas Operações</TabButton>

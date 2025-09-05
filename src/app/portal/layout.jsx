@@ -67,9 +67,9 @@ export default function PortalLayout({ children }) {
     }
 
     return (
-        <div className="flex flex-col h-screen bg-gray-900">
+        <div className="flex flex-col h-full bg-gray-900">
             <PortalNavbar user={user} onLogout={handleLogout} />
-            <main className="flex-grow pt-16 overflow-y-auto">
+            <main className="flex-grow pt-16">
                 {children}
             </main>
         </div>
