@@ -44,13 +44,11 @@ export async function PUT(request, { params }) {
              const { data: clientes } = await supabase.from('clientes').select('nome').limit(1);
              const empresaMasterNome = clientes && clientes.length > 0 ? clientes[0].nome : 'FIDC IJJ';
 
-            // Lógica para criar a descrição customizada
-            let descricaoLancamento = `Borderô #${id}`; // Fallback
+            let descricaoLancamento = `Borderô #${id}`;
             const { data: duplicatas } = await supabase.from('duplicatas').select('nf_cte').eq('operacao_id', id);
             if (duplicatas && duplicatas.length > 0 && operacao.cliente) {
                 const docType = operacao.cliente.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
                 const numerosDoc = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
-                // CORREÇÃO: Removido "Pagamento" do início da string.
                 descricaoLancamento = `Borderô ${docType} ${numerosDoc}`;
             }
 
@@ -62,7 +60,8 @@ export async function PUT(request, { params }) {
                     descricao: descricaoLancamento,
                     valor: -Math.abs(operacao.valor_liquido),
                     categoria: 'Pagamento de Borderô',
-                    conta_bancaria: `${conta.banco} - Ag. ${conta.agencia} / CC ${conta.conta_corrente}`,
+                    // CORREÇÃO: Padronizado o formato da string da conta.
+                    conta_bancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
                     empresa_associada: empresaMasterNome,
                 });
 

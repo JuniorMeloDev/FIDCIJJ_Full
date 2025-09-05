@@ -112,7 +112,7 @@ export default function OperacaoDetalhes({
                             <option value="">Selecione uma conta</option>
                             {contasBancarias.map(conta => (
                                 <option key={conta.id} value={conta.id}>
-                                    {conta.banco} - Ag. {conta.agencia} / CC {conta.contaCorrente}
+                                    {conta.banco} - {conta.agencia}/{conta.contaCorrente}
                                 </option>
                             ))}
                         </select>
