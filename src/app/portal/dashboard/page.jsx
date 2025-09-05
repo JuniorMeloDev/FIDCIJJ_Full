@@ -12,10 +12,8 @@ import VolumeOperadoChart from "@/app/components/VolumeOperadoChart";
 const ITEMS_PER_PAGE_OPERATIONS = 5;
 const ITEMS_PER_PAGE_DUPLICATAS = 10;
 
-// Ícones SVG para a nova view
 const UploadIcon = () => <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>;
 const CheckCircleIcon = () => <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>;
-
 
 const useSortableData = (items, initialConfig = { key: null, direction: 'DESC' }) => {
     const [sortConfig, setSortConfig] = useState(initialConfig);
@@ -233,6 +231,7 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const fileInputRef = useRef(null);
+    
     useEffect(() => {
         const fetchTiposOperacao = async () => {
             try {
@@ -246,7 +245,9 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
             }
         };
         fetchTiposOperacao();
-    }, [getAuthHeader, showNotification]);
+    // CORREÇÃO: Removidas as dependências que causavam o loop infinito.
+    }, []);
+
     const handleFileChange = (event) => {
         const file = event.target.files[0];
         if (file && (file.type === 'text/xml' || file.type === 'application/pdf')) {
@@ -415,6 +416,9 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
     );
 }
 
+// ===================================================================
+//  Componente Principal da Página
+// ===================================================================
 export default function ClientDashboardPage() {
     const [operacoes, setOperacoes] = useState([]);
     const [duplicatas, setDuplicatas] = useState([]);
@@ -423,7 +427,6 @@ export default function ClientDashboardPage() {
     const [activeView, setActiveView] = useState('consultas');
     const [notification, setNotification] = useState({ message: '', type: '' });
     
-    // States para os novos gráficos
     const [volumeFilter, setVolumeFilter] = useState('last_6_months');
     const [volumeData, setVolumeData] = useState([]);
     const [maioresSacadosData, setMaioresSacadosData] = useState([]);
@@ -467,7 +470,6 @@ export default function ClientDashboardPage() {
         }
     }, [activeView]);
 
-    // useEffect para buscar dados dos gráficos
     useEffect(() => {
         const fetchChartData = async () => {
             setChartsLoading(true);
