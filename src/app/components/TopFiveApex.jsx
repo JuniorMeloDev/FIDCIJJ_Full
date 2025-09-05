@@ -36,7 +36,8 @@ export default function TopFiveApex({ data = [] }) {
         return null;
     };
 
-    const isManyItems = data.length >= 10;
+    // CORREÇÃO: Alterado o limite de 10 para 5 para a troca de layout.
+    const isManyItems = data.length > 5;
 
     return (
         <ResponsiveContainer width="100%" height={isManyItems ? 400 : 308}>

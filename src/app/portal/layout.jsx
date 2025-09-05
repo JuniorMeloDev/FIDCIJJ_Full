@@ -69,7 +69,7 @@ export default function PortalLayout({ children }) {
     return (
         <div className="flex flex-col h-full bg-gray-900">
             <PortalNavbar user={user} onLogout={handleLogout} />
-            <main className="flex-grow pt-16">
+            <main className="flex-grow pt-8">
                 {children}
             </main>
         </div>

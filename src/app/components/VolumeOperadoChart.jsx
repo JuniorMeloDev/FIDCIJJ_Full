@@ -3,12 +3,23 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { formatBRLNumber } from '@/app/utils/formatters';
+import { format as formatDateFns } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+// Função para formatar o label do tooltip em português
+const formatTooltipLabel = (label) => {
+    // Adiciona um dia à data para evitar problemas de fuso horário
+    const date = new Date(label);
+    date.setDate(date.getDate() + 1);
+    const formatted = formatDateFns(date, 'MMM/yyyy', { locale: ptBR });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
 
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-gray-600 p-3 border border-gray-500 rounded-md shadow-lg">
-                <p className="font-bold text-gray-100">{label}</p>
+                <p className="font-bold text-gray-100">{formatTooltipLabel(label)}</p>
                 <p className="text-orange-400">{`Valor: ${formatBRLNumber(payload[0].value)}`}</p>
             </div>
         );
@@ -21,6 +32,16 @@ const formatAxis = (value) => {
     if (value >= 1000) return `R$${Math.round(value / 1000)}k`;
     return formatBRLNumber(value);
 };
+
+// Função para formatar o eixo X em português
+const formatXAxis = (tickItem) => {
+    // Adiciona um dia à data para evitar problemas de fuso horário
+    const date = new Date(tickItem);
+    date.setDate(date.getDate() + 1);
+    const formatted = formatDateFns(date, 'MMM/yy', { locale: ptBR });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+};
+
 
 export default function VolumeOperadoChart({ data = [] }) {
     if (!data || data.length === 0) {
@@ -35,7 +56,7 @@ export default function VolumeOperadoChart({ data = [] }) {
         <ResponsiveContainer width="100%" height={250}>
             <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                <XAxis dataKey="mes" stroke="#9ca3af" fontSize={12} />
+                <XAxis dataKey="mes" stroke="#9ca3af" fontSize={12} tickFormatter={formatXAxis} />
                 <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={formatAxis} />
                 <Tooltip cursor={{ fill: 'rgba(255, 255, 255, 0.1)' }} content={<CustomTooltip />} />
                 <Bar dataKey="total" name="Volume" fill="#f97316" radius={[4, 4, 0, 0]} />
