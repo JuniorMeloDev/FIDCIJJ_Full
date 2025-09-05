@@ -11,11 +11,10 @@ export default function TopFiveApex({ data = [] }) {
         );
     }
 
-    // Mantém o valor mas limita o nome
     const chartData = data.map(item => ({
-        name: item.nome.split(" ")[0], // pega só a primeira palavra
+        name: item.nome.split(" ")[0],
         value: item.valorTotal,
-        fullName: item.nome // guardamos o original para tooltip
+        fullName: item.nome
     }));
 
     const abbreviateValue = val => {
@@ -43,7 +42,7 @@ export default function TopFiveApex({ data = [] }) {
             <BarChart
                 data={chartData}
                 layout={isManyItems ? "vertical" : "horizontal"}
-                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
                 barSize={isManyItems ? 25 : 50}
             >
                 {isManyItems ? (
@@ -55,6 +54,8 @@ export default function TopFiveApex({ data = [] }) {
                             tickFormatter={abbreviateValue}
                             axisLine={false}
                             tickLine={false}
+                            /* CORREÇÃO: Estende o eixo em 20% para dar espaço ao texto */
+                            domain={[0, dataMax => dataMax * 1.2]} 
                         />
                         <YAxis 
                             type="category" 
@@ -98,9 +99,8 @@ export default function TopFiveApex({ data = [] }) {
                 >
                     <LabelList 
                         dataKey="value" 
-                        // CORREÇÃO: Posição do valor muda para dentro da barra no modo horizontal
-                        position={isManyItems ? "insideRight" : "top"}
-                        style={{ fill: isManyItems ? '#ffffff' : '#d1d5db', fontSize: 12, fontWeight: 'bold' }}
+                        position={isManyItems ? "right" : "top"}
+                        style={{ fill: '#d1d5db', fontSize: 12 }}
                         formatter={formatBRLNumber}
                     />
                 </Bar>
