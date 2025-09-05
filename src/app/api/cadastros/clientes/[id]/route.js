@@ -12,35 +12,42 @@ export async function PUT(request, { params }) {
         const { id } = params;
         const body = await request.json();
         
+        // CORREÇÃO DEFINITIVA: Destruturação explícita de TODAS as propriedades que não são colunas diretas da tabela 'clientes'.
+        // Isso garante que o objeto 'clienteData' conterá apenas os campos que realmente podem ser atualizados.
         const { 
             acesso, 
             contasBancarias, 
             emails, 
             ramoDeAtividade,
             tiposOperacao,
+            // Propriedades que vêm do objeto original do banco e que precisam ser ignoradas no update principal:
+            contas_bancarias,
+            cliente_emails,
+            cliente_tipos_operacao,
             ...clienteData 
         } = body;
 
-        // 1. ATUALIZA OS DADOS DO CLIENTE
+        // 1. ATUALIZA OS DADOS DO CLIENTE (agora com o objeto 'clienteData' limpo)
         const { error: clienteError } = await supabase
             .from('clientes')
             .update({ ...clienteData, ramo_de_atividade: ramoDeAtividade })
             .eq('id', id);
 
-        if (clienteError) throw clienteError;
+        if (clienteError) {
+             console.error("Erro ao atualizar dados do cliente:", clienteError);
+             throw clienteError;
+        }
 
         // 2. ATUALIZA CONTAS BANCÁRIAS
         await supabase.from('contas_bancarias').delete().eq('cliente_id', id);
         if (contasBancarias && contasBancarias.length > 0) {
-             // CORREÇÃO: Garante que todos os campos sejam mapeados para o nome correto da coluna.
              const contasToInsert = contasBancarias.map(({id: contaId, ...c}) => ({ 
                 banco: c.banco,
                 agencia: c.agencia,
-                conta_corrente: c.contaCorrente, // Mapeamento corrigido
+                conta_corrente: c.contaCorrente,
                 cliente_id: id 
             }));
-            const { error: contasError } = await supabase.from('contas_bancarias').insert(contasToInsert);
-            if (contasError) throw contasError;
+            await supabase.from('contas_bancarias').insert(contasToInsert);
         }
 
         // 3. ATUALIZA EMAILS
