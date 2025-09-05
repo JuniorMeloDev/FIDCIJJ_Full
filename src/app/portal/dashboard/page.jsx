@@ -59,7 +59,11 @@ const HistoricoOperacoesTable = ({ operacoes, loading, error }) => {
     
     const { items: sortedOperacoes, requestSort, getSortIcon } = useSortableData(operacoes, { key: 'data_operacao', direction: 'DESC' });
 
-    const currentOperacoes = sortedOperacoes.slice((currentPage - 1) * ITEMS_PER_PAGE_OPERATIONS, currentPage * ITEMS_PER_PAGE_OPERATIONS);
+    const toggleRow = (id) => setExpandedRow(expandedRow === id ? null : id);
+
+    const indexOfLastItem = currentPage * ITEMS_PER_PAGE_OPERATIONS;
+    const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE_OPERATIONS;
+    const currentOperacoes = sortedOperacoes.slice(indexOfFirstItem, indexOfLastItem);
 
     const getStatusTag = (status) => {
         const styles = { Pendente: "bg-orange-800 text-amber-100", Aprovada: "bg-green-800 text-green-100", Rejeitada: "bg-red-800 text-red-100" };
@@ -88,7 +92,7 @@ const HistoricoOperacoesTable = ({ operacoes, loading, error }) => {
                          currentOperacoes.length === 0 ? <tr><td colSpan="6" className="text-center py-8">Nenhuma operação encontrada.</td></tr> :
                          currentOperacoes.map(op => (
                             <React.Fragment key={op.id}>
-                                <tr onClick={() => setExpandedRow(expandedRow === op.id ? null : op.id)} className={`cursor-pointer hover:bg-gray-700/50 ${expandedRow === op.id ? 'bg-gray-700/50' : ''}`}>
+                                <tr onClick={() => toggleRow(op.id)} className={`cursor-pointer hover:bg-gray-700/50 ${expandedRow === op.id ? 'bg-gray-700/50' : ''}`}>
                                     <td className="px-4 py-4"><FaChevronRight className={`text-gray-500 transition-transform duration-300 ${expandedRow === op.id ? 'rotate-90' : ''}`} /></td>
                                     <td className="px-6 py-4 font-medium text-white">#{op.id}</td>
                                     <td className="px-6 py-4 text-gray-300">{formatDate(op.data_operacao)}</td>
@@ -96,7 +100,38 @@ const HistoricoOperacoesTable = ({ operacoes, loading, error }) => {
                                     <td className="px-6 py-4 text-right text-gray-300">{formatBRLNumber(op.valor_liquido)}</td>
                                     <td className="px-6 py-4 text-center">{getStatusTag(op.status)}</td>
                                 </tr>
-                                {expandedRow === op.id && ( /* Detalhes da Operação podem ser adicionados aqui */ )}
+                                {expandedRow === op.id && (
+                                    <tr className="bg-gray-900/50">
+                                        <td colSpan="6" className="p-0">
+                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="overflow-hidden p-4">
+                                                <h4 className="font-semibold text-sm mb-2 text-orange-400">Detalhes da Operação #{op.id}</h4>
+                                                <table className="min-w-full text-xs">
+                                                    <thead className="bg-gray-700/30">
+                                                        <tr>
+                                                            <th className="px-3 py-1 text-left">NF/CT-e</th>
+                                                            <th className="px-3 py-1 text-left">Sacado</th>
+                                                            <th className="px-3 py-1 text-right">Valor</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {op.duplicatas.map(dup => (
+                                                            <tr key={dup.id}>
+                                                                <td className="px-3 py-1">{dup.nf_cte}</td>
+                                                                <td className="px-3 py-1">{dup.cliente_sacado}</td>
+                                                                <td className="px-3 py-1 text-right">{formatBRLNumber(dup.valor_bruto)}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                                <div className="text-right mt-2">
+                                                    <button className="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md flex items-center gap-2 ml-auto">
+                                                        <FaDownload />Baixar Borderô
+                                                    </button>
+                                                </div>
+                                            </motion.div>
+                                        </td>
+                                    </tr>
+                                )}
                             </React.Fragment>
                          ))}
                     </tbody>
