@@ -5,12 +5,12 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { jwtDecode } from "jwt-decode";
 import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
-import { FaChevronRight } from "react-icons/fa";
+import { FaChevronRight, FaHourglassHalf, FaCheckCircle, FaTimesCircle, FaCheck, FaExclamationCircle, FaClock, FaCloudUploadAlt } from "react-icons/fa";
 import Pagination from "@/app/components/Pagination";
 
 const ITEMS_PER_PAGE = 5;
 
-// --- Subcomponente para a Aba "Minhas Operações" (VERSÃO CORRIGIDA E COMPLETA) ---
+// --- Subcomponente para a Aba "Minhas Operações" ---
 const MinhasOperacoesView = ({ operacoes, loading, error }) => {
     const [expandedRow, setExpandedRow] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -23,19 +23,24 @@ const MinhasOperacoesView = ({ operacoes, loading, error }) => {
 
     const getStatusTag = (status) => {
         const styles = {
-            Pendente: "bg-yellow-500 text-white",
-            Aprovada: "bg-green-500 text-white",
-            Rejeitada: "bg-red-500 text-white",
+            Pendente: "status-tag status-pendente",
+            Aprovada: "status-tag status-aprovado",
+            Rejeitada: "status-tag status-rejeitado",
         };
-        return <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${styles[status] || 'bg-gray-500'}`}>{status}</span>;
+        const icons = {
+            Pendente: <FaHourglassHalf />,
+            Aprovada: <FaCheckCircle />,
+            Rejeitada: <FaTimesCircle />,
+        };
+        return <span className={styles[status] || 'status-tag bg-gray-600'}><div className="w-4 h-4">{icons[status]}</div>{status}</span>;
     };
 
     return (
-        <div className="bg-gray-800 p-6 rounded-lg shadow-lg mt-8">
+        <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
             <h2 className="text-xl font-semibold mb-4 text-white">Histórico de Operações</h2>
             <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-700">
-                     <thead className="bg-gray-700/50">
+                    <thead className="bg-gray-700/50">
                         <tr>
                             <th className="w-12"></th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">ID Operação</th>
@@ -55,52 +60,22 @@ const MinhasOperacoesView = ({ operacoes, loading, error }) => {
                         ) : (
                             currentItems.map(op => (
                                 <React.Fragment key={op.id}>
-                                    <tr onClick={() => toggleRow(op.id)} className="cursor-pointer hover:bg-gray-700/50">
-                                        <td className="px-4 py-4"><FaChevronRight className={`transform transition-transform ${expandedRow === op.id ? 'rotate-90' : ''}`} /></td>
+                                    <tr onClick={() => toggleRow(op.id)} className={`cursor-pointer hover:bg-gray-700/50 ${expandedRow === op.id ? 'expanded' : ''}`}>
+                                        <td className="px-4 py-4"><FaChevronRight className="expand-icon text-gray-500" /></td>
                                         <td className="px-6 py-4 font-medium">#{op.id}</td>
                                         <td className="px-6 py-4">{formatDate(op.data_operacao)}</td>
                                         <td className="px-6 py-4 text-right">{formatBRLNumber(op.valor_total_bruto)}</td>
                                         <td className="px-6 py-4 text-right">{formatBRLNumber(op.valor_liquido)}</td>
                                         <td className="px-6 py-4 text-center">{getStatusTag(op.status)}</td>
                                     </tr>
-                                    {expandedRow === op.id && (
-                                        <tr className="bg-gray-900/50">
-                                            <td colSpan="6" className="p-0">
-                                                <motion.div 
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: 'auto', opacity: 1 }}
-                                                    className="overflow-hidden"
-                                                >
-                                                    <div className="p-4">
-                                                        <h4 className="font-semibold text-sm mb-2 text-orange-400">Detalhes da Operação #{op.id}</h4>
-                                                        <table className="min-w-full text-xs">
-                                                            <thead className="bg-gray-700/30">
-                                                                <tr>
-                                                                    <th className="px-3 py-1 text-left">NF/CT-e</th>
-                                                                    <th className="px-3 py-1 text-left">Sacado</th>
-                                                                    <th className="px-3 py-1 text-right">Valor</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {op.duplicatas.map(dup => (
-                                                                    <tr key={dup.id}>
-                                                                        <td className="px-3 py-1">{dup.nf_cte}</td>
-                                                                        <td className="px-3 py-1">{dup.cliente_sacado}</td>
-                                                                        <td className="px-3 py-1 text-right">{formatBRLNumber(dup.valor_bruto)}</td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
-                                                        <div className="text-right mt-2">
-                                                            <button className="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md">
-                                                                Baixar Borderô
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
-                                            </td>
-                                        </tr>
-                                    )}
+                                    <tr className={`details-row bg-gray-900/50 ${expandedRow === op.id ? 'show' : ''}`}>
+                                        <td colSpan="6" className="p-0">
+                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="overflow-hidden p-4">
+                                                <h4 className="font-semibold text-sm mb-2 text-orange-400">Detalhes da Operação #{op.id}</h4>
+                                                {/* Detalhes da operação aqui */}
+                                            </motion.div>
+                                        </td>
+                                    </tr>
                                 </React.Fragment>
                             ))
                         )}
@@ -112,22 +87,12 @@ const MinhasOperacoesView = ({ operacoes, loading, error }) => {
     );
 };
 
-// --- Subcomponente para a Aba "Acompanhamento" (Placeholder) ---
-const AcompanhamentoView = () => (
-    <div className="bg-gray-800 p-6 rounded-lg shadow-lg mt-8 text-center">
-        <h2 className="text-xl font-semibold mb-4 text-white">Acompanhamento de Duplicatas</h2>
-        <p className="text-gray-400">Em breve: Acompanhe suas duplicatas liquidadas, a vencer e vencidas, além de gráficos de performance.</p>
-    </div>
-);
-
-
 // --- Componente Principal da Página ---
 export default function ClientDashboardPage() {
     const [operacoes, setOperacoes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [clienteNome, setClienteNome] = useState('');
-    const [activeView, setActiveView] = useState('operacoes');
+    const [activeView, setActiveView] = useState('consultas');
 
     const kpis = {
         limiteDisponivel: 749250.00,
@@ -145,12 +110,6 @@ export default function ClientDashboardPage() {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const token = sessionStorage.getItem('authToken');
-                if (token) {
-                    const decodedToken = jwtDecode(token);
-                    setClienteNome(decodedToken.cliente_nome || '');
-                }
-
                 const response = await fetch('/api/portal/operacoes', { headers: getAuthHeader() });
                 if (!response.ok) throw new Error('Falha ao buscar suas operações.');
                 const data = await response.json();
@@ -167,8 +126,8 @@ export default function ClientDashboardPage() {
     const TabButton = ({ viewName, currentView, setView, children }) => (
         <button
             onClick={() => setView(viewName)}
-            className={`py-2 px-5 rounded-md text-sm font-semibold transition-colors ${
-                currentView === viewName ? 'bg-orange-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            className={`nav-button font-semibold py-2 px-5 rounded-md transition ${
+                currentView === viewName ? 'active' : 'text-white'
             }`}
         >
             {children}
@@ -176,47 +135,49 @@ export default function ClientDashboardPage() {
     );
 
     return (
-        <div className="text-gray-200">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-white">Portal do Cliente</h1>
-                    <Link href="/portal/enviar-operacao" className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition">
-                        + Enviar Nova Operação
-                    </Link>
+        <div className="pt-20">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="mb-6 bg-gray-800 p-2 rounded-lg inline-flex items-center space-x-2">
+                    <TabButton viewName="consultas" currentView={activeView} setView={setActiveView}>Minhas Operações</TabButton>
+                    <TabButton viewName="nova-operacao" currentView={activeView} setView={setActiveView}>Enviar Nova Operação</TabButton>
                 </div>
 
-                <div className="flex space-x-2 border-b border-gray-700 pb-4">
-                    <TabButton viewName="operacoes" currentView={activeView} setView={setActiveView}>Minhas Operações</TabButton>
-                    <TabButton viewName="duplicatas" currentView={activeView} setView={setActiveView}>Acompanhamento de Duplicatas</TabButton>
-                </div>
-
-                {activeView === 'operacoes' && (
-                    <>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-                            <div className="bg-gray-800 p-5 rounded-lg shadow-lg border-l-4 border-green-500">
-                                <h3 className="text-sm font-medium text-gray-400">Limite Disponível</h3>
-                                <p className="text-3xl font-bold mt-2">{formatBRLNumber(kpis.limiteDisponivel)}</p>
+                <div id="page-content">
+                    {activeView === 'consultas' && (
+                        <div id="view-consultas">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                                <div className="bg-gray-800 p-5 rounded-lg shadow-lg border-l-4 border-green-500">
+                                    <h3 className="text-sm font-medium text-gray-400">Limite Disponível</h3>
+                                    <p className="text-3xl font-bold text-white mt-2">{formatBRLNumber(kpis.limiteDisponivel)}</p>
+                                </div>
+                                <div className="bg-gray-800 p-5 rounded-lg shadow-lg border-l-4 border-blue-500">
+                                    <h3 className="text-sm font-medium text-gray-400">Total a Vencer</h3>
+                                    <p className="text-3xl font-bold text-white mt-2">{formatBRLNumber(kpis.totalAVencer)}</p>
+                                </div>
+                                <div className="bg-gray-800 p-5 rounded-lg shadow-lg border-l-4 border-purple-500">
+                                    <h3 className="text-sm font-medium text-gray-400">Taxa Média</h3>
+                                    <p className="text-3xl font-bold text-white mt-2">{kpis.taxaMedia.toFixed(2)}%</p>
+                                </div>
+                                <div className="bg-gray-800 p-5 rounded-lg shadow-lg border-l-4 border-yellow-500">
+                                    <h3 className="text-sm font-medium text-gray-400">Prazo Médio</h3>
+                                    <p className="text-3xl font-bold text-white mt-2">{kpis.prazoMedio} dias</p>
+                                </div>
                             </div>
-                            <div className="bg-gray-800 p-5 rounded-lg shadow-lg border-l-4 border-blue-500">
-                                <h3 className="text-sm font-medium text-gray-400">Total a Vencer</h3>
-                                <p className="text-3xl font-bold mt-2">{formatBRLNumber(kpis.totalAVencer)}</p>
-                            </div>
-                            <div className="bg-gray-800 p-5 rounded-lg shadow-lg border-l-4 border-purple-500">
-                                <h3 className="text-sm font-medium text-gray-400">Taxa Média</h3>
-                                <p className="text-3xl font-bold mt-2">{kpis.taxaMedia.toFixed(2)}%</p>
-                            </div>
-                            <div className="bg-gray-800 p-5 rounded-lg shadow-lg border-l-4 border-yellow-500">
-                                <h3 className="text-sm font-medium text-gray-400">Prazo Médio</h3>
-                                <p className="text-3xl font-bold mt-2">{kpis.prazoMedio} dias</p>
-                            </div>
+                            <MinhasOperacoesView operacoes={operacoes} loading={loading} error={error} />
+                            {/* Aqui entrarão as outras seções do protótipo, como "Acompanhamento" e gráficos */}
                         </div>
-                        <MinhasOperacoesView operacoes={operacoes} loading={loading} error={error} />
-                    </>
-                )}
+                    )}
 
-                {activeView === 'duplicatas' && (
-                    <AcompanhamentoView />
-                )}
+                    {activeView === 'nova-operacao' && (
+                         <div id="view-nova-operacao">
+                             <div className="bg-gray-800 p-8 rounded-lg shadow-lg">
+                                 {/* O conteúdo da página /portal/enviar-operacao pode ser movido para cá */}
+                                 <h2 className="text-2xl font-semibold text-white mb-2">Enviar Nova Operação</h2>
+                                 <p className="text-gray-400 mb-6">Em breve: Faça o upload dos seus arquivos para análise.</p>
+                             </div>
+                         </div>
+                    )}
+                </div>
             </div>
         </div>
     );
