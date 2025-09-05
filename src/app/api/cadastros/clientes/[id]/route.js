@@ -12,31 +12,27 @@ export async function PUT(request, { params }) {
         const { id } = params;
         const body = await request.json();
         
-        // --- PONTO CRÍTICO DA CORREÇÃO ---
-        // Aqui, separamos TUDO que não pertence diretamente à tabela 'clientes'.
-        // O que sobra em 'clienteData' é apenas o que pode ser salvo nela.
         const { 
             acesso, 
             contasBancarias, 
             emails, 
             ramoDeAtividade,
-            // Adicionamos estas para garantir que nenhuma variação passe
-            contas_bancarias, 
-            cliente_emails,
-            ramo_de_atividade,
+            tiposOperacao, // Array com os IDs dos tipos de operação selecionados
             ...clienteData 
         } = body;
 
-        // 1. ATUALIZA OS DADOS DO CLIENTE (agora com certeza sem os campos extras)
+        // Limpa campos de relacionamento para evitar erros no update
+        delete clienteData.contas_bancarias; 
+        delete clienteData.cliente_emails;
+        delete clienteData.cliente_tipos_operacao;
+
+        // 1. ATUALIZA OS DADOS DO CLIENTE
         const { error: clienteError } = await supabase
             .from('clientes')
-            .update({ ...clienteData, ramo_de_atividade: ramoDeAtividade }) // Atualiza os dados puros + o ramo
+            .update({ ...clienteData, ramo_de_atividade: ramoDeAtividade })
             .eq('id', id);
 
-        if (clienteError) {
-            console.error("Erro ao atualizar tabela clientes:", clienteError);
-            throw clienteError;
-        }
+        if (clienteError) throw clienteError;
 
         // 2. ATUALIZA CONTAS BANCÁRIAS
         await supabase.from('contas_bancarias').delete().eq('cliente_id', id);
@@ -50,14 +46,21 @@ export async function PUT(request, { params }) {
             await supabase.from('contas_bancarias').insert(contasToInsert);
         }
 
-        // 3. ATUALIZA EMAILS PARA NOTIFICAÇÃO (tabela separada)
+        // 3. ATUALIZA EMAILS
         await supabase.from('cliente_emails').delete().eq('cliente_id', id);
         if (emails && emails.length > 0) {
             const emailsToInsert = emails.map(email => ({ email, cliente_id: id }));
             await supabase.from('cliente_emails').insert(emailsToInsert);
         }
+        
+        // 4. ATUALIZA OS TIPOS DE OPERAÇÃO
+        await supabase.from('cliente_tipos_operacao').delete().eq('cliente_id', id);
+        if (tiposOperacao && tiposOperacao.length > 0) {
+            const tiposToInsert = tiposOperacao.map(tipo_id => ({ cliente_id: id, tipo_operacao_id: tipo_id }));
+            await supabase.from('cliente_tipos_operacao').insert(tiposToInsert);
+        }
 
-        // 4. GERENCIA O USUÁRIO DE ACESSO
+        // 5. GERENCIA O USUÁRIO DE ACESSO
         if (acesso && acesso.username) {
             const { data: existingUser } = await supabase.from('users').select('id').eq('cliente_id', id).single();
             
@@ -91,7 +94,7 @@ export async function PUT(request, { params }) {
     }
 }
 
-// A função DELETE permanece a mesma
+// DELETE: Apaga um cliente e seus dados associados
 export async function DELETE(request, { params }) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -99,8 +102,10 @@ export async function DELETE(request, { params }) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const { id } = params;
-        await supabase.from('users').delete().eq('cliente_id', id);
-        await supabase.from('clientes').delete().eq('id', id);
+        // Graças ao ON DELETE CASCADE, só precisamos apagar o cliente
+        const { error } = await supabase.from('clientes').delete().eq('id', id);
+        
+        if (error) throw error;
 
         return new NextResponse(null, { status: 204 });
     } catch (error) {

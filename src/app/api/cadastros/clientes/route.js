@@ -3,9 +3,8 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-// GET: Busca todos os clientes
+// GET: Busca todos os clientes (agora incluindo os tipos de operação associados)
 export async function GET(request) {
-    // ... (código existente, sem alterações)
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
@@ -16,7 +15,8 @@ export async function GET(request) {
             .select(`
                 *,
                 contas_bancarias (*),
-                cliente_emails (email)
+                cliente_emails (email),
+                cliente_tipos_operacao ( tipo_operacao_id )
             `)
             .order('nome', { ascending: true });
 
@@ -31,7 +31,7 @@ export async function GET(request) {
     }
 }
 
-// POST: Cria um novo cliente e seu usuário de acesso
+// POST: Cria um novo cliente (agora incluindo os tipos de operação)
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -40,39 +40,40 @@ export async function POST(request) {
 
         const body = await request.json();
         
-        const { contasBancarias, emails, acesso, ramoDeAtividade, ...clienteData } = body;
-
-        // CORREÇÃO: Remove a propriedade 'id' do objeto antes de salvar.
-        // Isso garante que o banco de dados irá gerar um novo ID automaticamente.
+        const { contasBancarias, emails, acesso, ramoDeAtividade, tiposOperacao, ...clienteData } = body;
+        
+        // Garante que o ID não seja enviado na criação
         delete clienteData.id;
 
-        const dataToSave = {
-            ...clienteData,
-            ramo_de_atividade: ramoDeAtividade
+        const dataToSave = { 
+            ...clienteData, 
+            ramo_de_atividade: ramoDeAtividade 
         };
 
-        // 1. Insere o cliente com os dados corretos
         const { data: newCliente, error: clienteError } = await supabase
-            .from('clientes')
-            .insert(dataToSave)
-            .select()
-            .single();
+            .from('clientes').insert(dataToSave).select().single();
 
         if (clienteError) throw clienteError;
 
-        // 2. Insere as contas bancárias associadas
+        // Insere as contas bancárias associadas
         if (contasBancarias && contasBancarias.length > 0) {
             const contasToInsert = contasBancarias.map(c => ({ ...c, cliente_id: newCliente.id }));
             await supabase.from('contas_bancarias').insert(contasToInsert);
         }
 
-        // 3. Insere os emails de notificação associados
+        // Insere os emails de notificação associados
         if (emails && emails.length > 0) {
             const emailsToInsert = emails.map(email => ({ email, cliente_id: newCliente.id }));
             await supabase.from('cliente_emails').insert(emailsToInsert);
         }
         
-        // 4. Cria o usuário de acesso se os dados foram fornecidos
+        // Salva os Tipos de Operação associados
+        if (tiposOperacao && tiposOperacao.length > 0) {
+            const tiposToInsert = tiposOperacao.map(tipo_id => ({ cliente_id: newCliente.id, tipo_operacao_id: tipo_id }));
+            await supabase.from('cliente_tipos_operacao').insert(tiposToInsert);
+        }
+
+        // Cria o usuário de acesso se os dados foram fornecidos
         if (acesso && acesso.username && acesso.password) {
             const hashedPassword = await bcrypt.hash(acesso.password, 10);
             const { error: userError } = await supabase.from('users').insert({
