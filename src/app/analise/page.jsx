@@ -58,7 +58,7 @@ export default function AnalisePage() {
 
     const handleSalvarAnalise = async (operacaoId, payload) => {
         try {
-            const response = await fetch(`/api/operacoes/${operacaoId}/analisar`, {
+            const response = await fetch(`/api/operacoes/${operacaoId}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
                 body: JSON.stringify(payload),
@@ -79,12 +79,13 @@ export default function AnalisePage() {
     return (
         <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
+            {/* CORREÇÃO AQUI: A propriedade foi renomeada de 'contasMaster' para 'contasBancarias' */}
             <AprovacaoOperacaoModal 
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleSalvarAnalise}
                 operacao={operacaoSelecionada}
-                contasMaster={contasMaster}
+                contasBancarias={contasMaster}
             />
 
             <motion.header 
