@@ -7,10 +7,21 @@ async function getUserIdFromToken(token) {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const username = decoded.sub;
-        const { data: user, error } = await supabase.from('users').select('id').eq('username', username).single();
-        if (error) throw error;
+
+        // Modificação: Busca na tabela 'users' que contém a coluna 'username'
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('id') // Seleciona o ID da tabela 'users'
+            .eq('username', username)
+            .single();
+        
+        if (error) {
+            console.error("Error fetching user by username:", error);
+            throw error;
+        }
         return user?.id;
     } catch (e) {
+        console.error("Token verification or user fetch failed:", e);
         return null;
     }
 }
@@ -20,7 +31,11 @@ export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         const userId = await getUserIdFromToken(token);
-        if (!userId) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
+        
+        if (!userId) {
+            // Se o user ID não for encontrado, significa que o token é inválido ou o usuário não existe.
+            return NextResponse.json({ message: 'Não autorizado ou usuário não encontrado.' }, { status: 401 });
+        }
 
         const { count, error } = await supabase
             .from('notifications')
@@ -28,11 +43,16 @@ export async function GET(request) {
             .eq('user_id', userId)
             .eq('is_read', false);
 
-        if (error) throw error;
+        if (error) {
+            console.error("Error fetching unread notifications count:", error);
+            throw error;
+        }
 
         return NextResponse.json({ count: count || 0 }, { status: 200 });
 
     } catch (error) {
-        return NextResponse.json({ message: error.message }, { status: 500 });
+        console.error("General error in GET unread-count:", error);
+        return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
     }
 }
+
