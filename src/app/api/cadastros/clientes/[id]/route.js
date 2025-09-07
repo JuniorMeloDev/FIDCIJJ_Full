@@ -33,13 +33,15 @@ export async function PUT(request, { params }) {
         const { id } = params;
         const body = await request.json();
         
+        // --- CORREÇÃO AQUI: Adicionado 'email' à desestruturação ---
         const { 
             acesso, 
             contasBancarias, 
+            email, // <-- Adicionado aqui
             emails, 
             ramoDeAtividade,
             tiposOperacao,
-            sendWelcomeEmail, 
+            sendWelcomeEmail,
             contas_bancarias,
             cliente_emails,
             cliente_tipos_operacao,
@@ -53,6 +55,7 @@ export async function PUT(request, { params }) {
 
         if (clienteError) throw clienteError;
 
+        // O restante da lógica permanece o mesmo...
         await supabase.from('contas_bancarias').delete().eq('cliente_id', id);
         if (contasBancarias && contasBancarias.length > 0) {
              const contasToInsert = contasBancarias.map(({id: contaId, ...c}) => ({ 
@@ -66,7 +69,7 @@ export async function PUT(request, { params }) {
 
         await supabase.from('cliente_emails').delete().eq('cliente_id', id);
         if (emails && emails.length > 0) {
-            const emailsToInsert = emails.map(email => ({ email, cliente_id: id }));
+            const emailsToInsert = emails.map(emailAddr => ({ email: emailAddr, cliente_id: id }));
             await supabase.from('cliente_emails').insert(emailsToInsert);
         }
         
@@ -105,9 +108,8 @@ export async function PUT(request, { params }) {
             }
 
             if (sendWelcomeEmail) {
-                const recipientEmail = clienteData.email || (emails && emails.length > 0 ? emails[0] : null);
+                const recipientEmail = email || (emails && emails.length > 0 ? emails[0] : null);
                 if (recipientEmail) {
-                    // --- CORREÇÃO AQUI ---
                     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
                     const emailApiUrl = `${appUrl}/api/emails/send-welcome`;
                     
