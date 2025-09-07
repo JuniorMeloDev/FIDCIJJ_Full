@@ -2,7 +2,7 @@
 
 import { jwtDecode } from 'jwt-decode';
 import { useEffect, useState, useRef } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { FaChartLine, FaBell } from "react-icons/fa";
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -36,7 +36,7 @@ function PortalNavbar({ user, onLogout, unreadCount, onBellClick }) {
                          <button onClick={onBellClick} className="relative text-gray-400 hover:text-white">
                             <FaBell size={20} />
                             {unreadCount > 0 && (
-                                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-xs text-white"></span>
+                                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-xs text-white animate-pulse"></span>
                             )}
                         </button>
                          <div className="relative" ref={profileRef}>
@@ -106,7 +106,7 @@ export default function PortalLayout({ children }) {
                     cliente_nome: decoded.cliente_nome
                 });
                 fetchUnreadCount();
-                const interval = setInterval(fetchUnreadCount, 30000);
+                const interval = setInterval(fetchUnreadCount, 30000); // Check every 30 seconds
                 return () => clearInterval(interval);
             } catch (error) {
                 sessionStorage.removeItem('authToken');
