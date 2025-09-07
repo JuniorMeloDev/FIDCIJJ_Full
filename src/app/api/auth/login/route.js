@@ -56,10 +56,10 @@ export async function POST(request) {
 
         const userRoles = user.roles.split(',').map(role => role.trim());
 
-        // --- CORREÇÃO PRINCIPAL ---
-        // Adiciona o user.id diretamente no token.
+        // --- CORREÇÃO PRINCIPAL E DEFINITIVA ---
+        // Adiciona o user.id (UUID) diretamente no token.
         const claims = {
-            user_id: user.id, // <<-- ADICIONADO AQUI
+            user_id: user.id, // <-- Ponto chave da correção
             username: user.username,
             roles: userRoles,
             sub: user.username,
@@ -81,3 +81,4 @@ export async function POST(request) {
         return NextResponse.json({ message: 'Ocorreu um erro durante a autenticação' }, { status: 500 });
     }
 }
+
