@@ -119,7 +119,7 @@ export async function POST(request) {
                 if (recipientEmail) {
                     // --- CORREÇÃO AQUI ---
                     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-                    const emailApiUrl = `${appUrl}/api/emails/send-welcome`;
+                    const emailApiUrl = `${appUrl}/api/emails/enviar-boasVindas`;
                     
                     const emailResponse = await fetch(emailApiUrl, {
                         method: 'POST',
