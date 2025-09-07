@@ -4,9 +4,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-
-// Alterado de 'import' para 'require' para garantir compatibilidade no ambiente de servidor
-const { generateStrongPassword, sendWelcomeEmail } = require('@/app/lib/emailService');
+import { generateStrongPassword, sendWelcomeEmail } from '@/app/lib/emailService';
 
 export async function PUT(request, { params }) {
     try {
@@ -23,7 +21,7 @@ export async function PUT(request, { params }) {
             emails, 
             ramoDeAtividade,
             tiposOperacao,
-            sendWelcomeEmail,
+            sendWelcomeEmail: sendWelcomeFlag,
             // Propriedades de relacionamento que não devem ser passadas no update
             contas_bancarias,
             cliente_emails,
@@ -73,7 +71,7 @@ export async function PUT(request, { params }) {
         if (acesso && acesso.username) {
             let tempPassword = acesso.password;
             
-            if (sendWelcomeEmail) {
+            if (sendWelcomeFlag) {
                 tempPassword = generateStrongPassword();
             }
 
@@ -97,15 +95,19 @@ export async function PUT(request, { params }) {
                 });
             }
 
-            if (sendWelcomeEmail) {
+            if (sendWelcomeFlag) {
                 const recipientEmail = clienteData.email || (emails && emails.length > 0 ? emails[0] : null);
                 if (recipientEmail) {
+                    console.log("📧 Enviando e-mail de boas-vindas para:", recipientEmail);
                     await sendWelcomeEmail({
                         clienteNome: clienteData.nome,
                         username: acesso.username,
                         tempPassword: tempPassword,
                         recipientEmail: recipientEmail
                     });
+                    console.log("✅ E-mail enviado com sucesso!");
+                } else {
+                    console.warn("⚠ Nenhum e-mail encontrado para envio de boas-vindas.");
                 }
             }
         }
