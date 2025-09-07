@@ -1,9 +1,12 @@
+// Arquivo: src/app/api/cadastros/clientes/[id]/route.js
+
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-// Passo 1: Importar as funções do serviço de e-mail centralizado
-import { generateStrongPassword, sendWelcomeEmail } from '@/app/lib/emailService';
+
+// Alterado de 'import' para 'require' para garantir compatibilidade no ambiente de servidor
+const { generateStrongPassword, sendWelcomeEmail } = require('@/app/lib/emailService');
 
 export async function PUT(request, { params }) {
     try {
@@ -21,6 +24,7 @@ export async function PUT(request, { params }) {
             ramoDeAtividade,
             tiposOperacao,
             sendWelcomeEmail,
+            // Propriedades de relacionamento que não devem ser passadas no update
             contas_bancarias,
             cliente_emails,
             cliente_tipos_operacao,
@@ -96,7 +100,6 @@ export async function PUT(request, { params }) {
             if (sendWelcomeEmail) {
                 const recipientEmail = clienteData.email || (emails && emails.length > 0 ? emails[0] : null);
                 if (recipientEmail) {
-                    // Passo 2: Chamar a função diretamente, sem usar fetch
                     await sendWelcomeEmail({
                         clienteNome: clienteData.nome,
                         username: acesso.username,
