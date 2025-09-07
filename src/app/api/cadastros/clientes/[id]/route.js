@@ -1,27 +1,9 @@
-// Arquivo: src/app/api/cadastros/clientes/[id]/route.js
-
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-
-const generateStrongPassword = () => {
-    const length = 10;
-    const lower = 'abcdefghijklmnopqrstuvwxyz';
-    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const numbers = '0123456789';
-    const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-    const all = lower + upper + numbers + special;
-    let password = '';
-    password += lower[Math.floor(Math.random() * lower.length)];
-    password += upper[Math.floor(Math.random() * upper.length)];
-    password += numbers[Math.floor(Math.random() * numbers.length)];
-    password += special[Math.floor(Math.random() * special.length)];
-    for (let i = 4; i < length; i++) {
-        password += all[Math.floor(Math.random() * all.length)];
-    }
-    return password.split('').sort(() => 0.5 - Math.random()).join('');
-};
+// Passo 1: Importar as funções do serviço de e-mail centralizado
+import { generateStrongPassword, sendWelcomeEmail } from '@/app/lib/emailService';
 
 export async function PUT(request, { params }) {
     try {
@@ -32,11 +14,9 @@ export async function PUT(request, { params }) {
         const { id } = params;
         const body = await request.json();
         
-        // CORREÇÃO DEFINITIVA: Desestruturação explícita de TODAS as propriedades que não são colunas diretas da tabela 'clientes'.
         const { 
             acesso, 
             contasBancarias, 
-            email,
             emails, 
             ramoDeAtividade,
             tiposOperacao,
@@ -47,7 +27,7 @@ export async function PUT(request, { params }) {
             ...clienteData 
         } = body;
 
-        // 1. ATUALIZA OS DADOS DO CLIENTE (agora com o objeto 'clienteData' limpo)
+        // 1. ATUALIZA OS DADOS DO CLIENTE
         const { error: clienteError } = await supabase
             .from('clientes')
             .update({ ...clienteData, ramo_de_atividade: ramoDeAtividade })
@@ -85,7 +65,7 @@ export async function PUT(request, { params }) {
             if (tiposError) throw tiposError;
         }
 
-        // 5. GERENCIA O USUÁRIO DE ACESSO E ENVIA E-MAIL
+        // 5. GERE O ACESSO DO USUÁRIO E ENVIA O E-MAIL SE NECESSÁRIO
         if (acesso && acesso.username) {
             let tempPassword = acesso.password;
             
@@ -114,24 +94,15 @@ export async function PUT(request, { params }) {
             }
 
             if (sendWelcomeEmail) {
-                const recipientEmail = email || (emails && emails.length > 0 ? emails[0] : null);
+                const recipientEmail = clienteData.email || (emails && emails.length > 0 ? emails[0] : null);
                 if (recipientEmail) {
-                    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-                    const emailApiUrl = `${appUrl}/api/emails/enviar-boasVindas`;
-                    
-                    const emailResponse = await fetch(emailApiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            clienteNome: clienteData.nome,
-                            username: acesso.username,
-                            tempPassword: tempPassword,
-                            recipientEmail: recipientEmail
-                        })
+                    // Passo 2: Chamar a função diretamente, sem usar fetch
+                    await sendWelcomeEmail({
+                        clienteNome: clienteData.nome,
+                        username: acesso.username,
+                        tempPassword: tempPassword,
+                        recipientEmail: recipientEmail
                     });
-                     if (!emailResponse.ok) {
-                        console.error('Falha ao chamar a API de envio de e-mail:', await emailResponse.text());
-                    }
                 }
             }
         }
@@ -146,7 +117,6 @@ export async function PUT(request, { params }) {
     }
 }
 
-// DELETE (sem alterações)
 export async function DELETE(request, { params }) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
