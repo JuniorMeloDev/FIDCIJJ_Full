@@ -3,7 +3,7 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-// Função para gerar senha forte (duplicada para manter o arquivo independente)
+// Função para gerar senha forte
 const generateStrongPassword = () => {
     const length = 10;
     const lower = 'abcdefghijklmnopqrstuvwxyz';
@@ -39,7 +39,7 @@ export async function PUT(request, { params }) {
             emails, 
             ramoDeAtividade,
             tiposOperacao,
-            sendWelcomeEmail, // Nova flag
+            sendWelcomeEmail, 
             contas_bancarias,
             cliente_emails,
             cliente_tipos_operacao,
@@ -77,11 +77,9 @@ export async function PUT(request, { params }) {
             if (tiposError) throw tiposError;
         }
 
-        // --- LÓGICA DE USUÁRIO E E-MAIL ---
         if (acesso && acesso.username) {
             let tempPassword = acesso.password;
             
-            // Gera nova senha se a flag for true
             if (sendWelcomeEmail) {
                 tempPassword = generateStrongPassword();
             }
@@ -90,7 +88,7 @@ export async function PUT(request, { params }) {
             
             if (existingUser) { 
                 const updatePayload = { username: acesso.username };
-                if (tempPassword) { // Se houver uma nova senha (seja a digitada ou a gerada)
+                if (tempPassword) {
                     updatePayload.password = await bcrypt.hash(tempPassword, 10);
                 }
                 await supabase.from('users').update(updatePayload).eq('id', existingUser.id);
@@ -106,12 +104,14 @@ export async function PUT(request, { params }) {
                 });
             }
 
-            // Envia o e-mail de boas-vindas se a flag for true
             if (sendWelcomeEmail) {
                 const recipientEmail = clienteData.email || (emails && emails.length > 0 ? emails[0] : null);
                 if (recipientEmail) {
-                    const emailApiUrl = new URL('/api/emails/send-welcome', request.url);
-                    await fetch(emailApiUrl.toString(), {
+                    // --- CORREÇÃO AQUI ---
+                    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+                    const emailApiUrl = `${appUrl}/api/emails/send-welcome`;
+                    
+                    const emailResponse = await fetch(emailApiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -121,10 +121,12 @@ export async function PUT(request, { params }) {
                             recipientEmail: recipientEmail
                         })
                     });
+                     if (!emailResponse.ok) {
+                        console.error('Falha ao chamar a API de envio de e-mail:', await emailResponse.text());
+                    }
                 }
             }
         }
-        // --- FIM DA LÓGICA ---
 
         return new NextResponse(null, { status: 204 });
     } catch (error) {

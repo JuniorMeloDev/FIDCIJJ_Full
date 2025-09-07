@@ -26,7 +26,6 @@ const generateStrongPassword = () => {
     return password.split('').sort(() => 0.5 - Math.random()).join('');
 };
 
-
 // GET: Busca todos os clientes (sem alterações)
 export async function GET(request) {
     try {
@@ -93,7 +92,6 @@ export async function POST(request) {
         if (acesso && acesso.username) {
             let tempPassword = acesso.password;
             
-            // Se for para enviar e-mail de boas-vindas, gera uma nova senha forte
             if (sendWelcomeEmail) {
                 tempPassword = generateStrongPassword();
             }
@@ -116,12 +114,14 @@ export async function POST(request) {
                 throw userError;
             }
             
-            // Envia o e-mail se a flag estiver ativa
             if (sendWelcomeEmail) {
                 const recipientEmail = clienteData.email || (emails && emails.length > 0 ? emails[0] : null);
                 if (recipientEmail) {
-                    const emailApiUrl = new URL('/api/emails/send-welcome', request.url);
-                    await fetch(emailApiUrl.toString(), {
+                    // --- CORREÇÃO AQUI ---
+                    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+                    const emailApiUrl = `${appUrl}/api/emails/send-welcome`;
+                    
+                    const emailResponse = await fetch(emailApiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -131,6 +131,10 @@ export async function POST(request) {
                             recipientEmail: recipientEmail
                         })
                     });
+                    // Log para depuração caso ainda falhe
+                    if (!emailResponse.ok) {
+                        console.error('Falha ao chamar a API de envio de e-mail:', await emailResponse.text());
+                    }
                 }
             }
         }
