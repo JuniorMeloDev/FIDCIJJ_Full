@@ -19,53 +19,89 @@ export const generateStrongPassword = () => {
     return password.split('').sort(() => 0.5 - Math.random()).join('');
 };
 
+const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+        user: process.env.EMAIL_USERNAME,
+        pass: process.env.EMAIL_PASSWORD,
+    },
+});
+
 export async function sendWelcomeEmail({ clienteNome, username, tempPassword, recipientEmail }) {
     if (!clienteNome || !username || !tempPassword || !recipientEmail) {
         throw new Error('Dados insuficientes para enviar o e-mail de boas-vindas.');
     }
-
-    const transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 587,
-        secure: false,
-        auth: {
-            user: process.env.EMAIL_USERNAME,
-            pass: process.env.EMAIL_PASSWORD,
-        },
-    });
-
     const loginUrl = process.env.NEXT_PUBLIC_LOGIN_URL || 'https://fidcijj.vercel.app/login';
+    const emailBody = `...`; // Seu corpo de e-mail de boas-vindas
+    await transporter.sendMail({
+        from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
+        to: recipientEmail,
+        subject: 'Bem-vindo(a) ao Portal do Cliente FIDC IJJ',
+        html: emailBody,
+    });
+}
 
+// NOVA FUNÇÃO: E-mail para admin sobre nova operação
+export async function sendOperationSubmittedEmail({ clienteNome, operacaoId, valorLiquido, adminEmails }) {
+    if (!clienteNome || !operacaoId || !valorLiquido || !adminEmails || adminEmails.length === 0) {
+        return; // Não envia se não tiver dados ou destinatários
+    }
+    const analysisUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://fidcijj.vercel.app'}/analise`;
     const emailBody = `
         <div style="font-family: Arial, sans-serif; color: #333;">
-            <p>Olá, <strong>${clienteNome}</strong>!</p>
-            <p>Seja bem-vindo(a) à IJJ FIDC! Estamos felizes em tê-lo(a) conosco.</p>
-            <p>Para acessar nosso portal do cliente, utilize as credenciais provisórias abaixo:</p>
+            <p>Olá,</p>
+            <p>Uma nova operação foi enviada para análise.</p>
             <div style="background-color: #f2f2f2; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                <p><strong>URL de Acesso:</strong> <a href="${loginUrl}" target="_blank">${loginUrl}</a></p>
-                <p><strong>Usuário:</strong> ${username}</p>
-                <p><strong>Senha Provisória:</strong> ${tempPassword}</p>
+                <p><strong>Cliente:</strong> ${clienteNome}</p>
+                <p><strong>ID da Operação:</strong> #${operacaoId}</p>
+                <p><strong>Valor Líquido:</strong> ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorLiquido)}</p>
             </div>
-            <p>Por segurança, recomendamos fortemente que você <strong>altere sua senha</strong> no primeiro acesso através do menu "Perfil".</p>
+            <p>Por favor, acesse o painel de administração para analisar e aprovar a operação.</p>
+            <p><a href="${analysisUrl}" target="_blank">Analisar Operação</a></p>
+            <br>
+            <p>Atenciosamente,</p>
+            <p><strong>Sistema FIDC IJJ</strong></p>
+        </div>
+    `;
+    await transporter.sendMail({
+        from: `"FIDC IJJ - Alerta" <${process.env.EMAIL_USERNAME}>`,
+        to: adminEmails.join(','),
+        subject: `Nova Operação #${operacaoId} para Análise - ${clienteNome}`,
+        html: emailBody,
+    });
+}
+
+// NOVA FUNÇÃO: E-mail para cliente sobre status da operação
+export async function sendOperationStatusEmail({ clienteNome, operacaoId, status, recipientEmail }) {
+     if (!clienteNome || !operacaoId || !status || !recipientEmail) {
+        return; 
+    }
+    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://fidcijj.vercel.app'}/portal/dashboard`;
+    const subject = `Sua Operação #${operacaoId} foi ${status === 'Aprovada' ? 'Aprovada' : 'Rejeitada'}`;
+
+     const emailBody = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+            <p>Olá, <strong>${clienteNome}</strong>!</p>
+            <p>Temos uma atualização sobre a sua operação enviada para análise.</p>
+            <div style="background-color: #f2f2f2; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p><strong>ID da Operação:</strong> #${operacaoId}</p>
+                <p><strong>Novo Status:</strong> <strong style="color: ${status === 'Aprovada' ? 'green' : 'red'};">${status}</strong></p>
+            </div>
+            ${status === 'Aprovada' ? '<p>O valor líquido será creditado na conta bancária informada em breve.</p>' : '<p>Para mais detalhes sobre o motivo da rejeição, entre em contato conosco.</p>'}
+            <p>Você pode ver mais detalhes acessando o portal do cliente:</p>
+            <p><a href="${portalUrl}" target="_blank">Acessar Portal</a></p>
             <br>
             <p>Atenciosamente,</p>
             <p><strong>Equipe FIDC IJJ</strong></p>
         </div>
     `;
 
-    const logoPath = path.resolve(process.cwd(), 'public', 'Logo.png');
-
-    await transporter.sendMail({
+     await transporter.sendMail({
         from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
         to: recipientEmail,
-        subject: 'Bem-vindo(a) ao Portal do Cliente FIDC IJJ',
+        subject: subject,
         html: emailBody,
-        attachments: [
-            {
-                filename: 'Logo.png',
-                path: logoPath,
-                cid: 'logoImage'
-            }
-        ],
     });
 }

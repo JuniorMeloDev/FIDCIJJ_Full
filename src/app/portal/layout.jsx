@@ -1,14 +1,27 @@
 'use client'
 
 import { jwtDecode } from 'jwt-decode';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { FaChartLine } from "react-icons/fa";
-import Link from 'next/link'; // Importar Link
+import { FaChartLine, FaBell } from "react-icons/fa";
+import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 
-// Componente de Cabeçalho do Portal
-function PortalNavbar({ user, onLogout }) {
+function PortalNavbar({ user, onLogout, unreadCount }) {
     const pathname = usePathname();
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const profileRef = useRef(null);
+    
+    useEffect(() => {
+        function onClickOutside(e) {
+          if (profileRef.current && !profileRef.current.contains(e.target)) {
+            setIsProfileOpen(false)
+          }
+        }
+        document.addEventListener('mousedown', onClickOutside)
+        return () => document.removeEventListener('mousedown', onClickOutside)
+    }, [])
+
     if (!user) return null;
 
     return (
@@ -19,16 +32,37 @@ function PortalNavbar({ user, onLogout }) {
                         <FaChartLine className="text-orange-400 text-2xl" />
                         <span className="text-xl font-bold text-white">IJJ FIDC - Portal do Cliente</span>
                     </Link>
-                    <div className="flex items-center space-x-6">
-                         <span className="hidden sm:block text-gray-300 font-medium">{user.cliente_nome}</span>
-                         {/* Links de navegação */}
-                         <Link href="/portal/dashboard" className={`text-sm font-medium transition-colors ${pathname === '/portal/dashboard' ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`}>
-                           Dashboard
-                         </Link>
-                         <Link href="/portal/profile" className={`text-sm font-medium transition-colors ${pathname === '/portal/profile' ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`}>
-                           Perfil
-                         </Link>
-                         <button onClick={onLogout} className="text-sm text-gray-300 hover:text-orange-400 transition">Sair</button>
+                    <div className="flex items-center space-x-4">
+                         <Link href="/portal/notificacoes" className="relative text-gray-400 hover:text-white">
+                            <FaBell size={20} />
+                            {unreadCount > 0 && (
+                                <span className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                                    {unreadCount}
+                                </span>
+                            )}
+                        </Link>
+                         <div className="relative" ref={profileRef}>
+                            <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-800 transition">
+                                <span className="hidden sm:block text-gray-300 font-medium">{user.cliente_nome}</span>
+                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                            </button>
+                            <AnimatePresence>
+                            {isProfileOpen && (
+                                <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                transition={{ duration: 0.2 }}
+                                className="origin-top-right absolute right-0 mt-2 w-48 bg-gray-800 rounded-md shadow-xl py-1"
+                                >
+                                <Link href="/portal/dashboard" onClick={() => setIsProfileOpen(false)} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700">Dashboard</Link>
+                                <Link href="/portal/profile" onClick={() => setIsProfileOpen(false)} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700">Perfil</Link>
+                                <Link href="/portal/notificacoes" onClick={() => setIsProfileOpen(false)} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700">Notificações</Link>
+                                <button onClick={onLogout} className="w-full text-left block px-4 py-2 text-sm text-red-500 hover:bg-gray-700">Sair</button>
+                                </motion.div>
+                            )}
+                            </AnimatePresence>
+                         </div>
                     </div>
                 </div>
             </div>
@@ -36,11 +70,28 @@ function PortalNavbar({ user, onLogout }) {
     );
 }
 
-
 export default function PortalLayout({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [unreadCount, setUnreadCount] = useState(0);
     const router = useRouter();
+    
+    const getAuthHeader = () => {
+        const token = sessionStorage.getItem('authToken');
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    };
+
+    const fetchUnreadCount = async () => {
+        try {
+            const response = await fetch('/api/notifications/unread-count', { headers: getAuthHeader() });
+            if (response.ok) {
+                const data = await response.json();
+                setUnreadCount(data.count);
+            }
+        } catch (error) {
+            console.error("Failed to fetch unread count", error);
+        }
+    };
 
     useEffect(() => {
         const token = sessionStorage.getItem('authToken');
@@ -56,6 +107,9 @@ export default function PortalLayout({ children }) {
                     username: decoded.sub,
                     cliente_nome: decoded.cliente_nome
                 });
+                fetchUnreadCount();
+                const interval = setInterval(fetchUnreadCount, 30000); // Poll every 30 seconds
+                return () => clearInterval(interval);
             } catch (error) {
                 sessionStorage.removeItem('authToken');
                 router.push('/login');
@@ -77,7 +131,7 @@ export default function PortalLayout({ children }) {
 
     return (
         <div className="flex flex-col h-full bg-gray-900">
-            <PortalNavbar user={user} onLogout={handleLogout} />
+            <PortalNavbar user={user} onLogout={handleLogout} unreadCount={unreadCount} />
             <main className="flex-grow pt-16">
                 {children}
             </main>

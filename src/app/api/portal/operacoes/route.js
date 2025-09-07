@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
+import { sendOperationSubmittedEmail } from '@/app/lib/emailService';
 
-// GET: Busca as operações APENAS do cliente logado
+// GET (sem alterações)
 export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -38,7 +39,7 @@ export async function GET(request) {
 }
 
 
-// POST: Salva uma nova operação enviada pelo cliente com status 'Pendente'
+// POST: Salva uma nova operação E NOTIFICA ADMINS
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -46,6 +47,7 @@ export async function POST(request) {
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const clienteId = decoded.cliente_id;
+        const clienteNome = decoded.cliente_nome;
         const userRoles = decoded.roles || [];
 
         if (!userRoles.includes('ROLE_CLIENTE') || !clienteId) {
@@ -53,13 +55,12 @@ export async function POST(request) {
         }
 
         const body = await request.json();
-        const notaFiscal = body.notasFiscais[0]; // Portal envia uma de cada vez
+        const notaFiscal = body.notasFiscais[0];
         
         const valorTotalBruto = notaFiscal.valorNf;
         const valorTotalJuros = notaFiscal.jurosCalculado;
         const valorLiquido = notaFiscal.valorLiquidoCalculado;
 
-        // 1. Inserir a operação principal com status "Pendente"
         const { data: newOperacao, error: operacaoError } = await supabase
             .from('operacoes')
             .insert({
@@ -68,20 +69,16 @@ export async function POST(request) {
                 cliente_id: clienteId,
                 valor_total_bruto: valorTotalBruto,
                 valor_total_juros: valorTotalJuros,
-                valor_total_descontos: 0, // Descontos são adicionados pelo admin
+                valor_total_descontos: 0,
                 valor_liquido: valorLiquido,
-                status: 'Pendente', // Status inicial é sempre pendente
-                conta_bancaria_id: null // Conta será definida na aprovação
+                status: 'Pendente',
+                conta_bancaria_id: null
             })
             .select()
             .single();
 
-        if (operacaoError) {
-            console.error("Erro do Supabase ao inserir operação:", operacaoError);
-            throw new Error("Não foi possível criar o registro da operação.");
-        }
+        if (operacaoError) throw new Error("Não foi possível criar o registro da operação.");
 
-        // 2. Preparar e inserir as duplicatas associadas à nova operação
         const duplicatasParaSalvar = notaFiscal.parcelasCalculadas.map(p => ({
             operacao_id: newOperacao.id,
             data_operacao: body.dataOperacao,
@@ -93,16 +90,36 @@ export async function POST(request) {
             status_recebimento: 'Pendente'
         }));
 
-        const { error: duplicatasError } = await supabase
-            .from('duplicatas')
-            .insert(duplicatasParaSalvar);
+        const { error: duplicatasError } = await supabase.from('duplicatas').insert(duplicatasParaSalvar);
 
         if (duplicatasError) {
-            console.error("Erro do Supabase ao inserir duplicatas:", duplicatasError);
-            // Idealmente, aqui se faria o rollback da operação inserida, mas para simplicidade, lançamos o erro.
             await supabase.from('operacoes').delete().eq('id', newOperacao.id);
-            throw new Error("Não foi possível salvar os detalhes das parcelas (duplicatas). A operação foi cancelada.");
+            throw new Error("Não foi possível salvar os detalhes das parcelas. A operação foi cancelada.");
         }
+
+        // --- LÓGICA DE NOTIFICAÇÃO ---
+        const { data: admins } = await supabase.from('users').select('id, email').eq('roles', 'ROLE_ADMIN');
+        
+        if (admins && admins.length > 0) {
+            const notifications = admins.map(admin => ({
+                user_id: admin.id,
+                title: `Nova Operação para Análise`,
+                message: `O cliente ${clienteNome} enviou a operação #${newOperacao.id} no valor de R$ ${valorLiquido.toFixed(2)}.`,
+                link: '/analise'
+            }));
+            await supabase.from('notifications').insert(notifications);
+
+            const adminEmails = admins.map(a => a.email).filter(Boolean);
+            if (adminEmails.length > 0) {
+                await sendOperationSubmittedEmail({
+                    clienteNome,
+                    operacaoId: newOperacao.id,
+                    valorLiquido,
+                    adminEmails
+                });
+            }
+        }
+        // --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
 
         return NextResponse.json({ operacaoId: newOperacao.id, message: 'Operação enviada para análise com sucesso!' }, { status: 201 });
 

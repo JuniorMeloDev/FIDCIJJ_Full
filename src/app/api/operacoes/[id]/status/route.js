@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
+import { sendOperationStatusEmail } from '@/app/lib/emailService';
 
 export async function PUT(request, { params }) {
     try {
@@ -15,35 +16,28 @@ export async function PUT(request, { params }) {
 
         const { id } = params;
         const { status, conta_bancaria_id } = await request.json();
+        
+        // --- LÓGICA DE NOTIFICAÇÃO (ANTES DE ATUALIZAR) ---
+        const { data: operacao, error: fetchError } = await supabase
+            .from('operacoes')
+            .select('*, cliente:clientes(id, nome, email)')
+            .eq('id', id)
+            .single();
+        
+        if (fetchError || !operacao) {
+            throw new Error('Operação a ser atualizada não foi encontrada.');
+        }
+        // --- FIM DA BUSCA ---
 
         if (status === 'Aprovada') {
             if (!conta_bancaria_id) {
                 return NextResponse.json({ message: 'Conta bancária é obrigatória para aprovação.' }, { status: 400 });
             }
-
-            const { data: operacao, error: fetchError } = await supabase
-                .from('operacoes')
-                .select('valor_liquido, data_operacao, cliente:clientes(ramo_de_atividade)')
-                .eq('id', id)
-                .single();
             
-            if (fetchError || !operacao) {
-                throw new Error('Operação a ser aprovada não foi encontrada.');
-            }
+            const { data: conta } = await supabase.from('contas_bancarias').select('banco, agencia, conta_corrente').eq('id', conta_bancaria_id).single();
+            const { data: clientes } = await supabase.from('clientes').select('nome').limit(1);
+            const empresaMasterNome = clientes && clientes.length > 0 ? clientes[0].nome : 'FIDC IJJ';
             
-            const { data: conta, error: contaError } = await supabase
-                .from('contas_bancarias')
-                .select('banco, agencia, conta_corrente')
-                .eq('id', conta_bancaria_id)
-                .single();
-
-             if (contaError || !conta) {
-                throw new Error('Conta bancária selecionada não foi encontrada.');
-            }
-            
-             const { data: clientes } = await supabase.from('clientes').select('nome').limit(1);
-             const empresaMasterNome = clientes && clientes.length > 0 ? clientes[0].nome : 'FIDC IJJ';
-
             let descricaoLancamento = `Borderô #${id}`;
             const { data: duplicatas } = await supabase.from('duplicatas').select('nf_cte').eq('operacao_id', id);
             if (duplicatas && duplicatas.length > 0 && operacao.cliente) {
@@ -52,35 +46,42 @@ export async function PUT(request, { params }) {
                 descricaoLancamento = `Borderô ${docType} ${numerosDoc}`;
             }
 
-            const { error: movError } = await supabase
-                .from('movimentacoes_caixa')
-                .insert({
-                    operacao_id: id,
-                    data_movimento: operacao.data_operacao,
-                    descricao: descricaoLancamento,
-                    valor: -Math.abs(operacao.valor_liquido),
-                    categoria: 'Pagamento de Borderô',
-                    // CORREÇÃO: Padronizado o formato da string da conta.
-                    conta_bancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
-                    empresa_associada: empresaMasterNome,
-                });
+            await supabase.from('movimentacoes_caixa').insert({
+                operacao_id: id,
+                data_movimento: operacao.data_operacao,
+                descricao: descricaoLancamento,
+                valor: -Math.abs(operacao.valor_liquido),
+                categoria: 'Pagamento de Borderô',
+                conta_bancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
+                empresa_associada: empresaMasterNome,
+            });
 
-            if (movError) throw movError;
+            await supabase.from('operacoes').update({ status: 'Aprovada', conta_bancaria_id }).eq('id', id);
 
-            const { error: updateError } = await supabase
-                .from('operacoes')
-                .update({ status: 'Aprovada', conta_bancaria_id: conta_bancaria_id })
-                .eq('id', id);
-
-            if (updateError) throw updateError;
-
-        } else {
-            const { error } = await supabase
-                .from('operacoes')
-                .update({ status: status })
-                .eq('id', id);
-            if (error) throw error;
+        } else { // Rejeitada
+            await supabase.from('operacoes').update({ status: status }).eq('id', id);
         }
+
+        // --- ENVIAR NOTIFICAÇÃO E E-MAIL PARA O CLIENTE ---
+        const { data: clienteUser } = await supabase.from('users').select('id').eq('cliente_id', operacao.cliente.id).single();
+        if (clienteUser) {
+             await supabase.from('notifications').insert({
+                user_id: clienteUser.id,
+                title: `Sua Operação #${id} foi ${status}`,
+                message: `A operação no valor de R$ ${operacao.valor_liquido.toFixed(2)} foi ${status.toLowerCase()} pela nossa equipe.`,
+                link: '/portal/dashboard'
+            });
+
+            if (operacao.cliente.email) {
+                await sendOperationStatusEmail({
+                    clienteNome: operacao.cliente.nome,
+                    operacaoId: id,
+                    status: status,
+                    recipientEmail: operacao.cliente.email
+                });
+            }
+        }
+        // --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
         
         return NextResponse.json({ message: `Operação ${status.toLowerCase()} com sucesso.` }, { status: 200 });
 
