@@ -1,9 +1,10 @@
+// Arquivo: src/app/api/cadastros/clientes/[id]/route.js
+
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-// Função para gerar senha forte
 const generateStrongPassword = () => {
     const length = 10;
     const lower = 'abcdefghijklmnopqrstuvwxyz';
@@ -11,13 +12,11 @@ const generateStrongPassword = () => {
     const numbers = '0123456789';
     const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
     const all = lower + upper + numbers + special;
-
     let password = '';
     password += lower[Math.floor(Math.random() * lower.length)];
     password += upper[Math.floor(Math.random() * upper.length)];
     password += numbers[Math.floor(Math.random() * numbers.length)];
     password += special[Math.floor(Math.random() * special.length)];
-
     for (let i = 4; i < length; i++) {
         password += all[Math.floor(Math.random() * all.length)];
     }
@@ -33,11 +32,11 @@ export async function PUT(request, { params }) {
         const { id } = params;
         const body = await request.json();
         
-        // --- CORREÇÃO AQUI: Adicionado 'email' à desestruturação ---
+        // CORREÇÃO DEFINITIVA: Desestruturação explícita de TODAS as propriedades que não são colunas diretas da tabela 'clientes'.
         const { 
             acesso, 
             contasBancarias, 
-            email, // <-- Adicionado aqui
+            email,
             emails, 
             ramoDeAtividade,
             tiposOperacao,
@@ -48,14 +47,18 @@ export async function PUT(request, { params }) {
             ...clienteData 
         } = body;
 
+        // 1. ATUALIZA OS DADOS DO CLIENTE (agora com o objeto 'clienteData' limpo)
         const { error: clienteError } = await supabase
             .from('clientes')
             .update({ ...clienteData, ramo_de_atividade: ramoDeAtividade })
             .eq('id', id);
 
-        if (clienteError) throw clienteError;
+        if (clienteError) {
+             console.error("Erro ao atualizar dados do cliente:", clienteError);
+             throw clienteError;
+        }
 
-        // O restante da lógica permanece o mesmo...
+        // 2. ATUALIZA CONTAS BANCÁRIAS
         await supabase.from('contas_bancarias').delete().eq('cliente_id', id);
         if (contasBancarias && contasBancarias.length > 0) {
              const contasToInsert = contasBancarias.map(({id: contaId, ...c}) => ({ 
@@ -67,12 +70,14 @@ export async function PUT(request, { params }) {
             await supabase.from('contas_bancarias').insert(contasToInsert);
         }
 
+        // 3. ATUALIZA EMAILS
         await supabase.from('cliente_emails').delete().eq('cliente_id', id);
         if (emails && emails.length > 0) {
             const emailsToInsert = emails.map(emailAddr => ({ email: emailAddr, cliente_id: id }));
             await supabase.from('cliente_emails').insert(emailsToInsert);
         }
         
+        // 4. ATUALIZA OS TIPOS DE OPERAÇÃO
         await supabase.from('cliente_tipos_operacao').delete().eq('cliente_id', id);
         if (tiposOperacao && tiposOperacao.length > 0) {
             const tiposToInsert = tiposOperacao.map(tipo_id => ({ cliente_id: parseInt(id), tipo_operacao_id: tipo_id }));
@@ -80,6 +85,7 @@ export async function PUT(request, { params }) {
             if (tiposError) throw tiposError;
         }
 
+        // 5. GERENCIA O USUÁRIO DE ACESSO E ENVIA E-MAIL
         if (acesso && acesso.username) {
             let tempPassword = acesso.password;
             
@@ -132,6 +138,7 @@ export async function PUT(request, { params }) {
 
         return new NextResponse(null, { status: 204 });
     } catch (error) {
+        console.error("Erro na API PUT /api/cadastros/clientes/[id]:", error);
         if (error.code === '23505') {
             return NextResponse.json({ message: 'Este nome de usuário já está em uso.' }, { status: 409 });
         }
