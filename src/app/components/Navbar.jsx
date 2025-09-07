@@ -1,143 +1,181 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { FaBell, FaCheckDouble } from 'react-icons/fa';
-import { formatDate } from '@/app/utils/formatters';
-import Link from 'next/link';
+import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
+import { useRouter, usePathname } from 'next/navigation'
+import { jwtDecode } from 'jwt-decode';
+import { motion, AnimatePresence } from 'framer-motion'
+import { FaChartLine, FaBars, FaTimes, FaBell } from 'react-icons/fa'
+import NotificationModal from './NotificationModal'; // Importar o novo modal
 
-export default function NotificacoesClientePage() {
-    const [notifications, setNotifications] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [filters, setFilters] = useState({ dataInicio: '', dataFim: '' });
+export default function Navbar() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isProfileOpen, setIsProfileOpen] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false); // State para o modal
 
-    const getAuthHeader = () => {
-        const token = sessionStorage.getItem('authToken');
-        return token ? { 'Authorization': `Bearer ${token}` } : {};
-    };
+  const router = useRouter()
+  const pathname = usePathname()
+  const profileRef = useRef(null)
 
-    const fetchNotifications = async () => {
-        setLoading(true);
-        const params = new URLSearchParams();
-        if (filters.dataInicio) params.append('dataInicio', filters.dataInicio);
-        if (filters.dataFim) params.append('dataFim', filters.dataFim);
+  const getAuthHeader = () => {
+    const token = sessionStorage.getItem('authToken');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  };
 
-        try {
-            const response = await fetch(`/api/notifications?${params.toString()}`, { headers: getAuthHeader() });
-            if (!response.ok) throw new Error('Falha ao carregar notificações.');
-            const data = await response.json();
-            setNotifications(data);
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const fetchUnreadCount = async () => {
+      try {
+          const response = await fetch('/api/notifications/unread-count', { headers: getAuthHeader() });
+          if (response.ok) {
+              const data = await response.json();
+              setUnreadCount(data.count);
+          }
+      } catch (error) {
+          console.error("Failed to fetch unread count", error);
+      }
+  };
 
-    useEffect(() => {
-        fetchNotifications();
-    }, [filters]);
 
-    const handleFilterChange = (e) => {
-        setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    };
+  if (pathname.startsWith('/portal')) {
+      return null;
+  }
 
-    const markAsRead = async (ids) => {
-        try {
-            await fetch('/api/notifications', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-                body: JSON.stringify({ ids }),
-            });
-            setNotifications(prev => 
-                prev.map(n => ids.includes(n.id) ? { ...n, is_read: true } : n)
-            );
-        } catch (err) {
-            alert(err.message);
-        }
-    };
+  useEffect(() => {
+    const token = sessionStorage.getItem('authToken')
+    if (token) {
+      try {
+        const { sub: username } = jwtDecode(token)
+        setCurrentUser({ username });
+        fetchUnreadCount();
+        const interval = setInterval(fetchUnreadCount, 30000);
+        return () => clearInterval(interval);
+      } catch {
+        sessionStorage.removeItem('authToken')
+        router.push('/login')
+      }
+    }
+  }, [pathname, router])
 
-    const markAllAsRead = () => {
-        const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
-        if (unreadIds.length > 0) {
-            markAsRead(unreadIds);
-        }
-    };
+  useEffect(() => {
+    function onClickOutside(e) {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setIsProfileOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
 
-    return (
-        <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col items-center">
-            <div className="w-full max-w-5xl">
-                <motion.header
-                    className="mb-6 border-b-2 border-orange-500 pb-4 flex justify-between items-center"
-                    initial={{ y: -20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                >
-                    <div className="flex items-center gap-3">
-                        <FaBell className="text-3xl text-orange-400" />
-                        <div>
-                            <h1 className="text-3xl font-bold">Minhas Notificações</h1>
-                            <p className="text-sm text-gray-300">Acompanhe o status das suas operações.</p>
-                        </div>
-                    </div>
-                     <button 
-                        onClick={markAllAsRead}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md transition flex items-center gap-2 text-sm"
+  const handleLogout = () => {
+    sessionStorage.removeItem('authToken')
+    router.push('/login')
+  }
+
+  const publicPaths = ['/', '/login'];
+  if (publicPaths.includes(pathname)) {
+      return null;
+  }
+
+  if (!currentUser) return null
+
+  const links = [
+    { label: 'Resumo', href: '/resumo' },
+    { label: 'Criar Borderô', href: '/operacao-bordero' },
+    { label: 'Análise', href: '/analise' },
+    { label: 'Consultas', href: '/consultas' },
+    { label: 'Fluxo de Caixa', href: '/fluxo-caixa' },
+    { label: 'Cadastros', href: '/cadastros/clientes' },
+    { label: 'Agenda', href: '/agenda' },
+  ]
+
+  return (
+    <>
+      <NotificationModal 
+        isOpen={isNotificationModalOpen}
+        onClose={() => setIsNotificationModalOpen(false)}
+        onUpdateCount={fetchUnreadCount}
+      />
+      <motion.nav
+        className="bg-gray-900 border-b border-gray-800 shadow-lg fixed w-full z-30"
+        initial={{ y: -64, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <Link href="/resumo" className="flex items-center space-x-2">
+              <FaChartLine className="w-6 h-6 text-orange-400" />
+              <span className="text-xl font-bold text-white">IJJ FIDC</span>
+            </Link>
+
+            <div className="hidden md:flex md:items-center md:space-x-4">
+              {links.map(({ label, href }) => (
+                <Link key={href} href={href} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${pathname.startsWith(href) ? 'text-white bg-gray-700' : 'text-gray-300 hover:text-orange-400 hover:bg-gray-800'}`}>
+                  {label}
+                </Link>
+              ))}
+            </div>
+
+            <div className="flex items-center">
+                <button onClick={() => setIsNotificationModalOpen(true)} className="relative text-gray-400 hover:text-white mr-4">
+                    <FaBell size={20} />
+                    {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                        </span>
+                    )}
+                </button>
+                <div className="hidden md:block relative ml-4 flex-shrink-0" ref={profileRef}>
+                  <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-800 transition">
+                    <span className="font-medium text-gray-200">{currentUser.username}</span>
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  {isProfileOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2 }}
+                      className="origin-top-right absolute right-0 mt-2 w-48 bg-gray-800 rounded-md shadow-xl py-1"
                     >
-                        <FaCheckDouble /> Marcar todas como lidas
-                    </button>
-                </motion.header>
-
-                 <div className="bg-gray-800 p-4 rounded-lg shadow-md mb-6 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                    <div>
-                        <label className="text-sm">De:</label>
-                        <input type="date" name="dataInicio" value={filters.dataInicio} onChange={handleFilterChange} className="w-full bg-gray-700 p-2 rounded mt-1" />
-                    </div>
-                    <div>
-                        <label className="text-sm">Até:</label>
-                        <input type="date" name="dataFim" value={filters.dataFim} onChange={handleFilterChange} className="w-full bg-gray-700 p-2 rounded mt-1" />
-                    </div>
-                    <button onClick={() => setFilters({ dataInicio: '', dataFim: '' })} className="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-md transition h-10">Limpar Filtros</button>
+                      <Link href="/profile" onClick={() => setIsProfileOpen(false)} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700">Perfil</Link>
+                      <button onClick={handleLogout} className="w-full text-left block px-4 py-2 text-sm text-red-500 hover:bg-gray-700">Sair</button>
+                    </motion.div>
+                  )}
                 </div>
-
-                <div className="bg-gray-800 p-4 rounded-lg shadow-md">
-                    {loading && <p className="text-center py-10">Carregando...</p>}
-                    {error && <p className="text-red-500 text-center py-10">{error}</p>}
-                    {!loading && !error && notifications.length === 0 && <p className="text-center py-10 text-gray-400">Nenhuma notificação encontrada.</p>}
-                    
-                    <div className="space-y-3">
-                        {notifications.map(notif => (
-                             <motion.div
-                                key={notif.id}
-                                className={`p-4 rounded-lg flex items-start gap-4 transition-colors ${notif.is_read ? 'bg-gray-700/50' : 'bg-gray-700'}`}
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                            >
-                                <div className={`mt-1 flex-shrink-0 h-3 w-3 rounded-full ${notif.is_read ? 'bg-gray-500' : 'bg-orange-400 animate-pulse'}`}></div>
-                                <div className="flex-grow">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className={`font-semibold ${notif.is_read ? 'text-gray-300' : 'text-white'}`}>{notif.title}</h3>
-                                        <span className="text-xs text-gray-400">{formatDate(notif.created_at)}</span>
-                                    </div>
-                                    <p className="text-sm text-gray-300 mt-1">{notif.message}</p>
-                                     <div className="mt-2 flex items-center gap-4">
-                                        {notif.link && (
-                                            <Link href={notif.link} className="text-sm text-orange-400 hover:underline">
-                                                Ver Operação
-                                            </Link>
-                                        )}
-                                        {!notif.is_read && (
-                                            <button onClick={() => markAsRead([notif.id])} className="text-sm text-blue-400 hover:underline">
-                                                Marcar como lida
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </motion.div>
-                        ))}
-                    </div>
+                 <div className="md:hidden flex items-center">
+                    <button
+                        className="text-gray-400 hover:text-white"
+                        onClick={() => setIsMenuOpen(!isMenuOpen)}
+                    >
+                        {isMenuOpen ? <FaTimes size={20} /> : <FaBars size={20} />}
+                    </button>
                 </div>
             </div>
-        </main>
-    );
+          </div>
+        </div>
+      </motion.nav>
+
+       <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            className="md:hidden fixed top-16 left-0 h-[calc(100%-4rem)] w-64 bg-gray-900 border-r border-gray-800 z-20 flex flex-col p-4 space-y-2"
+          >
+             {links.map(({ label, href }) => (
+                <Link key={href} href={href} onClick={() => setIsMenuOpen(false)} className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${pathname.startsWith(href) ? 'text-white bg-gray-700' : 'text-gray-300 hover:text-orange-400 hover:bg-gray-800'}`}>
+                  {label}
+                </Link>
+              ))}
+              <div className="border-t border-gray-700 my-4"></div>
+               <Link href="/profile" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 text-base font-medium text-gray-300 hover:text-orange-400 hover:bg-gray-800">Perfil</Link>
+               <button onClick={handleLogout} className="w-full text-left block px-3 py-2 text-base font-medium text-red-500 hover:bg-gray-800">Sair</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  )
 }
+

@@ -6,9 +6,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import { FaChartLine, FaBell } from "react-icons/fa";
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
+import NotificationModal from '@/app/components/NotificationModal';
 
-function PortalNavbar({ user, onLogout, unreadCount }) {
-    const pathname = usePathname();
+function PortalNavbar({ user, onLogout, unreadCount, onBellClick }) {
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const profileRef = useRef(null);
     
@@ -33,14 +33,12 @@ function PortalNavbar({ user, onLogout, unreadCount }) {
                         <span className="text-xl font-bold text-white">IJJ FIDC - Portal do Cliente</span>
                     </Link>
                     <div className="flex items-center space-x-4">
-                         <Link href="/portal/notificacoes" className="relative text-gray-400 hover:text-white">
+                         <button onClick={onBellClick} className="relative text-gray-400 hover:text-white">
                             <FaBell size={20} />
                             {unreadCount > 0 && (
-                                <span className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                                    {unreadCount}
-                                </span>
+                                <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-xs text-white"></span>
                             )}
-                        </Link>
+                        </button>
                          <div className="relative" ref={profileRef}>
                             <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-800 transition">
                                 <span className="hidden sm:block text-gray-300 font-medium">{user.cliente_nome}</span>
@@ -57,7 +55,6 @@ function PortalNavbar({ user, onLogout, unreadCount }) {
                                 >
                                 <Link href="/portal/dashboard" onClick={() => setIsProfileOpen(false)} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700">Dashboard</Link>
                                 <Link href="/portal/profile" onClick={() => setIsProfileOpen(false)} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700">Perfil</Link>
-                                <Link href="/portal/notificacoes" onClick={() => setIsProfileOpen(false)} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-700">Notificações</Link>
                                 <button onClick={onLogout} className="w-full text-left block px-4 py-2 text-sm text-red-500 hover:bg-gray-700">Sair</button>
                                 </motion.div>
                             )}
@@ -74,6 +71,7 @@ export default function PortalLayout({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
     const router = useRouter();
     
     const getAuthHeader = () => {
@@ -108,7 +106,7 @@ export default function PortalLayout({ children }) {
                     cliente_nome: decoded.cliente_nome
                 });
                 fetchUnreadCount();
-                const interval = setInterval(fetchUnreadCount, 30000); // Poll every 30 seconds
+                const interval = setInterval(fetchUnreadCount, 30000);
                 return () => clearInterval(interval);
             } catch (error) {
                 sessionStorage.removeItem('authToken');
@@ -130,11 +128,22 @@ export default function PortalLayout({ children }) {
     }
 
     return (
-        <div className="flex flex-col h-full bg-gray-900">
-            <PortalNavbar user={user} onLogout={handleLogout} unreadCount={unreadCount} />
-            <main className="flex-grow pt-16">
+        <div className="min-h-screen bg-gray-900">
+            <NotificationModal 
+                isOpen={isNotificationModalOpen}
+                onClose={() => setIsNotificationModalOpen(false)}
+                onUpdateCount={fetchUnreadCount}
+            />
+            <PortalNavbar 
+                user={user} 
+                onLogout={handleLogout} 
+                unreadCount={unreadCount}
+                onBellClick={() => setIsNotificationModalOpen(true)}
+            />
+            <main className="pt-16">
                 {children}
             </main>
         </div>
     );
 }
+
