@@ -59,7 +59,7 @@ export async function POST(request) {
         // --- CORREÇÃO PRINCIPAL E DEFINITIVA ---
         // Adiciona o user.id (UUID) diretamente no token.
         const claims = {
-            user_id: user.id, // <-- Ponto chave da correção
+            user_id: user.id, // <-- Esta é a linha que corrige o problema.
             username: user.username,
             roles: userRoles,
             sub: user.username,
@@ -81,4 +81,3 @@ export async function POST(request) {
         return NextResponse.json({ message: 'Ocorreu um erro durante a autenticação' }, { status: 500 });
     }
 }
-
