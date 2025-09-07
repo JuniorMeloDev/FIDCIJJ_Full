@@ -16,7 +16,6 @@ export async function POST(request) {
         const cleanInput = username.replace(/\D/g, '');
         const isCnpjOrCpf = cleanInput.length === 11 || cleanInput.length === 14;
 
-        // Tenta buscar pelo nome de usuário primeiro
         const { data: userByUsername } = await supabase
             .from('users')
             .select('*, cliente:clientes(cnpj, nome)')
@@ -25,9 +24,7 @@ export async function POST(request) {
 
         if (userByUsername) {
             user = userByUsername;
-        } 
-        // Se não encontrar e o input for um CNPJ/CPF, busca pelo cliente
-        else if (isCnpjOrCpf) {
+        } else if (isCnpjOrCpf) {
             const { data: cliente } = await supabase
                 .from('clientes')
                 .select('id')
@@ -59,12 +56,15 @@ export async function POST(request) {
 
         const userRoles = user.roles.split(',').map(role => role.trim());
 
+        // --- CORREÇÃO PRINCIPAL ---
+        // Adiciona o user.id diretamente no token.
         const claims = {
+            user_id: user.id, // <<-- ADICIONADO AQUI
             username: user.username,
             roles: userRoles,
             sub: user.username,
         };
-
+        
         if (userRoles.includes('ROLE_CLIENTE') && user.cliente_id) {
             claims.cliente_id = user.cliente_id;
             claims.cliente_nome = user.cliente.nome;
