@@ -12,13 +12,42 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Usuário e senha são obrigatórios' }, { status: 400 });
         }
 
-        const { data: user, error: userError } = await supabase
+        let user;
+        const cleanInput = username.replace(/\D/g, '');
+        const isCnpjOrCpf = cleanInput.length === 11 || cleanInput.length === 14;
+
+        // Tenta buscar pelo nome de usuário primeiro
+        const { data: userByUsername } = await supabase
             .from('users')
-            .select('*')
+            .select('*, cliente:clientes(cnpj, nome)')
             .eq('username', username)
             .single();
 
-        if (userError || !user) {
+        if (userByUsername) {
+            user = userByUsername;
+        } 
+        // Se não encontrar e o input for um CNPJ/CPF, busca pelo cliente
+        else if (isCnpjOrCpf) {
+            const { data: cliente } = await supabase
+                .from('clientes')
+                .select('id')
+                .eq('cnpj', cleanInput)
+                .single();
+
+            if (cliente) {
+                const { data: userByCliente } = await supabase
+                    .from('users')
+                    .select('*, cliente:clientes(cnpj, nome)')
+                    .eq('cliente_id', cliente.id)
+                    .single();
+                
+                if (userByCliente) {
+                    user = userByCliente;
+                }
+            }
+        }
+
+        if (!user) {
             return NextResponse.json({ message: 'Credenciais inválidas' }, { status: 401 });
         }
 
@@ -36,18 +65,9 @@ export async function POST(request) {
             sub: user.username,
         };
 
-        // MODIFICAÇÃO: Se for um cliente, busca o nome e adiciona o ID e nome ao token
         if (userRoles.includes('ROLE_CLIENTE') && user.cliente_id) {
-            const { data: clienteData, error: clienteError } = await supabase
-                .from('clientes')
-                .select('nome')
-                .eq('id', user.cliente_id)
-                .single();
-            
-            if (clienteError) throw new Error('Não foi possível encontrar a empresa associada a este usuário.');
-
             claims.cliente_id = user.cliente_id;
-            claims.cliente_nome = clienteData.nome;
+            claims.cliente_nome = user.cliente.nome;
         }
 
         const token = jwt.sign(claims, process.env.JWT_SECRET, {
@@ -61,4 +81,3 @@ export async function POST(request) {
         return NextResponse.json({ message: 'Ocorreu um erro durante a autenticação' }, { status: 500 });
     }
 }
-
