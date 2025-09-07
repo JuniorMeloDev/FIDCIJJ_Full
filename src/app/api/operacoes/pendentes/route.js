@@ -21,7 +21,7 @@ export async function GET(request) {
             .from('operacoes')
             .select(`
                 *,
-                cliente:clientes!inner( nome ),
+                cliente:clientes!inner( id, nome ),
                 duplicatas ( * )
             `)
             .eq('status', 'Pendente') // O filtro principal acontece aqui

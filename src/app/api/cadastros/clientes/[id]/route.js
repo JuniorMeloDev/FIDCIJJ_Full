@@ -3,6 +3,27 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
+// Função para gerar senha forte (duplicada para manter o arquivo independente)
+const generateStrongPassword = () => {
+    const length = 10;
+    const lower = 'abcdefghijklmnopqrstuvwxyz';
+    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const numbers = '0123456789';
+    const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    const all = lower + upper + numbers + special;
+
+    let password = '';
+    password += lower[Math.floor(Math.random() * lower.length)];
+    password += upper[Math.floor(Math.random() * upper.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += special[Math.floor(Math.random() * special.length)];
+
+    for (let i = 4; i < length; i++) {
+        password += all[Math.floor(Math.random() * all.length)];
+    }
+    return password.split('').sort(() => 0.5 - Math.random()).join('');
+};
+
 export async function PUT(request, { params }) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -12,33 +33,26 @@ export async function PUT(request, { params }) {
         const { id } = params;
         const body = await request.json();
         
-        // CORREÇÃO DEFINITIVA: Destruturação explícita de TODAS as propriedades que não são colunas diretas da tabela 'clientes'.
-        // Isso garante que o objeto 'clienteData' conterá apenas os campos que realmente podem ser atualizados.
         const { 
             acesso, 
             contasBancarias, 
             emails, 
             ramoDeAtividade,
             tiposOperacao,
-            // Propriedades que vêm do objeto original do banco e que precisam ser ignoradas no update principal:
+            sendWelcomeEmail, // Nova flag
             contas_bancarias,
             cliente_emails,
             cliente_tipos_operacao,
             ...clienteData 
         } = body;
 
-        // 1. ATUALIZA OS DADOS DO CLIENTE (agora com o objeto 'clienteData' limpo)
         const { error: clienteError } = await supabase
             .from('clientes')
             .update({ ...clienteData, ramo_de_atividade: ramoDeAtividade })
             .eq('id', id);
 
-        if (clienteError) {
-             console.error("Erro ao atualizar dados do cliente:", clienteError);
-             throw clienteError;
-        }
+        if (clienteError) throw clienteError;
 
-        // 2. ATUALIZA CONTAS BANCÁRIAS
         await supabase.from('contas_bancarias').delete().eq('cliente_id', id);
         if (contasBancarias && contasBancarias.length > 0) {
              const contasToInsert = contasBancarias.map(({id: contaId, ...c}) => ({ 
@@ -50,14 +64,12 @@ export async function PUT(request, { params }) {
             await supabase.from('contas_bancarias').insert(contasToInsert);
         }
 
-        // 3. ATUALIZA EMAILS
         await supabase.from('cliente_emails').delete().eq('cliente_id', id);
         if (emails && emails.length > 0) {
             const emailsToInsert = emails.map(email => ({ email, cliente_id: id }));
             await supabase.from('cliente_emails').insert(emailsToInsert);
         }
         
-        // 4. ATUALIZA OS TIPOS DE OPERAÇÃO
         await supabase.from('cliente_tipos_operacao').delete().eq('cliente_id', id);
         if (tiposOperacao && tiposOperacao.length > 0) {
             const tiposToInsert = tiposOperacao.map(tipo_id => ({ cliente_id: parseInt(id), tipo_operacao_id: tipo_id }));
@@ -65,21 +77,27 @@ export async function PUT(request, { params }) {
             if (tiposError) throw tiposError;
         }
 
-        // 5. GERENCIA O USUÁRIO DE ACESSO
+        // --- LÓGICA DE USUÁRIO E E-MAIL ---
         if (acesso && acesso.username) {
+            let tempPassword = acesso.password;
+            
+            // Gera nova senha se a flag for true
+            if (sendWelcomeEmail) {
+                tempPassword = generateStrongPassword();
+            }
+
             const { data: existingUser } = await supabase.from('users').select('id').eq('cliente_id', id).single();
             
             if (existingUser) { 
                 const updatePayload = { username: acesso.username };
-                if (acesso.password) {
-                    updatePayload.password = await bcrypt.hash(acesso.password, 10);
+                if (tempPassword) { // Se houver uma nova senha (seja a digitada ou a gerada)
+                    updatePayload.password = await bcrypt.hash(tempPassword, 10);
                 }
                 await supabase.from('users').update(updatePayload).eq('id', existingUser.id);
             } else { 
-                if (!acesso.password) {
-                    throw new Error("A senha é obrigatória para criar um novo usuário de acesso.");
-                }
-                const hashedPassword = await bcrypt.hash(acesso.password, 10);
+                if (!tempPassword) throw new Error("A senha é obrigatória para criar um novo usuário de acesso.");
+                
+                const hashedPassword = await bcrypt.hash(tempPassword, 10);
                 await supabase.from('users').insert({
                     username: acesso.username,
                     password: hashedPassword,
@@ -87,11 +105,29 @@ export async function PUT(request, { params }) {
                     cliente_id: id
                 });
             }
+
+            // Envia o e-mail de boas-vindas se a flag for true
+            if (sendWelcomeEmail) {
+                const recipientEmail = clienteData.email || (emails && emails.length > 0 ? emails[0] : null);
+                if (recipientEmail) {
+                    const emailApiUrl = new URL('/api/emails/send-welcome', request.url);
+                    await fetch(emailApiUrl.toString(), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            clienteNome: clienteData.nome,
+                            username: acesso.username,
+                            tempPassword: tempPassword,
+                            recipientEmail: recipientEmail
+                        })
+                    });
+                }
+            }
         }
+        // --- FIM DA LÓGICA ---
 
         return new NextResponse(null, { status: 204 });
     } catch (error) {
-        console.error("Erro na API PUT /api/cadastros/clientes/[id]:", error);
         if (error.code === '23505') {
             return NextResponse.json({ message: 'Este nome de usuário já está em uso.' }, { status: 409 });
         }
@@ -99,7 +135,7 @@ export async function PUT(request, { params }) {
     }
 }
 
-// DELETE: Apaga um cliente e seus dados associados
+// DELETE (sem alterações)
 export async function DELETE(request, { params }) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
