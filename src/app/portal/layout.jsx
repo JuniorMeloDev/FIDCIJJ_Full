@@ -92,30 +92,46 @@ export default function PortalLayout({ children }) {
     };
 
     useEffect(() => {
-        const token = sessionStorage.getItem('authToken');
-        if (token) {
+        const checkAuthAndLoadData = async () => {
+            const token = sessionStorage.getItem('authToken');
+            if (!token) {
+                router.push('/login');
+                setLoading(false);
+                return;
+            }
+
             try {
                 const decoded = jwtDecode(token);
                 const userRoles = decoded.roles || [];
+
                 if (!userRoles.includes('ROLE_CLIENTE')) {
                     router.push('/login');
+                    setLoading(false);
                     return;
                 }
+                
+                // Definir o utilizador primeiro
                 setUser({
                     username: decoded.sub,
                     cliente_nome: decoded.cliente_nome
                 });
-                fetchUnreadCount();
-                const interval = setInterval(fetchUnreadCount, 30000); // Check every 30 seconds
+
+                // Depois, buscar os dados necessários
+                await fetchUnreadCount();
+                
+                const interval = setInterval(fetchUnreadCount, 30000);
                 return () => clearInterval(interval);
+
             } catch (error) {
                 sessionStorage.removeItem('authToken');
                 router.push('/login');
+            } finally {
+                // Só parar o loading depois de tudo
+                setLoading(false);
             }
-        } else {
-            router.push('/login');
-        }
-        setLoading(false);
+        };
+
+        checkAuthAndLoadData();
     }, [router]);
 
     const handleLogout = () => {
