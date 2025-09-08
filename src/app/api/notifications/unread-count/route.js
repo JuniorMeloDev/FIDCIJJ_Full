@@ -16,8 +16,6 @@ export async function GET(request) {
         let decoded;
         try {
             decoded = jwt.verify(token, process.env.JWT_SECRET);
-            // Log detalhado do conteúdo do token para depuração
-            console.log('[LOG] Token decodificado:', JSON.stringify(decoded, null, 2));
         } catch (jwtError) {
             return NextResponse.json({ message: `Token JWT inválido: ${jwtError.message}` }, { status: 401 });
         }

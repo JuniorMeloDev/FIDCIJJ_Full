@@ -14,6 +14,8 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Nenhuma duplicata selecionada.' }, { status: 400 });
         }
 
+        // 1. CHAMA A FUNÇÃO EXISTENTE DO BANCO DE DADOS
+        // Esta função atualiza o status e cria a movimentação de caixa se necessário.
         const promises = liquidacoes.map(item => 
             supabase.rpc('liquidar_duplicata', {
                 p_duplicata_id: item.id,
@@ -31,9 +33,9 @@ export async function POST(request) {
             throw new Error('Falha ao processar a baixa da(s) duplicata(s).');
         }
 
-        // *** CORREÇÃO ROBUSTA E DEFINITIVA ***
-        // Se a liquidação foi "Apenas Baixa" (sem crédito em conta),
-        // garantimos que a data de liquidação seja salva diretamente na tabela de duplicatas.
+        // 2. **GARANTIA DE ATUALIZAÇÃO DA DATA PARA "APENAS BAIXA"**
+        // Se não foi uma liquidação com crédito em conta, nós garantimos que a
+        // coluna `data_liquidacao` seja preenchida com um update explícito.
         if (!contaBancariaId) {
             const idsParaAtualizar = liquidacoes.map(item => item.id);
             const dataParaAtualizar = dataLiquidacao || new Date().toISOString().split('T')[0];
@@ -44,9 +46,10 @@ export async function POST(request) {
                 .in('id', idsParaAtualizar);
 
             if (updateError) {
-                // Loga o erro mas não necessariamente falha a requisição,
-                // pois a baixa do status já foi feita pelo RPC.
-                console.error('Aviso: A baixa foi realizada, mas falhou ao registrar a data de liquidação explicitamente.', updateError);
+                // Se este update falhar, a operação está em um estado inconsistente.
+                // É importante que o erro seja lançado para investigação.
+                console.error('ERRO CRÍTICO: A baixa foi realizada, mas falhou ao registrar a data explicitamente.', updateError);
+                throw new Error('A baixa foi realizada, mas falhou ao registrar a data.');
             }
         }
 
