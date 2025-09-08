@@ -3,7 +3,7 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { sendOperationSubmittedEmail } from '@/app/lib/emailService';
 
-// GET (sem alterações)
+// GET: Busca o histórico de operações para o cliente autenticado
 export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -39,7 +39,7 @@ export async function GET(request) {
 }
 
 
-// POST: Salva uma nova operação E NOTIFICA ADMINS
+// POST: Salva uma nova operação enviada pelo cliente E NOTIFICA OS ADMINS
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -56,7 +56,32 @@ export async function POST(request) {
 
         const body = await request.json();
         const notaFiscal = body.notasFiscais[0];
-        
+        const { chave_nfe } = notaFiscal;
+
+        if (!chave_nfe) {
+            return NextResponse.json({ message: 'A Chave de Acesso do documento é obrigatória.' }, { status: 400 });
+        }
+
+        // VERIFICA SE A CHAVE JÁ EXISTE NO BANCO DE DADOS
+        const { data: existingOperation, error: checkError } = await supabase
+            .from('operacoes')
+            .select('status')
+            .eq('chave_nfe', chave_nfe)
+            .single();
+
+        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = not found, o que é bom
+            throw checkError;
+        }
+
+        if (existingOperation) {
+            if (existingOperation.status === 'Rejeitada') {
+                return NextResponse.json({ message: 'Este documento (NF-e/CT-e) já foi enviado e rejeitado anteriormente. Não é possível reenviá-lo.' }, { status: 409 });
+            } else {
+                return NextResponse.json({ message: 'Este documento (NF-e/CT-e) já foi enviado e está em análise ou foi aprovado.' }, { status: 409 });
+            }
+        }
+
+        // Se não existir, continua com a criação da operação
         const valorTotalBruto = notaFiscal.valorNf;
         const valorTotalJuros = notaFiscal.jurosCalculado;
         const valorLiquido = notaFiscal.valorLiquidoCalculado;
@@ -72,13 +97,14 @@ export async function POST(request) {
                 valor_total_descontos: 0,
                 valor_liquido: valorLiquido,
                 status: 'Pendente',
-                conta_bancaria_id: null
+                conta_bancaria_id: null,
+                chave_nfe: chave_nfe, // Salva a chave da NF-e
             })
             .select()
             .single();
 
         if (operacaoError) throw new Error("Não foi possível criar o registro da operação.");
-
+        
         const duplicatasParaSalvar = notaFiscal.parcelasCalculadas.map(p => ({
             operacao_id: newOperacao.id,
             data_operacao: body.dataOperacao,
@@ -97,7 +123,7 @@ export async function POST(request) {
             throw new Error("Não foi possível salvar os detalhes das parcelas. A operação foi cancelada.");
         }
 
-        // --- LÓGICA DE NOTIFICAÇÃO ---
+        // LÓGICA DE NOTIFICAÇÃO PARA ADMINS
         const { data: admins } = await supabase.from('users').select('id, email').eq('roles', 'ROLE_ADMIN');
         
         if (admins && admins.length > 0) {
@@ -119,7 +145,6 @@ export async function POST(request) {
                 });
             }
         }
-        // --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
 
         return NextResponse.json({ operacaoId: newOperacao.id, message: 'Operação enviada para análise com sucesso!' }, { status: 201 });
 
@@ -128,3 +153,4 @@ export async function POST(request) {
         return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
     }
 }
+
