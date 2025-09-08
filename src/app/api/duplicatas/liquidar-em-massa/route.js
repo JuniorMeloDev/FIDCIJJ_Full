@@ -14,27 +14,40 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Nenhuma duplicata selecionada.' }, { status: 400 });
         }
 
-        // **CORREÇÃO APLICADA AQUI**
-        // Se a data de liquidação não for fornecida (caso de "Apenas Baixa"),
-        // use a data atual como padrão.
-        const effectiveDataLiquidacao = dataLiquidacao || new Date().toISOString().split('T')[0];
-
         const promises = liquidacoes.map(item => 
             supabase.rpc('liquidar_duplicata', {
                 p_duplicata_id: item.id,
-                p_data_liquidacao: effectiveDataLiquidacao, // Usa a data efetiva
-                p_juros_mora: (jurosMora || 0) + (item.juros_a_somar || 0), // Soma juros da mora + juros da operação
+                p_data_liquidacao: dataLiquidacao,
+                p_juros_mora: (jurosMora || 0) + (item.juros_a_somar || 0),
                 p_conta_bancaria_id: contaBancariaId
             })
         );
         
         const results = await Promise.all(promises);
         
-        // Verifica se alguma das chamadas deu erro
         const firstError = results.find(res => res.error);
         if (firstError) {
-            console.error('Erro ao liquidar uma ou mais duplicatas:', firstError.error);
-            throw new Error('Falha ao liquidar uma ou mais duplicatas.');
+            console.error('Erro ao liquidar uma ou mais duplicatas via RPC:', firstError.error);
+            throw new Error('Falha ao processar a baixa da(s) duplicata(s).');
+        }
+
+        // *** CORREÇÃO ROBUSTA E DEFINITIVA ***
+        // Se a liquidação foi "Apenas Baixa" (sem crédito em conta),
+        // garantimos que a data de liquidação seja salva diretamente na tabela de duplicatas.
+        if (!contaBancariaId) {
+            const idsParaAtualizar = liquidacoes.map(item => item.id);
+            const dataParaAtualizar = dataLiquidacao || new Date().toISOString().split('T')[0];
+
+            const { error: updateError } = await supabase
+                .from('duplicatas')
+                .update({ data_liquidacao: dataParaAtualizar })
+                .in('id', idsParaAtualizar);
+
+            if (updateError) {
+                // Loga o erro mas não necessariamente falha a requisição,
+                // pois a baixa do status já foi feita pelo RPC.
+                console.error('Aviso: A baixa foi realizada, mas falhou ao registrar a data de liquidação explicitamente.', updateError);
+            }
         }
 
         return new NextResponse(null, { status: 200 });
