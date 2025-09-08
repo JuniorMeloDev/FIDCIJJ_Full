@@ -10,9 +10,6 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // --- ALTERAÇÃO PRINCIPAL AQUI ---
-        // Agora, consultamos as DUAS relações possíveis com a tabela de movimentações.
-        // Damos a elas nomes diferentes ('movimentacao_nova', 'movimentacao_antiga') para evitar ambiguidade.
         let { data: duplicatas, error } = await supabase
             .from('duplicatas')
             .select(`
@@ -24,7 +21,8 @@ export async function GET(request) {
                 ),
                 movimentacao_nova:movimentacoes_caixa!fk_movimentacao_caixa ( data_movimento, conta_bancaria ),
                 movimentacao_antiga:movimentacoes_caixa!duplicatas_liquidacao_mov_id_fkey ( data_movimento, conta_bancaria )
-            `);
+            `)
+            .eq('operacao.status', 'Aprovada');
 
         if (error) throw error;
 
