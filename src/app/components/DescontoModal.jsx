@@ -57,7 +57,7 @@ export default function DescontoModal({ isOpen, onClose, onSave }) {
                         Voltar
                     </button>
                     <button onClick={handleSaveClick} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition">
-                        Guardar
+                        Salvar
                     </button>
                 </div>
             </div>

@@ -393,7 +393,7 @@ export default function OperacaoBorderoPage() {
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(
-          errorData.message || "Ocorreu um erro ao guardar a operação."
+          errorData.message || "Ocorreu um erro ao salvar a operação."
         );
       }
       const operacaoId = await response.json();
