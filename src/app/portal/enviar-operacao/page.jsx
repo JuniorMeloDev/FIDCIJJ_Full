@@ -5,11 +5,8 @@ import { motion } from "framer-motion";
 import {
   formatBRLNumber,
   formatDate,
-  formatBRLInput,
-  parseBRL,
 } from "@/app/utils/formatters";
 import Notification from "@/app/components/Notification";
-import AutoCompleteSearch from "@/app/components/AutoCompleteSearch";
 
 // Ícones SVG embutidos
 const UploadIcon = () => (
@@ -85,10 +82,10 @@ export default function EnviarOperacaoPage() {
 
   const handleFileChange = (event) => {
     const file = event.target.files[0];
-    if (file && (file.type === "text/xml" || file.type === "application/pdf")) {
+    if (file && (file.type === "text/xml" || file.name.endsWith('.xml'))) {
       setSelectedFile(file);
     } else {
-      showNotification("Por favor, selecione um arquivo XML ou PDF.", "error");
+      showNotification("Por favor, selecione um arquivo XML.", "error");
       setSelectedFile(null);
     }
   };
@@ -137,7 +134,7 @@ export default function EnviarOperacaoPage() {
         body: JSON.stringify({
           dataOperacao: new Date().toISOString().split("T")[0],
           tipoOperacaoId: parseInt(tipoOperacaoId),
-          notasFiscais: [simulationResult], // A API espera um array
+          notasFiscais: [simulationResult],
         }),
       });
       if (!response.ok) {
@@ -145,7 +142,6 @@ export default function EnviarOperacaoPage() {
         throw new Error(errorData.message || "Falha ao enviar operação.");
       }
       showNotification("Operação enviada para análise com sucesso!", "success");
-      // Limpa o formulário
       setSelectedFile(null);
       setTipoOperacaoId("");
       setSimulationResult(null);
@@ -286,7 +282,7 @@ export default function EnviarOperacaoPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  2. Faça o Upload do Arquivo (XML ou PDF)
+                  2. Faça o Upload do Arquivo (XML)
                 </label>
                 <div
                   className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-600 border-dashed rounded-md cursor-pointer hover:border-orange-400"
@@ -314,7 +310,7 @@ export default function EnviarOperacaoPage() {
                     type="file"
                     className="sr-only"
                     onChange={handleFileChange}
-                    accept=".xml,.pdf"
+                    accept=".xml"
                   />
                 </div>
               </div>

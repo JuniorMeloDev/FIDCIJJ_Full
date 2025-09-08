@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js';
-import PDFParser from "pdf2json";
 
 // Funções auxiliares de parsing de XML
 const getVal = (obj, path) => path.split('.').reduce((acc, key) => acc?.[key]?.[0], obj);
@@ -83,53 +82,6 @@ const parseXml = async (xmlText) => {
     };
 };
 
-const parsePdf = async (buffer) => {
-    const pdfParser = new PDFParser();
-    const pdfText = await new Promise((resolve, reject) => {
-        pdfParser.on("pdfParser_dataError", errData => reject(new Error(errData.parserError)));
-        pdfParser.on("pdfParser_dataReady", () => {
-            resolve(pdfParser.getRawTextContent().replace(/\s+/g, ' '));
-        });
-        pdfParser.parseBuffer(buffer);
-    });
-
-    const chaveNfeMatch = pdfText.match(/CHAVE DE ACESSO\s*(\d{44})/i);
-    const chaveNfe = chaveNfeMatch ? chaveNfeMatch[1] : null;
-    if (!chaveNfe) throw new Error("Não foi possível extrair a Chave de Acesso do PDF.");
-
-    const cnpjEmitenteMatch = pdfText.match(/CNPJ\s*(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/);
-    const cnpjEmitente = cnpjEmitenteMatch ? cnpjEmitenteMatch[1].replace(/\D/g, '') : null;
-
-    const cnpjTomadorMatch = pdfText.match(/TOMADOR DO SERVIÇO\s*.*?CNPJ.*?(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/i);
-    const cnpjSacado = cnpjTomadorMatch ? cnpjTomadorMatch[1].replace(/\D/g, '') : null;
-    if (!cnpjSacado) throw new Error("Não foi possível extrair o CNPJ do Tomador do serviço do PDF.");
-
-    const { data: sacadoData } = await supabase.from('sacados').select('id, nome, condicoes_pagamento(*)').eq('cnpj', cnpjSacado).single();
-    if (!sacadoData) throw new Error(`Sacado com CNPJ ${cnpjSacado} não encontrado no sistema.`);
-
-    const numeroCteMatch = pdfText.match(/NÚMERO\s*(\d+)/i);
-    const dataEmissaoMatch = pdfText.match(/DATA E HORA DE EMISSÃO\s*(\d{2}\/\d{2}\/\d{4})/i);
-    const valorTotalMatch = pdfText.match(/VALOR TOTAL DA PRESTAÇÃO DO SERVIÇO\s*([\d.,]+)/i);
-
-    const dataEmissao = dataEmissaoMatch ? dataEmissaoMatch[1].split('/').reverse().join('-') : new Date().toISOString().split('T')[0];
-
-    let prazosString = "0";
-    if (sacadoData.condicoes_pagamento && sacadoData.condicoes_pagamento.length > 0) {
-        prazosString = sacadoData.condicoes_pagamento[0].prazos;
-    }
-
-    return {
-        chave_nfe: chaveNfe,
-        nfCte: numeroCteMatch ? numeroCteMatch[1] : '',
-        dataNf: dataEmissao,
-        valorNf: valorTotalMatch ? parseFloat(valorTotalMatch[1].replace(/\./g, '').replace(',', '.')) : 0,
-        clienteSacado: sacadoData.nome,
-        parcelas: "1",
-        prazos: prazosString,
-        cedenteCnpjVerificado: cnpjEmitente
-    };
-};
-
 // Rota Principal
 export async function POST(request) {
     try {
@@ -152,10 +104,8 @@ export async function POST(request) {
 
         if (file.type === 'text/xml' || file.name.endsWith('.xml')) {
             parsedData = await parseXml(fileBuffer.toString('utf-8'));
-        } else if (file.type === 'application/pdf') {
-            parsedData = await parsePdf(fileBuffer);
         } else {
-            throw new Error("Formato de arquivo não suportado.");
+            throw new Error("Formato de arquivo não suportado. Por favor, envie um ficheiro XML.");
         }
         
         if (parsedData.cedenteCnpjVerificado !== clienteAtual.cnpj) {

@@ -50,7 +50,6 @@ export default function OperacaoBorderoPage() {
   const [isPartialDebitModalOpen, setIsPartialDebitModalOpen] = useState(false);
 
   const fileInputRef = useRef(null);
-  const cteFileInputRef = useRef(null);
   const [xmlDataPendente, setXmlDataPendente] = useState(null);
   const [isClienteModalOpen, setIsClienteModalOpen] = useState(false);
   const [isSacadoModalOpen, setIsSacadoModalOpen] = useState(false);
@@ -108,45 +107,10 @@ export default function OperacaoBorderoPage() {
   const fetchSacados = (query) =>
     fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
 
-  const handleCtePdfUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    showNotification("A processar CT-e PDF...", "info");
-    const formData = new FormData();
-    formData.append("file", file);
-    try {
-      const response = await fetch(`/api/upload/cte-pdf`, {
-        method: "POST",
-        headers: { ...getAuthHeader() },
-        body: formData,
-      });
-      if (!response.ok) {
-        const errorText = await response.json();
-        throw new Error(errorText.message || "Falha ao ler o ficheiro PDF.");
-      }
-      const data = await response.json();
-
-      setXmlDataPendente(data);
-      if (!data.emitenteExiste) {
-        setClienteParaCriar(data.emitente);
-        setIsClienteModalOpen(true);
-      } else if (!data.sacadoExiste) {
-        setSacadoParaCriar(data.sacado);
-        setIsSacadoModalOpen(true);
-      } else {
-        preencherFormularioComXml(data);
-      }
-    } catch (error) {
-      showNotification(error.message, "error");
-    } finally {
-      if (cteFileInputRef.current) cteFileInputRef.current.value = "";
-    }
-  };
-
   const handleXmlUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    showNotification("A processar XML...", "info");
+    showNotification("Processando XML...", "info");
     const formData = new FormData();
     formData.append("file", file);
     try {
@@ -413,12 +377,11 @@ export default function OperacaoBorderoPage() {
       notasFiscais: notasFiscais.map((nf) => ({
         ...nf,
         peso: parseFloat(String(nf.peso).replace(",", ".")) || null,
-        // Se 'jurosPre' for falso, envia juros como 0 para o backend
         jurosCalculado: jurosPre ? nf.jurosCalculado : 0,
       })),
-      cedenteRamo, // Adicionado para garantir que o ramo seja passado
-      valorDebito: valorDebito, // Para débito parcial
-      dataDebito: dataDebito,   // Para débito parcial
+      cedenteRamo,
+      valorDebito: valorDebito,
+      dataDebito: dataDebito,
     };
 
     try {
@@ -501,7 +464,7 @@ export default function OperacaoBorderoPage() {
     setCondicoesSacado([]);
     setIgnoreDespesasBancarias(false);
     setIsPartialDebit(false);
-    setjurosPre(true); // Reseta o novo checkbox para o padrão
+    setjurosPre(true);
     if (showMsg) showNotification("Formulário limpo.", "success");
   };
 
@@ -542,7 +505,6 @@ export default function OperacaoBorderoPage() {
       0
     );
     
-    // O cálculo do líquido agora depende diretamente do estado 'jurosPre'
     const liquidoOperacao = jurosPre
       ? valorTotalBruto - desagioTotal - totalOutrosDescontos
       : valorTotalBruto - totalOutrosDescontos;
@@ -630,14 +592,6 @@ export default function OperacaoBorderoPage() {
             >
               Importar NF/CT-e (XML)
             </button>
-
-            <input
-              type="file"
-              accept=".pdf"
-              ref={cteFileInputRef}
-              onChange={handleCtePdfUpload}
-              style={{ display: "none" }}
-            />
           </div>
         </motion.header>
 
