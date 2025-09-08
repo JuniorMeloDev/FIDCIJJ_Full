@@ -76,7 +76,7 @@ export async function POST(request) {
 
         if (existingOperation) {
             // Se já existe, retorna uma mensagem de erro clara para o cliente.
-            throw new Error(`Este documento (Chave: ...${chaveNfe.slice(-6)}) já foi processado anteriormente (Operação #${existingOperation.id}, Status: ${existingOperation.status}).`);
+            throw new Error(`XML processado na Operação #${existingOperation.id} e seu Status é: ${existingOperation.status}). Não é possível enviar novamente`);
         }
         
         const valorTotalBruto = notaFiscal.valorNf;

@@ -704,7 +704,7 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                2. Faça o Upload do Arquivo (XML ou PDF)
+                2. Faça o Upload do Arquivo XML
               </label>
               <div
                 className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-600 border-dashed rounded-md cursor-pointer hover:border-orange-400"
