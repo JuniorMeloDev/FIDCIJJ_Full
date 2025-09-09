@@ -34,7 +34,25 @@ export async function sendWelcomeEmail({ clienteNome, username, tempPassword, re
         throw new Error('Dados insuficientes para enviar o e-mail de boas-vindas.');
     }
     const loginUrl = process.env.NEXT_PUBLIC_LOGIN_URL || 'https://fidcijj.vercel.app/login';
-    const emailBody = `...`; // Seu corpo de e-mail de boas-vindas
+    
+    // *** CORPO DO E-MAIL CORRIGIDO E DETALHADO ***
+    const emailBody = `
+    <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <p>Olá, <strong>${clienteNome}</strong>!</p>
+        <p>Seja bem-vindo(a) à IJJ FIDC! Estamos felizes em tê-lo(a) conosco.</p>
+        <p>Para acessar nosso portal do cliente, utilize as credenciais provisórias abaixo:</p>
+        <div style="background-color: #f2f2f2; padding: 20px; border-radius: 8px; margin: 25px 0; font-size: 16px;">
+            <p style="margin: 5px 0;"><strong>URL de Acesso:</strong> <a href="${loginUrl}" target="_blank">${loginUrl}</a></p>
+            <p style="margin: 5px 0;"><strong>Usuário:</strong> ${username}</p>
+            <p style="margin: 5px 0;"><strong>Senha Provisória:</strong> <span style="font-weight: bold; color: #d9534f;">${tempPassword}</span></p>
+        </div>
+        <p>Por segurança, recomendamos fortemente que você <strong>altere sua senha</strong> no primeiro acesso através do menu "Perfil".</p>
+        <br>
+        <p>Atenciosamente,</p>
+        <p><strong>Equipe FIDC IJJ</strong></p>
+    </div>
+    `;
+
     await transporter.sendMail({
         from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
         to: recipientEmail,
@@ -43,10 +61,9 @@ export async function sendWelcomeEmail({ clienteNome, username, tempPassword, re
     });
 }
 
-// NOVA FUNÇÃO: E-mail para admin sobre nova operação
 export async function sendOperationSubmittedEmail({ clienteNome, operacaoId, valorLiquido, adminEmails }) {
     if (!clienteNome || !operacaoId || !valorLiquido || !adminEmails || adminEmails.length === 0) {
-        return; // Não envia se não tiver dados ou destinatários
+        return;
     }
     const analysisUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://fidcijj.vercel.app'}/analise`;
     const emailBody = `
@@ -73,7 +90,6 @@ export async function sendOperationSubmittedEmail({ clienteNome, operacaoId, val
     });
 }
 
-// NOVA FUNÇÃO: E-mail para cliente sobre status da operação
 export async function sendOperationStatusEmail({ clienteNome, operacaoId, status, recipientEmail }) {
      if (!clienteNome || !operacaoId || !status || !recipientEmail) {
         return; 
