@@ -121,3 +121,41 @@ export async function sendOperationStatusEmail({ clienteNome, operacaoId, status
         html: emailBody,
     });
 }
+
+    // Adicione esta função ao final do arquivo /lib/emailService.js
+
+export async function sendCustomNotificationEmail({ title, message, recipientEmails }) {
+    if (!title || !message || !recipientEmails || recipientEmails.length === 0) {
+        return;
+    }
+
+    const emailBody = `
+        <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+            <p>Olá,</p>
+            <p>${message.replace(/\n/g, '<br>')}</p>
+            <br>
+            <p>Atenciosamente,</p>
+            <p>
+                <strong>Equipe FIDC IJJ</strong>
+            </p>
+            <br>
+            <img src="cid:logoImage" width="140" alt="Logo FIDC IJJ">
+        </div>
+    `;
+
+    const logoPath = path.resolve(process.cwd(), 'public', 'Logo.png');
+
+    await transporter.sendMail({
+        from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
+        to: recipientEmails.join(', '),
+        subject: title,
+        html: emailBody,
+        attachments: [
+            {
+                filename: 'Logo.png',
+                path: logoPath,
+                cid: 'logoImage' // Mesmo CID para o HTML referenciar
+            }
+        ]
+    });
+}
