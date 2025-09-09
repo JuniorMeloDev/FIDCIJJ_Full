@@ -18,6 +18,8 @@ export default function NotificationModal({ isOpen, onClose, onUpdateCount }) {
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [itemsToDelete, setItemsToDelete] = useState(null);
+    
+    // State que controla a visibilidade do modal de criação de notificação
     const [isNewNotificationModalOpen, setIsNewNotificationModalOpen] = useState(false);
 
     const getAuthHeader = () => {
@@ -25,7 +27,7 @@ export default function NotificationModal({ isOpen, onClose, onUpdateCount }) {
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     };
 
-    // **CORREÇÃO: Adicionando a função que faltava**
+    // **FUNÇÃO AUXILIAR QUE ESTAVA FALTANDO**
     const fetchApiData = async (url) => {
         try {
             const res = await fetch(url, { headers: getAuthHeader() });
@@ -36,6 +38,7 @@ export default function NotificationModal({ isOpen, onClose, onUpdateCount }) {
         }
     };
 
+    // Função para ser passada como prop para o componente de busca
     const fetchClientes = (query) => fetchApiData(`/api/cadastros/clientes/search?nome=${query}`);
 
     const fetchNotifications = async () => {
@@ -67,7 +70,7 @@ export default function NotificationModal({ isOpen, onClose, onUpdateCount }) {
     const handleFilterChange = (e) => {
         setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
-
+    
     const markAsRead = async (ids) => {
         try {
             await fetch('/api/notifications', {
@@ -134,12 +137,13 @@ export default function NotificationModal({ isOpen, onClose, onUpdateCount }) {
 
     return (
         <>
+            {/* O modal de Nova Notificação é renderizado aqui, mas controlado pelo seu próprio state */}
             <NewNotificationModal
                 isOpen={isNewNotificationModalOpen}
                 onClose={() => setIsNewNotificationModalOpen(false)}
                 onSuccess={() => {
-                    alert("Notificação enviada com sucesso!");
-                    setIsNewNotificationModalOpen(false);
+                   alert("Notificação enviada com sucesso!");
+                   setIsNewNotificationModalOpen(false);
                 }}
                 fetchClientes={fetchClientes}
             />
