@@ -9,9 +9,10 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
     const [message, setMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [error, setError] = useState('');
-
-    // Novo state para controlar o texto do campo de busca
     const [searchQuery, setSearchQuery] = useState('');
+    
+    // Novo state para controlar o carregamento de todos os clientes
+    const [isLoadingAll, setIsLoadingAll] = useState(false);
 
     if (!isOpen) return null;
     
@@ -24,12 +25,32 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
         if (client && !recipients.some(r => r.id === client.id)) {
             setRecipients([...recipients, client]);
         }
-        // Limpa o campo de busca após selecionar um cliente
         setSearchQuery('');
     };
     
     const handleRemoveRecipient = (clientId) => {
         setRecipients(recipients.filter(r => r.id !== clientId));
+    };
+
+    // Nova função para selecionar todos os clientes ou limpar a seleção
+    const handleSelectAllOrClear = async () => {
+        if (recipients.length > 0) {
+            setRecipients([]);
+            return;
+        }
+
+        setIsLoadingAll(true);
+        setError('');
+        try {
+            const response = await fetch('/api/cadastros/clientes', { headers: getAuthHeader() });
+            if (!response.ok) throw new Error('Falha ao buscar a lista completa de clientes.');
+            const allClients = await response.json();
+            setRecipients(allClients);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsLoadingAll(false);
+        }
     };
 
     const handleSend = async () => {
@@ -52,8 +73,7 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
                 const errorData = await response.json();
                 throw new Error(errorData.message || 'Falha ao enviar notificação.');
             }
-
-            // Limpa o formulário e fecha
+            
             setRecipients([]);
             setTitle('');
             setMessage('');
@@ -66,7 +86,6 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
         }
     };
 
-
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
             <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
@@ -74,16 +93,26 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
                 
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Destinatários (Clientes)</label>
+                        <div className="flex justify-between items-center mb-1">
+                            <label className="block text-sm font-medium text-gray-300">Destinatários (Clientes)</label>
+                            {/* Botão para selecionar/limpar todos */}
+                            <button
+                                type="button"
+                                onClick={handleSelectAllOrClear}
+                                disabled={isLoadingAll}
+                                className="text-sm text-orange-400 hover:text-orange-300 disabled:opacity-50"
+                            >
+                                {isLoadingAll ? 'Carregando...' : (recipients.length > 0 ? 'Limpar Seleção' : 'Selecionar Todos')}
+                            </button>
+                        </div>
                         <AutocompleteSearch
-                            // Adicionadas as props 'value' e 'onChange' que estavam faltando
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             fetchSuggestions={fetchClientes}
                             onSelect={handleSelectClient}
                             placeholder="Pesquisar cliente para adicionar..."
                         />
-                        <div className="mt-2 flex flex-wrap gap-2 min-h-[2rem]">
+                        <div className="mt-2 flex flex-wrap gap-2 min-h-[2rem] max-h-24 overflow-y-auto bg-gray-900/50 p-2 rounded-md">
                             {recipients.map(client => (
                                 <span key={client.id} className="flex items-center gap-2 bg-orange-500 text-white text-sm font-medium px-2.5 py-0.5 rounded-full">
                                     {client.nome}
