@@ -10,6 +10,9 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
     const [isSending, setIsSending] = useState(false);
     const [error, setError] = useState('');
 
+    // Novo state para controlar o texto do campo de busca
+    const [searchQuery, setSearchQuery] = useState('');
+
     if (!isOpen) return null;
     
     const getAuthHeader = () => {
@@ -21,6 +24,8 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
         if (client && !recipients.some(r => r.id === client.id)) {
             setRecipients([...recipients, client]);
         }
+        // Limpa o campo de busca após selecionar um cliente
+        setSearchQuery('');
     };
     
     const handleRemoveRecipient = (clientId) => {
@@ -71,6 +76,9 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Destinatários (Clientes)</label>
                         <AutocompleteSearch
+                            // Adicionadas as props 'value' e 'onChange' que estavam faltando
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
                             fetchSuggestions={fetchClientes}
                             onSelect={handleSelectClient}
                             placeholder="Pesquisar cliente para adicionar..."
