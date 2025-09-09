@@ -340,27 +340,16 @@ const HistoricoOperacoesTable = ({
   );
 };
 
+// ===================================================================
+//  COMPONENTE MODIFICADO
+// ===================================================================
 const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
   const [currentPage, setCurrentPage] = useState(1);
-  const {
-    items: sortedDuplicatas,
-    requestSort,
-    getSortIcon,
-  } = useSortableData(duplicatas, {
-    key: "data_vencimento",
-    direction: "DESC",
-  });
-  const currentDuplicatas = sortedDuplicatas.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE_DUPLICATAS,
-    currentPage * ITEMS_PER_PAGE_DUPLICATAS
-  );
-  const getDuplicataStatusTag = (dup) => {
+  const [statusFilter, setStatusFilter] = useState("Todos");
+
+  const getDuplicataStatus = (dup) => {
     if (dup.status_recebimento === "Recebido") {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-800 text-blue-100">
-          <FaCheck /> Liquidada
-        </span>
-      );
+      return "Liquidada";
     }
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
@@ -368,6 +357,47 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
     const diffTime = vencimento - hoje;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     if (diffDays < 0) {
+      return "Vencida";
+    }
+    return "A Vencer";
+  };
+
+  const filteredDuplicatas = useMemo(() => {
+    if (statusFilter === "Todos") {
+      return duplicatas;
+    }
+    return duplicatas.filter((dup) => getDuplicataStatus(dup) === statusFilter);
+  }, [duplicatas, statusFilter]);
+  
+  const {
+    items: sortedDuplicatas,
+    requestSort,
+    getSortIcon,
+  } = useSortableData(filteredDuplicatas, {
+    key: "data_vencimento",
+    direction: "DESC",
+  });
+
+  const currentDuplicatas = sortedDuplicatas.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE_DUPLICATAS,
+    currentPage * ITEMS_PER_PAGE_DUPLICATAS
+  );
+
+  const getDuplicataStatusTag = (dup) => {
+    const status = getDuplicataStatus(dup);
+    if (status === "Liquidada") {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-800 text-blue-100">
+          <FaCheck /> Liquidada
+        </span>
+      );
+    }
+     if (status === "Vencida") {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        const vencimento = new Date(dup.data_vencimento + "T00:00:00-03:00");
+        const diffTime = vencimento - hoje;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return (
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-red-900 text-red-200">
           <FaExclamationCircle /> Vencida ({Math.abs(diffDays)} dia
@@ -383,9 +413,25 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
   };
   return (
     <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-      <h2 className="text-xl font-semibold mb-4 text-white">
-        Acompanhamento de Duplicatas
-      </h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold text-white">
+          Acompanhamento de Duplicatas
+        </h2>
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setCurrentPage(1); // Reseta a paginação ao mudar o filtro
+          }}
+          className="bg-gray-700 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+        >
+          <option value="Todos">Todos os Status</option>
+          <option value="A Vencer">A Vencer</option>
+          <option value="Liquidada">Liquidada</option>
+          <option value="Vencida">Vencida</option>
+        </select>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-700">
           <thead className="bg-gray-700/50">
@@ -435,7 +481,7 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
             ) : currentDuplicatas.length === 0 ? (
               <tr>
                 <td colSpan="5" className="text-center py-8">
-                  Nenhuma duplicata encontrada.
+                  Nenhuma duplicata encontrada para o filtro selecionado.
                 </td>
               </tr>
             ) : (
@@ -449,8 +495,7 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
                   </td>
                   <td
                     className={`px-6 py-4 ${
-                      new Date(d.data_vencimento + "T00:00:00-03:00") <
-                        new Date() && d.status_recebimento !== "Recebido"
+                      getDuplicataStatus(d) === 'Vencida'
                         ? "text-red-400 font-semibold"
                         : "text-gray-300"
                     }`}
@@ -470,7 +515,7 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
         </table>
       </div>
       <Pagination
-        totalItems={duplicatas.length}
+        totalItems={sortedDuplicatas.length}
         itemsPerPage={ITEMS_PER_PAGE_DUPLICATAS}
         currentPage={currentPage}
         onPageChange={setCurrentPage}
@@ -478,6 +523,7 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
     </div>
   );
 };
+// ===================================================================
 
 const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
   const [tiposOperacao, setTiposOperacao] = useState([]);
@@ -508,15 +554,14 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
       }
     };
     fetchTiposOperacao();
-    // CORREÇÃO: Removidas as dependências que causavam o loop infinito.
   }, []);
 
   const handleFileChange = (event) => {
     const file = event.target.files[0];
-    if (file && (file.type === "text/xml" || file.type === "application/pdf")) {
+    if (file && (file.type === "text/xml" || file.name.endsWith('.xml'))) {
       setSelectedFile(file);
     } else {
-      showNotification("Por favor, selecione um arquivo XML ou PDF.", "error");
+      showNotification("Por favor, selecione um arquivo XML.", "error");
       setSelectedFile(null);
     }
   };
@@ -569,10 +614,7 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
         const errorData = await response.json();
         throw new Error(errorData.message || "Falha ao enviar operação.");
       }
-      showNotification(
-        "Operação enviada para análise com sucesso! Atualize a página em alguns instantes para vê-la no histórico.",
-        "success"
-      );
+      showNotification("Operação enviada para análise com sucesso! Atualize a página em alguns instantes para vê-la no histórico.", "success");
       setSelectedFile(null);
       setTipoOperacaoId("");
       setSimulationResult(null);
