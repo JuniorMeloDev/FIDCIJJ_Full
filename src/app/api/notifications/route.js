@@ -72,3 +72,33 @@ export async function POST(request) {
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
 }
+    // DELETE: Exclui notificações
+
+export async function DELETE(request) {
+    try {
+        const token = request.headers.get('Authorization')?.split(' ')[1];
+        const userId = await getUserIdFromToken(token);
+        if (!userId) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
+
+        const { ids } = await request.json();
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return NextResponse.json({ message: 'Nenhum ID de notificação fornecido para exclusão.' }, { status: 400 });
+        }
+
+        const { error } = await supabase
+            .from('notifications')
+            .delete()
+            .in('id', ids)
+            .eq('user_id', userId); // Garante que o usuário só pode excluir as suas próprias notificações
+
+        if (error) throw error;
+
+        return new NextResponse(null, { status: 204 }); // No Content
+
+    } catch (error) {
+        return NextResponse.json({ message: error.message }, { status: 500 });
+    }
+
+}
+
