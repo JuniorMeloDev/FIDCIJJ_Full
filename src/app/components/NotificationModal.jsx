@@ -7,10 +7,9 @@ import { formatDate } from '@/app/utils/formatters';
 import Link from 'next/link';
 import NotificationActionsBar from './NotificationActionsBar';
 import ConfirmacaoModal from './ConfirmacaoModal';
-import NewNotificationModal from './NewNotificationModal';
-import NotificationDetailModal from './NotificationDetailModal'; // Importar o novo modal
+import NotificationDetailModal from './NotificationDetailModal';
 
-export default function NotificationModal({ isOpen, onClose, onUpdateCount, onOpenNew }) {
+export default function NotificationModal({ isOpen, onClose, onUpdateCount, onOpenNew, isAdmin = false }) {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -126,6 +125,18 @@ export default function NotificationModal({ isOpen, onClose, onUpdateCount, onOp
         const text = tempDiv.textContent || tempDiv.innerText || "";
         return text.length > length ? text.substring(0, length) + '...' : text;
     };
+    
+    const handleMarkSelectedAsRead = () => {
+        const idsToMark = Array.from(selectedItems).filter(id => {
+            const notif = notifications.find(n => n.id === id);
+            return notif && !notif.is_read;
+        });
+
+        if (idsToMark.length > 0) {
+            markAsRead(idsToMark);
+        }
+        clearSelection();
+    };
 
 
     return (
@@ -181,15 +192,11 @@ export default function NotificationModal({ isOpen, onClose, onUpdateCount, onOp
                             </div>
 
                             <div className="p-4 flex-grow overflow-y-auto">
-                                {loading && <p className="text-center py-10">Carregando...</p>}
-                                {error && <p className="text-red-500 text-center py-10">{error}</p>}
-                                {!loading && !error && notifications.length === 0 && <p className="text-center py-10 text-gray-400">Nenhuma notificação encontrada.</p>}
-                                
                                 <div className="space-y-3">
                                     {notifications.map(notif => (
                                         <div 
                                             key={notif.id} 
-                                            className={`p-3 rounded-md flex items-start gap-3 transition-all duration-200 ${notif.is_read ? 'bg-gray-900/50' : 'bg-gray-700'} ${isSelectionMode ? 'cursor-pointer' : ''} ${selectedItems.has(notif.id) ? 'ring-2 ring-orange-500' : ''}`}
+                                            className={`p-3 rounded-md flex items-start gap-3 transition-all duration-200 cursor-pointer ${notif.is_read ? 'bg-gray-900/50 hover:bg-gray-700/80' : 'bg-gray-700 hover:bg-gray-600'} ${selectedItems.has(notif.id) ? 'ring-2 ring-orange-500' : ''}`}
                                             onClick={() => {
                                                 if (isSelectionMode) {
                                                     handleToggleSelection(notif.id);
@@ -220,7 +227,7 @@ export default function NotificationModal({ isOpen, onClose, onUpdateCount, onOp
                                                 <div className="mt-2 flex items-center gap-4">
                                                     {notif.link && (
                                                         <Link href={notif.link} onClick={(e) => { e.stopPropagation(); onClose(); }} className="text-sm text-orange-400 hover:underline">
-                                                            Ver Detalhes
+                                                            Ver Operação
                                                         </Link>
                                                     )}
                                                     {!notif.is_read && (
@@ -237,12 +244,14 @@ export default function NotificationModal({ isOpen, onClose, onUpdateCount, onOp
 
                             <footer className="p-4 border-t border-gray-700 flex-shrink-0 flex justify-between items-center">
                                 <div className="flex gap-2">
-                                    <button 
-                                        onClick={onOpenNew}
-                                        className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md transition flex items-center gap-2 text-sm"
-                                    >
-                                        <FaPlus /> Novo
-                                    </button>
+                                    {isAdmin && (
+                                        <button 
+                                            onClick={onOpenNew}
+                                            className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md transition flex items-center gap-2 text-sm"
+                                        >
+                                            <FaPlus /> Novo
+                                        </button>
+                                    )}
                                      <button 
                                         onClick={() => setIsSelectionMode(!isSelectionMode)}
                                         className="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-md transition text-sm"
@@ -259,7 +268,15 @@ export default function NotificationModal({ isOpen, onClose, onUpdateCount, onOp
                             </footer>
 
                             <AnimatePresence>
-                               {isSelectionMode && <NotificationActionsBar selectedCount={selectedItems.size} onDelete={handleDeleteRequest} onClear={clearSelection} />}
+                               {isSelectionMode && (
+                                <NotificationActionsBar 
+                                    selectedCount={selectedItems.size} 
+                                    onClear={clearSelection}
+                                    isAdmin={isAdmin}
+                                    onDelete={handleDeleteRequest}
+                                    onMarkSelectedAsRead={handleMarkSelectedAsRead}
+                                />
+                               )}
                             </AnimatePresence>
 
                         </motion.div>

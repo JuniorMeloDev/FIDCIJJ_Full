@@ -110,13 +110,11 @@ export default function PortalLayout({ children }) {
                     return;
                 }
                 
-                // Definir o utilizador primeiro
                 setUser({
                     username: decoded.sub,
                     cliente_nome: decoded.cliente_nome
                 });
 
-                // Depois, buscar os dados necessários
                 await fetchUnreadCount();
                 
                 const interval = setInterval(fetchUnreadCount, 30000);
@@ -126,7 +124,6 @@ export default function PortalLayout({ children }) {
                 sessionStorage.removeItem('authToken');
                 router.push('/login');
             } finally {
-                // Só parar o loading depois de tudo
                 setLoading(false);
             }
         };
@@ -149,6 +146,7 @@ export default function PortalLayout({ children }) {
                 isOpen={isNotificationModalOpen}
                 onClose={() => setIsNotificationModalOpen(false)}
                 onUpdateCount={fetchUnreadCount}
+                isAdmin={false} // Clientes nunca são administradores, então passamos 'false'
             />
             <PortalNavbar 
                 user={user} 
@@ -162,4 +160,3 @@ export default function PortalLayout({ children }) {
         </div>
     );
 }
-
