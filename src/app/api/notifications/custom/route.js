@@ -18,7 +18,7 @@ export async function POST(request) {
         const clientIds = JSON.parse(formData.get('clientIds'));
         const title = formData.get('title');
         const message = formData.get('message');
-        const sendEmail = formData.get('sendEmail') === 'true'; // Captura o valor do checkbox
+        const sendEmail = formData.get('sendEmail') === 'true';
         const files = formData.getAll('attachments');
 
         if (!clientIds || clientIds.length === 0 || !title || !message) {
@@ -30,12 +30,16 @@ export async function POST(request) {
         if (users.length === 0) {
             return NextResponse.json({ message: 'Nenhum usuário destinatário encontrado.' }, { status: 404 });
         }
+
+        // **CORREÇÃO: Extrai os nomes dos arquivos para salvar no BD**
+        const attachmentFileNames = files.map(file => file.name);
         
         const notificationsToInsert = users.map(user => ({
             user_id: user.id,
             title,
             message,
-            link: '/portal/notificacoes'
+            link: null, // Link nulo para notificações personalizadas
+            attachments: attachmentFileNames.length > 0 ? attachmentFileNames : null, // Salva os nomes dos arquivos
         }));
 
         const { error: insertError } = await supabase.from('notifications').insert(notificationsToInsert);
@@ -48,9 +52,8 @@ export async function POST(request) {
         } else {
             const recipientEmails = clients.map(c => c.email).filter(Boolean);
             if (recipientEmails.length > 0) {
-                // Prepara anexos apenas se o e-mail detalhado for enviado
                 const attachments = [];
-                if (sendEmail) { // Apenas processa anexos se for para enviar o e-mail completo
+                if (sendEmail) {
                     for (const file of files) {
                         const buffer = Buffer.from(await file.arrayBuffer());
                         attachments.push({
@@ -66,7 +69,7 @@ export async function POST(request) {
                     message,
                     recipientEmails,
                     attachments,
-                    isDetailedEmail: sendEmail // Passa o flag para a função de e-mail
+                    isDetailedEmail: sendEmail
                 });
             }
         }

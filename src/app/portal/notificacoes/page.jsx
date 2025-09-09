@@ -5,12 +5,16 @@ import { motion } from 'framer-motion';
 import { FaBell, FaCheckDouble } from 'react-icons/fa';
 import { formatDate } from '@/app/utils/formatters';
 import Link from 'next/link';
+import NotificationDetailModal from '@/app/components/NotificationDetailModal'; // Importar o novo modal
 
 export default function NotificacoesClientePage() {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [filters, setFilters] = useState({ dataInicio: '', dataFim: '' });
+    
+    // State para controlar o modal de detalhes
+    const [selectedNotification, setSelectedNotification] = useState(null);
 
     const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
@@ -29,6 +33,7 @@ export default function NotificacoesClientePage() {
             const data = await response.json();
             setNotifications(data);
         } catch (err) {
+            // **CORREÇÃO AQUI: Adicionadas as chaves {} ao redor do setError**
             setError(err.message);
         } finally {
             setLoading(false);
@@ -65,8 +70,21 @@ export default function NotificacoesClientePage() {
         }
     };
 
+    // Função para extrair texto puro do HTML para a pré-visualização
+    const getTextPreview = (html, length = 100) => {
+        if (!html) return '';
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const text = doc.body.textContent || "";
+        return text.length > length ? text.substring(0, length) + '...' : text;
+    };
+
     return (
         <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col items-center">
+            <NotificationDetailModal 
+                notification={selectedNotification}
+                onClose={() => setSelectedNotification(null)}
+            />
+
             <div className="w-full max-w-5xl">
                 <motion.header
                     className="mb-6 border-b-2 border-orange-500 pb-4 flex justify-between items-center"
@@ -109,25 +127,38 @@ export default function NotificacoesClientePage() {
                         {notifications.map(notif => (
                              <motion.div
                                 key={notif.id}
-                                className={`p-4 rounded-lg flex items-start gap-4 transition-colors ${notif.is_read ? 'bg-gray-700/50' : 'bg-gray-700'}`}
+                                className={`p-4 rounded-lg flex items-start gap-4 transition-colors cursor-pointer ${notif.is_read ? 'bg-gray-700/50 hover:bg-gray-700/80' : 'bg-gray-700 hover:bg-gray-600'}`}
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={{ opacity: 1, x: 0 }}
+                                onClick={() => setSelectedNotification(notif)}
                             >
-                                <div className={`mt-1 flex-shrink-0 h-3 w-3 rounded-full ${notif.is_read ? 'bg-gray-500' : 'bg-orange-400 animate-pulse'}`}></div>
+                                <div className={`mt-1.5 flex-shrink-0 h-3 w-3 rounded-full ${notif.is_read ? 'bg-gray-500' : 'bg-orange-400 animate-pulse'}`}></div>
                                 <div className="flex-grow">
                                     <div className="flex justify-between items-center">
                                         <h3 className={`font-semibold ${notif.is_read ? 'text-gray-300' : 'text-white'}`}>{notif.title}</h3>
                                         <span className="text-xs text-gray-400">{formatDate(notif.created_at)}</span>
                                     </div>
-                                    <p className="text-sm text-gray-300 mt-1">{notif.message}</p>
-                                     <div className="mt-2 flex items-center gap-4">
+                                    <p className="text-sm text-gray-400 mt-1 italic">
+                                        {getTextPreview(notif.message)}
+                                    </p>
+                                    <div className="mt-2 flex items-center gap-4">
                                         {notif.link && (
-                                            <Link href={notif.link} className="text-sm text-orange-400 hover:underline">
+                                            <Link 
+                                                href={notif.link} 
+                                                onClick={(e) => e.stopPropagation()} // Impede que o modal abra ao clicar no link
+                                                className="text-sm text-orange-400 hover:underline"
+                                            >
                                                 Ver Operação
                                             </Link>
                                         )}
                                         {!notif.is_read && (
-                                            <button onClick={() => markAsRead([notif.id])} className="text-sm text-blue-400 hover:underline">
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation(); // Impede que o modal abra
+                                                    markAsRead([notif.id]);
+                                                }} 
+                                                className="text-sm text-blue-400 hover:underline"
+                                            >
                                                 Marcar como lida
                                             </button>
                                         )}
