@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { FaChartLine, FaBars, FaTimes, FaBell } from 'react-icons/fa'
 import NotificationModal from './NotificationModal';
 import NewNotificationModal from './NewNotificationModal';
+import Notification from './Notification'; // 1. Importar o componente de notificação
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -16,6 +17,13 @@ export default function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isNotificationListOpen, setIsNotificationListOpen] = useState(false);
   const [isNewNotificationOpen, setIsNewNotificationOpen] = useState(false);
+  
+  // 2. Adicionar state e função para controlar a notificação de sucesso/erro
+  const [notification, setNotification] = useState({ message: '', type: '' });
+  const showNotification = (message, type) => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification({ message: '', type: '' }), 5000);
+  };
 
   const router = useRouter()
   const pathname = usePathname()
@@ -50,15 +58,10 @@ export default function Navbar() {
       }
   };
   
-  // **NOVA FUNÇÃO PARA TRANSIÇÃO CORRETA DOS MODAIS**
   const handleOpenNewNotificationModal = () => {
     setIsNotificationListOpen(false);
     setIsNewNotificationOpen(true);
   };
-
-  if (pathname.startsWith('/portal')) {
-      return null;
-  }
 
   useEffect(() => {
     const token = sessionStorage.getItem('authToken')
@@ -90,7 +93,7 @@ export default function Navbar() {
     sessionStorage.removeItem('authToken')
     router.push('/login')
   }
-
+  
   const publicPaths = ['/', '/login'];
   if (publicPaths.includes(pathname)) {
       return null;
@@ -110,6 +113,9 @@ export default function Navbar() {
 
   return (
     <>
+      {/* 3. Renderizar o componente de notificação */}
+      <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
+
       <NotificationModal 
         isOpen={isNotificationListOpen}
         onClose={() => setIsNotificationListOpen(false)}
@@ -119,8 +125,9 @@ export default function Navbar() {
       <NewNotificationModal
         isOpen={isNewNotificationOpen}
         onClose={() => setIsNewNotificationOpen(false)}
+        // 4. Trocar o alert() pela função showNotification
         onSuccess={() => {
-            alert("Notificação enviada com sucesso!");
+            showNotification("Notificação enviada com sucesso!", "success");
             setIsNewNotificationOpen(false);
         }}
         fetchClientes={fetchClientes}
@@ -131,6 +138,7 @@ export default function Navbar() {
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
+        {/* ... O resto do JSX da Navbar permanece exatamente o mesmo ... */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link href="/resumo" className="flex items-center space-x-2">

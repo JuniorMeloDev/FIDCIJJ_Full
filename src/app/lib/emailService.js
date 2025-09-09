@@ -34,8 +34,6 @@ export async function sendWelcomeEmail({ clienteNome, username, tempPassword, re
         throw new Error('Dados insuficientes para enviar o e-mail de boas-vindas.');
     }
     const loginUrl = process.env.NEXT_PUBLIC_LOGIN_URL || 'https://fidcijj.vercel.app/login';
-    
-    // *** CORPO DO E-MAIL CORRIGIDO E DETALHADO ***
     const emailBody = `
     <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
         <p>Olá, <strong>${clienteNome}</strong>!</p>
@@ -52,7 +50,6 @@ export async function sendWelcomeEmail({ clienteNome, username, tempPassword, re
         <p><strong>Equipe FIDC IJJ</strong></p>
     </div>
     `;
-
     await transporter.sendMail({
         from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
         to: recipientEmail,
@@ -96,8 +93,7 @@ export async function sendOperationStatusEmail({ clienteNome, operacaoId, status
     }
     const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://fidcijj.vercel.app'}/portal/dashboard`;
     const subject = `Sua Operação #${operacaoId} foi ${status === 'Aprovada' ? 'Aprovada' : 'Rejeitada'}`;
-
-     const emailBody = `
+    const emailBody = `
         <div style="font-family: Arial, sans-serif; color: #333;">
             <p>Olá, <strong>${clienteNome}</strong>!</p>
             <p>Temos uma atualização sobre a sua operação enviada para análise.</p>
@@ -113,7 +109,6 @@ export async function sendOperationStatusEmail({ clienteNome, operacaoId, status
             <p><strong>Equipe FIDC IJJ</strong></p>
         </div>
     `;
-
      await transporter.sendMail({
         from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
         to: recipientEmail,
@@ -122,18 +117,16 @@ export async function sendOperationStatusEmail({ clienteNome, operacaoId, status
     });
 }
 
-    // Adicione esta função ao final do arquivo /lib/emailService.js
-
-export async function sendCustomNotificationEmail({ title, message, recipientEmails }) {
+// **FUNÇÃO CORRIGIDA PARA LIDAR COM ANEXOS**
+export async function sendCustomNotificationEmail({ title, message, recipientEmails, attachments = [] }) {
     if (!title || !message || !recipientEmails || recipientEmails.length === 0) {
         return;
     }
 
     const emailBody = `
         <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-            <p>Olá,</p>
-            <p>${message.replace(/\n/g, '<br>')}</p>
-            <br>
+            ${message.replace(/\n/g, '<br>')}
+            <br><br>
             <p>Atenciosamente,</p>
             <p>
                 <strong>Equipe FIDC IJJ</strong>
@@ -144,18 +137,22 @@ export async function sendCustomNotificationEmail({ title, message, recipientEma
     `;
 
     const logoPath = path.resolve(process.cwd(), 'public', 'Logo.png');
+    
+    // Clona o array de anexos para não modificar o original
+    const finalAttachments = [...attachments];
+
+    // Adiciona o logo como anexo embutido (inline)
+    finalAttachments.push({
+        filename: 'Logo.png',
+        path: logoPath,
+        cid: 'logoImage'
+    });
 
     await transporter.sendMail({
         from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
         to: recipientEmails.join(', '),
         subject: title,
         html: emailBody,
-        attachments: [
-            {
-                filename: 'Logo.png',
-                path: logoPath,
-                cid: 'logoImage' // Mesmo CID para o HTML referenciar
-            }
-        ]
+        attachments: finalAttachments // Usa a lista de anexos final
     });
 }
