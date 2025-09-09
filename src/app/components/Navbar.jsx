@@ -6,14 +6,18 @@ import { useRouter, usePathname } from 'next/navigation'
 import { jwtDecode } from 'jwt-decode';
 import { motion, AnimatePresence } from 'framer-motion'
 import { FaChartLine, FaBars, FaTimes, FaBell } from 'react-icons/fa'
-import NotificationModal from './NotificationModal'; // Importar o novo modal
+import NotificationModal from './NotificationModal';
+import NewNotificationModal from './NewNotificationModal'; // Importar o novo modal também aqui
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false); // State para o modal
+  
+  // A Navbar agora controla os dois modais
+  const [isNotificationListOpen, setIsNotificationListOpen] = useState(false);
+  const [isNewNotificationOpen, setIsNewNotificationOpen] = useState(false);
 
   const router = useRouter()
   const pathname = usePathname()
@@ -23,6 +27,18 @@ export default function Navbar() {
     const token = sessionStorage.getItem('authToken');
     return token ? { 'Authorization': `Bearer ${token}` } : {};
   };
+
+  const fetchApiData = async (url) => {
+    try {
+        const res = await fetch(url, { headers: getAuthHeader() });
+        if (!res.ok) return [];
+        return await res.json();
+    } catch {
+        return [];
+    }
+  };
+
+  const fetchClientes = (query) => fetchApiData(`/api/cadastros/clientes/search?nome=${query}`);
 
   const fetchUnreadCount = async () => {
       try {
@@ -35,7 +51,6 @@ export default function Navbar() {
           console.error("Failed to fetch unread count", error);
       }
   };
-
 
   if (pathname.startsWith('/portal')) {
       return null;
@@ -71,7 +86,7 @@ export default function Navbar() {
     sessionStorage.removeItem('authToken')
     router.push('/login')
   }
-
+  
   const publicPaths = ['/', '/login'];
   if (publicPaths.includes(pathname)) {
       return null;
@@ -92,9 +107,20 @@ export default function Navbar() {
   return (
     <>
       <NotificationModal 
-        isOpen={isNotificationModalOpen}
-        onClose={() => setIsNotificationModalOpen(false)}
+        isOpen={isNotificationListOpen}
+        onClose={() => setIsNotificationListOpen(false)}
         onUpdateCount={fetchUnreadCount}
+        // Nova prop para abrir o modal de criação
+        onOpenNew={() => setIsNewNotificationOpen(true)}
+      />
+      <NewNotificationModal
+        isOpen={isNewNotificationOpen}
+        onClose={() => setIsNewNotificationOpen(false)}
+        onSuccess={() => {
+            alert("Notificação enviada com sucesso!");
+            setIsNewNotificationOpen(false);
+        }}
+        fetchClientes={fetchClientes}
       />
       <motion.nav
         className="bg-gray-900 border-b border-gray-800 shadow-lg fixed w-full z-30"
@@ -118,7 +144,7 @@ export default function Navbar() {
             </div>
 
             <div className="flex items-center">
-                <button onClick={() => setIsNotificationModalOpen(true)} className="relative text-gray-400 hover:text-white mr-4">
+                <button onClick={() => setIsNotificationListOpen(true)} className="relative text-gray-400 hover:text-white mr-4">
                     <FaBell size={20} />
                     {unreadCount > 0 && (
                         <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-xs text-white">
@@ -178,4 +204,3 @@ export default function Navbar() {
     </>
   )
 }
-
