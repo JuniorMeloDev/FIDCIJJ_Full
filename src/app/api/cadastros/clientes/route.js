@@ -4,44 +4,33 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { generateStrongPassword, sendWelcomeEmail } from '@/app/lib/emailService';
 
-// Função para gerar senha forte
-const generateStrongPassword = () => {
-    const length = 10;
-    const lower = 'abcdefghijklmnopqrstuvwxyz';
-    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const numbers = '0123456789';
-    const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-    const all = lower + upper + numbers + special;
-
-    let password = '';
-    password += lower[Math.floor(Math.random() * lower.length)];
-    password += upper[Math.floor(Math.random() * upper.length)];
-    password += numbers[Math.floor(Math.random() * numbers.length)];
-    password += special[Math.floor(Math.random() * special.length)];
-
-    for (let i = 4; i < length; i++) {
-        password += all[Math.floor(Math.random() * all.length)];
-    }
-    return password.split('').sort(() => 0.5 - Math.random()).join('');
-};
-
-// GET: Busca todos os clientes (sem alterações)
 export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
+        
+        // **NOVA LÓGICA DE FILTRO**
+        const { searchParams } = new URL(request.url);
+        const ramo = searchParams.get('ramo');
 
-        const { data, error } = await supabase
+        let query = supabase
             .from('clientes')
             .select(`
                 *,
                 contas_bancarias (*),
                 cliente_emails (email),
                 cliente_tipos_operacao ( tipo_operacao_id )
-            `)
-            .order('nome', { ascending: true });
+            `);
+        
+        // Aplica o filtro se o parâmetro 'ramo' for fornecido
+        if (ramo && ramo !== 'Todos') {
+            query = query.eq('ramo_de_atividade', ramo);
+        }
+
+        const { data, error } = await query.order('nome', { ascending: true });
 
         if (error) {
             console.error('Erro do Supabase ao buscar clientes:', error);
@@ -54,7 +43,8 @@ export async function GET(request) {
     }
 }
 
-// POST: Cria um novo cliente
+
+// A função POST permanece a mesma
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -88,7 +78,6 @@ export async function POST(request) {
             await supabase.from('cliente_tipos_operacao').insert(tiposToInsert);
         }
 
-        // --- LÓGICA DE USUÁRIO E E-MAIL ---
         if (acesso && acesso.username) {
             let tempPassword = acesso.password;
             
@@ -117,7 +106,6 @@ export async function POST(request) {
             if (sendWelcomeEmail) {
                 const recipientEmail = clienteData.email || (emails && emails.length > 0 ? emails[0] : null);
                 if (recipientEmail) {
-                    // --- CORREÇÃO AQUI ---
                     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
                     const emailApiUrl = `${appUrl}/api/emails/enviar-boasVindas`;
                     
@@ -131,14 +119,12 @@ export async function POST(request) {
                             recipientEmail: recipientEmail
                         })
                     });
-                    // Log para depuração caso ainda falhe
                     if (!emailResponse.ok) {
                         console.error('Falha ao chamar a API de envio de e-mail:', await emailResponse.text());
                     }
                 }
             }
         }
-        // --- FIM DA LÓGICA ---
 
         return NextResponse.json(newCliente, { status: 201 });
     } catch (error) {

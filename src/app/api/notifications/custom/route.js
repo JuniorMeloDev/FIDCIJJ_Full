@@ -14,49 +14,56 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Acesso negado.' }, { status: 403 });
         }
 
-        const { clientIds, title, message } = await request.json();
+        // Processa o corpo como FormData
+        const formData = await request.formData();
+        const clientIds = JSON.parse(formData.get('clientIds'));
+        const title = formData.get('title');
+        const message = formData.get('message');
+        const files = formData.getAll('attachments'); // 'attachments' é o nome do campo do arquivo
 
         if (!clientIds || clientIds.length === 0 || !title || !message) {
-            return NextResponse.json({ message: 'Todos os campos são obrigatórios.' }, { status: 400 });
+            return NextResponse.json({ message: 'Todos os campos de texto são obrigatórios.' }, { status: 400 });
         }
         
-        // 1. Buscar os IDs dos usuários associados aos clientes
-        const { data: users, error: userError } = await supabase
-            .from('users')
-            .select('id')
-            .in('cliente_id', clientIds);
-
+        const { data: users, error: userError } = await supabase.from('users').select('id').in('cliente_id', clientIds);
         if (userError) throw userError;
         if (users.length === 0) {
-            return NextResponse.json({ message: 'Nenhum usuário destinatário encontrado para os clientes selecionados.' }, { status: 404 });
+            return NextResponse.json({ message: 'Nenhum usuário destinatário encontrado.' }, { status: 404 });
         }
         
-        // 2. Preparar e inserir as notificações no banco de dados
         const notificationsToInsert = users.map(user => ({
             user_id: user.id,
             title,
             message,
-            link: '/portal/notificacoes' // Link genérico para a página de notificações do cliente
+            link: '/portal/notificacoes'
         }));
 
         const { error: insertError } = await supabase.from('notifications').insert(notificationsToInsert);
         if (insertError) throw insertError;
         
-        // 3. Buscar os e-mails dos clientes para enviar a notificação
-        const { data: clients, error: clientError } = await supabase
-            .from('clientes')
-            .select('email')
-            .in('id', clientIds);
+        // Processa os anexos para o e-mail
+        const attachments = [];
+        for (const file of files) {
+            const buffer = Buffer.from(await file.arrayBuffer());
+            attachments.push({
+                filename: file.name,
+                content: buffer,
+                contentType: file.type,
+            });
+        }
+        
+        const { data: clients, error: clientError } = await supabase.from('clientes').select('email').in('id', clientIds);
         
         if (clientError) {
-             console.error("Falha ao buscar e-mails dos clientes, mas as notificações foram salvas.", clientError);
+             console.error("Falha ao buscar e-mails, mas notificações foram salvas.", clientError);
         } else {
             const recipientEmails = clients.map(c => c.email).filter(Boolean);
             if (recipientEmails.length > 0) {
                 await sendCustomNotificationEmail({
                     title,
                     message,
-                    recipientEmails
+                    recipientEmails,
+                    attachments // Envia os anexos para a função de e-mail
                 });
             }
         }
