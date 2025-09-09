@@ -7,15 +7,13 @@ import { jwtDecode } from 'jwt-decode';
 import { motion, AnimatePresence } from 'framer-motion'
 import { FaChartLine, FaBars, FaTimes, FaBell } from 'react-icons/fa'
 import NotificationModal from './NotificationModal';
-import NewNotificationModal from './NewNotificationModal'; // Importar o novo modal também aqui
+import NewNotificationModal from './NewNotificationModal';
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
   const [unreadCount, setUnreadCount] = useState(0);
-  
-  // A Navbar agora controla os dois modais
   const [isNotificationListOpen, setIsNotificationListOpen] = useState(false);
   const [isNewNotificationOpen, setIsNewNotificationOpen] = useState(false);
 
@@ -50,6 +48,12 @@ export default function Navbar() {
       } catch (error) {
           console.error("Failed to fetch unread count", error);
       }
+  };
+  
+  // **NOVA FUNÇÃO PARA TRANSIÇÃO CORRETA DOS MODAIS**
+  const handleOpenNewNotificationModal = () => {
+    setIsNotificationListOpen(false);
+    setIsNewNotificationOpen(true);
   };
 
   if (pathname.startsWith('/portal')) {
@@ -86,7 +90,7 @@ export default function Navbar() {
     sessionStorage.removeItem('authToken')
     router.push('/login')
   }
-  
+
   const publicPaths = ['/', '/login'];
   if (publicPaths.includes(pathname)) {
       return null;
@@ -110,8 +114,7 @@ export default function Navbar() {
         isOpen={isNotificationListOpen}
         onClose={() => setIsNotificationListOpen(false)}
         onUpdateCount={fetchUnreadCount}
-        // Nova prop para abrir o modal de criação
-        onOpenNew={() => setIsNewNotificationOpen(true)}
+        onOpenNew={handleOpenNewNotificationModal}
       />
       <NewNotificationModal
         isOpen={isNewNotificationOpen}

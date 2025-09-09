@@ -1,26 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import AutocompleteSearch from './AutoCompleteSearch';
+import { FaPaperclip, FaTimes } from 'react-icons/fa';
 
 export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetchClientes }) {
     const [recipients, setRecipients] = useState([]);
     const [title, setTitle] = useState('');
     const [message, setMessage] = useState('');
+    const [attachments, setAttachments] = useState([]);
     const [isSending, setIsSending] = useState(false);
     const [error, setError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
-    
-    // Novo state para controlar o carregamento de todos os clientes
     const [isLoadingAll, setIsLoadingAll] = useState(false);
+    const [ramoFilter, setRamoFilter] = useState('Todos');
+    const fileInputRef = useRef(null);
 
     if (!isOpen) return null;
     
-    const getAuthHeader = () => {
-        const token = sessionStorage.getItem('authToken');
-        return token ? { 'Authorization': `Bearer ${token}` } : {};
-    };
-
     const handleSelectClient = (client) => {
         if (client && !recipients.some(r => r.id === client.id)) {
             setRecipients([...recipients, client]);
@@ -32,7 +29,6 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
         setRecipients(recipients.filter(r => r.id !== clientId));
     };
 
-    // Nova função para selecionar todos os clientes ou limpar a seleção
     const handleSelectAllOrClear = async () => {
         if (recipients.length > 0) {
             setRecipients([]);
@@ -42,7 +38,9 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
         setIsLoadingAll(true);
         setError('');
         try {
-            const response = await fetch('/api/cadastros/clientes', { headers: getAuthHeader() });
+            const token = sessionStorage.getItem('authToken');
+            const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {};
+            const response = await fetch(`/api/cadastros/clientes?ramo=${ramoFilter}`, { headers: authHeader });
             if (!response.ok) throw new Error('Falha ao buscar a lista completa de clientes.');
             const allClients = await response.json();
             setRecipients(allClients);
@@ -53,20 +51,45 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
         }
     };
 
+    const handleFileChange = (event) => {
+        setAttachments(prev => [...prev, ...event.target.files]);
+    };
+
+    const handleRemoveAttachment = (fileName) => {
+        setAttachments(prev => prev.filter(file => file.name !== fileName));
+    };
+
     const handleSend = async () => {
         setError('');
         if (recipients.length === 0 || !title || !message) {
-            setError('Todos os campos são obrigatórios.');
+            setError('Destinatários, título e mensagem são obrigatórios.');
             return;
         }
-
         setIsSending(true);
+        
+        const formData = new FormData();
+        const clientIds = recipients.map(r => r.id);
+        formData.append('clientIds', JSON.stringify(clientIds));
+        formData.append('title', title);
+        formData.append('message', message);
+        attachments.forEach(file => {
+            formData.append('attachments', file);
+        });
+
         try {
-            const clientIds = recipients.map(r => r.id);
+            // **CORREÇÃO PRINCIPAL AQUI**
+            // Criamos o cabeçalho manualmente apenas com o token,
+            // deixando o navegador definir o 'Content-Type' para 'multipart/form-data'.
+            const headers = new Headers();
+            const token = sessionStorage.getItem('authToken');
+            if (token) {
+                headers.append('Authorization', `Bearer ${token}`);
+            }
+
             const response = await fetch('/api/notifications/custom', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-                body: JSON.stringify({ clientIds, title, message }),
+                headers: headers, // Usamos o cabeçalho criado
+                body: formData,
             });
 
             if (!response.ok) {
@@ -77,6 +100,7 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
             setRecipients([]);
             setTitle('');
             setMessage('');
+            setAttachments([]);
             onSuccess();
 
         } catch (err) {
@@ -93,25 +117,46 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
                 
                 <div className="space-y-4">
                     <div>
-                        <div className="flex justify-between items-center mb-1">
-                            <label className="block text-sm font-medium text-gray-300">Destinatários (Clientes)</label>
-                            {/* Botão para selecionar/limpar todos */}
-                            <button
+                        <div className="grid grid-cols-3 gap-4 mb-1">
+                            <div className="col-span-2">
+                                <label className="block text-sm font-medium text-gray-300">Destinatários</label>
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-sm font-medium text-gray-300">Filtrar por Ramo</label>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-4">
+                            <div className="flex-grow">
+                                <AutocompleteSearch
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    fetchSuggestions={fetchClientes}
+                                    onSelect={handleSelectClient}
+                                    placeholder="Pesquisar cliente para adicionar..."
+                                />
+                            </div>
+                            <select
+                                value={ramoFilter}
+                                onChange={(e) => setRamoFilter(e.target.value)}
+                                className="bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
+                            >
+                                <option value="Todos">Todos</option>
+                                <option value="Transportes">Transportes</option>
+                                <option value="Industria">Indústria</option>
+                                <option value="Comercio">Comércio</option>
+                                <option value="Servicos">Serviços</option>
+                                <option value="Outro">Outro</option>
+                            </select>
+                             <button
                                 type="button"
                                 onClick={handleSelectAllOrClear}
                                 disabled={isLoadingAll}
-                                className="text-sm text-orange-400 hover:text-orange-300 disabled:opacity-50"
+                                className="bg-gray-600 hover:bg-gray-500 px-3 py-2 rounded-md text-sm font-semibold disabled:opacity-50"
                             >
-                                {isLoadingAll ? 'Carregando...' : (recipients.length > 0 ? 'Limpar Seleção' : 'Selecionar Todos')}
+                                {isLoadingAll ? '...' : (recipients.length > 0 ? 'Limpar' : 'Todos')}
                             </button>
                         </div>
-                        <AutocompleteSearch
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            fetchSuggestions={fetchClientes}
-                            onSelect={handleSelectClient}
-                            placeholder="Pesquisar cliente para adicionar..."
-                        />
+
                         <div className="mt-2 flex flex-wrap gap-2 min-h-[2rem] max-h-24 overflow-y-auto bg-gray-900/50 p-2 rounded-md">
                             {recipients.map(client => (
                                 <span key={client.id} className="flex items-center gap-2 bg-orange-500 text-white text-sm font-medium px-2.5 py-0.5 rounded-full">
@@ -124,23 +169,31 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
 
                     <div>
                         <label htmlFor="title" className="block text-sm font-medium text-gray-300">Título</label>
-                        <input
-                            type="text"
-                            id="title"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-2"
-                        />
+                        <input type="text" id="title" value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-2" />
                     </div>
                      <div>
-                        <label htmlFor="message" className="block text-sm font-medium text-gray-300">Mensagem</label>
-                        <textarea
+                        <label htmlFor="message" className="block text-sm font-medium text-gray-300">Mensagem (Suporta HTML básico)</label>
+                        <div
                             id="message"
-                            rows="5"
-                            value={message}
-                            onChange={(e) => setMessage(e.target.value)}
-                            className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-2"
+                            contentEditable="true"
+                            onInput={e => setMessage(e.currentTarget.innerHTML)}
+                            className="mt-1 block w-full h-32 overflow-y-auto bg-gray-700 border-gray-600 rounded-md p-2"
                         />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Anexos</label>
+                        <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple accept="image/*" className="hidden"/>
+                        <button onClick={() => fileInputRef.current.click()} className="mt-1 w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-md p-2 transition">
+                            <FaPaperclip /> Adicionar Anexo(s)
+                        </button>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                             {attachments.map((file, index) => (
+                                <div key={index} className="flex items-center gap-2 bg-gray-600 text-white text-xs px-2 py-1 rounded-full">
+                                    {file.name}
+                                    <button onClick={() => handleRemoveAttachment(file.name)} className="text-gray-300 hover:text-white font-bold leading-none">&times;</button>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
