@@ -5,15 +5,13 @@ import { motion } from 'framer-motion';
 import { FaBell, FaCheckDouble } from 'react-icons/fa';
 import { formatDate } from '@/app/utils/formatters';
 import Link from 'next/link';
-import NotificationDetailModal from '@/app/components/NotificationDetailModal'; // Importar o novo modal
+import NotificationDetailModal from '@/app/components/NotificationDetailModal';
 
 export default function NotificacoesClientePage() {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [filters, setFilters] = useState({ dataInicio: '', dataFim: '' });
-    
-    // State para controlar o modal de detalhes
     const [selectedNotification, setSelectedNotification] = useState(null);
 
     const getAuthHeader = () => {
@@ -33,7 +31,6 @@ export default function NotificacoesClientePage() {
             const data = await response.json();
             setNotifications(data);
         } catch (err) {
-            // **CORREÇÃO AQUI: Adicionadas as chaves {} ao redor do setError**
             setError(err.message);
         } finally {
             setLoading(false);
@@ -69,14 +66,16 @@ export default function NotificacoesClientePage() {
             markAsRead(unreadIds);
         }
     };
-
-    // Função para extrair texto puro do HTML para a pré-visualização
+    
     const getTextPreview = (html, length = 100) => {
         if (!html) return '';
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const text = doc.body.textContent || "";
+        // Cria um elemento temporário para extrair o texto sem as tags HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        const text = tempDiv.textContent || tempDiv.innerText || "";
         return text.length > length ? text.substring(0, length) + '...' : text;
     };
+
 
     return (
         <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col items-center">
@@ -142,10 +141,11 @@ export default function NotificacoesClientePage() {
                                         {getTextPreview(notif.message)}
                                     </p>
                                     <div className="mt-2 flex items-center gap-4">
+                                        {/* O link só aparece se a notificação tiver um link associado */}
                                         {notif.link && (
                                             <Link 
                                                 href={notif.link} 
-                                                onClick={(e) => e.stopPropagation()} // Impede que o modal abra ao clicar no link
+                                                onClick={(e) => e.stopPropagation()}
                                                 className="text-sm text-orange-400 hover:underline"
                                             >
                                                 Ver Operação
@@ -154,7 +154,7 @@ export default function NotificacoesClientePage() {
                                         {!notif.is_read && (
                                             <button 
                                                 onClick={(e) => {
-                                                    e.stopPropagation(); // Impede que o modal abra
+                                                    e.stopPropagation();
                                                     markAsRead([notif.id]);
                                                 }} 
                                                 className="text-sm text-blue-400 hover:underline"

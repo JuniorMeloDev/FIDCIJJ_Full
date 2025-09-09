@@ -30,8 +30,8 @@ export async function POST(request) {
         if (users.length === 0) {
             return NextResponse.json({ message: 'Nenhum usuário destinatário encontrado.' }, { status: 404 });
         }
-
-        // **CORREÇÃO: Extrai os nomes dos arquivos para salvar no BD**
+        
+        // Extrai os nomes dos arquivos para salvar na nova coluna do BD
         const attachmentFileNames = files.map(file => file.name);
         
         const notificationsToInsert = users.map(user => ({
@@ -39,7 +39,7 @@ export async function POST(request) {
             title,
             message,
             link: null, // Link nulo para notificações personalizadas
-            attachments: attachmentFileNames.length > 0 ? attachmentFileNames : null, // Salva os nomes dos arquivos
+            attachments: attachmentFileNames.length > 0 ? attachmentFileNames : null,
         }));
 
         const { error: insertError } = await supabase.from('notifications').insert(notificationsToInsert);
