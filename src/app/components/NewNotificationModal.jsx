@@ -14,10 +14,30 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoadingAll, setIsLoadingAll] = useState(false);
     const [ramoFilter, setRamoFilter] = useState('Todos');
+    
+    // Novo state para o checkbox de e-mail
+    const [sendEmail, setSendEmail] = useState(true);
+    
     const fileInputRef = useRef(null);
+
+    // Função para resetar o estado do modal ao fechar
+    const handleClose = () => {
+        setRecipients([]);
+        setTitle('');
+        setMessage('');
+        setAttachments([]);
+        setSendEmail(true);
+        setError('');
+        onClose();
+    };
 
     if (!isOpen) return null;
     
+    const getAuthHeader = () => {
+        const token = sessionStorage.getItem('authToken');
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    };
+
     const handleSelectClient = (client) => {
         if (client && !recipients.some(r => r.id === client.id)) {
             setRecipients([...recipients, client]);
@@ -34,14 +54,11 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
             setRecipients([]);
             return;
         }
-
         setIsLoadingAll(true);
         setError('');
         try {
-            const token = sessionStorage.getItem('authToken');
-            const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {};
-            const response = await fetch(`/api/cadastros/clientes?ramo=${ramoFilter}`, { headers: authHeader });
-            if (!response.ok) throw new Error('Falha ao buscar a lista completa de clientes.');
+            const response = await fetch(`/api/cadastros/clientes?ramo=${ramoFilter}`, { headers: getAuthHeader() });
+            if (!response.ok) throw new Error('Falha ao buscar a lista de clientes.');
             const allClients = await response.json();
             setRecipients(allClients);
         } catch (err) {
@@ -65,6 +82,7 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
             setError('Destinatários, título e mensagem são obrigatórios.');
             return;
         }
+
         setIsSending(true);
         
         const formData = new FormData();
@@ -72,14 +90,12 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
         formData.append('clientIds', JSON.stringify(clientIds));
         formData.append('title', title);
         formData.append('message', message);
+        formData.append('sendEmail', sendEmail); // Adiciona o valor do checkbox
         attachments.forEach(file => {
             formData.append('attachments', file);
         });
 
         try {
-            // **CORREÇÃO PRINCIPAL AQUI**
-            // Criamos o cabeçalho manualmente apenas com o token,
-            // deixando o navegador definir o 'Content-Type' para 'multipart/form-data'.
             const headers = new Headers();
             const token = sessionStorage.getItem('authToken');
             if (token) {
@@ -88,7 +104,7 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
 
             const response = await fetch('/api/notifications/custom', {
                 method: 'POST',
-                headers: headers, // Usamos o cabeçalho criado
+                headers: headers,
                 body: formData,
             });
 
@@ -97,10 +113,6 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
                 throw new Error(errorData.message || 'Falha ao enviar notificação.');
             }
             
-            setRecipients([]);
-            setTitle('');
-            setMessage('');
-            setAttachments([]);
             onSuccess();
 
         } catch (err) {
@@ -111,11 +123,12 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={handleClose}>
             <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
                 <h2 className="text-xl font-bold mb-6">Enviar Nova Notificação</h2>
                 
                 <div className="space-y-4">
+                    {/* ... (campos de Destinatários, Título, Mensagem e Anexos permanecem iguais) ... */}
                     <div>
                         <div className="grid grid-cols-3 gap-4 mb-1">
                             <div className="col-span-2">
@@ -156,7 +169,6 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
                                 {isLoadingAll ? '...' : (recipients.length > 0 ? 'Limpar' : 'Todos')}
                             </button>
                         </div>
-
                         <div className="mt-2 flex flex-wrap gap-2 min-h-[2rem] max-h-24 overflow-y-auto bg-gray-900/50 p-2 rounded-md">
                             {recipients.map(client => (
                                 <span key={client.id} className="flex items-center gap-2 bg-orange-500 text-white text-sm font-medium px-2.5 py-0.5 rounded-full">
@@ -199,11 +211,23 @@ export default function NewNotificationModal({ isOpen, onClose, onSuccess, fetch
 
                 {error && <p className="text-sm text-red-400 mt-4 text-center">{error}</p>}
                 
-                <div className="flex justify-end gap-3 pt-6 mt-4 border-t border-gray-700">
-                    <button type="button" onClick={onClose} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition">Cancelar</button>
-                    <button type="button" onClick={handleSend} disabled={isSending} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition disabled:opacity-50">
-                        {isSending ? 'Enviando...' : 'Enviar Notificação'}
-                    </button>
+                <div className="flex justify-between items-center pt-6 mt-4 border-t border-gray-700">
+                    <label className="flex items-center cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            id="sendEmail"
+                            checked={sendEmail}
+                            onChange={(e) => setSendEmail(e.target.checked)}
+                            className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
+                        />
+                        <span className="ml-2 text-sm text-gray-300">Enviar também por e-mail</span>
+                    </label>
+                    <div className="flex gap-3">
+                        <button type="button" onClick={handleClose} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition">Cancelar</button>
+                        <button type="button" onClick={handleSend} disabled={isSending} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition disabled:opacity-50">
+                            {isSending ? 'Enviando...' : 'Enviar Notificação'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

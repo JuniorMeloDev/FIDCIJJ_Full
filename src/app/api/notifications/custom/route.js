@@ -14,12 +14,12 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Acesso negado.' }, { status: 403 });
         }
 
-        // Processa o corpo como FormData
         const formData = await request.formData();
         const clientIds = JSON.parse(formData.get('clientIds'));
         const title = formData.get('title');
         const message = formData.get('message');
-        const files = formData.getAll('attachments'); // 'attachments' é o nome do campo do arquivo
+        const sendEmail = formData.get('sendEmail') === 'true'; // Captura o valor do checkbox
+        const files = formData.getAll('attachments');
 
         if (!clientIds || clientIds.length === 0 || !title || !message) {
             return NextResponse.json({ message: 'Todos os campos de texto são obrigatórios.' }, { status: 400 });
@@ -41,29 +41,32 @@ export async function POST(request) {
         const { error: insertError } = await supabase.from('notifications').insert(notificationsToInsert);
         if (insertError) throw insertError;
         
-        // Processa os anexos para o e-mail
-        const attachments = [];
-        for (const file of files) {
-            const buffer = Buffer.from(await file.arrayBuffer());
-            attachments.push({
-                filename: file.name,
-                content: buffer,
-                contentType: file.type,
-            });
-        }
-        
         const { data: clients, error: clientError } = await supabase.from('clientes').select('email').in('id', clientIds);
         
         if (clientError) {
-             console.error("Falha ao buscar e-mails, mas notificações foram salvas.", clientError);
+             console.error("Falha ao buscar e-mails, mas notificações no portal foram salvas.", clientError);
         } else {
             const recipientEmails = clients.map(c => c.email).filter(Boolean);
             if (recipientEmails.length > 0) {
+                // Prepara anexos apenas se o e-mail detalhado for enviado
+                const attachments = [];
+                if (sendEmail) { // Apenas processa anexos se for para enviar o e-mail completo
+                    for (const file of files) {
+                        const buffer = Buffer.from(await file.arrayBuffer());
+                        attachments.push({
+                            filename: file.name,
+                            content: buffer,
+                            contentType: file.type,
+                        });
+                    }
+                }
+
                 await sendCustomNotificationEmail({
                     title,
                     message,
                     recipientEmails,
-                    attachments // Envia os anexos para a função de e-mail
+                    attachments,
+                    isDetailedEmail: sendEmail // Passa o flag para a função de e-mail
                 });
             }
         }

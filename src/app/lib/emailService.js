@@ -118,30 +118,52 @@ export async function sendOperationStatusEmail({ clienteNome, operacaoId, status
 }
 
 // **FUNÇÃO CORRIGIDA PARA LIDAR COM ANEXOS**
-export async function sendCustomNotificationEmail({ title, message, recipientEmails, attachments = [] }) {
-    if (!title || !message || !recipientEmails || recipientEmails.length === 0) {
+export async function sendCustomNotificationEmail({ title, message, recipientEmails, attachments = [], isDetailedEmail = true }) {
+    if (!title || !recipientEmails || recipientEmails.length === 0) {
         return;
     }
 
-    const emailBody = `
-        <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-            ${message.replace(/\n/g, '<br>')}
-            <br><br>
-            <p>Atenciosamente,</p>
-            <p>
-                <strong>Equipe FIDC IJJ</strong>
-            </p>
-            <br>
-            <img src="cid:logoImage" width="140" alt="Logo FIDC IJJ">
-        </div>
-    `;
-
+    let emailBody;
+    let finalAttachments = [];
     const logoPath = path.resolve(process.cwd(), 'public', 'Logo.png');
-    
-    // Clona o array de anexos para não modificar o original
-    const finalAttachments = [...attachments];
+    const portalUrl = process.env.NEXT_PUBLIC_LOGIN_URL || 'https://fidcijj.vercel.app/login';
 
-    // Adiciona o logo como anexo embutido (inline)
+    if (isDetailedEmail) {
+        // Lógica para o e-mail completo (com mensagem e anexos)
+        emailBody = `
+            <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                ${message}
+                <br><br>
+                <p>Atenciosamente,</p>
+                <p>
+                    <strong>Equipe FIDC IJJ</strong>
+                </p>
+                <br>
+                <img src="cid:logoImage" width="140" alt="Logo FIDC IJJ">
+            </div>
+        `;
+        finalAttachments = [...attachments]; // Usa os anexos enviados
+
+    } else {
+        // Lógica para o e-mail genérico (apenas aviso)
+        emailBody = `
+             <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                <p>Olá,</p>
+                <p>Você recebeu uma nova notificação em nosso portal de clientes.</p>
+                <p><strong>Assunto:</strong> ${title}</p>
+                <br>
+                <p>Para visualizar os detalhes, por favor, acesse o portal.</p>
+                <p><a href="${portalUrl}" target="_blank" style="display: inline-block; padding: 10px 20px; background-color: #f97316; color: #ffffff; text-decoration: none; border-radius: 5px;">Acessar Portal FIDC IJJ</a></p>
+                <br>
+                <p>Atenciosamente,</p>
+                <p><strong>Equipe FIDC IJJ</strong></p>
+                <br>
+                <img src="cid:logoImage" width="140" alt="Logo FIDC IJJ">
+            </div>
+        `;
+    }
+
+    // Adiciona o logo como anexo embutido em ambos os casos
     finalAttachments.push({
         filename: 'Logo.png',
         path: logoPath,
@@ -151,8 +173,8 @@ export async function sendCustomNotificationEmail({ title, message, recipientEma
     await transporter.sendMail({
         from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
         to: recipientEmails.join(', '),
-        subject: title,
+        subject: isDetailedEmail ? title : 'Você tem uma nova notificação no Portal FIDC IJJ',
         html: emailBody,
-        attachments: finalAttachments // Usa a lista de anexos final
+        attachments: finalAttachments
     });
 }

@@ -125,7 +125,6 @@ export default function Navbar() {
       <NewNotificationModal
         isOpen={isNewNotificationOpen}
         onClose={() => setIsNewNotificationOpen(false)}
-        // 4. Trocar o alert() pela função showNotification
         onSuccess={() => {
             showNotification("Notificação enviada com sucesso!", "success");
             setIsNewNotificationOpen(false);
