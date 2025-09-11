@@ -20,7 +20,7 @@ export default function Navbar() {
   const [isNewNotificationOpen, setIsNewNotificationOpen] = useState(false);
   const [notification, setNotification] = useState({ message: '', type: '' });
 
-  const { isAdmin } = useAuth(); // 2. Usar o hook para verificar se o usuário é admin
+  const { isAdmin } = useAuth(); 
 
   const showNotification = (message, type) => {
     setNotification({ message, type });
@@ -96,8 +96,9 @@ export default function Navbar() {
     router.push('/login')
   }
   
+  // CORREÇÃO AQUI: Adicionado a verificação para não renderizar no portal do cliente
   const publicPaths = ['/', '/login'];
-  if (publicPaths.includes(pathname)) {
+  if (publicPaths.includes(pathname) || pathname.startsWith('/portal')) {
       return null;
   }
 
@@ -122,7 +123,7 @@ export default function Navbar() {
         onClose={() => setIsNotificationListOpen(false)}
         onUpdateCount={fetchUnreadCount}
         onOpenNew={handleOpenNewNotificationModal}
-        isAdmin={isAdmin} // 3. Passar a propriedade isAdmin para o modal
+        isAdmin={isAdmin}
       />
       <NewNotificationModal
         isOpen={isNewNotificationOpen}
