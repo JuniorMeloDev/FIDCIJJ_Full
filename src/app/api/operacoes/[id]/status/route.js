@@ -16,9 +16,8 @@ export async function PUT(request, { params }) {
     }
 
     const { id } = params;
-    const { status, conta_bancaria_id } = await request.json();
+    const { status, conta_bancaria_id, descontos } = await request.json();
 
-    // --- LÓGICA DE NOTIFICAÇÃO (ANTES DE ATUALIZAR) ---
     const { data: operacao, error: fetchError } = await supabase
       .from("operacoes")
       .select("*, cliente:clientes(id, nome, email)")
@@ -28,7 +27,6 @@ export async function PUT(request, { params }) {
     if (fetchError || !operacao) {
       throw new Error("Operação a ser atualizada não foi encontrada.");
     }
-    // --- FIM DA BUSCA ---
 
     if (status === "Aprovada") {
       if (!conta_bancaria_id) {
@@ -37,6 +35,21 @@ export async function PUT(request, { params }) {
           { status: 400 }
         );
       }
+      
+      // Salva os descontos adicionais, se houver
+      if (descontos && descontos.length > 0) {
+          const descontosToInsert = descontos.map(d => ({
+              operacao_id: id,
+              descricao: d.descricao,
+              valor: d.valor
+          }));
+          await supabase.from('descontos').insert(descontosToInsert);
+      }
+
+      // Recalcula o valor líquido
+      const totalDescontosAdicionais = descontos.reduce((acc, d) => acc + d.valor, 0);
+      const novoValorLiquido = operacao.valor_liquido - totalDescontosAdicionais;
+
 
       const { data: conta } = await supabase
         .from("contas_bancarias")
@@ -68,7 +81,7 @@ export async function PUT(request, { params }) {
         operacao_id: id,
         data_movimento: operacao.data_operacao,
         descricao: descricaoLancamento,
-        valor: -Math.abs(operacao.valor_liquido),
+        valor: -Math.abs(novoValorLiquido), // Usa o novo valor líquido
         categoria: "Pagamento de Borderô",
         conta_bancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
         empresa_associada: empresaMasterNome,
@@ -76,18 +89,18 @@ export async function PUT(request, { params }) {
 
       await supabase
         .from("operacoes")
-        .update({ status: "Aprovada", conta_bancaria_id })
+        .update({ 
+            status: "Aprovada", 
+            conta_bancaria_id,
+            valor_liquido: novoValorLiquido, // Atualiza o valor líquido na operação
+            valor_total_descontos: operacao.valor_total_descontos + totalDescontosAdicionais
+        })
         .eq("id", id);
     } else {
-      // Rejeitada
-      // 1. Excluir duplicatas associadas à operação rejeitada
       await supabase.from("duplicatas").delete().eq("operacao_id", id);
-
-      // 2. Atualizar o status da operação principal
       await supabase.from("operacoes").update({ status: status }).eq("id", id);
     }
 
-    // --- ENVIAR NOTIFICAÇÃO E E-MAIL PARA O CLIENTE ---
     const { data: clienteUser } = await supabase
       .from("users")
       .select("id")
@@ -112,7 +125,6 @@ export async function PUT(request, { params }) {
         });
       }
     }
-    // --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
 
     return NextResponse.json(
       { message: `Operação ${status.toLowerCase()} com sucesso.` },

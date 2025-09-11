@@ -5,7 +5,8 @@ import { motion } from 'framer-motion';
 import { formatBRLNumber, formatDate } from '../utils/formatters';
 import Notification from '@/app/components/Notification';
 import AprovacaoOperacaoModal from '@/app/components/AprovacaoOperacaoModal';
-import EmailModal from '@/app/components/EmailModal'; // 1. Importar o EmailModal
+import EmailModal from '@/app/components/EmailModal';
+import DescontoModal from '@/app/components/DescontoModal'; // Importar o modal de desconto
 
 export default function AnalisePage() {
     const [operacoes, setOperacoes] = useState([]);
@@ -17,10 +18,13 @@ export default function AnalisePage() {
     const [operacaoSelecionada, setOperacaoSelecionada] = useState(null);
     const [contasMaster, setContasMaster] = useState([]);
 
-    // 2. Adicionar os novos estados para o modal de e-mail
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
     const [operacaoParaEmail, setOperacaoParaEmail] = useState(null);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+    // Estado para o novo modal de Desconto
+    const [isDescontoModalOpen, setIsDescontoModalOpen] = useState(false);
+    const [descontosAdicionais, setDescontosAdicionais] = useState([]);
 
 
     const getAuthHeader = () => {
@@ -60,16 +64,19 @@ export default function AnalisePage() {
 
     const handleAnalisarClick = (operacao) => {
         setOperacaoSelecionada(operacao);
+        setDescontosAdicionais([]); // Limpa os descontos ao abrir o modal
         setIsModalOpen(true);
     };
-
-    // 5. Modificar a função para abrir o modal de e-mail após a aprovação
+    
     const handleSalvarAnalise = async (operacaoId, payload) => {
         try {
+            // Adiciona os novos descontos ao payload que será enviado para a API
+            const finalPayload = { ...payload, descontos: descontosAdicionais };
+
             const response = await fetch(`/api/operacoes/${operacaoId}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-                body: JSON.stringify(payload),
+                body: JSON.stringify(finalPayload),
             });
             if (!response.ok) {
                  const errorData = await response.json();
@@ -78,23 +85,21 @@ export default function AnalisePage() {
             showNotification("Operação analisada com sucesso!", "success");
             fetchPendentes();
 
-            // Se a operação foi APROVADA, prepara para abrir o modal de email
             if (payload.status === 'Aprovada') {
                 setOperacaoParaEmail({
                     id: operacaoId,
                     clienteId: operacaoSelecionada?.cliente?.id
                 });
-                setIsEmailModalOpen(true); // Abre o modal de email
+                setIsEmailModalOpen(true);
             }
 
-            return true; // Sinaliza sucesso para fechar o modal de aprovação
+            return true;
         } catch (err) {
             showNotification(err.message, "error");
             return false;
         }
     };
 
-    // 4. Adicionar a função para enviar o e-mail
     const handleSendEmail = async (destinatarios) => {
         if (!operacaoParaEmail) return;
         setIsSendingEmail(true);
@@ -116,7 +121,7 @@ export default function AnalisePage() {
             showNotification(err.message, "error");
         } finally {
             setIsSendingEmail(false);
-            setIsEmailModalOpen(false); // Fecha o modal após enviar ou dar erro
+            setIsEmailModalOpen(false);
             setOperacaoParaEmail(null);
         }
     };
@@ -132,9 +137,11 @@ export default function AnalisePage() {
                 onSave={handleSalvarAnalise}
                 operacao={operacaoSelecionada}
                 contasBancarias={contasMaster}
+                onAddDesconto={() => setIsDescontoModalOpen(true)} // Passa a função para abrir o modal de desconto
+                descontosAdicionais={descontosAdicionais} // Passa os descontos para exibição
+                setDescontosAdicionais={setDescontosAdicionais} // Permite a remoção de descontos
             />
 
-            {/* 3. Adicionar o componente EmailModal ao JSX */}
             <EmailModal
                 isOpen={isEmailModalOpen}
                 onClose={() => {
@@ -144,6 +151,15 @@ export default function AnalisePage() {
                 onSend={handleSendEmail}
                 isSending={isSendingEmail}
                 clienteId={operacaoParaEmail?.clienteId}
+            />
+
+            <DescontoModal
+                isOpen={isDescontoModalOpen}
+                onClose={() => setIsDescontoModalOpen(false)}
+                onSave={(novoDesconto) => {
+                    setDescontosAdicionais([...descontosAdicionais, novoDesconto]);
+                    setIsDescontoModalOpen(false);
+                }}
             />
 
 

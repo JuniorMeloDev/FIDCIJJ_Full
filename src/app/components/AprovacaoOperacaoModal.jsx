@@ -1,13 +1,29 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 
-export default function AprovacaoOperacaoModal({ isOpen, onClose, onSave, operacao, contasBancarias }) {
+export default function AprovacaoOperacaoModal({ 
+    isOpen, 
+    onClose, 
+    onSave, 
+    operacao, 
+    contasBancarias,
+    onAddDesconto, // Nova propriedade
+    descontosAdicionais, // Nova propriedade
+    setDescontosAdicionais // Nova propriedade
+}) {
     const [status, setStatus] = useState('Aprovada');
     const [contaBancariaId, setContaBancariaId] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
+
+    // Calcula o novo valor líquido com base nos descontos adicionais
+    const valorLiquidoFinal = useMemo(() => {
+        if (!operacao) return 0;
+        const totalDescontos = descontosAdicionais.reduce((acc, d) => acc + d.valor, 0);
+        return operacao.valor_liquido - totalDescontos;
+    }, [operacao, descontosAdicionais]);
 
     useEffect(() => {
         if (isOpen && operacao) {
@@ -40,6 +56,10 @@ export default function AprovacaoOperacaoModal({ isOpen, onClose, onSave, operac
         }
         setIsSaving(false);
     };
+
+    const handleRemoveDesconto = (id) => {
+        setDescontosAdicionais(descontosAdicionais.filter(d => d.id !== id));
+    }
     
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
@@ -51,7 +71,7 @@ export default function AprovacaoOperacaoModal({ isOpen, onClose, onSave, operac
                         <div><p><strong>Cliente:</strong> {operacao.cliente.nome}</p></div>
                         <div><p><strong>Data:</strong> {formatDate(operacao.data_operacao)}</p></div>
                         <div><p><strong>Valor Bruto:</strong> {formatBRLNumber(operacao.valor_total_bruto)}</p></div>
-                        <div><p><strong>Valor Líquido:</strong> {formatBRLNumber(operacao.valor_liquido)}</p></div>
+                        <div><p className="font-bold text-orange-400"><strong>Valor Líquido Final:</strong> {formatBRLNumber(valorLiquidoFinal)}</p></div>
                     </div>
                     
                     <div className="border-t border-gray-700 pt-4">
@@ -81,6 +101,30 @@ export default function AprovacaoOperacaoModal({ isOpen, onClose, onSave, operac
                             </table>
                         </div>
                     </div>
+
+                    {/* Seção de Descontos Adicionais */}
+                    <div className="border-t border-gray-700 pt-4 mt-4">
+                        <h3 className="font-semibold mb-2">Descontos / Taxas Adicionais:</h3>
+                        {descontosAdicionais.length > 0 ? (
+                            <ul className="space-y-2">
+                                {descontosAdicionais.map(d => (
+                                    <li key={d.id} className="flex justify-between items-center bg-gray-700 p-2 rounded-md text-sm">
+                                        <span>{d.descricao}</span>
+                                        <div className="flex items-center gap-3">
+                                            <span className="font-medium text-red-400">-{formatBRLNumber(d.valor)}</span>
+                                            <button onClick={() => handleRemoveDesconto(d.id)} className="text-gray-500 hover:text-red-400">&times;</button>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-sm text-gray-400 italic">Nenhum desconto adicional inserido.</p>
+                        )}
+                        <button onClick={onAddDesconto} className="text-sm text-orange-400 hover:underline mt-2">
+                            + Adicionar Desconto/Taxa
+                        </button>
+                    </div>
+
                 </div>
 
                 <div className="flex-shrink-0 border-t border-gray-700 pt-4 mt-4">
