@@ -6,19 +6,19 @@ import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 export default function AprovacaoOperacaoModal({ 
     isOpen, 
     onClose, 
-    onSave, 
+    onSaveTrigger, // Alterado de onSave para onSaveTrigger
     operacao, 
     contasBancarias,
-    onAddDesconto, // Nova propriedade
-    descontosAdicionais, // Nova propriedade
-    setDescontosAdicionais // Nova propriedade
+    onAddDesconto,
+    descontosAdicionais,
+    setDescontosAdicionais
 }) {
     const [status, setStatus] = useState('Aprovada');
     const [contaBancariaId, setContaBancariaId] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
+    const [isPartialDebit, setIsPartialDebit] = useState(false); // Novo estado para o checkbox
 
-    // Calcula o novo valor líquido com base nos descontos adicionais
     const valorLiquidoFinal = useMemo(() => {
         if (!operacao) return 0;
         const totalDescontos = descontosAdicionais.reduce((acc, d) => acc + d.valor, 0);
@@ -29,13 +29,14 @@ export default function AprovacaoOperacaoModal({
         if (isOpen && operacao) {
             setStatus('Aprovada');
             setContaBancariaId('');
+            setIsPartialDebit(false); // Reseta o checkbox
             setError('');
         }
     }, [isOpen, operacao]);
 
     if (!isOpen || !operacao) return null;
 
-    const handleSave = async () => {
+    const handleConfirm = async () => {
         if (status === 'Aprovada' && !contaBancariaId) {
             setError('É necessário selecionar uma conta bancária para aprovar a operação.');
             return;
@@ -43,18 +44,15 @@ export default function AprovacaoOperacaoModal({
         setIsSaving(true);
         setError('');
         
-        const payload = {
+        // O onSaveTrigger agora lida com a lógica de abrir o próximo modal ou salvar diretamente
+        await onSaveTrigger({
             status,
             conta_bancaria_id: status === 'Aprovada' ? parseInt(contaBancariaId, 10) : null,
-        };
+            isPartialDebit: status === 'Aprovada' ? isPartialDebit : false,
+        });
 
-        const success = await onSave(operacao.id, payload);
-        if (success) {
-            onClose();
-        } else {
-            setError('Ocorreu um erro ao salvar a operação.');
-        }
         setIsSaving(false);
+        // Não fechamos o modal aqui, a página pai decide quando fechar
     };
 
     const handleRemoveDesconto = (id) => {
@@ -102,7 +100,6 @@ export default function AprovacaoOperacaoModal({
                         </div>
                     </div>
 
-                    {/* Seção de Descontos Adicionais */}
                     <div className="border-t border-gray-700 pt-4 mt-4">
                         <h3 className="font-semibold mb-2">Descontos / Taxas Adicionais:</h3>
                         {descontosAdicionais.length > 0 ? (
@@ -124,11 +121,10 @@ export default function AprovacaoOperacaoModal({
                             + Adicionar Desconto/Taxa
                         </button>
                     </div>
-
                 </div>
 
                 <div className="flex-shrink-0 border-t border-gray-700 pt-4 mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                         <div>
                             <label className="block text-sm font-medium text-gray-300">Ação</label>
                             <select value={status} onChange={e => setStatus(e.target.value)} className="mt-1 w-full bg-gray-700 p-2 rounded">
@@ -148,12 +144,26 @@ export default function AprovacaoOperacaoModal({
                             </div>
                         )}
                     </div>
+                    
+                    {status === 'Aprovada' && (
+                        <div className="pt-4">
+                            <label className="flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={isPartialDebit}
+                                    onChange={(e) => setIsPartialDebit(e.target.checked)}
+                                    className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
+                                />
+                                <span className="ml-2 text-sm text-gray-200">Debitar Valor Parcial</span>
+                            </label>
+                        </div>
+                    )}
 
                     {error && <p className="text-red-400 text-sm mt-4 text-center">{error}</p>}
                     
                     <div className="mt-6 flex justify-end gap-4">
                         <button onClick={onClose} className="bg-gray-600 font-semibold py-2 px-4 rounded-md">Cancelar</button>
-                        <button onClick={handleSave} disabled={isSaving} className="bg-green-600 font-semibold py-2 px-4 rounded-md">
+                        <button onClick={handleConfirm} disabled={isSaving} className="bg-green-600 font-semibold py-2 px-4 rounded-md">
                             {isSaving ? 'Salvando...' : 'Confirmar'}
                         </button>
                     </div>
