@@ -16,11 +16,11 @@ export async function PUT(request, { params }) {
     }
 
     const { id } = params;
-    const { status, conta_bancaria_id, descontos } = await request.json();
+    const { status, conta_bancaria_id, descontos, valor_debito_parcial, data_debito_parcial } = await request.json();
 
     const { data: operacao, error: fetchError } = await supabase
       .from("operacoes")
-      .select("*, cliente:clientes(id, nome, email)")
+      .select("*, cliente:clientes(id, nome, email, ramo_de_atividade)")
       .eq("id", id)
       .single();
 
@@ -35,21 +35,26 @@ export async function PUT(request, { params }) {
           { status: 400 }
         );
       }
-      
-      // Salva os descontos adicionais, se houver
-      if (descontos && descontos.length > 0) {
-          const descontosToInsert = descontos.map(d => ({
-              operacao_id: id,
-              descricao: d.descricao,
-              valor: d.valor
-          }));
-          await supabase.from('descontos').insert(descontosToInsert);
-      }
 
-      // Recalcula o valor líquido
-      const totalDescontosAdicionais = descontos.reduce((acc, d) => acc + d.valor, 0);
+      const totalDescontosAdicionais = descontos?.reduce((acc, d) => acc + d.valor, 0) || 0;
       const novoValorLiquido = operacao.valor_liquido - totalDescontosAdicionais;
 
+      // --- CORREÇÃO AQUI ---
+      // Lógica mais robusta para determinar o valor a ser debitado.
+      let valorDebitado = novoValorLiquido;
+      if (valor_debito_parcial && Number(valor_debito_parcial) > 0) {
+          valorDebitado = Number(valor_debito_parcial);
+      }
+      // --- FIM DA CORREÇÃO ---
+
+      if (descontos && descontos.length > 0) {
+        const descontosToInsert = descontos.map(d => ({
+            operacao_id: id,
+            descricao: d.descricao,
+            valor: d.valor
+        }));
+        await supabase.from('descontos').insert(descontosToInsert);
+      }
 
       const { data: conta } = await supabase
         .from("contas_bancarias")
@@ -79,9 +84,9 @@ export async function PUT(request, { params }) {
 
       await supabase.from("movimentacoes_caixa").insert({
         operacao_id: id,
-        data_movimento: operacao.data_operacao,
+        data_movimento: data_debito_parcial || operacao.data_operacao,
         descricao: descricaoLancamento,
-        valor: -Math.abs(novoValorLiquido), // Usa o novo valor líquido
+        valor: -Math.abs(valorDebitado), // Usa a variável corrigida
         categoria: "Pagamento de Borderô",
         conta_bancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
         empresa_associada: empresaMasterNome,
@@ -92,11 +97,12 @@ export async function PUT(request, { params }) {
         .update({ 
             status: "Aprovada", 
             conta_bancaria_id,
-            valor_liquido: novoValorLiquido, // Atualiza o valor líquido na operação
+            valor_liquido: novoValorLiquido,
             valor_total_descontos: operacao.valor_total_descontos + totalDescontosAdicionais
         })
         .eq("id", id);
-    } else {
+
+    } else { // Rejeitada
       await supabase.from("duplicatas").delete().eq("operacao_id", id);
       await supabase.from("operacoes").update({ status: status }).eq("id", id);
     }
@@ -106,6 +112,7 @@ export async function PUT(request, { params }) {
       .select("id")
       .eq("cliente_id", operacao.cliente.id)
       .single();
+      
     if (clienteUser) {
       await supabase.from("notifications").insert({
         user_id: clienteUser.id,
