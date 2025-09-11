@@ -417,7 +417,7 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
-            setCurrentPage(1); // Reseta a paginação ao mudar o filtro
+            setCurrentPage(1);
           }}
           className="bg-gray-700 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
         >
@@ -585,13 +585,12 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
         headers: getAuthHeader(),
         body: formData,
       });
-
+      
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.message || "Falha ao simular operação.");
       }
       
-      // Armazena todos os resultados, incluindo erros, para exibição
       setSimulationResult(data);
 
     } catch (error) {
@@ -602,7 +601,6 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
   };
   
   const handleConfirmSubmit = async () => {
-    // Garante que só envie os resultados válidos
     const validResults = simulationResult?.results.filter(r => !r.isDuplicate && !r.error);
     if (!validResults || validResults.length === 0) return;
 
@@ -635,10 +633,15 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
   };
 
   const SimulationDetails = ({ result, onSubmit, onCancel, isSubmitting }) => {
+    const [expandedRow, setExpandedRow] = useState(null);
     const validResults = result.results.filter(r => !r.isDuplicate && !r.error);
     const duplicateResults = result.results.filter(r => r.isDuplicate);
     const errorResults = result.results.filter(r => r.error);
   
+    const toggleRow = (chaveNfe) => {
+        setExpandedRow(prev => (prev === chaveNfe ? null : chaveNfe));
+    };
+
     return (
       <motion.div
         initial={{ opacity: 0 }}
@@ -674,6 +677,7 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
                 <table className="min-w-full text-sm">
                     <thead className="bg-gray-700">
                     <tr className="text-left text-gray-300">
+                        <th className="p-3 w-12"></th>
                         <th className="p-3">NF/CT-e</th>
                         <th className="p-3">Sacado</th>
                         <th className="p-3 text-right">Valor Bruto</th>
@@ -683,18 +687,52 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
                     </thead>
                     <tbody className="divide-y divide-gray-700">
                     {validResults.map((res) => (
-                        <tr key={res.chave_nfe}>
-                        <td className="p-3">{res.nfCte}</td>
-                        <td className="p-3">{res.clienteSacado}</td>
-                        <td className="p-3 text-right">{formatBRLNumber(res.valorNf)}</td>
-                        <td className="p-3 text-right text-red-400">-{formatBRLNumber(res.jurosCalculado)}</td>
-                        <td className="p-3 text-right">{formatBRLNumber(res.valorLiquidoCalculado)}</td>
-                        </tr>
+                        <React.Fragment key={res.chave_nfe}>
+                            <tr onClick={() => toggleRow(res.chave_nfe)} className="cursor-pointer hover:bg-gray-700/50">
+                                <td className="p-3 text-center">
+                                    <FaChevronRight className={`text-gray-500 transition-transform duration-200 ${expandedRow === res.chave_nfe ? 'rotate-90' : ''}`} />
+                                </td>
+                                <td className="p-3">{res.nfCte}</td>
+                                <td className="p-3">{res.clienteSacado}</td>
+                                <td className="p-3 text-right">{formatBRLNumber(res.valorNf)}</td>
+                                <td className="p-3 text-right text-red-400">-{formatBRLNumber(res.jurosCalculado)}</td>
+                                <td className="p-3 text-right">{formatBRLNumber(res.valorLiquidoCalculado)}</td>
+                            </tr>
+                            {expandedRow === res.chave_nfe && (
+                                <tr className="bg-gray-900/50">
+                                    <td colSpan="6" className="p-0">
+                                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="p-4">
+                                            <h5 className="text-xs font-bold text-gray-400 mb-2">DETALHES DAS PARCELAS</h5>
+                                            <table className="min-w-full text-xs bg-gray-800 rounded">
+                                                <thead className="bg-gray-700/50">
+                                                    <tr>
+                                                        <th className="p-2 text-left">Parcela</th>
+                                                        <th className="p-2 text-left">Vencimento</th>
+                                                        <th className="p-2 text-right">Valor</th>
+                                                        <th className="p-2 text-right">Juros</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-700">
+                                                    {res.parcelasCalculadas.map(p => (
+                                                        <tr key={p.numeroParcela}>
+                                                            <td className="p-2">{p.numeroParcela}</td>
+                                                            <td className="p-2">{formatDate(p.dataVencimento)}</td>
+                                                            <td className="p-2 text-right">{formatBRLNumber(p.valorParcela)}</td>
+                                                            <td className="p-2 text-right text-red-500">-{formatBRLNumber(p.jurosParcela)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </motion.div>
+                                    </td>
+                                </tr>
+                            )}
+                        </React.Fragment>
                     ))}
                     </tbody>
                     <tfoot className="bg-gray-700 font-bold">
                         <tr>
-                            <td className="p-3 text-right" colSpan="2">TOTAIS DA OPERAÇÃO:</td>
+                            <td className="p-3 text-right" colSpan="3">TOTAIS DA OPERAÇÃO:</td>
                             <td className="p-3 text-right">{formatBRLNumber(result.totals.totalBruto)}</td>
                             <td className="p-3 text-right text-red-400">-{formatBRLNumber(result.totals.totalJuros)}</td>
                             <td className="p-3 text-right text-green-400">{formatBRLNumber(result.totals.totalLiquido)}</td>
