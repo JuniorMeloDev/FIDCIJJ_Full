@@ -39,7 +39,7 @@ export async function GET(request) {
 }
 
 
-// POST: Salva uma nova operação E NOTIFICA ADMINS
+// POST: Salva uma nova operação com múltiplos XMLs E NOTIFICA ADMINS
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -55,33 +55,19 @@ export async function POST(request) {
         }
 
         const body = await request.json();
-        const notaFiscal = body.notasFiscais[0];
-        const chaveNfe = notaFiscal.chave_nfe;
+        const { notasFiscais } = body;
 
-        if (!chaveNfe) {
-            throw new Error("A Chave de Acesso da NF-e/CT-e é obrigatória para submeter a operação.");
-        }
-
-        // VERIFICA SE A OPERAÇÃO JÁ EXISTE com base na chave única
-        const { data: existingOperation, error: existingError } = await supabase
-            .from('operacoes')
-            .select('id, status')
-            .eq('chave_nfe', chaveNfe)
-            .maybeSingle(); // Use maybeSingle para não dar erro se não encontrar nada
-
-        if (existingError) {
-            console.error("Erro ao verificar operação existente:", existingError);
-            throw existingError;
-        }
-
-        if (existingOperation) {
-            // Se já existe, retorna uma mensagem de erro clara para o cliente.
-            throw new Error(`XML processado na Operação #${existingOperation.id} e seu Status é: ${existingOperation.status}). Não é possível enviar novamente`);
+        if (!notasFiscais || notasFiscais.length === 0) {
+            return NextResponse.json({ message: 'Nenhum documento válido para processar.' }, { status: 400 });
         }
         
-        const valorTotalBruto = notaFiscal.valorNf;
-        const valorTotalJuros = notaFiscal.jurosCalculado;
-        const valorLiquido = notaFiscal.valorLiquidoCalculado;
+        // Usa a chave do primeiro documento para o registro da operação
+        const chaveNfePrincipal = notasFiscais[0].chave_nfe;
+
+        // Calcula os totais da operação
+        const valorTotalBruto = notasFiscais.reduce((sum, nf) => sum + nf.valorNf, 0);
+        const valorTotalJuros = notasFiscais.reduce((sum, nf) => sum + nf.jurosCalculado, 0);
+        const valorLiquido = notasFiscais.reduce((sum, nf) => sum + nf.valorLiquidoCalculado, 0);
 
         const { data: newOperacao, error: operacaoError } = await supabase
             .from('operacoes')
@@ -95,40 +81,41 @@ export async function POST(request) {
                 valor_liquido: valorLiquido,
                 status: 'Pendente',
                 conta_bancaria_id: null,
-                chave_nfe: chaveNfe // Salva a chave da NFe
+                chave_nfe: chaveNfePrincipal // Salva a chave do primeiro item como referência
             })
             .select()
             .single();
 
         if (operacaoError) {
             console.error("Erro ao inserir nova operação:", operacaoError);
-            // Verifica se o erro é de violação de chave única
             if (operacaoError.code === '23505') {
-                 throw new Error(`Este documento (Chave: ...${chaveNfe.slice(-6)}) já foi enviado e está sendo processado.`);
+                 throw new Error(`Um dos documentos enviados já foi processado em outra operação.`);
             }
             throw new Error("Não foi possível criar o registro da operação.");
         }
 
-        const duplicatasParaSalvar = notaFiscal.parcelasCalculadas.map(p => ({
-            operacao_id: newOperacao.id,
-            data_operacao: body.dataOperacao,
-            nf_cte: `${notaFiscal.nfCte}.${p.numeroParcela}`,
-            cliente_sacado: notaFiscal.clienteSacado,
-            valor_bruto: p.valorParcela,
-            valor_juros: p.jurosParcela,
-            data_vencimento: p.dataVencimento,
-            status_recebimento: 'Pendente'
-        }));
+        // Prepara todas as duplicatas de todos os XMLs para inserção
+        const duplicatasParaSalvar = notasFiscais.flatMap(notaFiscal => 
+            notaFiscal.parcelasCalculadas.map(p => ({
+                operacao_id: newOperacao.id,
+                data_operacao: body.dataOperacao,
+                nf_cte: `${notaFiscal.nfCte}.${p.numeroParcela}`,
+                cliente_sacado: notaFiscal.clienteSacado,
+                valor_bruto: p.valorParcela,
+                valor_juros: p.jurosParcela,
+                data_vencimento: p.dataVencimento,
+                status_recebimento: 'Pendente'
+            }))
+        );
+
 
         const { error: duplicatasError } = await supabase.from('duplicatas').insert(duplicatasParaSalvar);
 
         if (duplicatasError) {
-            // Rollback: se der erro ao salvar as duplicatas, remove a operação criada.
             await supabase.from('operacoes').delete().eq('id', newOperacao.id);
             throw new Error("Não foi possível salvar os detalhes das parcelas. A operação foi cancelada.");
         }
 
-        // --- LÓGICA DE NOTIFICAÇÃO ---
         const { data: admins } = await supabase.from('users').select('id, email').eq('roles', 'ROLE_ADMIN');
         
         if (admins && admins.length > 0) {
@@ -150,7 +137,6 @@ export async function POST(request) {
                 });
             }
         }
-        // --- FIM DA LÓGICA DE NOTIFICAÇÃO ---
 
         return NextResponse.json({ operacaoId: newOperacao.id, message: 'Operação enviada para análise com sucesso!' }, { status: 201 });
 
@@ -159,4 +145,3 @@ export async function POST(request) {
         return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
     }
 }
-

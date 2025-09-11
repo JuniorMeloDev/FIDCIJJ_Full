@@ -3,10 +3,9 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js';
 
-// Funções auxiliares de parsing de XML
 const getVal = (obj, path) => path.split('.').reduce((acc, key) => acc?.[key]?.[0], obj);
 
-const parseXml = async (xmlText) => {
+const parseXmlAndSimulate = async (xmlText, clienteCnpj, tipoOperacaoId) => {
     const parsedXml = await parseStringPromise(xmlText, { 
         explicitArray: true, 
         ignoreAttrs: false,
@@ -47,27 +46,55 @@ const parseXml = async (xmlText) => {
         parcelas = [];
     }
 
-    if (!chaveNfe) {
-        throw new Error("Não foi possível extrair a Chave de Acesso do documento XML.");
-    }
+    if (!chaveNfe) throw new Error("Não foi possível extrair a Chave de Acesso do XML.");
+
+    if (getVal(emitNode, 'CNPJ') !== clienteCnpj) throw new Error(`O CNPJ do emitente no XML (${numeroDoc}) não corresponde ao seu cadastro.`);
+    
+    // VERIFICA SE A OPERAÇÃO JÁ EXISTE
+    const { data: existingOperation } = await supabase.from('operacoes').select('id').eq('chave_nfe', chaveNfe).maybeSingle();
+    if (existingOperation) return { chave_nfe: chaveNfe, nfCte: numeroDoc, isDuplicate: true };
 
     const destCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
     const nomeSacadoXml = getVal(sacadoNode, 'xNome');
-
     const { data: sacadoData } = await supabase.from('sacados').select('*, condicoes_pagamento(*)').eq('cnpj', destCnpjCpf).single();
+    if (!sacadoData) throw new Error(`Sacado com CNPJ/CPF ${destCnpjCpf} (${nomeSacadoXml}) não está cadastrado.`);
     
-    if (!sacadoData) {
-        throw new Error(`Sacado com CNPJ/CPF ${destCnpjCpf} (${nomeSacadoXml}) não está registado no sistema. Por favor, peça ao administrador para o registar.`);
-    }
-    
-    if (parcelas.length === 0 && sacadoData.condicoes_pagamento && sacadoData.condicoes_pagamento.length > 0) {
+    if (parcelas.length === 0 && sacadoData.condicoes_pagamento?.length > 0) {
         const condicaoPadrao = sacadoData.condicoes_pagamento[0];
         prazosString = condicaoPadrao.prazos;
         parcelas = Array(condicaoPadrao.parcelas).fill({});
     } else {
-        prazosString = parcelas.map(p => 
-            Math.ceil(Math.abs(new Date(p.dataVencimento) - new Date(dataEmissao)) / (1000 * 60 * 60 * 24))
-        ).join('/');
+        prazosString = parcelas.map(p => Math.ceil(Math.abs(new Date(p.dataVencimento) - new Date(dataEmissao)) / (1000 * 60 * 60 * 24))).join('/');
+    }
+
+    const { data: tipoOp } = await supabase.from('tipos_operacao').select('*').eq('id', tipoOperacaoId).single();
+    if (!tipoOp) throw new Error('Tipo de operação não encontrado.');
+
+    let totalJuros = 0;
+    const numParcelas = parcelas.length || 1;
+    const valorParcelaBase = valorTotal / numParcelas;
+    const prazosArray = prazosString.split('/').map(p => parseInt(p.trim(), 10));
+    const parcelasCalculadas = [];
+    const dataOperacao = new Date().toISOString().split('T')[0];
+
+    if (tipoOp.valor_fixo > 0) {
+        totalJuros = tipoOp.valor_fixo;
+        const jurosPorParcela = totalJuros / numParcelas;
+        for (let i = 0; i < prazosArray.length; i++) {
+            const dataVencimento = new Date(dataEmissao + 'T12:00:00Z');
+            dataVencimento.setUTCDate(dataVencimento.getUTCDate() + prazosArray[i]);
+            parcelasCalculadas.push({ numeroParcela: i + 1, dataVencimento: dataVencimento.toISOString().split('T')[0], valorParcela: valorParcelaBase, jurosParcela: jurosPorParcela });
+        }
+    } else {
+        for (let i = 0; i < prazosArray.length; i++) {
+            const prazoDias = prazosArray[i];
+            const dataVenc = new Date(dataEmissao + 'T12:00:00Z'); 
+            dataVenc.setUTCDate(dataVenc.getUTCDate() + prazoDias);
+            const diasCorridos = tipoOp.usar_prazo_sacado ? prazoDias : Math.ceil((dataVenc - new Date(dataOperacao)) / (1000 * 60 * 60 * 24));
+            const jurosParcela = (valorParcelaBase * (tipoOp.taxa_juros / 100) / 30) * diasCorridos;
+            totalJuros += jurosParcela;
+            parcelasCalculadas.push({ numeroParcela: i + 1, dataVencimento: dataVenc.toISOString().split('T')[0], valorParcela: valorParcelaBase, jurosParcela: jurosParcela });
+        }
     }
 
     return {
@@ -76,13 +103,13 @@ const parseXml = async (xmlText) => {
         dataNf: dataEmissao,
         valorNf: valorTotal,
         clienteSacado: sacadoData.nome,
-        parcelas: parcelas.length > 0 ? String(parcelas.length) : "1",
-        prazos: prazosString || "0",
-        cedenteCnpjVerificado: getVal(emitNode, 'CNPJ')
+        jurosCalculado: totalJuros,
+        valorLiquidoCalculado: valorTotal - totalJuros,
+        parcelasCalculadas,
+        isDuplicate: false,
     };
 };
 
-// Rota Principal
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -94,67 +121,38 @@ export async function POST(request) {
         if (!clienteAtual) throw new Error('Cliente não encontrado.');
 
         const formData = await request.formData();
-        const file = formData.get('file');
+        const files = formData.getAll('files');
         const tipoOperacaoId = formData.get('tipoOperacaoId');
         
-        if (!file || !tipoOperacaoId) return NextResponse.json({ message: 'Arquivo e tipo de operação são obrigatórios.' }, { status: 400 });
-
-        let parsedData;
-        const fileBuffer = Buffer.from(await file.arrayBuffer());
-
-        if (file.type === 'text/xml' || file.name.endsWith('.xml')) {
-            parsedData = await parseXml(fileBuffer.toString('utf-8'));
-        } else {
-            throw new Error("Formato de arquivo não suportado. Por favor, envie um ficheiro XML.");
+        if (!files || files.length === 0 || !tipoOperacaoId) {
+            return NextResponse.json({ message: 'Arquivos e tipo de operação são obrigatórios.' }, { status: 400 });
         }
         
-        if (parsedData.cedenteCnpjVerificado !== clienteAtual.cnpj) {
-            throw new Error('O CNPJ do emitente no arquivo não corresponde ao seu registo.');
-        }
-
-        const { data: tipoOp, error: tipoOpError } = await supabase.from('tipos_operacao').select('*').eq('id', tipoOperacaoId).single();
-        if (tipoOpError) throw new Error('Tipo de operação não encontrado.');
-
-        let totalJuros = 0;
-        const parcelas = parseInt(parsedData.parcelas) || 1;
-        const valorParcelaBase = parsedData.valorNf / parcelas;
-        const prazosArray = parsedData.prazos.split('/').map(p => parseInt(p.trim(), 10));
-        const parcelasCalculadas = [];
-        const dataOperacao = new Date().toISOString().split('T')[0];
-
-        if (tipoOp.valor_fixo > 0) {
-            totalJuros = tipoOp.valor_fixo;
-            const jurosPorParcela = totalJuros / parcelas;
-            for (let i = 0; i < prazosArray.length; i++) {
-                const dataVencimento = new Date(parsedData.dataNf + 'T12:00:00Z');
-                dataVencimento.setUTCDate(dataVencimento.getUTCDate() + prazosArray[i]);
-                parcelasCalculadas.push({ numeroParcela: i + 1, dataVencimento: dataVencimento.toISOString().split('T')[0], valorParcela: valorParcelaBase, jurosParcela: jurosPorParcela });
+        const simulationPromises = files.map(async file => {
+            try {
+                const fileBuffer = Buffer.from(await file.arrayBuffer());
+                const xmlText = fileBuffer.toString('utf-8');
+                return await parseXmlAndSimulate(xmlText, clienteAtual.cnpj, tipoOperacaoId);
+            } catch (error) {
+                return { error: error.message, fileName: file.name };
             }
-        } else {
-            for (let i = 0; i < prazosArray.length; i++) {
-                const prazoDias = prazosArray[i];
-                const dataVenc = new Date(parsedData.dataNf + 'T12:00:00Z'); 
-                dataVenc.setUTCDate(dataVenc.getUTCDate() + prazoDias);
+        });
 
-                const diasCorridos = tipoOp.usar_prazo_sacado ? prazoDias : Math.ceil((dataVenc - new Date(dataOperacao)) / (1000 * 60 * 60 * 24));
-                const jurosParcela = (valorParcelaBase * (tipoOp.taxa_juros / 100) / 30) * diasCorridos;
-                totalJuros += jurosParcela;
-                parcelasCalculadas.push({ numeroParcela: i + 1, dataVencimento: dataVenc.toISOString().split('T')[0], valorParcela: valorParcelaBase, jurosParcela: jurosParcela });
+        const results = await Promise.all(simulationPromises);
+
+        const totals = results.reduce((acc, res) => {
+            if (res && !res.isDuplicate && !res.error) {
+                acc.totalBruto += res.valorNf;
+                acc.totalJuros += res.jurosCalculado;
+                acc.totalLiquido += res.valorLiquidoCalculado;
             }
-        }
+            return acc;
+        }, { totalBruto: 0, totalJuros: 0, totalLiquido: 0 });
 
-        const simulationResult = {
-            ...parsedData,
-            jurosCalculado: totalJuros,
-            valorLiquidoCalculado: parsedData.valorNf - totalJuros,
-            parcelasCalculadas,
-        };
-
-        return NextResponse.json(simulationResult, { status: 200 });
+        return NextResponse.json({ results, totals }, { status: 200 });
 
     } catch (error) {
         console.error("Erro na simulação:", error);
         return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
     }
 }
-

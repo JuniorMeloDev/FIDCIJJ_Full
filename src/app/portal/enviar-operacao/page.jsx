@@ -2,10 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import {
-  formatBRLNumber,
-  formatDate,
-} from "@/app/utils/formatters";
+import {formatBRLNumber, formatDate,} from "@/app/utils/formatters";
 import Notification from "@/app/components/Notification";
 
 // Ícones SVG embutidos
@@ -40,7 +37,7 @@ const CheckCircleIcon = () => (
 
 export default function EnviarOperacaoPage() {
   const [tiposOperacao, setTiposOperacao] = useState([]);
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]); // Alterado para array
   const [tipoOperacaoId, setTipoOperacaoId] = useState("");
   const [simulationResult, setSimulationResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -81,19 +78,20 @@ export default function EnviarOperacaoPage() {
   }, []);
 
   const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file && (file.type === "text/xml" || file.name.endsWith('.xml'))) {
-      setSelectedFile(file);
-    } else {
-      showNotification("Por favor, selecione um arquivo XML.", "error");
-      setSelectedFile(null);
+    const files = Array.from(event.target.files);
+    const xmlFiles = files.filter(file => file.type === "text/xml" || file.name.endsWith('.xml'));
+    
+    if (xmlFiles.length !== files.length) {
+        showNotification("Apenas arquivos XML são permitidos. Alguns arquivos foram ignorados.", "error");
     }
+    
+    setSelectedFiles(xmlFiles);
   };
 
   const handleSimulate = async () => {
-    if (!selectedFile || !tipoOperacaoId) {
+    if (selectedFiles.length === 0 || !tipoOperacaoId) {
       showNotification(
-        "Por favor, selecione um arquivo e um tipo de operação.",
+        "Por favor, selecione ao menos um arquivo e um tipo de operação.",
         "error"
       );
       return;
@@ -102,7 +100,9 @@ export default function EnviarOperacaoPage() {
     setSimulationResult(null);
 
     const formData = new FormData();
-    formData.append("file", selectedFile);
+    selectedFiles.forEach(file => {
+        formData.append("files", file); // Usar 'files' no plural
+    });
     formData.append("tipoOperacaoId", tipoOperacaoId);
 
     try {
@@ -116,7 +116,18 @@ export default function EnviarOperacaoPage() {
         throw new Error(errorData.message || "Falha ao simular operação.");
       }
       const data = await response.json();
-      setSimulationResult(data);
+      
+      if (data.results.some(r => r.isDuplicate)) {
+          showNotification("Atenção: Um ou mais documentos já foram processados e foram ignorados.", "error");
+      }
+      
+      const validResults = data.results.filter(r => !r.isDuplicate && !r.error);
+      if (validResults.length === 0) {
+          throw new Error("Nenhum dos arquivos enviados pôde ser processado. Verifique os arquivos e tente novamente.");
+      }
+      
+      setSimulationResult({ ...data, results: validResults });
+
     } catch (error) {
       showNotification(error.message, "error");
     } finally {
@@ -125,7 +136,7 @@ export default function EnviarOperacaoPage() {
   };
 
   const handleConfirmSubmit = async () => {
-    if (!simulationResult) return;
+    if (!simulationResult || simulationResult.results.length === 0) return;
     setIsSubmitting(true);
     try {
       const response = await fetch("/api/portal/operacoes", {
@@ -134,7 +145,7 @@ export default function EnviarOperacaoPage() {
         body: JSON.stringify({
           dataOperacao: new Date().toISOString().split("T")[0],
           tipoOperacaoId: parseInt(tipoOperacaoId),
-          notasFiscais: [simulationResult],
+          notasFiscais: simulationResult.results,
         }),
       });
       if (!response.ok) {
@@ -142,7 +153,7 @@ export default function EnviarOperacaoPage() {
         throw new Error(errorData.message || "Falha ao enviar operação.");
       }
       showNotification("Operação enviada para análise com sucesso!", "success");
-      setSelectedFile(null);
+      setSelectedFiles([]);
       setTipoOperacaoId("");
       setSimulationResult(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -160,69 +171,40 @@ export default function EnviarOperacaoPage() {
       className="bg-gray-800 p-6 rounded-lg shadow-lg"
     >
       <h3 className="text-xl font-semibold mb-4 text-orange-400">
-        Simulação da Operação
+        Resumo da Operação
       </h3>
       <div className="space-y-4">
-        <div className="bg-gray-700 p-4 rounded-md">
-          <p className="text-sm text-gray-400">
-            Sacado:{" "}
-            <span className="font-medium text-white">
-              {result.clienteSacado}
-            </span>
-          </p>
-          <p className="text-sm text-gray-400">
-            NF/CT-e:{" "}
-            <span className="font-medium text-white">{result.nfCte}</span>
-          </p>
-        </div>
-        <div className="border-t border-b border-gray-700 py-4">
+        <div className="border border-gray-700 rounded-lg overflow-hidden">
           <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-400">
-                <th className="pb-2">Parcela</th>
-                <th className="pb-2">Vencimento</th>
-                <th className="pb-2 text-right">Valor</th>
-                <th className="pb-2 text-right">Juros (Deságio)</th>
+            <thead className="bg-gray-700">
+              <tr className="text-left text-gray-300">
+                <th className="p-3">NF/CT-e</th>
+                <th className="p-3">Sacado</th>
+                <th className="p-3 text-right">Valor Bruto</th>
+                <th className="p-3 text-right">Juros (Deságio)</th>
+                <th className="p-3 text-right">Valor Líquido</th>
               </tr>
             </thead>
-            <tbody>
-              {result.parcelasCalculadas.map((p) => (
-                <tr
-                  key={p.numeroParcela}
-                  className="border-t border-gray-700/50"
-                >
-                  <td className="py-2">{p.numeroParcela}</td>
-                  <td className="py-2">{formatDate(p.dataVencimento)}</td>
-                  <td className="py-2 text-right">
-                    {formatBRLNumber(p.valorParcela)}
-                  </td>
-                  <td className="py-2 text-right text-red-400">
-                    -{formatBRLNumber(p.jurosParcela)}
-                  </td>
+            <tbody className="divide-y divide-gray-700">
+              {result.results.map((res) => (
+                <tr key={res.chave_nfe}>
+                  <td className="p-3">{res.nfCte}</td>
+                  <td className="p-3">{res.clienteSacado}</td>
+                  <td className="p-3 text-right">{formatBRLNumber(res.valorNf)}</td>
+                  <td className="p-3 text-right text-red-400">-{formatBRLNumber(res.jurosCalculado)}</td>
+                  <td className="p-3 text-right">{formatBRLNumber(res.valorLiquidoCalculado)}</td>
                 </tr>
               ))}
             </tbody>
+            <tfoot className="bg-gray-700 font-bold">
+                <tr>
+                    <td className="p-3 text-right" colSpan="2">TOTAIS DA OPERAÇÃO:</td>
+                    <td className="p-3 text-right">{formatBRLNumber(result.totals.totalBruto)}</td>
+                    <td className="p-3 text-right text-red-400">-{formatBRLNumber(result.totals.totalJuros)}</td>
+                    <td className="p-3 text-right text-green-400">{formatBRLNumber(result.totals.totalLiquido)}</td>
+                </tr>
+            </tfoot>
           </table>
-        </div>
-        <div className="grid grid-cols-2 gap-4 text-right font-medium">
-          <div>
-            <p className="text-gray-400">Valor Total Bruto:</p>
-            <p className="text-white text-lg">
-              {formatBRLNumber(result.valorNf)}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400">Deságio Total (Juros):</p>
-            <p className="text-red-400 text-lg">
-              -{formatBRLNumber(result.jurosCalculado)}
-            </p>
-          </div>
-          <div className="col-span-2 border-t border-gray-700 pt-2 mt-2">
-            <p className="text-gray-400">Valor Líquido a Receber:</p>
-            <p className="text-green-400 text-2xl font-bold">
-              {formatBRLNumber(result.valorLiquidoCalculado)}
-            </p>
-          </div>
         </div>
       </div>
       <div className="mt-8 flex justify-end gap-4">
@@ -282,23 +264,26 @@ export default function EnviarOperacaoPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  2. Faça o Upload do Arquivo (XML)
+                  2. Faça o Upload do(s) Arquivo(s) XML
                 </label>
                 <div
                   className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-600 border-dashed rounded-md cursor-pointer hover:border-orange-400"
                   onClick={() => fileInputRef.current.click()}
                 >
                   <div className="space-y-1 text-center">
-                    {selectedFile ? (
-                      <div className="flex items-center text-green-400">
+                    {selectedFiles.length > 0 ? (
+                      <div className="flex flex-col items-center text-green-400">
                         <CheckCircleIcon />
-                        <span className="font-medium">{selectedFile.name}</span>
+                        <span className="font-medium mt-1">{selectedFiles.length} arquivo(s) selecionado(s)</span>
+                        <ul className="text-xs text-gray-400 list-disc list-inside">
+                            {selectedFiles.map(f => <li key={f.name}>{f.name}</li>)}
+                        </ul>
                       </div>
                     ) : (
                       <>
                         <UploadIcon />
                         <p className="text-sm text-gray-400">
-                          Clique para selecionar ou arraste o arquivo aqui
+                          Clique para selecionar ou arraste os arquivos aqui
                         </p>
                       </>
                     )}
@@ -311,6 +296,7 @@ export default function EnviarOperacaoPage() {
                     className="sr-only"
                     onChange={handleFileChange}
                     accept=".xml"
+                    multiple // Habilita a seleção múltipla
                   />
                 </div>
               </div>
