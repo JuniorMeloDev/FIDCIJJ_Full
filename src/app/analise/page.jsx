@@ -6,7 +6,8 @@ import { formatBRLNumber, formatDate } from '../utils/formatters';
 import Notification from '@/app/components/Notification';
 import AprovacaoOperacaoModal from '@/app/components/AprovacaoOperacaoModal';
 import EmailModal from '@/app/components/EmailModal';
-import DescontoModal from '@/app/components/DescontoModal'; // Importar o modal de desconto
+import DescontoModal from '@/app/components/DescontoModal';
+import PartialDebitModal from '@/app/components/PartialDebitModal';
 
 export default function AnalisePage() {
     const [operacoes, setOperacoes] = useState([]);
@@ -22,10 +23,12 @@ export default function AnalisePage() {
     const [operacaoParaEmail, setOperacaoParaEmail] = useState(null);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
 
-    // Estado para o novo modal de Desconto
     const [isDescontoModalOpen, setIsDescontoModalOpen] = useState(false);
     const [descontosAdicionais, setDescontosAdicionais] = useState([]);
-
+    
+    const [isSaving, setIsSaving] = useState(false);
+    const [isPartialDebitModalOpen, setIsPartialDebitModalOpen] = useState(false);
+    const [approvalPayload, setApprovalPayload] = useState(null);
 
     const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
@@ -64,14 +67,19 @@ export default function AnalisePage() {
 
     const handleAnalisarClick = (operacao) => {
         setOperacaoSelecionada(operacao);
-        setDescontosAdicionais([]); // Limpa os descontos ao abrir o modal
+        setDescontosAdicionais([]);
         setIsModalOpen(true);
     };
     
-    const handleSalvarAnalise = async (operacaoId, payload) => {
+    const handleSalvarAnalise = async (operacaoId, payload, partialData) => {
+        setIsSaving(true);
         try {
-            // Adiciona os novos descontos ao payload que será enviado para a API
-            const finalPayload = { ...payload, descontos: descontosAdicionais };
+            const finalPayload = { 
+                ...payload, 
+                descontos: descontosAdicionais,
+                valor_debito_parcial: partialData?.valorDebito || null,
+                data_debito_parcial: partialData?.dataDebito || null,
+            };
 
             const response = await fetch(`/api/operacoes/${operacaoId}/status`, {
                 method: 'PUT',
@@ -84,6 +92,9 @@ export default function AnalisePage() {
             }
             showNotification("Operação analisada com sucesso!", "success");
             fetchPendentes();
+            
+            setIsModalOpen(false);
+            setIsPartialDebitModalOpen(false);
 
             if (payload.status === 'Aprovada') {
                 setOperacaoParaEmail({
@@ -92,11 +103,19 @@ export default function AnalisePage() {
                 });
                 setIsEmailModalOpen(true);
             }
-
-            return true;
         } catch (err) {
             showNotification(err.message, "error");
-            return false;
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleApprovalConfirmation = (payload) => {
+        if (payload.status === 'Aprovada' && payload.isPartialDebit) {
+            setApprovalPayload(payload);
+            setIsPartialDebitModalOpen(true);
+        } else {
+            handleSalvarAnalise(operacaoSelecionada.id, payload, null);
         }
     };
 
@@ -126,6 +145,9 @@ export default function AnalisePage() {
         }
     };
 
+    const valorLiquidoFinalParaModalParcial = 
+        (operacaoSelecionada?.valor_liquido || 0) - 
+        (descontosAdicionais.reduce((acc, d) => acc + d.valor, 0));
 
     return (
         <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
@@ -134,12 +156,22 @@ export default function AnalisePage() {
             <AprovacaoOperacaoModal 
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                onSave={handleSalvarAnalise}
+                onConfirm={handleApprovalConfirmation}
+                isSaving={isSaving}
                 operacao={operacaoSelecionada}
                 contasBancarias={contasMaster}
-                onAddDesconto={() => setIsDescontoModalOpen(true)} // Passa a função para abrir o modal de desconto
-                descontosAdicionais={descontosAdicionais} // Passa os descontos para exibição
-                setDescontosAdicionais={setDescontosAdicionais} // Permite a remoção de descontos
+                onAddDesconto={() => setIsDescontoModalOpen(true)}
+                descontosAdicionais={descontosAdicionais}
+                setDescontosAdicionais={setDescontosAdicionais}
+            />
+
+            <PartialDebitModal
+                isOpen={isPartialDebitModalOpen}
+                onClose={() => setIsPartialDebitModalOpen(false)}
+                onConfirm={(valorDebito, dataDebito) => {
+                    handleSalvarAnalise(operacaoSelecionada.id, approvalPayload, { valorDebito, dataDebito });
+                }}
+                totalValue={valorLiquidoFinalParaModalParcial}
             />
 
             <EmailModal
@@ -161,7 +193,6 @@ export default function AnalisePage() {
                     setIsDescontoModalOpen(false);
                 }}
             />
-
 
             <motion.header 
                 className="mb-6 border-b-2 border-orange-500 pb-4"

@@ -6,7 +6,8 @@ import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 export default function AprovacaoOperacaoModal({ 
     isOpen, 
     onClose, 
-    onSaveTrigger, // Alterado de onSave para onSaveTrigger
+    onConfirm,
+    isSaving,
     operacao, 
     contasBancarias,
     onAddDesconto,
@@ -15,9 +16,8 @@ export default function AprovacaoOperacaoModal({
 }) {
     const [status, setStatus] = useState('Aprovada');
     const [contaBancariaId, setContaBancariaId] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
-    const [isPartialDebit, setIsPartialDebit] = useState(false); // Novo estado para o checkbox
+    const [isPartialDebit, setIsPartialDebit] = useState(false);
 
     const valorLiquidoFinal = useMemo(() => {
         if (!operacao) return 0;
@@ -29,30 +29,25 @@ export default function AprovacaoOperacaoModal({
         if (isOpen && operacao) {
             setStatus('Aprovada');
             setContaBancariaId('');
-            setIsPartialDebit(false); // Reseta o checkbox
+            setIsPartialDebit(false);
             setError('');
         }
     }, [isOpen, operacao]);
 
     if (!isOpen || !operacao) return null;
 
-    const handleConfirm = async () => {
+    const handleConfirmClick = () => {
         if (status === 'Aprovada' && !contaBancariaId) {
             setError('É necessário selecionar uma conta bancária para aprovar a operação.');
             return;
         }
-        setIsSaving(true);
         setError('');
         
-        // O onSaveTrigger agora lida com a lógica de abrir o próximo modal ou salvar diretamente
-        await onSaveTrigger({
+        onConfirm({
             status,
             conta_bancaria_id: status === 'Aprovada' ? parseInt(contaBancariaId, 10) : null,
             isPartialDebit: status === 'Aprovada' ? isPartialDebit : false,
         });
-
-        setIsSaving(false);
-        // Não fechamos o modal aqui, a página pai decide quando fechar
     };
 
     const handleRemoveDesconto = (id) => {
@@ -162,8 +157,8 @@ export default function AprovacaoOperacaoModal({
                     {error && <p className="text-red-400 text-sm mt-4 text-center">{error}</p>}
                     
                     <div className="mt-6 flex justify-end gap-4">
-                        <button onClick={onClose} className="bg-gray-600 font-semibold py-2 px-4 rounded-md">Cancelar</button>
-                        <button onClick={handleConfirm} disabled={isSaving} className="bg-green-600 font-semibold py-2 px-4 rounded-md">
+                        <button onClick={onClose} disabled={isSaving} className="bg-gray-600 font-semibold py-2 px-4 rounded-md disabled:opacity-50">Cancelar</button>
+                        <button onClick={handleConfirmClick} disabled={isSaving} className="bg-green-600 font-semibold py-2 px-4 rounded-md disabled:opacity-50">
                             {isSaving ? 'Salvando...' : 'Confirmar'}
                         </button>
                     </div>
