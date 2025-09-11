@@ -340,9 +340,6 @@ const HistoricoOperacoesTable = ({
   );
 };
 
-// ===================================================================
-//  COMPONENTE MODIFICADO
-// ===================================================================
 const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("Todos");
@@ -421,7 +418,7 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
-            setCurrentPage(1); // Reseta a paginação ao mudar o filtro
+            setCurrentPage(1);
           }}
           className="bg-gray-700 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
         >
@@ -523,286 +520,277 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
     </div>
   );
 };
-// ===================================================================
 
-const NovaOperacaoView = ({ showNotification, getAuthHeader }) => {
-  const [tiposOperacao, setTiposOperacao] = useState([]);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [tipoOperacaoId, setTipoOperacaoId] = useState("");
-  const [simulationResult, setSimulationResult] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const fileInputRef = useRef(null);
+const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitted }) => {
+    const [tiposOperacao, setTiposOperacao] = useState([]);
+    const [selectedFiles, setSelectedFiles] = useState([]);
+    const [tipoOperacaoId, setTipoOperacaoId] = useState("");
+    const [simulationResult, setSimulationResult] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    const fetchTiposOperacao = async () => {
-      try {
-        const res = await fetch("/api/portal/tipos-operacao", {
-          headers: getAuthHeader(),
-        });
-        if (!res.ok)
-          throw new Error("Não foi possível carregar os tipos de operação.");
-        const data = await res.json();
-        const formattedData = data.map((t) => ({
-          ...t,
-          taxaJuros: t.taxa_juros,
-          valorFixo: t.valor_fixo,
-        }));
-        setTiposOperacao(formattedData);
-      } catch (error) {
-        showNotification(error.message, "error");
-      }
+    useEffect(() => {
+      const fetchTiposOperacao = async () => {
+        try {
+          const res = await fetch("/api/portal/tipos-operacao", {
+            headers: getAuthHeader(),
+          });
+          if (!res.ok)
+            throw new Error("Não foi possível carregar os tipos de operação.");
+          const data = await res.json();
+          const formattedData = data.map((t) => ({
+            ...t,
+            taxaJuros: t.taxa_juros,
+            valorFixo: t.valor_fixo,
+          }));
+          setTiposOperacao(formattedData);
+        } catch (error) {
+          showNotification(error.message, "error");
+        }
+      };
+      fetchTiposOperacao();
+    }, [getAuthHeader, showNotification]);
+
+    const handleFileChange = (event) => {
+        const files = Array.from(event.target.files);
+        const xmlFiles = files.filter(file => file.type === "text/xml" || file.name.endsWith('.xml'));
+        
+        if (xmlFiles.length !== files.length) {
+            showNotification("Apenas arquivos XML são permitidos. Alguns arquivos foram ignorados.", "error");
+        }
+        
+        setSelectedFiles(xmlFiles);
     };
-    fetchTiposOperacao();
-  }, []);
 
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file && (file.type === "text/xml" || file.name.endsWith('.xml'))) {
-      setSelectedFile(file);
-    } else {
-      showNotification("Por favor, selecione um arquivo XML.", "error");
-      setSelectedFile(null);
-    }
-  };
-  const handleSimulate = async () => {
-    if (!selectedFile || !tipoOperacaoId) {
-      showNotification(
-        "Por favor, selecione um arquivo e um tipo de operação.",
-        "error"
-      );
-      return;
-    }
-    setIsLoading(true);
-    setSimulationResult(null);
+    const handleSimulate = async () => {
+        if (selectedFiles.length === 0 || !tipoOperacaoId) {
+          showNotification(
+            "Por favor, selecione ao menos um arquivo e um tipo de operação.",
+            "error"
+          );
+          return;
+        }
+        setIsLoading(true);
+        setSimulationResult(null);
+    
+        const formData = new FormData();
+        selectedFiles.forEach(file => {
+            formData.append("files", file);
+        });
+        formData.append("tipoOperacaoId", tipoOperacaoId);
+    
+        try {
+          const response = await fetch("/api/portal/simular-operacao", {
+            method: "POST",
+            headers: getAuthHeader(),
+            body: formData,
+          });
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || "Falha ao simular operação.");
+          }
+          const data = await response.json();
+          
+          if (data.results.some(r => r.isDuplicate)) {
+              showNotification("Atenção: Um ou mais documentos já foram processados e foram ignorados.", "error");
+          }
+          
+          const validResults = data.results.filter(r => !r.isDuplicate && !r.error);
+          if (validResults.length === 0) {
+              throw new Error("Nenhum dos arquivos enviados pôde ser processado. Verifique os arquivos e tente novamente.");
+          }
+          
+          setSimulationResult({ ...data, results: validResults });
+    
+        } catch (error) {
+          showNotification(error.message, "error");
+        } finally {
+          setIsLoading(false);
+        }
+    };
+    
+    const handleConfirmSubmit = async () => {
+        if (!simulationResult || simulationResult.results.length === 0) return;
+        setIsSubmitting(true);
+        try {
+          const response = await fetch("/api/portal/operacoes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getAuthHeader() },
+            body: JSON.stringify({
+              dataOperacao: new Date().toISOString().split("T")[0],
+              tipoOperacaoId: parseInt(tipoOperacaoId),
+              notasFiscais: simulationResult.results,
+            }),
+          });
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || "Falha ao enviar operação.");
+          }
+          showNotification("Operação enviada para análise com sucesso!", "success");
+          setSelectedFiles([]);
+          setTipoOperacaoId("");
+          setSimulationResult(null);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          onOperationSubmitted(); // Chama a função para atualizar a outra aba
+        } catch (error) {
+          showNotification(error.message, "error");
+        } finally {
+          setIsSubmitting(false);
+        }
+    };
 
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-    formData.append("tipoOperacaoId", tipoOperacaoId);
-    try {
-      const response = await fetch("/api/portal/simular-operacao", {
-        method: "POST",
-        headers: getAuthHeader(),
-        body: formData,
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Falha ao simular operação.");
-      }
-      const data = await response.json();
-      setSimulationResult(data);
-    } catch (error) {
-      showNotification(error.message, "error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  const handleConfirmSubmit = async () => {
-    if (!simulationResult) return;
-    setIsSubmitting(true);
-    try {
-      const response = await fetch("/api/portal/operacoes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify({
-          dataOperacao: new Date().toISOString().split("T")[0],
-          tipoOperacaoId: parseInt(tipoOperacaoId),
-          notasFiscais: [simulationResult],
-        }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Falha ao enviar operação.");
-      }
-      showNotification("Operação enviada para análise com sucesso! Atualize a página em alguns instantes para vê-la no histórico.", "success");
-      setSelectedFile(null);
-      setTipoOperacaoId("");
-      setSimulationResult(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (error) {
-      showNotification(error.message, "error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-  const SimulationDetails = ({ result, onSubmit, onCancel }) => (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="bg-gray-800 p-6 rounded-lg shadow-lg"
-    >
-      <h3 className="text-xl font-semibold mb-4 text-orange-400">
-        Simulação da Operação
-      </h3>
-      <div className="space-y-4">
-        <div className="bg-gray-700 p-4 rounded-md">
-          <p className="text-sm text-gray-400">
-            Sacado:{" "}
-            <span className="font-medium text-white">
-              {result.clienteSacado}
-            </span>
-          </p>
-          <p className="text-sm text-gray-400">
-            NF/CT-e:{" "}
-            <span className="font-medium text-white">{result.nfCte}</span>
-          </p>
-        </div>
-        <div className="border-t border-b border-gray-700 py-4">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-400">
-                <th className="pb-2">Parcela</th>
-                <th className="pb-2">Vencimento</th>
-                <th className="pb-2 text-right">Valor</th>
-                <th className="pb-2 text-right">Juros (Deságio)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.parcelasCalculadas.map((p) => (
-                <tr
-                  key={p.numeroParcela}
-                  className="border-t border-gray-700/50"
-                >
-                  <td className="py-2">{p.numeroParcela}</td>
-                  <td className="py-2">{formatDate(p.dataVencimento)}</td>
-                  <td className="py-2 text-right">
-                    {formatBRLNumber(p.valorParcela)}
-                  </td>
-                  <td className="py-2 text-right text-red-400">
-                    -{formatBRLNumber(p.jurosParcela)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="grid grid-cols-2 gap-4 text-right font-medium">
-          <div>
-            <p className="text-gray-400">Valor Total Bruto:</p>
-            <p className="text-white text-lg">
-              {formatBRLNumber(result.valorNf)}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400">Deságio Total (Juros):</p>
-            <p className="text-red-400 text-lg">
-              -{formatBRLNumber(result.jurosCalculado)}
-            </p>
-          </div>
-          <div className="col-span-2 border-t border-gray-700 pt-2 mt-2">
-            <p className="text-gray-400">Valor Líquido a Receber:</p>
-            <p className="text-green-400 text-2xl font-bold">
-              {formatBRLNumber(result.valorLiquidoCalculado)}
-            </p>
-          </div>
-        </div>
-      </div>
-      <div className="mt-8 flex justify-end gap-4">
-        <button
-          onClick={onCancel}
-          className="bg-gray-600 text-gray-100 font-semibold py-2 px-6 rounded-md hover:bg-gray-500 transition"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={onSubmit}
-          disabled={isSubmitting}
-          className="bg-green-500 text-white font-semibold py-2 px-6 rounded-md shadow-sm hover:bg-green-600 transition disabled:bg-green-400"
-        >
-          {isSubmitting ? "Enviando..." : "Confirmar e Enviar para Análise"}
-        </button>
-      </div>
-    </motion.div>
-  );
-  return (
-    <>
-      {!simulationResult ? (
+    const SimulationDetails = ({ result, onSubmit, onCancel }) => (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="bg-gray-800 p-6 rounded-lg shadow-lg"
         >
-          <h2 className="text-2xl font-bold text-white mb-6">
-            Enviar Nova Operação
-          </h2>
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                1. Selecione o Tipo de Operação
-              </label>
-              <select
-                value={tipoOperacaoId}
-                onChange={(e) => setTipoOperacaoId(e.target.value)}
-                className="w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-3 text-white"
-              >
-                <option value="">Escolha uma opção...</option>
-                {tiposOperacao.map((op) => (
-                  <option key={op.id} value={op.id}>
-                    {op.nome} (Taxa: {op.taxaJuros}%, Fixo:{" "}
-                    {formatBRLNumber(op.valorFixo)})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                2. Faça o Upload do Arquivo XML
-              </label>
-              <div
-                className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-600 border-dashed rounded-md cursor-pointer hover:border-orange-400"
-                onClick={() => fileInputRef.current.click()}
-              >
-                <div className="space-y-1 text-center">
-                  {selectedFile ? (
-                    <div className="flex items-center text-green-400">
-                      <CheckCircleIcon />
-                      <span className="font-medium">{selectedFile.name}</span>
-                    </div>
-                  ) : (
-                    <>
-                      <UploadIcon />
-                      <p className="text-sm text-gray-400">
-                        Clique para selecionar ou arraste o arquivo aqui
-                      </p>
-                    </>
-                  )}
-                </div>
-                <input
-                  ref={fileInputRef}
-                  id="file-upload"
-                  name="file-upload"
-                  type="file"
-                  className="sr-only"
-                  onChange={handleFileChange}
-                  accept=".xml,.pdf"
-                />
-              </div>
+          <h3 className="text-xl font-semibold mb-4 text-orange-400">
+            Resumo da Operação
+          </h3>
+          <div className="space-y-4">
+            <div className="border border-gray-700 rounded-lg overflow-hidden">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-700">
+                  <tr className="text-left text-gray-300">
+                    <th className="p-3">NF/CT-e</th>
+                    <th className="p-3">Sacado</th>
+                    <th className="p-3 text-right">Valor Bruto</th>
+                    <th className="p-3 text-right">Juros (Deságio)</th>
+                    <th className="p-3 text-right">Valor Líquido</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700">
+                  {result.results.map((res) => (
+                    <tr key={res.chave_nfe}>
+                      <td className="p-3">{res.nfCte}</td>
+                      <td className="p-3">{res.clienteSacado}</td>
+                      <td className="p-3 text-right">{formatBRLNumber(res.valorNf)}</td>
+                      <td className="p-3 text-right text-red-400">-{formatBRLNumber(res.jurosCalculado)}</td>
+                      <td className="p-3 text-right">{formatBRLNumber(res.valorLiquidoCalculado)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-700 font-bold">
+                    <tr>
+                        <td className="p-3 text-right" colSpan="2">TOTAIS DA OPERAÇÃO:</td>
+                        <td className="p-3 text-right">{formatBRLNumber(result.totals.totalBruto)}</td>
+                        <td className="p-3 text-right text-red-400">-{formatBRLNumber(result.totals.totalJuros)}</td>
+                        <td className="p-3 text-right text-green-400">{formatBRLNumber(result.totals.totalLiquido)}</td>
+                    </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
-          <div className="mt-8 text-right">
+          <div className="mt-8 flex justify-end gap-4">
             <button
-              onClick={handleSimulate}
-              disabled={isLoading}
-              className="bg-orange-500 text-white font-semibold py-2 px-6 rounded-md shadow-sm hover:bg-orange-600 transition disabled:bg-orange-400"
+              onClick={onCancel}
+              className="bg-gray-600 text-gray-100 font-semibold py-2 px-6 rounded-md hover:bg-gray-500 transition"
             >
-              {isLoading ? "Processando..." : "Simular Operação"}
+              Cancelar
+            </button>
+            <button
+              onClick={onSubmit}
+              disabled={isSubmitting}
+              className="bg-green-500 text-white font-semibold py-2 px-6 rounded-md shadow-sm hover:bg-green-600 transition disabled:bg-green-400"
+            >
+              {isSubmitting ? "Enviando..." : "Confirmar e Enviar para Análise"}
             </button>
           </div>
         </motion.div>
-      ) : (
-        <SimulationDetails
-          result={simulationResult}
-          onSubmit={handleConfirmSubmit}
-          onCancel={() => setSimulationResult(null)}
-        />
-      )}
-    </>
-  );
+      );
+      
+    return (
+        <>
+          {!simulationResult ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-gray-800 p-6 rounded-lg shadow-lg"
+            >
+              <h2 className="text-2xl font-bold text-white mb-6">
+                Enviar Nova Operação
+              </h2>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    1. Selecione o Tipo de Operação
+                  </label>
+                  <select
+                    value={tipoOperacaoId}
+                    onChange={(e) => setTipoOperacaoId(e.target.value)}
+                    className="w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-3 text-white"
+                  >
+                    <option value="">Escolha uma opção...</option>
+                    {tiposOperacao.map((op) => (
+                      <option key={op.id} value={op.id}>
+                        {op.nome} (Taxa: {op.taxaJuros}%, Fixo:{" "}
+                        {formatBRLNumber(op.valorFixo)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    2. Faça o Upload do(s) Arquivo(s) XML
+                  </label>
+                  <div
+                    className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-600 border-dashed rounded-md cursor-pointer hover:border-orange-400"
+                    onClick={() => fileInputRef.current.click()}
+                  >
+                    <div className="space-y-1 text-center">
+                        {selectedFiles.length > 0 ? (
+                            <div className="flex flex-col items-center text-green-400">
+                                <CheckCircleIcon />
+                                <span className="font-medium mt-1">{selectedFiles.length} arquivo(s) selecionado(s)</span>
+                                <ul className="text-xs text-gray-400 list-disc list-inside">
+                                    {selectedFiles.map(f => <li key={f.name}>{f.name}</li>)}
+                                </ul>
+                            </div>
+                        ) : (
+                            <>
+                                <UploadIcon />
+                                <p className="text-sm text-gray-400">
+                                Clique para selecionar ou arraste os arquivos aqui
+                                </p>
+                            </>
+                        )}
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      id="file-upload"
+                      name="file-upload"
+                      type="file"
+                      className="sr-only"
+                      onChange={handleFileChange}
+                      accept=".xml"
+                      multiple
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-8 text-right">
+                <button
+                  onClick={handleSimulate}
+                  disabled={isLoading}
+                  className="bg-orange-500 text-white font-semibold py-2 px-6 rounded-md shadow-sm hover:bg-orange-600 transition disabled:bg-orange-400"
+                >
+                  {isLoading ? "Processando..." : "Simular Operação"}
+                </button>
+              </div>
+            </motion.div>
+          ) : (
+            <SimulationDetails
+              result={simulationResult}
+              onSubmit={handleConfirmSubmit}
+              onCancel={() => setSimulationResult(null)}
+            />
+          )}
+        </>
+      );
 };
 
-// ===================================================================
-//  Componente Principal da Página
-// ===================================================================
 export default function ClientDashboardPage() {
   const [operacoes, setOperacoes] = useState([]);
   const [duplicatas, setDuplicatas] = useState([]);
@@ -826,31 +814,31 @@ export default function ClientDashboardPage() {
     setTimeout(() => setNotification({ message: "", type: "" }), 5000);
   };
 
-  useEffect(() => {
-    const fetchTableData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const headers = getAuthHeader();
-        const [operacoesRes, duplicatasRes] = await Promise.all([
-          fetch("/api/portal/operacoes", { headers }),
-          fetch("/api/portal/duplicatas", { headers }),
-        ]);
-        if (!operacoesRes.ok)
-          throw new Error("Falha ao buscar suas operações.");
-        if (!duplicatasRes.ok)
-          throw new Error("Falha ao buscar suas duplicatas.");
-        const operacoesData = await operacoesRes.json();
-        const duplicatasData = await duplicatasRes.json();
-        setOperacoes(operacoesData);
-        setDuplicatas(duplicatasData);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchTableData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const headers = getAuthHeader();
+      const [operacoesRes, duplicatasRes] = await Promise.all([
+        fetch("/api/portal/operacoes", { headers }),
+        fetch("/api/portal/duplicatas", { headers }),
+      ]);
+      if (!operacoesRes.ok)
+        throw new Error("Falha ao buscar suas operações.");
+      if (!duplicatasRes.ok)
+        throw new Error("Falha ao buscar suas duplicatas.");
+      const operacoesData = await operacoesRes.json();
+      const duplicatasData = await duplicatasRes.json();
+      setOperacoes(operacoesData);
+      setDuplicatas(duplicatasData);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     if (activeView === "consultas") {
       fetchTableData();
     }
@@ -988,6 +976,15 @@ export default function ClientDashboardPage() {
               <NovaOperacaoView
                 showNotification={showNotification}
                 getAuthHeader={getAuthHeader}
+                onOperationSubmitted={() => {
+                    // Atrasa a busca de dados para dar tempo do backend processar
+                    setTimeout(() => {
+                        if (activeView === 'consultas') {
+                            fetchTableData();
+                        }
+                    }, 2000);
+                    setActiveView('consultas');
+                }}
               />
             </motion.div>
           )}
