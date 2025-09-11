@@ -15,6 +15,7 @@ import {
   FaSort,
   FaSortUp,
   FaSortDown,
+  FaTimes,
 } from "react-icons/fa";
 import Pagination from "@/app/components/Pagination";
 import Notification from "@/app/components/Notification";
@@ -552,16 +553,25 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
   }, [getAuthHeader, showNotification]);
 
   const handleFileChange = (event) => {
-    const files = Array.from(event.target.files);
-    const xmlFiles = files.filter(file => file.type === "text/xml" || file.name.endsWith('.xml'));
-    
-    if (xmlFiles.length !== files.length) {
-        showNotification("Apenas arquivos XML são permitidos. Alguns arquivos foram ignorados.", "error");
+    const newFiles = Array.from(event.target.files);
+    const xmlFiles = newFiles.filter(file => file.type === "text/xml" || file.name.endsWith('.xml'));
+  
+    if (xmlFiles.length !== newFiles.length) {
+      showNotification("Apenas arquivos XML são permitidos. Alguns arquivos foram ignorados.", "error");
     }
-    
-    setSelectedFiles(xmlFiles);
+  
+    // Adiciona apenas os novos arquivos que ainda não estão na lista
+    setSelectedFiles(prevFiles => {
+      const existingNames = new Set(prevFiles.map(f => f.name));
+      const uniqueNewFiles = xmlFiles.filter(f => !existingNames.has(f.name));
+      return [...prevFiles, ...uniqueNewFiles];
+    });
   };
 
+  const handleRemoveFile = (fileName) => {
+    setSelectedFiles(prevFiles => prevFiles.filter(f => f.name !== fileName));
+  };
+  
   const handleSimulate = async () => {
     if (selectedFiles.length === 0 || !tipoOperacaoId) {
       showNotification(
@@ -807,9 +817,6 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
                           <div className="flex flex-col items-center text-green-400">
                               <CheckCircleIcon />
                               <span className="font-medium mt-1">{selectedFiles.length} arquivo(s) selecionado(s)</span>
-                              <ul className="text-xs text-gray-400 list-disc list-inside">
-                                  {selectedFiles.map(f => <li key={f.name}>{f.name}</li>)}
-                              </ul>
                           </div>
                       ) : (
                           <>
@@ -831,6 +838,18 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
                     multiple
                   />
                 </div>
+                {selectedFiles.length > 0 && (
+                    <div className="mt-2 text-sm text-gray-300 space-y-1">
+                        {selectedFiles.map(f => (
+                            <div key={f.name} className="flex items-center justify-between bg-gray-700/50 p-1 rounded">
+                                <span>{f.name}</span>
+                                <button onClick={() => handleRemoveFile(f.name)} className="text-red-400 hover:text-red-300">
+                                    <FaTimes />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
               </div>
             </div>
             <div className="mt-8 text-right">
