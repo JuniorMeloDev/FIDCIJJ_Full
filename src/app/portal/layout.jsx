@@ -141,12 +141,12 @@ export default function PortalLayout({ children }) {
     }
 
     return (
-        <div className="min-h-screen bg-gray-900">
+        <div className="h-full flex flex-col bg-gray-900">
             <NotificationModal 
                 isOpen={isNotificationModalOpen}
                 onClose={() => setIsNotificationModalOpen(false)}
                 onUpdateCount={fetchUnreadCount}
-                isAdmin={false} // Clientes nunca são administradores, então passamos 'false'
+                isAdmin={false}
             />
             <PortalNavbar 
                 user={user} 
@@ -154,7 +154,7 @@ export default function PortalLayout({ children }) {
                 unreadCount={unreadCount}
                 onBellClick={() => setIsNotificationModalOpen(true)}
             />
-            <main className="pt-16">
+            <main className="pt-16 flex-grow overflow-y-auto">
                 {children}
             </main>
         </div>

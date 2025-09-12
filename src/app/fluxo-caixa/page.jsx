@@ -11,9 +11,9 @@ import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
 import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
-import ComplementModal from "@/app/components/ComplementModal"; // Importar o novo modal
+import ComplementModal from "@/app/components/ComplementModal";
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 20; // Aumentado para melhor uso do espaço com rolagem
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -52,7 +52,6 @@ export default function FluxoDeCaixaPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
 
-  // NOVOS STATES: Para o modal de complemento
   const [isComplementModalOpen, setIsComplementModalOpen] = useState(false);
   const [lancamentoParaComplemento, setLancamentoParaComplemento] = useState(null);
 
@@ -346,14 +345,12 @@ export default function FluxoDeCaixaPage() {
     });
   };
 
-  // NOVA FUNÇÃO: Para abrir o modal de complemento
   const handleAbrirModalComplemento = () => {
     if (!contextMenu.selectedItem) return;
     setLancamentoParaComplemento(contextMenu.selectedItem);
     setIsComplementModalOpen(true);
   };
 
-  // NOVA FUNÇÃO: Para salvar o complemento
   const handleSaveComplemento = async (payload) => {
     try {
       const response = await fetch(`/api/operacoes/complemento`, {
@@ -369,10 +366,10 @@ export default function FluxoDeCaixaPage() {
       showNotification('Complemento do borderô salvo com sucesso!', 'success');
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
-      return true; // Indica sucesso para o modal fechar
+      return true;
     } catch (error) {
         showNotification(error.message, 'error');
-        return false; // Indica falha
+        return false;
     }
   };
 
@@ -450,10 +447,9 @@ export default function FluxoDeCaixaPage() {
           </motion.header>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 flex-grow">
-          <div className="w-full flex-shrink-0 flex flex-col gap-4 lg:w-72 lg:overflow-y-auto lg:max-h-[calc(100vh-120px)]">
+        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
+          <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
             <motion.div
-              className=""
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2 }}
@@ -489,89 +485,91 @@ export default function FluxoDeCaixaPage() {
             />
           </div>
 
-          <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0 overflow-x-auto">
-            <div>
-              <table className="min-w-full divide-y divide-gray-700">
-                <thead className="bg-gray-700 sticky top-0 z-10">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort("data_movimento")}
-                        className="flex items-center gap-2"
-                      >
-                        Data {getSortIcon("data_movimento")}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort("descricao")}
-                        className="flex items-center gap-2"
-                      >
-                        Descrição {getSortIcon("descricao")}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Conta
-                    </th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort("valor")}
-                        className="flex items-center gap-2 float-right"
-                      >
-                        Valor {getSortIcon("valor")}
-                      </button>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-gray-800 divide-y divide-gray-700">
-                  {loading ? (
+          <div className="flex-grow bg-gray-800 rounded-lg shadow-md flex flex-col min-h-0">
+            <div className="flex-grow p-4 overflow-hidden flex flex-col">
+              <div className="flex-grow overflow-auto">
+                <table className="min-w-full divide-y divide-gray-700">
+                  <thead className="bg-gray-700 sticky top-0 z-10">
                     <tr>
-                      <td colSpan="4" className="text-center py-10 text-gray-400">
-                        A carregar...
-                      </td>
-                    </tr>
-                  ) : currentItems.length > 0 ? (
-                    currentItems.map((mov) => (
-                      <tr
-                        key={mov.id}
-                        onContextMenu={(e) => handleContextMenu(e, mov)}
-                        className="hover:bg-gray-700 cursor-pointer"
-                      >
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
-                          {formatDate(mov.dataMovimento)}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle">
-                          {mov.descricao}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
-                          {mov.contaBancaria}
-                        </td>
-                        <td
-                          className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${
-                            mov.valor >= 0 ? "text-green-400" : "text-red-400"
-                          }`}
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        <button
+                          onClick={() => handleSort("data_movimento")}
+                          className="flex items-center gap-2"
                         >
-                          {formatBRLNumber(mov.valor)}
+                          Data {getSortIcon("data_movimento")}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        <button
+                          onClick={() => handleSort("descricao")}
+                          className="flex items-center gap-2"
+                        >
+                          Descrição {getSortIcon("descricao")}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        Conta
+                      </th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        <button
+                          onClick={() => handleSort("valor")}
+                          className="flex items-center gap-2 float-right"
+                        >
+                          Valor {getSortIcon("valor")}
+                        </button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-gray-800 divide-y divide-gray-700">
+                    {loading ? (
+                      <tr>
+                        <td colSpan="4" className="text-center py-10 text-gray-400">
+                          A carregar...
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="4" className="text-center py-10 text-gray-400">
-                        Nenhuma movimentação encontrada.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex-shrink-0 pt-4">
-              <Pagination
-                totalItems={movimentacoes.length}
-                itemsPerPage={ITEMS_PER_PAGE}
-                currentPage={currentPage}
-                onPageChange={(page) => setCurrentPage(page)}
-              />
+                    ) : currentItems.length > 0 ? (
+                      currentItems.map((mov) => (
+                        <tr
+                          key={mov.id}
+                          onContextMenu={(e) => handleContextMenu(e, mov)}
+                          className="hover:bg-gray-700 cursor-pointer"
+                        >
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
+                            {formatDate(mov.dataMovimento)}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle">
+                            {mov.descricao}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
+                            {mov.contaBancaria}
+                          </td>
+                          <td
+                            className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${
+                              mov.valor >= 0 ? "text-green-400" : "text-red-400"
+                            }`}
+                          >
+                            {formatBRLNumber(mov.valor)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="4" className="text-center py-10 text-gray-400">
+                          Nenhuma movimentação encontrada.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex-shrink-0 pt-4">
+                <Pagination
+                  totalItems={movimentacoes.length}
+                  itemsPerPage={ITEMS_PER_PAGE}
+                  currentPage={currentPage}
+                  onPageChange={(page) => setCurrentPage(page)}
+                />
+              </div>
             </div>
           </div>
         </div>

@@ -5,7 +5,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import PrimeiroAcesso from './PrimeiroAcesso';
 import { useInactivityTimeout } from '../hooks/useInactivityTimeout';
 import SessionTimeoutModal from './SessionTimeoutModal';
-import { jwtDecode } from 'jwt-decode'; // Importe o jwt-decode
+import { jwtDecode } from 'jwt-decode';
+import Navbar from './Navbar'; // Importar a Navbar do admin
 
 // Componente interno para ativar o gerenciador de inatividade
 function InactivityManager() {
@@ -48,7 +49,6 @@ export default function SetupChecker({ children }) {
                     return;
                 }
 
-                // --- NOVA LÓGICA DE VERIFICAÇÃO DE PERMISSÃO ---
                 const decodedToken = jwtDecode(token);
                 const userRoles = decodedToken.roles || [];
                 const isClient = userRoles.includes('ROLE_CLIENTE');
@@ -56,19 +56,15 @@ export default function SetupChecker({ children }) {
 
                 const isAdminRoute = !pathname.startsWith('/portal');
 
-                // 1. Se um cliente tentar acessar uma rota de admin, redirecione-o para o portal.
                 if (isAdminRoute && isClient && !isAdmin) {
                     router.push('/portal/dashboard');
                     return;
                 }
                 
-                // 2. Se um não-cliente tentar acessar o portal, o /portal/layout.jsx já o redireciona.
-                // Esta é uma segurança extra.
                 if (!isAdminRoute && !isClient) {
                     router.push('/login');
                     return;
                 }
-                // --- FIM DA NOVA LÓGICA ---
 
                 const response = await fetch(`/api/setup/status`, { headers: getAuthHeader() }); 
                 
@@ -100,9 +96,9 @@ export default function SetupChecker({ children }) {
 
     const token = typeof window !== 'undefined' ? sessionStorage.getItem('authToken') : null;
     const isAuthenticated = !!token;
-
+    const isPortalRoute = pathname.startsWith('/portal');
+    
     if (isAuthenticated && pathname === '/login') {
-        // Redireciona para o resumo, pois o checkStatus acima cuidará de redirecionar para o portal se for cliente
         router.push('/resumo');
         return null;
     }
@@ -124,7 +120,10 @@ export default function SetupChecker({ children }) {
         if (pathname.startsWith('/cadastros')) {
             return (
                 <>
-                    {children}
+                    <Navbar />
+                    <div className="flex-grow pt-16 flex flex-col overflow-y-auto">
+                        {children}
+                    </div>
                     {isAuthenticated && <InactivityManager />}
                 </>
             );
@@ -133,12 +132,21 @@ export default function SetupChecker({ children }) {
     }
     
     if(isAuthenticated){
-        return (
-            <>
-                {children}
-                <InactivityManager />
-            </>
-        );
+        if (isPortalRoute) {
+            // Para rotas do portal, apenas renderiza o conteúdo (o layout do portal cuidará do resto)
+            return <>{children}<InactivityManager /></>;
+        } else {
+            // Para rotas do admin, aplica a Navbar e o contêiner de rolagem
+            return (
+                <>
+                    <Navbar />
+                    <div className="flex-grow pt-16 flex flex-col overflow-y-auto">
+                        {children}
+                    </div>
+                    <InactivityManager />
+                </>
+            );
+        }
     }
 
     return null;

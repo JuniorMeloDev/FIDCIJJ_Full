@@ -1,5 +1,4 @@
 import { Inter } from "next/font/google";
-import Navbar from "./components/Navbar";
 import SetupChecker from "./components/SetupChecker";
 import "./globals.css";
 
@@ -15,10 +14,7 @@ export default function RootLayout({ children }) {
     <html lang="pt-br" className="bg-gray-900">
       <body className={`${inter.className} h-screen flex flex-col`}>
         <SetupChecker>
-          <Navbar />
-          <div className="flex-grow pt-16 flex flex-col overflow-y-auto">
-            {children}
-          </div>
+          {children}
         </SetupChecker>
       </body>
     </html>
