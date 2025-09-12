@@ -25,7 +25,7 @@ function PortalNavbar({ user, onLogout, unreadCount, onBellClick }) {
     if (!user) return null;
 
     return (
-        <nav className="bg-gray-900 border-b border-gray-700 fixed w-full z-20 top-0 left-0 h-16">
+        <nav className="bg-gray-900 border-b border-gray-700 flex-shrink-0 z-20 h-16">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between items-center h-16">
                     <Link href="/portal/dashboard" className="flex items-center space-x-3">
@@ -141,21 +141,19 @@ export default function PortalLayout({ children }) {
     }
 
     return (
-        <div className="h-full flex flex-col bg-gray-900">
+        <div className="h-full flex flex-col bg-gray-900 pt-0">
             <NotificationModal 
                 isOpen={isNotificationModalOpen}
                 onClose={() => setIsNotificationModalOpen(false)}
                 onUpdateCount={fetchUnreadCount}
                 isAdmin={false}
             />
-            {/* O Navbar do Portal continua fixo */}
             <PortalNavbar 
                 user={user} 
                 onLogout={handleLogout} 
                 unreadCount={unreadCount}
                 onBellClick={() => setIsNotificationModalOpen(true)}
             />
-            {/* A área de <main> agora é responsável pela rolagem do seu próprio conteúdo */}
             <main className="flex-grow overflow-y-auto">
                 {children}
             </main>

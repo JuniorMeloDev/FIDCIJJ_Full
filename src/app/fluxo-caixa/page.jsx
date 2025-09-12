@@ -387,43 +387,15 @@ export default function FluxoDeCaixaPage() {
         type={notification.type}
         onClose={() => setNotification({ message: "", type: "" })}
       />
-      <LancamentoModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveLancamento}
-        contasMaster={contasMaster}
-        clienteMasterNome={clienteMasterNome}
-      />
-      <EditLancamentoModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        onSave={handleUpdateLancamento}
-        lancamento={itemParaEditar}
-        contasMaster={contasMaster}
-      />
-      <ConfirmacaoModal
-        isOpen={!!itemParaExcluir}
-        onClose={() => setItemParaExcluir(null)}
-        onConfirm={handleConfirmDelete}
-        title="Confirmar Exclusão"
-        message="Tem a certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita."
-      />
-      <EmailModal
-        isOpen={isEmailModalOpen}
-        onClose={() => setIsEmailModalOpen(false)}
-        onSend={handleSendEmail}
-        isSending={isSendingEmail}
-        clienteId={operacaoParaEmail?.clienteId}
-      />
-      <ComplementModal
-          isOpen={isComplementModalOpen}
-          onClose={() => setIsComplementModalOpen(false)}
-          onSave={handleSaveComplemento}
-          lancamentoOriginal={lancamentoParaComplemento}
-          contasMaster={contasMaster}
-      />
+      <LancamentoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveLancamento} contasMaster={contasMaster} clienteMasterNome={clienteMasterNome} />
+      <EditLancamentoModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleUpdateLancamento} lancamento={itemParaEditar} contasMaster={contasMaster} />
+      <ConfirmacaoModal isOpen={!!itemParaExcluir} onClose={() => setItemParaExcluir(null)} onConfirm={handleConfirmDelete} title="Confirmar Exclusão" message="Tem a certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita." />
+      <EmailModal isOpen={isEmailModalOpen} onClose={() => setIsEmailModalOpen(false)} onSend={handleSendEmail} isSending={isSendingEmail} clienteId={operacaoParaEmail?.clienteId} />
+      <ComplementModal isOpen={isComplementModalOpen} onClose={() => setIsComplementModalOpen(false)} onSave={handleSaveComplemento} lancamentoOriginal={lancamentoParaComplemento} contasMaster={contasMaster} />
 
+      {/* A estrutura principal agora é um flex-col para ocupar toda a altura */}
       <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+        {/* Cabeçalho fixo */}
         <div className="flex-shrink-0">
           <motion.header
             className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
@@ -445,201 +417,104 @@ export default function FluxoDeCaixaPage() {
           </motion.header>
         </div>
 
+        {/* Área de conteúdo que cresce e permite rolagem interna */}
         <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
+          {/* Painel Esquerdo (Saldos e Filtros) */}
           <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
+            {/* Saldos */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
               <h2 className="text-lg font-semibold text-gray-100 mb-2">
                 {saldosTitle}
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
                 {saldos.map((saldo, index) => (
-                  <div
-                    key={index}
-                    className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
-                  >
-                    <p className="text-sm text-gray-400 truncate">
-                      {saldo.contaBancaria}
-                    </p>
-                    <p
-                      className={`text-xl font-bold ${
-                        saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
-                      }`}
-                    >
+                  <div key={index} className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500">
+                    <p className="text-sm text-gray-400 truncate">{saldo.contaBancaria}</p>
+                    <p className={`text-xl font-bold ${saldo.saldo >= 0 ? "text-green-400" : "text-red-400"}`}>
                       {formatBRLNumber(saldo.saldo)}
                     </p>
                   </div>
                 ))}
               </div>
             </motion.div>
-            <FiltroLateral
-              filters={filters}
-              saldos={saldos}
-              onFilterChange={handleFilterChange}
-              onClear={clearFilters}
-            />
+            {/* Filtros */}
+            <FiltroLateral filters={filters} saldos={saldos} onFilterChange={handleFilterChange} onClear={clearFilters} />
           </div>
 
-          <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
-            <div className="flex-grow overflow-auto">
-              <table className="min-w-full divide-y divide-gray-700">
-                <thead className="bg-gray-700 sticky top-0 z-10">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort("data_movimento")}
-                        className="flex items-center gap-2"
-                      >
-                        Data {getSortIcon("data_movimento")}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort("descricao")}
-                        className="flex items-center gap-2"
-                      >
-                        Descrição {getSortIcon("descricao")}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Conta
-                    </th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      <button
-                        onClick={() => handleSort("valor")}
-                        className="flex items-center gap-2 float-right"
-                      >
-                        Valor {getSortIcon("valor")}
-                      </button>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-gray-800 divide-y divide-gray-700">
-                  {loading ? (
+          {/* Painel Direito (Tabela de Movimentações) */}
+          <div className="flex-grow bg-gray-800 rounded-lg shadow-md flex flex-col min-h-0">
+            <div className="flex-grow p-4 overflow-hidden flex flex-col">
+              <div className="flex-grow overflow-auto">
+                <table className="min-w-full divide-y divide-gray-700">
+                  <thead className="bg-gray-700 sticky top-0 z-10">
                     <tr>
-                      <td colSpan="4" className="text-center py-10 text-gray-400">
-                        A carregar...
-                      </td>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            <button onClick={() => handleSort("data_movimento")} className="flex items-center gap-2">
+                                Data {getSortIcon("data_movimento")}
+                            </button>
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            <button onClick={() => handleSort("descricao")} className="flex items-center gap-2">
+                                Descrição {getSortIcon("descricao")}
+                            </button>
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Conta</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            <button onClick={() => handleSort("valor")} className="flex items-center gap-2 float-right">
+                                Valor {getSortIcon("valor")}
+                            </button>
+                        </th>
                     </tr>
-                  ) : currentItems.length > 0 ? (
-                    currentItems.map((mov) => (
-                      <tr
-                        key={mov.id}
-                        onContextMenu={(e) => handleContextMenu(e, mov)}
-                        className="hover:bg-gray-700 cursor-pointer"
-                      >
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
-                          {formatDate(mov.dataMovimento)}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle">
-                          {mov.descricao}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
-                          {mov.contaBancaria}
-                        </td>
-                        <td
-                          className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${
-                            mov.valor >= 0 ? "text-green-400" : "text-red-400"
-                          }`}
-                        >
-                          {formatBRLNumber(mov.valor)}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="4" className="text-center py-10 text-gray-400">
-                        Nenhuma movimentação encontrada.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex-shrink-0 pt-4">
-              <Pagination
-                totalItems={movimentacoes.length}
-                itemsPerPage={ITEMS_PER_PAGE}
-                currentPage={currentPage}
-                onPageChange={(page) => setCurrentPage(page)}
-              />
+                  </thead>
+                  <tbody className="bg-gray-800 divide-y divide-gray-700">
+                    {loading ? ( <tr><td colSpan="4" className="text-center py-10 text-gray-400">A carregar...</td></tr>) 
+                    : currentItems.length > 0 ? (
+                      currentItems.map((mov) => (
+                        <tr key={mov.id} onContextMenu={(e) => handleContextMenu(e, mov)} className="hover:bg-gray-700 cursor-pointer">
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">{formatDate(mov.dataMovimento)}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle">{mov.descricao}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">{mov.contaBancaria}</td>
+                          <td className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${ mov.valor >= 0 ? "text-green-400" : "text-red-400"}`}>
+                            {formatBRLNumber(mov.valor)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr><td colSpan="4" className="text-center py-10 text-gray-400">Nenhuma movimentação encontrada.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex-shrink-0 pt-4">
+                <Pagination totalItems={movimentacoes.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={(page) => setCurrentPage(page)} />
+              </div>
             </div>
           </div>
         </div>
       </main>
 
       {contextMenu.visible && (
-        <div
-          ref={menuRef}
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          className="absolute origin-top-right w-56 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-20"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div ref={menuRef} style={{ top: contextMenu.y, left: contextMenu.x }} className="absolute origin-top-right w-56 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-20" onClick={(e) => e.stopPropagation()}>
           <div className="py-1">
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                handleEditRequest();
-              }}
-              className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-            >
+            <a href="#" onClick={(e) => { e.preventDefault(); handleEditRequest(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">
               Editar Lançamento
             </a>
-            {
-              contextMenu.selectedItem?.categoria === 'Pagamento de Borderô' &&
-              contextMenu.selectedItem?.operacao &&
-              Math.abs(contextMenu.selectedItem.valor) < contextMenu.selectedItem.operacao.valor_liquido &&
-              (
-                  <a href="#" onClick={(e) => { e.preventDefault(); handleAbrirModalComplemento(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">
-                      Complemento Borderô
-                  </a>
-              )
+            { contextMenu.selectedItem?.categoria === 'Pagamento de Borderô' && contextMenu.selectedItem?.operacao && Math.abs(contextMenu.selectedItem.valor) < contextMenu.selectedItem.operacao.valor_liquido &&
+              (<a href="#" onClick={(e) => { e.preventDefault(); handleAbrirModalComplemento(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Complemento Borderô</a>)
             }
             {contextMenu.selectedItem?.operacaoId && (
               <>
                 <div className="border-t border-gray-600 my-1"></div>
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleGeneratePdf();
-                  }}
-                  className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-                >
-                  Gerar PDF do Borderô
-                </a>
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleAbrirEmailModal();
-                  }}
-                  className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-                >
-                  Enviar Borderô por E-mail
-                </a>
+                <a href="#" onClick={(e) => { e.preventDefault(); handleGeneratePdf(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Gerar PDF do Borderô</a>
+                <a href="#" onClick={(e) => { e.preventDefault(); handleAbrirEmailModal(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">Enviar Borderô por E-mail</a>
               </>
             )}
             <div className="border-t border-gray-600 my-1"></div>
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                handleDeleteRequest();
-              }}
+            <button onClick={(e) => { e.preventDefault(); handleDeleteRequest(); }}
               className={`block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 ${
-                ["Pagamento de Borderô", "Recebimento"].includes(
-                  contextMenu.selectedItem?.categoria
-                )
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
+                ["Pagamento de Borderô", "Recebimento", "Transferencia Enviada", "Transferencia Recebida"].includes(contextMenu.selectedItem?.categoria) ? "opacity-50 cursor-not-allowed" : ""
               }`}
-              disabled={["Pagamento de Borderô", "Recebimento", "Transferencia Enviada", "Transferencia Recebida"].includes(
-                contextMenu.selectedItem?.categoria
-              )}
+              disabled={["Pagamento de Borderô", "Recebimento", "Transferencia Enviada", "Transferencia Recebida"].includes(contextMenu.selectedItem?.categoria)}
             >
               Excluir Lançamento
             </button>

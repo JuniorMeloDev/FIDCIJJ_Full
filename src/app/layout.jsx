@@ -16,8 +16,8 @@ export default function RootLayout({ children }) {
       <body className={`${inter.className} h-screen flex flex-col`}>
         <SetupChecker>
           <Navbar />
+          {/* O container principal agora é mais simples e ocupa o espaço restante */}
           <div className="flex-grow pt-16 flex flex-col">
-            {/* A classe overflow-y-auto foi removida daqui */}
             {children}
           </div>
         </SetupChecker>

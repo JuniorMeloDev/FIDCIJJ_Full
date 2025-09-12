@@ -6,9 +6,7 @@ import PrimeiroAcesso from './PrimeiroAcesso';
 import { useInactivityTimeout } from '../hooks/useInactivityTimeout';
 import SessionTimeoutModal from './SessionTimeoutModal';
 import { jwtDecode } from 'jwt-decode';
-import Navbar from './Navbar'; // Importar a Navbar do admin
 
-// Componente interno para ativar o gerenciador de inatividade
 function InactivityManager() {
     const { isWarningModalOpen, countdown, handleContinue, logout } = useInactivityTimeout();
     return (
@@ -53,7 +51,6 @@ export default function SetupChecker({ children }) {
                 const userRoles = decodedToken.roles || [];
                 const isClient = userRoles.includes('ROLE_CLIENTE');
                 const isAdmin = userRoles.includes('ROLE_ADMIN');
-
                 const isAdminRoute = !pathname.startsWith('/portal');
 
                 if (isAdminRoute && isClient && !isAdmin) {
@@ -96,8 +93,7 @@ export default function SetupChecker({ children }) {
 
     const token = typeof window !== 'undefined' ? sessionStorage.getItem('authToken') : null;
     const isAuthenticated = !!token;
-    const isPortalRoute = pathname.startsWith('/portal');
-    
+
     if (isAuthenticated && pathname === '/login') {
         router.push('/resumo');
         return null;
@@ -120,10 +116,7 @@ export default function SetupChecker({ children }) {
         if (pathname.startsWith('/cadastros')) {
             return (
                 <>
-                    <Navbar />
-                    <div className="flex-grow pt-16 flex flex-col overflow-y-auto">
-                        {children}
-                    </div>
+                    {children}
                     {isAuthenticated && <InactivityManager />}
                 </>
             );
@@ -132,21 +125,12 @@ export default function SetupChecker({ children }) {
     }
     
     if(isAuthenticated){
-        if (isPortalRoute) {
-            // Para rotas do portal, apenas renderiza o conteúdo (o layout do portal cuidará do resto)
-            return <>{children}<InactivityManager /></>;
-        } else {
-            // Para rotas do admin, aplica a Navbar e o contêiner de rolagem
-            return (
-                <>
-                    <Navbar />
-                    <div className="flex-grow pt-16 flex flex-col overflow-y-auto">
-                        {children}
-                    </div>
-                    <InactivityManager />
-                </>
-            );
-        }
+        return (
+            <>
+                {children}
+                <InactivityManager />
+            </>
+        );
     }
 
     return null;
