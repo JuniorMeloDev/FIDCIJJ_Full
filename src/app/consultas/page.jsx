@@ -13,7 +13,7 @@ import FiltroLateralConsultas from "@/app/components/FiltroLateralConsultas";
 import SelectionActionsBar from "@/app/components/SelectionActionsBar";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 8;
 
 export default function ConsultasPage() {
   const [duplicatas, setDuplicatas] = useState([]);
