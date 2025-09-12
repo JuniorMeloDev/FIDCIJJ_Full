@@ -313,7 +313,7 @@ export default function FluxoDeCaixaPage() {
         </div>
 
         {/* Conteúdo com rolagens internas */}
-        <div className="flex-grow flex flex-col lg:flex-row gap-6 px-6 pb-6 min-h-0 overflow-hidden">
+<div className="w-full lg:w-72 flex-shrink-0 flex flex-col overflow-y-auto">
           {/* Painel Esquerdo */}
           <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4 overflow-hidden">
             <motion.div
@@ -356,8 +356,7 @@ export default function FluxoDeCaixaPage() {
 
           {/* Painel Direito */}
           <div className="flex-grow bg-gray-800 rounded-lg shadow-md flex flex-col min-h-0">
-            <div className="flex-grow overflow-y-auto p-4">
-              <table className="min-w-full divide-y divide-gray-700">
+<div className="p-4 flex flex-col">              <table className="min-w-full divide-y divide-gray-700">
                 <thead className="bg-gray-700 sticky top-0 z-10">
                   <tr>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
