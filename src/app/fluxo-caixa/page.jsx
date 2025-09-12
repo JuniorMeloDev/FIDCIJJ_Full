@@ -7,6 +7,7 @@ import EditLancamentoModal from "@/app/components/EditLancamentoModal";
 import Notification from "@/app/components/Notification";
 import ConfirmacaoModal from "@/app/components/ConfirmacaoModal";
 import EmailModal from "@/app/components/EmailModal";
+import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal"; // Adicione esta linha
 import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
 import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
@@ -51,6 +52,7 @@ export default function FluxoDeCaixaPage() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
+  const [estornoInfo, setEstornoInfo] = useState(null);
 
   // NOVOS STATES: Para o modal de complemento
   const [isComplementModalOpen, setIsComplementModalOpen] = useState(false);
@@ -263,6 +265,35 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
+  const handleEstornarRequest = () => {
+    if (!contextMenu.selectedItem) return;
+    setEstornoInfo({ id: contextMenu.selectedItem.id });
+  };
+
+  const confirmarEstorno = async () => {
+    if (!estornoInfo) return;
+    try {
+      const response = await fetch(
+        `/api/duplicatas/${estornoInfo.id}/estornar`,
+        {
+          method: "POST",
+          headers: getAuthHeader(),
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Falha ao estornar a liquidação.");
+      }
+      showNotification("Liquidação estornada com sucesso!", "success");
+      fetchMovimentacoes(filters, sortConfig);
+      fetchSaldos(filters);
+    } catch (err) {
+      showNotification(err.message, "error");
+    } finally {
+      setEstornoInfo(null);
+    }
+  };
+
   const handleAbrirEmailModal = () => {
     if (!contextMenu.selectedItem) return;
     setOperacaoParaEmail({
@@ -419,6 +450,13 @@ export default function FluxoDeCaixaPage() {
         onSend={handleSendEmail}
         isSending={isSendingEmail}
         clienteId={operacaoParaEmail?.clienteId}
+      />
+      <ConfirmacaoEstornoModal
+        isOpen={!!estornoInfo}
+        onClose={() => setEstornoInfo(null)}
+        onConfirm={confirmarEstorno}
+        title="Confirmar Estorno"
+        message="Tem certeza que deseja estornar esta liquidação? A duplicata voltará ao status 'Pendente' e a movimentação de caixa será excluída."
       />
       <ComplementModal
           isOpen={isComplementModalOpen}
@@ -631,27 +669,41 @@ export default function FluxoDeCaixaPage() {
               </>
             )}
             <div className="border-t border-gray-600 my-1"></div>
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                handleDeleteRequest();
-              }}
-              className={`block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 ${
-                ["Pagamento de Borderô", "Recebimento"].includes(
-                  contextMenu.selectedItem?.categoria
-                )
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
-              }`}
-              disabled={["Pagamento de Borderô", "Recebimento", "Transferencia Enviada", "Transferencia Recebida"].includes(
+        {contextMenu.selectedItem?.categoria === 'Recebimento' ? (
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              handleEstornarRequest();
+            }}
+            className="block w-full text-left px-4 py-2 text-sm text-yellow-400 hover:bg-gray-600"
+          >
+            Estornar Liquidação
+          </a>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              handleDeleteRequest();
+            }}
+            className={`block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 ${
+              ["Pagamento de Borderô", "Transferencia Enviada", "Transferencia Recebida"].includes(
                 contextMenu.selectedItem?.categoria
-              )}
-            >
-              Excluir Lançamento
-            </button>
-          </div>
-        </div>
-      )}
+              )
+                ? "opacity-50 cursor-not-allowed"
+                : ""
+            }`}
+            disabled={["Pagamento de Borderô", "Recebimento", "Transferencia Enviada", "Transferencia Recebida"].includes(
+              contextMenu.selectedItem?.categoria
+            )}
+          >
+            Excluir Lançamento
+          </button>
+        )}
+        {/* FIM DA ALTERAÇÃO */}
+      </div>
+    </div>
+)}
     </>
   );
 }
