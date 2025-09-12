@@ -38,14 +38,11 @@ export async function PUT(request, { params }) {
 
       const totalDescontosAdicionais = descontos?.reduce((acc, d) => acc + d.valor, 0) || 0;
       const novoValorLiquido = operacao.valor_liquido - totalDescontosAdicionais;
-
-      // --- CORREÇÃO AQUI ---
-      // Lógica mais robusta para determinar o valor a ser debitado.
+      
       let valorDebitado = novoValorLiquido;
       if (valor_debito_parcial && Number(valor_debito_parcial) > 0) {
           valorDebitado = Number(valor_debito_parcial);
       }
-      // --- FIM DA CORREÇÃO ---
 
       if (descontos && descontos.length > 0) {
         const descontosToInsert = descontos.map(d => ({
@@ -86,7 +83,7 @@ export async function PUT(request, { params }) {
         operacao_id: id,
         data_movimento: data_debito_parcial || operacao.data_operacao,
         descricao: descricaoLancamento,
-        valor: -Math.abs(valorDebitado), // Usa a variável corrigida
+        valor: -Math.abs(valorDebitado),
         categoria: "Pagamento de Borderô",
         conta_bancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
         empresa_associada: empresaMasterNome,
@@ -98,7 +95,8 @@ export async function PUT(request, { params }) {
             status: "Aprovada", 
             conta_bancaria_id,
             valor_liquido: novoValorLiquido,
-            valor_total_descontos: operacao.valor_total_descontos + totalDescontosAdicionais
+            valor_total_descontos: operacao.valor_total_descontos + totalDescontosAdicionais,
+            limite_utilizado: (operacao.limite_utilizado || 0) + novoValorLiquido, // Atualiza o limite
         })
         .eq("id", id);
 

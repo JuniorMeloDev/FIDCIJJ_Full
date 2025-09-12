@@ -5,6 +5,8 @@ import {
   formatCnpjCpf,
   formatTelefone,
   formatCep,
+  formatBRLInput, // Importar
+  parseBRL, // Importar
 } from "@/app/utils/formatters";
 import AutocompleteInput from "./AutocompleteInput";
 
@@ -43,6 +45,7 @@ export default function EditClienteModal({
     contasBancarias: [],
     ramoDeAtividade: "",
     emails: [],
+    limite_credito: "", // Novo campo
   };
   const [formData, setFormData] = useState(initialState);
   const [isFetchingCnpj, setIsFetchingCnpj] = useState(false);
@@ -107,6 +110,7 @@ export default function EditClienteModal({
           cnpj: cliente.cnpj ? formatCnpjCpf(cliente.cnpj) : "",
           fone: cliente.fone ? formatTelefone(cliente.fone) : "",
           cep: cliente.cep ? formatCep(cliente.cep) : "",
+          limite_credito: cliente.limite_credito ? formatBRLInput(String(cliente.limite_credito * 100)) : "",
           contasBancarias: cliente.contasBancarias
             ? [...cliente.contasBancarias]
             : [],
@@ -171,6 +175,9 @@ export default function EditClienteModal({
       if (formattedValue.replace(/\D/g, "").length === 14)
         handleCnpjSearch(formattedValue);
     }
+    if (name === "limite_credito") {
+        formattedValue = formatBRLInput(value);
+    }
     setFormData((prev) => ({ ...prev, [name]: formattedValue }));
   };
 
@@ -233,12 +240,13 @@ export default function EditClienteModal({
       cnpj: formData.cnpj.replace(/\D/g, ""),
       fone: formData.fone?.replace(/\D/g, ""),
       cep: formData.cep?.replace(/\D/g, ""),
+      limite_credito: parseBRL(formData.limite_credito),
       acesso: {
         username: userData.username,
         password: userData.password,
       },
       tiposOperacao: Array.from(selectedTipos),
-      sendWelcomeEmail: sendEmail, // Adiciona a flag
+      sendWelcomeEmail: sendEmail,
     };
     const result = await onSave(cliente?.id, dataToSave);
     setIsSaving(false);
@@ -286,7 +294,6 @@ export default function EditClienteModal({
         </div>
 
         <div className="flex-grow overflow-y-auto py-4 pr-2">
-          {/* Conteúdo das abas... (sem alterações) */}
           {activeTab === "dadosCadastrais" && (
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -445,6 +452,19 @@ export default function EditClienteModal({
                     name="email"
                     value={formData.email || ""}
                     onChange={handleChange}
+                    className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-300">
+                    Limite de Crédito
+                  </label>
+                  <input
+                    type="text"
+                    name="limite_credito"
+                    value={formData.limite_credito || ""}
+                    onChange={handleChange}
+                    placeholder="R$ 0,00"
                     className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"
                   />
                 </div>
@@ -676,7 +696,6 @@ export default function EditClienteModal({
             >
               {isSaving ? "Salvando..." : "Salvar"}
             </button>
-            {/* NOVO BOTÃO */}
             <button
               onClick={() => handleSave(true)}
               disabled={isSaving}

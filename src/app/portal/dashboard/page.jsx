@@ -16,16 +16,19 @@ import {
   FaSortUp,
   FaSortDown,
   FaTimes,
+  FaCoins,
+  FaFileInvoiceDollar,
+  FaWallet
 } from "react-icons/fa";
 import Pagination from "@/app/components/Pagination";
 import Notification from "@/app/components/Notification";
 import TopFiveApex from "@/app/components/TopFiveApex";
 import VolumeOperadoChart from "@/app/components/VolumeOperadoChart";
 
+// ... (Todos os componentes internos como UploadIcon, useSortableData, HistoricoOperacoesTable, etc. permanecem inalterados) ...
 const ITEMS_PER_PAGE_OPERATIONS = 5;
 const ITEMS_PER_PAGE_DUPLICATAS = 5;
 
-// ... (Componentes internos como UploadIcon, CheckCircleIcon, useSortableData, etc., permanecem os mesmos)
 const UploadIcon = () => (
     <svg
       className="w-8 h-8 text-gray-400"
@@ -91,437 +94,437 @@ const UploadIcon = () => (
     };
     return { items: sortedItems, requestSort, getSortIcon };
   };
-
-const HistoricoOperacoesTable = ({
-  operacoes,
-  loading,
-  error,
-  getAuthHeader,
-  showNotification,
-}) => {
-  const [expandedRow, setExpandedRow] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [downloadingId, setDownloadingId] = useState(null);
-  const {
-    items: sortedOperacoes,
-    requestSort,
-    getSortIcon,
-  } = useSortableData(operacoes, { key: "data_operacao", direction: "DESC" });
-  const toggleRow = (id) => setExpandedRow(expandedRow === id ? null : id);
-  const indexOfLastItem = currentPage * ITEMS_PER_PAGE_OPERATIONS;
-  const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE_OPERATIONS;
-  const currentOperacoes = sortedOperacoes.slice(
-    indexOfFirstItem,
-    indexOfLastItem
-  );
-  const getStatusTag = (status) => {
-    const styles = {
-      Pendente: "bg-orange-800 text-amber-100",
-      Aprovada: "bg-green-800 text-green-100",
-      Rejeitada: "bg-red-800 text-red-100",
-    };
-    const icons = {
-      Pendente: <FaHourglassHalf />,
-      Aprovada: <FaCheckCircle />,
-      Rejeitada: <FaTimesCircle />,
-    };
-    return (
-      <span
-        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
-          styles[status] || "bg-gray-600"
-        }`}
-      >
-        {icons[status]} {status}
-      </span>
-    );
-  };
-  const handleDownloadBordero = async (operacaoId) => {
-    setDownloadingId(operacaoId);
-    try {
-      const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, {
-        headers: getAuthHeader(),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Não foi possível gerar o PDF.");
-      }
-      const contentDisposition = response.headers.get("content-disposition");
-      let filename = `bordero-${operacaoId}.pdf`;
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-        if (filenameMatch && filenameMatch.length > 1)
-          filename = filenameMatch[1];
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      showNotification(err.message, "error");
-    } finally {
-      setDownloadingId(null);
-    }
-  };
-  return (
-    <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-      <h2 className="text-xl font-semibold mb-4 text-white">
-        Histórico de Operações
-      </h2>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-700">
-          <thead className="bg-gray-700/50">
-            <tr>
-              <th className="w-12"></th>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort("id")}
-              >
-                ID{getSortIcon("id")}
-              </th>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort("data_operacao")}
-              >
-                Data de Envio{getSortIcon("data_operacao")}
-              </th>
-              <th
-                className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort("valor_total_bruto")}
-              >
-                Valor Bruto{getSortIcon("valor_total_bruto")}
-              </th>
-              <th
-                className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort("valor_liquido")}
-              >
-                Valor Líquido{getSortIcon("valor_liquido")}
-              </th>
-              <th
-                className="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort("status")}
-              >
-                Status{getSortIcon("status")}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-gray-800 divide-y divide-gray-700">
-            {loading ? (
-              <tr>
-                <td colSpan="6" className="text-center py-8">
-                  Carregando...
-                </td>
-              </tr>
-            ) : error ? (
-              <tr>
-                <td colSpan="6" className="text-center py-8 text-red-400">
-                  {error}
-                </td>
-              </tr>
-            ) : currentOperacoes.length === 0 ? (
-              <tr>
-                <td colSpan="6" className="text-center py-8">
-                  Nenhuma operação encontrada.
-                </td>
-              </tr>
-            ) : (
-              currentOperacoes.map((op) => (
-                <React.Fragment key={op.id}>
-                  <tr
-                    onClick={() => toggleRow(op.id)}
-                    className={`cursor-pointer hover:bg-gray-700/50 ${
-                      expandedRow === op.id ? "bg-gray-700/50" : ""
-                    }`}
-                  >
-                    <td className="px-4 py-4">
-                      <FaChevronRight
-                        className={`text-gray-500 transition-transform duration-300 ${
-                          expandedRow === op.id ? "rotate-90" : ""
-                        }`}
-                      />
-                    </td>
-                    <td className="px-6 py-4 font-medium text-white">
-                      #{op.id}
-                    </td>
-                    <td className="px-6 py-4 text-gray-300">
-                      {formatDate(op.data_operacao)}
-                    </td>
-                    <td className="px-6 py-4 text-right text-gray-300">
-                      {formatBRLNumber(op.valor_total_bruto)}
-                    </td>
-                    <td className="px-6 py-4 text-right text-gray-300">
-                      {formatBRLNumber(op.valor_liquido)}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      {getStatusTag(op.status)}
-                    </td>
-                  </tr>
-                  {expandedRow === op.id && (
-                    <tr className="bg-gray-900/50">
-                      <td colSpan="6" className="p-0">
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          className="overflow-hidden p-4 space-y-4"
-                        >
-                          <div className="flex justify-between items-center">
-                            <h4 className="font-semibold text-sm text-orange-400">
-                              Detalhes da Operação #{op.id}
-                            </h4>
-                            {op.status === "Aprovada" && (
-                              <button
-                                onClick={() => handleDownloadBordero(op.id)}
-                                disabled={downloadingId === op.id}
-                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md flex items-center gap-2 ml-auto disabled:bg-blue-400"
-                              >
-                                <FaDownload />
-                                {downloadingId === op.id
-                                  ? "Baixando..."
-                                  : "Baixar Borderô"}
-                              </button>
-                            )}
-                          </div>
-                          <table className="min-w-full text-xs">
-                            <thead className="bg-gray-700/50">
-                              <tr>
-                                <th className="px-3 py-2 text-left">NF/CT-e</th>
-                                <th className="px-3 py-2 text-left">Sacado</th>
-                                <th className="px-3 py-2 text-center">
-                                  Vencimento
-                                </th>
-                                <th className="px-3 py-2 text-right">
-                                  Valor Bruto
-                                </th>
-                                <th className="px-3 py-2 text-right">
-                                  Juros (Deságio)
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-700">
-                              {op.duplicatas.map((dup) => (
-                                <tr key={dup.id}>
-                                  <td className="px-3 py-2">{dup.nf_cte}</td>
-                                  <td className="px-3 py-2">
-                                    {dup.cliente_sacado}
-                                  </td>
-                                  <td className="px-3 py-2 text-center">
-                                    {formatDate(dup.data_vencimento)}
-                                  </td>
-                                  <td className="px-3 py-2 text-right">
-                                    {formatBRLNumber(dup.valor_bruto)}
-                                  </td>
-                                  <td className="px-3 py-2 text-right text-red-400">
-                                    {formatBRLNumber(dup.valor_juros)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </motion.div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-      <Pagination
-        totalItems={operacoes.length}
-        itemsPerPage={ITEMS_PER_PAGE_OPERATIONS}
-        currentPage={currentPage}
-        onPageChange={setCurrentPage}
-      />
-    </div>
-  );
-};
-
-const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
-  const [currentPage, setCurrentPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState("Todos");
-
-  const getDuplicataStatus = (dup) => {
-    if (dup.status_recebimento === "Recebido") {
-      return "Liquidada";
-    }
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const vencimento = new Date(dup.data_vencimento + "T00:00:00-03:00");
-    const diffTime = vencimento - hoje;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDays < 0) {
-      return "Vencida";
-    }
-    return "A Vencer";
-  };
-
-  const filteredDuplicatas = useMemo(() => {
-    if (statusFilter === "Todos") {
-      return duplicatas;
-    }
-    return duplicatas.filter((dup) => getDuplicataStatus(dup) === statusFilter);
-  }, [duplicatas, statusFilter]);
   
-  const {
-    items: sortedDuplicatas,
-    requestSort,
-    getSortIcon,
-  } = useSortableData(filteredDuplicatas, {
-    key: "data_vencimento",
-    direction: "DESC",
-  });
-
-  const currentDuplicatas = sortedDuplicatas.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE_DUPLICATAS,
-    currentPage * ITEMS_PER_PAGE_DUPLICATAS
-  );
-
-  const getDuplicataStatusTag = (dup) => {
-    const status = getDuplicataStatus(dup);
-    if (status === "Liquidada") {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-800 text-blue-100">
-          <FaCheck /> Liquidada
-        </span>
-      );
-    }
-     if (status === "Vencida") {
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
-        const vencimento = new Date(dup.data_vencimento + "T00:00:00-03:00");
-        const diffTime = vencimento - hoje;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-red-900 text-red-200">
-          <FaExclamationCircle /> Vencida ({Math.abs(diffDays)} dia
-          {Math.abs(diffDays) > 1 ? "s" : ""})
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-900 text-sky-100">
-        <FaClock /> A Vencer
-      </span>
+  const HistoricoOperacoesTable = ({
+    operacoes,
+    loading,
+    error,
+    getAuthHeader,
+    showNotification,
+  }) => {
+    const [expandedRow, setExpandedRow] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [downloadingId, setDownloadingId] = useState(null);
+    const {
+      items: sortedOperacoes,
+      requestSort,
+      getSortIcon,
+    } = useSortableData(operacoes, { key: "data_operacao", direction: "DESC" });
+    const toggleRow = (id) => setExpandedRow(expandedRow === id ? null : id);
+    const indexOfLastItem = currentPage * ITEMS_PER_PAGE_OPERATIONS;
+    const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE_OPERATIONS;
+    const currentOperacoes = sortedOperacoes.slice(
+      indexOfFirstItem,
+      indexOfLastItem
     );
-  };
-  return (
-    <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-white">
-          Acompanhamento de Duplicatas
-        </h2>
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value);
-            setCurrentPage(1); // Reseta a paginação ao mudar o filtro
-          }}
-          className="bg-gray-700 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+    const getStatusTag = (status) => {
+      const styles = {
+        Pendente: "bg-orange-800 text-amber-100",
+        Aprovada: "bg-green-800 text-green-100",
+        Rejeitada: "bg-red-800 text-red-100",
+      };
+      const icons = {
+        Pendente: <FaHourglassHalf />,
+        Aprovada: <FaCheckCircle />,
+        Rejeitada: <FaTimesCircle />,
+      };
+      return (
+        <span
+          className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+            styles[status] || "bg-gray-600"
+          }`}
         >
-          <option value="Todos">Todos os Status</option>
-          <option value="A Vencer">A Vencer</option>
-          <option value="Liquidada">Liquidada</option>
-          <option value="Vencida">Vencida</option>
-        </select>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-700">
-          <thead className="bg-gray-700/50">
-            <tr>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort("nf_cte")}
-              >
-                NF/CT-e{getSortIcon("nf_cte")}
-              </th>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort("cliente_sacado")}
-              >
-                Sacado{getSortIcon("cliente_sacado")}
-              </th>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort("data_vencimento")}
-              >
-                Vencimento{getSortIcon("data_vencimento")}
-              </th>
-              <th
-                className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort("valor_bruto")}
-              >
-                Valor{getSortIcon("valor_bruto")}
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase">
-                Status
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-gray-800 divide-y divide-gray-700">
-            {loading ? (
+          {icons[status]} {status}
+        </span>
+      );
+    };
+    const handleDownloadBordero = async (operacaoId) => {
+      setDownloadingId(operacaoId);
+      try {
+        const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, {
+          headers: getAuthHeader(),
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Não foi possível gerar o PDF.");
+        }
+        const contentDisposition = response.headers.get("content-disposition");
+        let filename = `bordero-${operacaoId}.pdf`;
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+          if (filenameMatch && filenameMatch.length > 1)
+            filename = filenameMatch[1];
+        }
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        showNotification(err.message, "error");
+      } finally {
+        setDownloadingId(null);
+      }
+    };
+    return (
+      <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+        <h2 className="text-xl font-semibold mb-4 text-white">
+          Histórico de Operações
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-700">
+            <thead className="bg-gray-700/50">
               <tr>
-                <td colSpan="5" className="text-center py-8">
-                  Carregando...
-                </td>
+                <th className="w-12"></th>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort("id")}
+                >
+                  ID{getSortIcon("id")}
+                </th>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort("data_operacao")}
+                >
+                  Data de Envio{getSortIcon("data_operacao")}
+                </th>
+                <th
+                  className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort("valor_total_bruto")}
+                >
+                  Valor Bruto{getSortIcon("valor_total_bruto")}
+                </th>
+                <th
+                  className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort("valor_liquido")}
+                >
+                  Valor Líquido{getSortIcon("valor_liquido")}
+                </th>
+                <th
+                  className="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort("status")}
+                >
+                  Status{getSortIcon("status")}
+                </th>
               </tr>
-            ) : error ? (
-              <tr>
-                <td colSpan="5" className="text-center py-8 text-red-400">
-                  {error}
-                </td>
-              </tr>
-            ) : currentDuplicatas.length === 0 ? (
-              <tr>
-                <td colSpan="5" className="text-center py-8">
-                  Nenhuma duplicata encontrada para o filtro selecionado.
-                </td>
-              </tr>
-            ) : (
-              currentDuplicatas.map((d) => (
-                <tr key={d.id}>
-                  <td className="px-6 py-4 font-medium text-white">
-                    {d.nf_cte}
-                  </td>
-                  <td className="px-6 py-4 text-gray-300">
-                    {d.cliente_sacado}
-                  </td>
-                  <td
-                    className={`px-6 py-4 ${
-                      getDuplicataStatus(d) === 'Vencida'
-                        ? "text-red-400 font-semibold"
-                        : "text-gray-300"
-                    }`}
-                  >
-                    {formatDate(d.data_vencimento)}
-                  </td>
-                  <td className="px-6 py-4 text-right text-gray-300">
-                    {formatBRLNumber(d.valor_bruto)}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    {getDuplicataStatusTag(d)}
+            </thead>
+            <tbody className="bg-gray-800 divide-y divide-gray-700">
+              {loading ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-8">
+                    Carregando...
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : error ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-8 text-red-400">
+                    {error}
+                  </td>
+                </tr>
+              ) : currentOperacoes.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-8">
+                    Nenhuma operação encontrada.
+                  </td>
+                </tr>
+              ) : (
+                currentOperacoes.map((op) => (
+                  <React.Fragment key={op.id}>
+                    <tr
+                      onClick={() => toggleRow(op.id)}
+                      className={`cursor-pointer hover:bg-gray-700/50 ${
+                        expandedRow === op.id ? "bg-gray-700/50" : ""
+                      }`}
+                    >
+                      <td className="px-4 py-4">
+                        <FaChevronRight
+                          className={`text-gray-500 transition-transform duration-300 ${
+                            expandedRow === op.id ? "rotate-90" : ""
+                          }`}
+                        />
+                      </td>
+                      <td className="px-6 py-4 font-medium text-white">
+                        #{op.id}
+                      </td>
+                      <td className="px-6 py-4 text-gray-300">
+                        {formatDate(op.data_operacao)}
+                      </td>
+                      <td className="px-6 py-4 text-right text-gray-300">
+                        {formatBRLNumber(op.valor_total_bruto)}
+                      </td>
+                      <td className="px-6 py-4 text-right text-gray-300">
+                        {formatBRLNumber(op.valor_liquido)}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {getStatusTag(op.status)}
+                      </td>
+                    </tr>
+                    {expandedRow === op.id && (
+                      <tr className="bg-gray-900/50">
+                        <td colSpan="6" className="p-0">
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            className="overflow-hidden p-4 space-y-4"
+                          >
+                            <div className="flex justify-between items-center">
+                              <h4 className="font-semibold text-sm text-orange-400">
+                                Detalhes da Operação #{op.id}
+                              </h4>
+                              {op.status === "Aprovada" && (
+                                <button
+                                  onClick={() => handleDownloadBordero(op.id)}
+                                  disabled={downloadingId === op.id}
+                                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-md flex items-center gap-2 ml-auto disabled:bg-blue-400"
+                                >
+                                  <FaDownload />
+                                  {downloadingId === op.id
+                                    ? "Baixando..."
+                                    : "Baixar Borderô"}
+                                </button>
+                              )}
+                            </div>
+                            <table className="min-w-full text-xs">
+                              <thead className="bg-gray-700/50">
+                                <tr>
+                                  <th className="px-3 py-2 text-left">NF/CT-e</th>
+                                  <th className="px-3 py-2 text-left">Sacado</th>
+                                  <th className="px-3 py-2 text-center">
+                                    Vencimento
+                                  </th>
+                                  <th className="px-3 py-2 text-right">
+                                    Valor Bruto
+                                  </th>
+                                  <th className="px-3 py-2 text-right">
+                                    Juros (Deságio)
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-700">
+                                {op.duplicatas.map((dup) => (
+                                  <tr key={dup.id}>
+                                    <td className="px-3 py-2">{dup.nf_cte}</td>
+                                    <td className="px-3 py-2">
+                                      {dup.cliente_sacado}
+                                    </td>
+                                    <td className="px-3 py-2 text-center">
+                                      {formatDate(dup.data_vencimento)}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                      {formatBRLNumber(dup.valor_bruto)}
+                                    </td>
+                                    <td className="px-3 py-2 text-right text-red-400">
+                                      {formatBRLNumber(dup.valor_juros)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </motion.div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <Pagination
+          totalItems={operacoes.length}
+          itemsPerPage={ITEMS_PER_PAGE_OPERATIONS}
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+        />
       </div>
-      <Pagination
-        totalItems={sortedDuplicatas.length}
-        itemsPerPage={ITEMS_PER_PAGE_DUPLICATAS}
-        currentPage={currentPage}
-        onPageChange={setCurrentPage}
-      />
-    </div>
-  );
-};
-
+    );
+  };
+  
+  const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
+    const [currentPage, setCurrentPage] = useState(1);
+    const [statusFilter, setStatusFilter] = useState("Todos");
+  
+    const getDuplicataStatus = (dup) => {
+      if (dup.status_recebimento === "Recebido") {
+        return "Liquidada";
+      }
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const vencimento = new Date(dup.data_vencimento + "T00:00:00-03:00");
+      const diffTime = vencimento - hoje;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) {
+        return "Vencida";
+      }
+      return "A Vencer";
+    };
+  
+    const filteredDuplicatas = useMemo(() => {
+      if (statusFilter === "Todos") {
+        return duplicatas;
+      }
+      return duplicatas.filter((dup) => getDuplicataStatus(dup) === statusFilter);
+    }, [duplicatas, statusFilter]);
+    
+    const {
+      items: sortedDuplicatas,
+      requestSort,
+      getSortIcon,
+    } = useSortableData(filteredDuplicatas, {
+      key: "data_vencimento",
+      direction: "DESC",
+    });
+  
+    const currentDuplicatas = sortedDuplicatas.slice(
+      (currentPage - 1) * ITEMS_PER_PAGE_DUPLICATAS,
+      currentPage * ITEMS_PER_PAGE_DUPLICATAS
+    );
+  
+    const getDuplicataStatusTag = (dup) => {
+      const status = getDuplicataStatus(dup);
+      if (status === "Liquidada") {
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-800 text-blue-100">
+            <FaCheck /> Liquidada
+          </span>
+        );
+      }
+       if (status === "Vencida") {
+          const hoje = new Date();
+          hoje.setHours(0, 0, 0, 0);
+          const vencimento = new Date(dup.data_vencimento + "T00:00:00-03:00");
+          const diffTime = vencimento - hoje;
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-red-900 text-red-200">
+            <FaExclamationCircle /> Vencida ({Math.abs(diffDays)} dia
+            {Math.abs(diffDays) > 1 ? "s" : ""})
+          </span>
+        );
+      }
+      return (
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-900 text-sky-100">
+          <FaClock /> A Vencer
+        </span>
+      );
+    };
+    return (
+      <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-white">
+            Acompanhamento de Duplicatas
+          </h2>
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setCurrentPage(1); // Reseta a paginação ao mudar o filtro
+            }}
+            className="bg-gray-700 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+          >
+            <option value="Todos">Todos os Status</option>
+            <option value="A Vencer">A Vencer</option>
+            <option value="Liquidada">Liquidada</option>
+            <option value="Vencida">Vencida</option>
+          </select>
+        </div>
+  
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-700">
+            <thead className="bg-gray-700/50">
+              <tr>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort("nf_cte")}
+                >
+                  NF/CT-e{getSortIcon("nf_cte")}
+                </th>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort("cliente_sacado")}
+                >
+                  Sacado{getSortIcon("cliente_sacado")}
+                </th>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort("data_vencimento")}
+                >
+                  Vencimento{getSortIcon("data_vencimento")}
+                </th>
+                <th
+                  className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort("valor_bruto")}
+                >
+                  Valor{getSortIcon("valor_bruto")}
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase">
+                  Status
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-gray-800 divide-y divide-gray-700">
+              {loading ? (
+                <tr>
+                  <td colSpan="5" className="text-center py-8">
+                    Carregando...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan="5" className="text-center py-8 text-red-400">
+                    {error}
+                  </td>
+                </tr>
+              ) : currentDuplicatas.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="text-center py-8">
+                    Nenhuma duplicata encontrada para o filtro selecionado.
+                  </td>
+                </tr>
+              ) : (
+                currentDuplicatas.map((d) => (
+                  <tr key={d.id}>
+                    <td className="px-6 py-4 font-medium text-white">
+                      {d.nf_cte}
+                    </td>
+                    <td className="px-6 py-4 text-gray-300">
+                      {d.cliente_sacado}
+                    </td>
+                    <td
+                      className={`px-6 py-4 ${
+                        getDuplicataStatus(d) === 'Vencida'
+                          ? "text-red-400 font-semibold"
+                          : "text-gray-300"
+                      }`}
+                    >
+                      {formatDate(d.data_vencimento)}
+                    </td>
+                    <td className="px-6 py-4 text-right text-gray-300">
+                      {formatBRLNumber(d.valor_bruto)}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {getDuplicataStatusTag(d)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <Pagination
+          totalItems={sortedDuplicatas.length}
+          itemsPerPage={ITEMS_PER_PAGE_DUPLICATAS}
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+        />
+      </div>
+    );
+  };
+  
 const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitted }) => {
     const [tiposOperacao, setTiposOperacao] = useState([]);
     const [selectedFiles, setSelectedFiles] = useState([]);
@@ -554,23 +557,23 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
     }, [getAuthHeader, showNotification]);
   
     const handleFileChange = (event) => {
-      const newFiles = Array.from(event.target.files);
-      const xmlFiles = newFiles.filter(file => file.type === "text/xml" || file.name.endsWith('.xml'));
+        const newFiles = Array.from(event.target.files);
+        const xmlFiles = newFiles.filter(file => file.type === "text/xml" || file.name.endsWith('.xml'));
+      
+        if (xmlFiles.length !== newFiles.length) {
+          showNotification("Apenas arquivos XML são permitidos. Alguns arquivos foram ignorados.", "error");
+        }
+      
+        setSelectedFiles(prevFiles => {
+          const existingNames = new Set(prevFiles.map(f => f.name));
+          const uniqueNewFiles = xmlFiles.filter(f => !existingNames.has(f.name));
+          return [...prevFiles, ...uniqueNewFiles];
+        });
+      };
     
-      if (xmlFiles.length !== newFiles.length) {
-        showNotification("Apenas arquivos XML são permitidos. Alguns arquivos foram ignorados.", "error");
-      }
-    
-      setSelectedFiles(prevFiles => {
-        const existingNames = new Set(prevFiles.map(f => f.name));
-        const uniqueNewFiles = xmlFiles.filter(f => !existingNames.has(f.name));
-        return [...prevFiles, ...uniqueNewFiles];
-      });
-    };
-  
-    const handleRemoveFile = (fileName) => {
-      setSelectedFiles(prevFiles => prevFiles.filter(f => f.name !== fileName));
-    };
+      const handleRemoveFile = (fileName) => {
+        setSelectedFiles(prevFiles => prevFiles.filter(f => f.name !== fileName));
+      };
     
     const handleSimulate = async () => {
       if (selectedFiles.length === 0 || !tipoOperacaoId) {
@@ -886,10 +889,11 @@ export default function ClientDashboardPage() {
     const [volumeData, setVolumeData] = useState([]);
     const [maioresSacadosData, setMaioresSacadosData] = useState([]);
     const [chartsLoading, setChartsLoading] = useState(true);
-  
-    const [vencimentos, setVencimentos] = useState([]); // NOVO ESTADO
-    const [diasVencimento, setDiasVencimento] = useState(5); // NOVO ESTADO
-    const [today, setToday] = useState(""); // NOVO ESTADO
+    
+    const [vencimentos, setVencimentos] = useState([]);
+    const [diasVencimento, setDiasVencimento] = useState(15);
+    const [today, setToday] = useState("");
+    const [limiteCredito, setLimiteCredito] = useState(null);
   
     const getAuthHeader = () => {
       const token = sessionStorage.getItem("authToken");
@@ -927,21 +931,23 @@ export default function ClientDashboardPage() {
   
     useEffect(() => {
         setToday(new Date().toISOString().split("T")[0]);
-        const fetchChartData = async () => {
+        const fetchDashboardData = async () => {
             setChartsLoading(true);
             try {
               const headers = getAuthHeader();
-              const [volumeRes, sacadosRes, vencimentosRes] = await Promise.all([
+              const [volumeRes, sacadosRes, vencimentosRes, limiteRes] = await Promise.all([
                 fetch(`/api/portal/volume-operado?period=${volumeFilter}`, { headers }),
                 fetch(`/api/portal/maiores-sacados?period=${volumeFilter}`, { headers }),
-                fetch(`/api/portal/vencimentos?diasVencimento=${diasVencimento}`, { headers })
+                fetch(`/api/portal/vencimentos?diasVencimento=${diasVencimento}`, { headers }),
+                fetch(`/api/portal/limite-credito`, { headers }),
               ]);
-              if (!volumeRes.ok || !sacadosRes.ok || !vencimentosRes.ok)
+              if (!volumeRes.ok || !sacadosRes.ok || !vencimentosRes.ok || !limiteRes.ok)
                 throw new Error("Falha ao carregar dados do dashboard.");
               
               setVolumeData(await volumeRes.json());
               setMaioresSacadosData(await sacadosRes.json());
               setVencimentos(await vencimentosRes.json());
+              setLimiteCredito(await limiteRes.json());
       
             } catch (err) {
               showNotification(err.message, "error");
@@ -952,7 +958,7 @@ export default function ClientDashboardPage() {
 
       if (activeView === "consultas") {
         fetchTableData();
-        fetchChartData();
+        fetchDashboardData();
       }
     }, [activeView, volumeFilter, diasVencimento]);
   
@@ -999,7 +1005,27 @@ export default function ClientDashboardPage() {
           <div id="page-content">
             {activeView === "consultas" && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                    {/* Card de Limite de Crédito */}
+                    {limiteCredito && (
+                        <div className="bg-gray-800 p-6 rounded-lg shadow-lg space-y-4">
+                            <h3 className="text-lg font-semibold text-white">Limite de Crédito</h3>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-400 flex items-center gap-2"><FaCoins /> Limite Total</span>
+                                <span className="font-bold text-gray-200">{formatBRLNumber(limiteCredito.limite_total)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-400 flex items-center gap-2"><FaFileInvoiceDollar /> Limite Utilizado</span>
+                                <span className="font-bold text-yellow-400">{formatBRLNumber(limiteCredito.limite_utilizado)}</span>
+                            </div>
+                            <div className="border-t border-gray-700 my-2"></div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-green-400 flex items-center gap-2"><FaWallet /> Limite Disponível</span>
+                                <span className="font-bold text-xl text-green-400">{formatBRLNumber(limiteCredito.limite_disponivel)}</span>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Card de Pendências e Vencimentos */}
                     <div className="p-6 rounded-lg shadow-lg transition bg-gray-800">
                         <div className="flex justify-between items-center mb-4">
@@ -1016,7 +1042,7 @@ export default function ClientDashboardPage() {
                             <option value={30}>Próximos 30 dias</option>
                         </select>
                         </div>
-                        <div className="space-y-3 max-h-80 overflow-auto pr-2">
+                        <div className="space-y-3 max-h-48 overflow-auto pr-2">
                         {chartsLoading ? <p className="text-center text-gray-400">Carregando...</p> : vencimentos.length > 0 ? (
                             vencimentos.map((dup) => {
                                 const isVencido = dup.data_vencimento < today;
@@ -1057,7 +1083,7 @@ export default function ClientDashboardPage() {
                     </div>
 
                     {/* Gráfico de Volume Operado */}
-                    <div className="lg:col-span-2 bg-gray-800 p-6 rounded-lg shadow-lg">
+                    <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-semibold text-white">
                             Volume Operado
