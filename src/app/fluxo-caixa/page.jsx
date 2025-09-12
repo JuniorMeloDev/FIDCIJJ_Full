@@ -267,14 +267,26 @@ export default function FluxoDeCaixaPage() {
 
   const handleEstornarRequest = () => {
     if (!contextMenu.selectedItem) return;
-    setEstornoInfo({ id: contextMenu.selectedItem.id });
+    // Agora salvamos o item inteiro para usar no modal e na confirmação
+    setEstornoInfo(contextMenu.selectedItem); 
   };
 
   const confirmarEstorno = async () => {
     if (!estornoInfo) return;
+
+    // --- CORREÇÃO PRINCIPAL AQUI ---
+    // Pega o ID da duplicata vinculada, não da movimentação de caixa
+    const duplicataParaEstornar = estornoInfo.duplicatas?.[0];
+
+    if (!duplicataParaEstornar?.id) {
+        showNotification('Erro: Não foi possível encontrar a duplicata vinculada a este recebimento para estornar.', 'error');
+        setEstornoInfo(null);
+        return;
+    }
+
     try {
       const response = await fetch(
-        `/api/duplicatas/${estornoInfo.id}/estornar`,
+        `/api/duplicatas/${duplicataParaEstornar.id}/estornar`, // Usa a ID correta da duplicata
         {
           method: "POST",
           headers: getAuthHeader(),
@@ -455,8 +467,7 @@ export default function FluxoDeCaixaPage() {
         isOpen={!!estornoInfo}
         onClose={() => setEstornoInfo(null)}
         onConfirm={confirmarEstorno}
-        title="Confirmar Estorno"
-        message="Tem certeza que deseja estornar esta liquidação? A duplicata voltará ao status 'Pendente' e a movimentação de caixa será excluída."
+        item={estornoInfo}
       />
       <ComplementModal
           isOpen={isComplementModalOpen}
@@ -668,42 +679,39 @@ export default function FluxoDeCaixaPage() {
                 </a>
               </>
             )}
-            <div className="border-t border-gray-600 my-1"></div>
-        {contextMenu.selectedItem?.categoria === 'Recebimento' ? (
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              handleEstornarRequest();
-            }}
-            className="block w-full text-left px-4 py-2 text-sm text-yellow-400 hover:bg-gray-600"
-          >
-            Estornar Liquidação
-          </a>
-        ) : (
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              handleDeleteRequest();
-            }}
-            className={`block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 ${
-              ["Pagamento de Borderô", "Transferencia Enviada", "Transferencia Recebida"].includes(
-                contextMenu.selectedItem?.categoria
-              )
-                ? "opacity-50 cursor-not-allowed"
-                : ""
-            }`}
-            disabled={["Pagamento de Borderô", "Recebimento", "Transferencia Enviada", "Transferencia Recebida"].includes(
-              contextMenu.selectedItem?.categoria
+             <div className="border-t border-gray-600 my-1"></div>
+            {contextMenu.selectedItem?.categoria === 'Recebimento' ? (
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleEstornarRequest();
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-yellow-400 hover:bg-gray-600"
+              >
+                Estornar Liquidação
+              </a>
+            ) : (
+              <button
+                onClick={(e) => { e.preventDefault(); handleDeleteRequest(); }}
+                className={`block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 ${
+                  ["Pagamento de Borderô", "Transferencia Enviada", "Transferencia Recebida"].includes(
+                    contextMenu.selectedItem?.categoria
+                  )
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                }`}
+                disabled={["Pagamento de Borderô", "Recebimento", "Transferencia Enviada", "Transferencia Recebida"].includes(
+                  contextMenu.selectedItem?.categoria
+                )}
+              >
+                Excluir Lançamento
+              </button>
             )}
-          >
-            Excluir Lançamento
-          </button>
-        )}
-        {/* FIM DA ALTERAÇÃO */}
-      </div>
-    </div>
-)}
+
+          </div>
+        </div>
+      )}
     </>
   );
 }

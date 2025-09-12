@@ -12,10 +12,10 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
         
-        // MODIFICAÇÃO: Adicionado 'operacoes(valor_liquido)' para buscar o valor da operação associada
-        let query = supabase.from('movimentacoes_caixa').select('*, operacao:operacoes ( valor_liquido )');
+        // --- ALTERAÇÃO AQUI: Adicionado 'duplicatas(id, nf_cte)' para buscar a duplicata vinculada ---
+        let query = supabase.from('movimentacoes_caixa').select('*, operacao:operacoes(valor_liquido), duplicatas(id, nf_cte)');
 
-        // ... (resto dos filtros permanece igual) ...
+        // ... (filtros permanecem iguais) ...
         if (searchParams.get('dataInicio')) query = query.gte('data_movimento', searchParams.get('dataInicio'));
         if (searchParams.get('dataFim')) query = query.lte('data_movimento', searchParams.get('dataFim'));
         if (searchParams.get('descricao')) query = query.ilike('descricao', `%${searchParams.get('descricao')}%`);
@@ -31,13 +31,15 @@ export async function GET(request) {
         const { data, error } = await query;
         if (error) throw error;
 
+        // --- ALTERAÇÃO AQUI: Garante que os novos dados sejam passados corretamente ---
         const formattedData = data.map(m => ({
             ...m,
             dataMovimento: m.data_movimento,
             contaBancaria: m.conta_bancaria,
             empresaAssociada: m.empresa_associada,
             operacaoId: m.operacao_id,
-            operacao: m.operacao 
+            operacao: m.operacao,
+            duplicatas: m.duplicatas // Passa o array de duplicatas (geralmente com um item)
         }));
 
         return NextResponse.json(formattedData, { status: 200 });
