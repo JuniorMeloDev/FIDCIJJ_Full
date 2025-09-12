@@ -25,71 +25,72 @@ import VolumeOperadoChart from "@/app/components/VolumeOperadoChart";
 const ITEMS_PER_PAGE_OPERATIONS = 5;
 const ITEMS_PER_PAGE_DUPLICATAS = 5;
 
+// ... (Componentes internos como UploadIcon, CheckCircleIcon, useSortableData, etc., permanecem os mesmos)
 const UploadIcon = () => (
-  <svg
-    className="w-8 h-8 text-gray-400"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-    ></path>
-  </svg>
-);
-const CheckCircleIcon = () => (
-  <svg
-    className="w-5 h-5 text-green-400"
-    fill="currentColor"
-    viewBox="0 0 20 20"
-  >
-    <path
-      fillRule="evenodd"
-      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-      clipRule="evenodd"
-    ></path>
-  </svg>
-);
-
-const useSortableData = (
-  items,
-  initialConfig = { key: null, direction: "DESC" }
-) => {
-  const [sortConfig, setSortConfig] = useState(initialConfig);
-  const sortedItems = useMemo(() => {
-    let sortableItems = [...items];
-    if (sortConfig.key !== null) {
-      sortableItems.sort((a, b) => {
-        const valA = a[sortConfig.key];
-        const valB = b[sortConfig.key];
-        if (valA === null || valA === undefined) return 1;
-        if (valB === null || valB === undefined) return -1;
-        if (valA < valB) return sortConfig.direction === "ASC" ? -1 : 1;
-        if (valA > valB) return sortConfig.direction === "ASC" ? 1 : -1;
-        return 0;
-      });
-    }
-    return sortableItems;
-  }, [items, sortConfig]);
-  const requestSort = (key) => {
-    let direction = "ASC";
-    if (sortConfig.key === key && sortConfig.direction === "ASC") {
-      direction = "DESC";
-    }
-    setSortConfig({ key, direction });
+    <svg
+      className="w-8 h-8 text-gray-400"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+      ></path>
+    </svg>
+  );
+  const CheckCircleIcon = () => (
+    <svg
+      className="w-5 h-5 text-green-400"
+      fill="currentColor"
+      viewBox="0 0 20 20"
+    >
+      <path
+        fillRule="evenodd"
+        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+        clipRule="evenodd"
+      ></path>
+    </svg>
+  );
+  
+  const useSortableData = (
+    items,
+    initialConfig = { key: null, direction: "DESC" }
+  ) => {
+    const [sortConfig, setSortConfig] = useState(initialConfig);
+    const sortedItems = useMemo(() => {
+      let sortableItems = [...items];
+      if (sortConfig.key !== null) {
+        sortableItems.sort((a, b) => {
+          const valA = a[sortConfig.key];
+          const valB = b[sortConfig.key];
+          if (valA === null || valA === undefined) return 1;
+          if (valB === null || valB === undefined) return -1;
+          if (valA < valB) return sortConfig.direction === "ASC" ? -1 : 1;
+          if (valA > valB) return sortConfig.direction === "ASC" ? 1 : -1;
+          return 0;
+        });
+      }
+      return sortableItems;
+    }, [items, sortConfig]);
+    const requestSort = (key) => {
+      let direction = "ASC";
+      if (sortConfig.key === key && sortConfig.direction === "ASC") {
+        direction = "DESC";
+      }
+      setSortConfig({ key, direction });
+    };
+    const getSortIcon = (key) => {
+      if (sortConfig.key !== key)
+        return <FaSort className="inline-block ml-1 text-gray-500" />;
+      if (sortConfig.direction === "ASC")
+        return <FaSortUp className="inline-block ml-1" />;
+      return <FaSortDown className="inline-block ml-1" />;
+    };
+    return { items: sortedItems, requestSort, getSortIcon };
   };
-  const getSortIcon = (key) => {
-    if (sortConfig.key !== key)
-      return <FaSort className="inline-block ml-1 text-gray-500" />;
-    if (sortConfig.direction === "ASC")
-      return <FaSortUp className="inline-block ml-1" />;
-    return <FaSortDown className="inline-block ml-1" />;
-  };
-  return { items: sortedItems, requestSort, getSortIcon };
-};
 
 const HistoricoOperacoesTable = ({
   operacoes,
@@ -418,7 +419,7 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
-            setCurrentPage(1);
+            setCurrentPage(1); // Reseta a paginação ao mudar o filtro
           }}
           className="bg-gray-700 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
         >
@@ -522,525 +523,581 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
 };
 
 const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitted }) => {
-  const [tiposOperacao, setTiposOperacao] = useState([]);
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [tipoOperacaoId, setTipoOperacaoId] = useState("");
-  const [simulationResult, setSimulationResult] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const fileInputRef = useRef(null);
-
-  useEffect(() => {
-    const fetchTiposOperacao = async () => {
+    const [tiposOperacao, setTiposOperacao] = useState([]);
+    const [selectedFiles, setSelectedFiles] = useState([]);
+    const [tipoOperacaoId, setTipoOperacaoId] = useState("");
+    const [simulationResult, setSimulationResult] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const fileInputRef = useRef(null);
+  
+    useEffect(() => {
+      const fetchTiposOperacao = async () => {
+        try {
+          const res = await fetch("/api/portal/tipos-operacao", {
+            headers: getAuthHeader(),
+          });
+          if (!res.ok)
+            throw new Error("Não foi possível carregar os tipos de operação.");
+          const data = await res.json();
+          const formattedData = data.map((t) => ({
+            ...t,
+            taxaJuros: t.taxa_juros,
+            valorFixo: t.valor_fixo,
+          }));
+          setTiposOperacao(formattedData);
+        } catch (error) {
+          showNotification(error.message, "error");
+        }
+      };
+      fetchTiposOperacao();
+    }, [getAuthHeader, showNotification]);
+  
+    const handleFileChange = (event) => {
+      const newFiles = Array.from(event.target.files);
+      const xmlFiles = newFiles.filter(file => file.type === "text/xml" || file.name.endsWith('.xml'));
+    
+      if (xmlFiles.length !== newFiles.length) {
+        showNotification("Apenas arquivos XML são permitidos. Alguns arquivos foram ignorados.", "error");
+      }
+    
+      setSelectedFiles(prevFiles => {
+        const existingNames = new Set(prevFiles.map(f => f.name));
+        const uniqueNewFiles = xmlFiles.filter(f => !existingNames.has(f.name));
+        return [...prevFiles, ...uniqueNewFiles];
+      });
+    };
+  
+    const handleRemoveFile = (fileName) => {
+      setSelectedFiles(prevFiles => prevFiles.filter(f => f.name !== fileName));
+    };
+    
+    const handleSimulate = async () => {
+      if (selectedFiles.length === 0 || !tipoOperacaoId) {
+        showNotification(
+          "Por favor, selecione ao menos um arquivo e um tipo de operação.",
+          "error"
+        );
+        return;
+      }
+      setIsLoading(true);
+      setSimulationResult(null);
+  
+      const formData = new FormData();
+      selectedFiles.forEach(file => {
+          formData.append("files", file);
+      });
+      formData.append("tipoOperacaoId", tipoOperacaoId);
+  
       try {
-        const res = await fetch("/api/portal/tipos-operacao", {
+        const response = await fetch("/api/portal/simular-operacao", {
+          method: "POST",
           headers: getAuthHeader(),
+          body: formData,
         });
-        if (!res.ok)
-          throw new Error("Não foi possível carregar os tipos de operação.");
-        const data = await res.json();
-        const formattedData = data.map((t) => ({
-          ...t,
-          taxaJuros: t.taxa_juros,
-          valorFixo: t.valor_fixo,
-        }));
-        setTiposOperacao(formattedData);
+        
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || "Falha ao simular operação.");
+        }
+        
+        setSimulationResult(data);
+  
       } catch (error) {
         showNotification(error.message, "error");
+      } finally {
+        setIsLoading(false);
       }
     };
-    fetchTiposOperacao();
-  }, [getAuthHeader, showNotification]);
-
-  const handleFileChange = (event) => {
-    const newFiles = Array.from(event.target.files);
-    const xmlFiles = newFiles.filter(file => file.type === "text/xml" || file.name.endsWith('.xml'));
+    
+    const handleConfirmSubmit = async () => {
+      const validResults = simulationResult?.results.filter(r => !r.isDuplicate && !r.error);
+      if (!validResults || validResults.length === 0) return;
   
-    if (xmlFiles.length !== newFiles.length) {
-      showNotification("Apenas arquivos XML são permitidos. Alguns arquivos foram ignorados.", "error");
-    }
-  
-    // Adiciona apenas os novos arquivos que ainda não estão na lista
-    setSelectedFiles(prevFiles => {
-      const existingNames = new Set(prevFiles.map(f => f.name));
-      const uniqueNewFiles = xmlFiles.filter(f => !existingNames.has(f.name));
-      return [...prevFiles, ...uniqueNewFiles];
-    });
-  };
-
-  const handleRemoveFile = (fileName) => {
-    setSelectedFiles(prevFiles => prevFiles.filter(f => f.name !== fileName));
-  };
-  
-  const handleSimulate = async () => {
-    if (selectedFiles.length === 0 || !tipoOperacaoId) {
-      showNotification(
-        "Por favor, selecione ao menos um arquivo e um tipo de operação.",
-        "error"
-      );
-      return;
-    }
-    setIsLoading(true);
-    setSimulationResult(null);
-
-    const formData = new FormData();
-    selectedFiles.forEach(file => {
-        formData.append("files", file);
-    });
-    formData.append("tipoOperacaoId", tipoOperacaoId);
-
-    try {
-      const response = await fetch("/api/portal/simular-operacao", {
-        method: "POST",
-        headers: getAuthHeader(),
-        body: formData,
-      });
-      
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || "Falha ao simular operação.");
+      setIsSubmitting(true);
+      try {
+        const response = await fetch("/api/portal/operacoes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...getAuthHeader() },
+          body: JSON.stringify({
+            dataOperacao: new Date().toISOString().split("T")[0],
+            tipoOperacaoId: parseInt(tipoOperacaoId),
+            notasFiscais: validResults,
+          }),
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Falha ao enviar operação.");
+        }
+        showNotification("Operação enviada para análise com sucesso!", "success");
+        setSelectedFiles([]);
+        setTipoOperacaoId("");
+        setSimulationResult(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        onOperationSubmitted();
+      } catch (error) {
+        showNotification(error.message, "error");
+      } finally {
+        setIsSubmitting(false);
       }
-      
-      setSimulationResult(data);
-
-    } catch (error) {
-      showNotification(error.message, "error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const handleConfirmSubmit = async () => {
-    const validResults = simulationResult?.results.filter(r => !r.isDuplicate && !r.error);
-    if (!validResults || validResults.length === 0) return;
-
-    setIsSubmitting(true);
-    try {
-      const response = await fetch("/api/portal/operacoes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify({
-          dataOperacao: new Date().toISOString().split("T")[0],
-          tipoOperacaoId: parseInt(tipoOperacaoId),
-          notasFiscais: validResults,
-        }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Falha ao enviar operação.");
-      }
-      showNotification("Operação enviada para análise com sucesso!", "success");
-      setSelectedFiles([]);
-      setTipoOperacaoId("");
-      setSimulationResult(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      onOperationSubmitted();
-    } catch (error) {
-      showNotification(error.message, "error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const SimulationDetails = ({ result, onSubmit, onCancel, isSubmitting }) => {
-    const [expandedRow, setExpandedRow] = useState(null);
-    const validResults = result.results.filter(r => !r.isDuplicate && !r.error);
-    const duplicateResults = result.results.filter(r => r.isDuplicate);
-    const errorResults = result.results.filter(r => r.error);
-  
-    const toggleRow = (chaveNfe) => {
-        setExpandedRow(prev => (prev === chaveNfe ? null : chaveNfe));
     };
-
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="bg-gray-800 p-6 rounded-lg shadow-lg"
-      >
-        <h3 className="text-xl font-semibold mb-4 text-orange-400">
-          Resultado da Simulação
-        </h3>
-        
-        {errorResults.length > 0 && (
-            <div className="mb-6 bg-red-900/50 border border-red-500 rounded-lg p-4">
-                <h4 className="font-bold text-red-300">Arquivos com Erro</h4>
-                <ul className="mt-2 text-sm text-red-200 list-disc list-inside space-y-1">
-                    {errorResults.map((res, i) => <li key={i}><strong>{res.fileName}:</strong> {res.error}</li>)}
-                </ul>
+  
+    const SimulationDetails = ({ result, onSubmit, onCancel, isSubmitting }) => {
+      const [expandedRow, setExpandedRow] = useState(null);
+      const validResults = result.results.filter(r => !r.isDuplicate && !r.error);
+      const duplicateResults = result.results.filter(r => r.isDuplicate);
+      const errorResults = result.results.filter(r => r.error);
+    
+      const toggleRow = (chaveNfe) => {
+          setExpandedRow(prev => (prev === chaveNfe ? null : chaveNfe));
+      };
+  
+      return (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="bg-gray-800 p-6 rounded-lg shadow-lg"
+        >
+          <h3 className="text-xl font-semibold mb-4 text-orange-400">
+            Resultado da Simulação
+          </h3>
+          
+          {errorResults.length > 0 && (
+              <div className="mb-6 bg-red-900/50 border border-red-500 rounded-lg p-4">
+                  <h4 className="font-bold text-red-300">Arquivos com Erro</h4>
+                  <ul className="mt-2 text-sm text-red-200 list-disc list-inside space-y-1">
+                      {errorResults.map((res, i) => <li key={i}><strong>{res.fileName}:</strong> {res.error}</li>)}
+                  </ul>
+              </div>
+          )}
+  
+          {duplicateResults.length > 0 && (
+              <div className="mb-6 bg-yellow-900/50 border border-yellow-500 rounded-lg p-4">
+                  <h4 className="font-bold text-yellow-300">Arquivos Duplicados (Ignorados)</h4>
+                  <ul className="mt-2 text-sm text-yellow-200 list-disc list-inside">
+                      {duplicateResults.map((res, i) => <li key={i}>NF/CT-e {res.nfCte}</li>)}
+                  </ul>
+              </div>
+          )}
+  
+          {validResults.length > 0 ? (
+            <div>
+              <h4 className="font-bold text-green-300 mb-2">Arquivos Válidos para Envio</h4>
+              <div className="border border-gray-700 rounded-lg overflow-hidden">
+                  <table className="min-w-full text-sm">
+                      <thead className="bg-gray-700">
+                      <tr className="text-left text-gray-300">
+                          <th className="p-3 w-12"></th>
+                          <th className="p-3">NF/CT-e</th>
+                          <th className="p-3">Sacado</th>
+                          <th className="p-3 text-right">Valor Bruto</th>
+                          <th className="p-3 text-right">Juros (Deságio)</th>
+                          <th className="p-3 text-right">Valor Líquido</th>
+                      </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-700">
+                      {validResults.map((res) => (
+                          <React.Fragment key={res.chave_nfe}>
+                              <tr onClick={() => toggleRow(res.chave_nfe)} className="cursor-pointer hover:bg-gray-700/50">
+                                  <td className="p-3 text-center">
+                                      <FaChevronRight className={`text-gray-500 transition-transform duration-200 ${expandedRow === res.chave_nfe ? 'rotate-90' : ''}`} />
+                                  </td>
+                                  <td className="p-3">{res.nfCte}</td>
+                                  <td className="p-3">{res.clienteSacado}</td>
+                                  <td className="p-3 text-right">{formatBRLNumber(res.valorNf)}</td>
+                                  <td className="p-3 text-right text-red-400">-{formatBRLNumber(res.jurosCalculado)}</td>
+                                  <td className="p-3 text-right">{formatBRLNumber(res.valorLiquidoCalculado)}</td>
+                              </tr>
+                              {expandedRow === res.chave_nfe && (
+                                  <tr className="bg-gray-900/50">
+                                      <td colSpan="6" className="p-0">
+                                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="p-4">
+                                              <h5 className="text-xs font-bold text-gray-400 mb-2">DETALHES DAS PARCELAS</h5>
+                                              <table className="min-w-full text-xs bg-gray-800 rounded">
+                                                  <thead className="bg-gray-700/50">
+                                                      <tr>
+                                                          <th className="p-2 text-left">Parcela</th>
+                                                          <th className="p-2 text-left">Vencimento</th>
+                                                          <th className="p-2 text-right">Valor</th>
+                                                          <th className="p-2 text-right">Juros</th>
+                                                      </tr>
+                                                  </thead>
+                                                  <tbody className="divide-y divide-gray-700">
+                                                      {res.parcelasCalculadas.map(p => (
+                                                          <tr key={p.numeroParcela}>
+                                                              <td className="p-2">{p.numeroParcela}</td>
+                                                              <td className="p-2">{formatDate(p.dataVencimento)}</td>
+                                                              <td className="p-2 text-right">{formatBRLNumber(p.valorParcela)}</td>
+                                                              <td className="p-2 text-right text-red-500">-{formatBRLNumber(p.jurosParcela)}</td>
+                                                          </tr>
+                                                      ))}
+                                                  </tbody>
+                                              </table>
+                                          </motion.div>
+                                      </td>
+                                  </tr>
+                              )}
+                          </React.Fragment>
+                      ))}
+                      </tbody>
+                      <tfoot className="bg-gray-700 font-bold">
+                          <tr>
+                              <td className="p-3 text-right" colSpan="3">TOTAIS DA OPERAÇÃO:</td>
+                              <td className="p-3 text-right">{formatBRLNumber(result.totals.totalBruto)}</td>
+                              <td className="p-3 text-right text-red-400">-{formatBRLNumber(result.totals.totalJuros)}</td>
+                              <td className="p-3 text-right text-green-400">{formatBRLNumber(result.totals.totalLiquido)}</td>
+                          </tr>
+                      </tfoot>
+                  </table>
+              </div>
             </div>
-        )}
-
-        {duplicateResults.length > 0 && (
-            <div className="mb-6 bg-yellow-900/50 border border-yellow-500 rounded-lg p-4">
-                <h4 className="font-bold text-yellow-300">Arquivos Duplicados (Ignorados)</h4>
-                <ul className="mt-2 text-sm text-yellow-200 list-disc list-inside">
-                    {duplicateResults.map((res, i) => <li key={i}>NF/CT-e {res.nfCte}</li>)}
-                </ul>
-            </div>
-        )}
-
-        {validResults.length > 0 ? (
-          <div>
-            <h4 className="font-bold text-green-300 mb-2">Arquivos Válidos para Envio</h4>
-            <div className="border border-gray-700 rounded-lg overflow-hidden">
-                <table className="min-w-full text-sm">
-                    <thead className="bg-gray-700">
-                    <tr className="text-left text-gray-300">
-                        <th className="p-3 w-12"></th>
-                        <th className="p-3">NF/CT-e</th>
-                        <th className="p-3">Sacado</th>
-                        <th className="p-3 text-right">Valor Bruto</th>
-                        <th className="p-3 text-right">Juros (Deságio)</th>
-                        <th className="p-3 text-right">Valor Líquido</th>
-                    </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                    {validResults.map((res) => (
-                        <React.Fragment key={res.chave_nfe}>
-                            <tr onClick={() => toggleRow(res.chave_nfe)} className="cursor-pointer hover:bg-gray-700/50">
-                                <td className="p-3 text-center">
-                                    <FaChevronRight className={`text-gray-500 transition-transform duration-200 ${expandedRow === res.chave_nfe ? 'rotate-90' : ''}`} />
-                                </td>
-                                <td className="p-3">{res.nfCte}</td>
-                                <td className="p-3">{res.clienteSacado}</td>
-                                <td className="p-3 text-right">{formatBRLNumber(res.valorNf)}</td>
-                                <td className="p-3 text-right text-red-400">-{formatBRLNumber(res.jurosCalculado)}</td>
-                                <td className="p-3 text-right">{formatBRLNumber(res.valorLiquidoCalculado)}</td>
-                            </tr>
-                            {expandedRow === res.chave_nfe && (
-                                <tr className="bg-gray-900/50">
-                                    <td colSpan="6" className="p-0">
-                                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="p-4">
-                                            <h5 className="text-xs font-bold text-gray-400 mb-2">DETALHES DAS PARCELAS</h5>
-                                            <table className="min-w-full text-xs bg-gray-800 rounded">
-                                                <thead className="bg-gray-700/50">
-                                                    <tr>
-                                                        <th className="p-2 text-left">Parcela</th>
-                                                        <th className="p-2 text-left">Vencimento</th>
-                                                        <th className="p-2 text-right">Valor</th>
-                                                        <th className="p-2 text-right">Juros</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-700">
-                                                    {res.parcelasCalculadas.map(p => (
-                                                        <tr key={p.numeroParcela}>
-                                                            <td className="p-2">{p.numeroParcela}</td>
-                                                            <td className="p-2">{formatDate(p.dataVencimento)}</td>
-                                                            <td className="p-2 text-right">{formatBRLNumber(p.valorParcela)}</td>
-                                                            <td className="p-2 text-right text-red-500">-{formatBRLNumber(p.jurosParcela)}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </motion.div>
-                                    </td>
-                                </tr>
-                            )}
-                        </React.Fragment>
-                    ))}
-                    </tbody>
-                    <tfoot className="bg-gray-700 font-bold">
-                        <tr>
-                            <td className="p-3 text-right" colSpan="3">TOTAIS DA OPERAÇÃO:</td>
-                            <td className="p-3 text-right">{formatBRLNumber(result.totals.totalBruto)}</td>
-                            <td className="p-3 text-right text-red-400">-{formatBRLNumber(result.totals.totalJuros)}</td>
-                            <td className="p-3 text-right text-green-400">{formatBRLNumber(result.totals.totalLiquido)}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+          ) : (
+              <p className="text-center text-gray-400">Nenhum arquivo válido para ser enviado.</p>
+          )}
+    
+          <div className="mt-8 flex justify-end gap-4">
+            <button
+              onClick={onCancel}
+              className="bg-gray-600 text-gray-100 font-semibold py-2 px-6 rounded-md hover:bg-gray-500 transition"
+            >
+              Voltar
+            </button>
+            <button
+              onClick={onSubmit}
+              disabled={isSubmitting || validResults.length === 0}
+              className="bg-green-500 text-white font-semibold py-2 px-6 rounded-md shadow-sm hover:bg-green-600 transition disabled:bg-gray-500 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? "Enviando..." : `Enviar ${validResults.length} Documento(s) Válido(s)`}
+            </button>
           </div>
-        ) : (
-            <p className="text-center text-gray-400">Nenhum arquivo válido para ser enviado.</p>
-        )}
-  
-        <div className="mt-8 flex justify-end gap-4">
-          <button
-            onClick={onCancel}
-            className="bg-gray-600 text-gray-100 font-semibold py-2 px-6 rounded-md hover:bg-gray-500 transition"
-          >
-            Voltar
-          </button>
-          <button
-            onClick={onSubmit}
-            disabled={isSubmitting || validResults.length === 0}
-            className="bg-green-500 text-white font-semibold py-2 px-6 rounded-md shadow-sm hover:bg-green-600 transition disabled:bg-gray-500 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? "Enviando..." : `Enviar ${validResults.length} Documento(s) Válido(s)`}
-          </button>
-        </div>
-      </motion.div>
-    );
-  };
-      
-  return (
-      <>
-        {!simulationResult ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-gray-800 p-6 rounded-lg shadow-lg"
-          >
-            <h2 className="text-2xl font-bold text-white mb-6">
-              Enviar Nova Operação
-            </h2>
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  1. Selecione o Tipo de Operação
-                </label>
-                <select
-                  value={tipoOperacaoId}
-                  onChange={(e) => setTipoOperacaoId(e.target.value)}
-                  className="w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-3 text-white"
-                >
-                  <option value="">Escolha uma opção...</option>
-                  {tiposOperacao.map((op) => (
-                    <option key={op.id} value={op.id}>
-                      {op.nome} (Taxa: {op.taxaJuros}%, Fixo:{" "}
-                      {formatBRLNumber(op.valorFixo)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  2. Faça o Upload do(s) Arquivo(s) XML
-                </label>
-                <div
-                  className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-600 border-dashed rounded-md cursor-pointer hover:border-orange-400"
-                  onClick={() => fileInputRef.current.click()}
-                >
-                  <div className="space-y-1 text-center">
-                      {selectedFiles.length > 0 ? (
-                          <div className="flex flex-col items-center text-green-400">
-                              <CheckCircleIcon />
-                              <span className="font-medium mt-1">{selectedFiles.length} arquivo(s) selecionado(s)</span>
-                          </div>
-                      ) : (
-                          <>
-                              <UploadIcon />
-                              <p className="text-sm text-gray-400">
-                              Clique para selecionar ou arraste os arquivos aqui
-                              </p>
-                          </>
-                      )}
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    id="file-upload"
-                    name="file-upload"
-                    type="file"
-                    className="sr-only"
-                    onChange={handleFileChange}
-                    accept=".xml"
-                    multiple
-                  />
+        </motion.div>
+      );
+    };
+        
+    return (
+        <>
+          {!simulationResult ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-gray-800 p-6 rounded-lg shadow-lg"
+            >
+              <h2 className="text-2xl font-bold text-white mb-6">
+                Enviar Nova Operação
+              </h2>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    1. Selecione o Tipo de Operação
+                  </label>
+                  <select
+                    value={tipoOperacaoId}
+                    onChange={(e) => setTipoOperacaoId(e.target.value)}
+                    className="w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-3 text-white"
+                  >
+                    <option value="">Escolha uma opção...</option>
+                    {tiposOperacao.map((op) => (
+                      <option key={op.id} value={op.id}>
+                        {op.nome} (Taxa: {op.taxaJuros}%, Fixo:{" "}
+                        {formatBRLNumber(op.valorFixo)})
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                {selectedFiles.length > 0 && (
-                    <div className="mt-2 text-sm text-gray-300 space-y-1">
-                        {selectedFiles.map(f => (
-                            <div key={f.name} className="flex items-center justify-between bg-gray-700/50 p-1 rounded">
-                                <span>{f.name}</span>
-                                <button onClick={() => handleRemoveFile(f.name)} className="text-red-400 hover:text-red-300">
-                                    <FaTimes />
-                                </button>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    2. Faça o Upload do(s) Arquivo(s) XML
+                  </label>
+                  <div
+                    className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-600 border-dashed rounded-md cursor-pointer hover:border-orange-400"
+                    onClick={() => fileInputRef.current.click()}
+                  >
+                    <div className="space-y-1 text-center">
+                        {selectedFiles.length > 0 ? (
+                            <div className="flex flex-col items-center text-green-400">
+                                <CheckCircleIcon />
+                                <span className="font-medium mt-1">{selectedFiles.length} arquivo(s) selecionado(s)</span>
                             </div>
-                        ))}
+                        ) : (
+                            <>
+                                <UploadIcon />
+                                <p className="text-sm text-gray-400">
+                                Clique para selecionar ou arraste os arquivos aqui
+                                </p>
+                            </>
+                        )}
                     </div>
-                )}
+                    <input
+                      ref={fileInputRef}
+                      id="file-upload"
+                      name="file-upload"
+                      type="file"
+                      className="sr-only"
+                      onChange={handleFileChange}
+                      accept=".xml"
+                      multiple
+                    />
+                  </div>
+                  {selectedFiles.length > 0 && (
+                      <div className="mt-2 text-sm text-gray-300 space-y-1">
+                          {selectedFiles.map(f => (
+                              <div key={f.name} className="flex items-center justify-between bg-gray-700/50 p-1 rounded">
+                                  <span>{f.name}</span>
+                                  <button onClick={() => handleRemoveFile(f.name)} className="text-red-400 hover:text-red-300">
+                                      <FaTimes />
+                                  </button>
+                              </div>
+                          ))}
+                      </div>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="mt-8 text-right">
-              <button
-                onClick={handleSimulate}
-                disabled={isLoading}
-                className="bg-orange-500 text-white font-semibold py-2 px-6 rounded-md shadow-sm hover:bg-orange-600 transition disabled:bg-orange-400"
-              >
-                {isLoading ? "Processando..." : "Simular Operação"}
-              </button>
-            </div>
-          </motion.div>
-        ) : (
-          <SimulationDetails
-            result={simulationResult}
-            onSubmit={handleConfirmSubmit}
-            onCancel={() => setSimulationResult(null)}
-            isSubmitting={isSubmitting}
-          />
-        )}
-      </>
-    );
+              <div className="mt-8 text-right">
+                <button
+                  onClick={handleSimulate}
+                  disabled={isLoading}
+                  className="bg-orange-500 text-white font-semibold py-2 px-6 rounded-md shadow-sm hover:bg-orange-600 transition disabled:bg-orange-400"
+                >
+                  {isLoading ? "Processando..." : "Simular Operação"}
+                </button>
+              </div>
+            </motion.div>
+          ) : (
+            <SimulationDetails
+              result={simulationResult}
+              onSubmit={handleConfirmSubmit}
+              onCancel={() => setSimulationResult(null)}
+              isSubmitting={isSubmitting}
+            />
+          )}
+        </>
+      );
 };
 
 export default function ClientDashboardPage() {
-  const [operacoes, setOperacoes] = useState([]);
-  const [duplicatas, setDuplicatas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [activeView, setActiveView] = useState("consultas");
-  const [notification, setNotification] = useState({ message: "", type: "" });
-
-  const [volumeFilter, setVolumeFilter] = useState("last_6_months");
-  const [volumeData, setVolumeData] = useState([]);
-  const [maioresSacadosData, setMaioresSacadosData] = useState([]);
-  const [chartsLoading, setChartsLoading] = useState(true);
-
-  const getAuthHeader = () => {
-    const token = sessionStorage.getItem("authToken");
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
-
-  const showNotification = (message, type) => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification({ message: "", type: "" }), 5000);
-  };
-
-  const fetchTableData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const headers = getAuthHeader();
-      const [operacoesRes, duplicatasRes] = await Promise.all([
-        fetch("/api/portal/operacoes", { headers }),
-        fetch("/api/portal/duplicatas", { headers }),
-      ]);
-      if (!operacoesRes.ok)
-        throw new Error("Falha ao buscar suas operações.");
-      if (!duplicatasRes.ok)
-        throw new Error("Falha ao buscar suas duplicatas.");
-      const operacoesData = await operacoesRes.json();
-      const duplicatasData = await duplicatasRes.json();
-      setOperacoes(operacoesData);
-      setDuplicatas(duplicatasData);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeView === "consultas") {
-      fetchTableData();
-    }
-  }, [activeView]);
-
-  useEffect(() => {
-    const fetchChartData = async () => {
-      setChartsLoading(true);
+    const [operacoes, setOperacoes] = useState([]);
+    const [duplicatas, setDuplicatas] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [activeView, setActiveView] = useState("consultas");
+    const [notification, setNotification] = useState({ message: "", type: "" });
+  
+    const [volumeFilter, setVolumeFilter] = useState("last_6_months");
+    const [volumeData, setVolumeData] = useState([]);
+    const [maioresSacadosData, setMaioresSacadosData] = useState([]);
+    const [chartsLoading, setChartsLoading] = useState(true);
+  
+    const [vencimentos, setVencimentos] = useState([]); // NOVO ESTADO
+    const [diasVencimento, setDiasVencimento] = useState(5); // NOVO ESTADO
+    const [today, setToday] = useState(""); // NOVO ESTADO
+  
+    const getAuthHeader = () => {
+      const token = sessionStorage.getItem("authToken");
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    };
+  
+    const showNotification = (message, type) => {
+      setNotification({ message, type });
+      setTimeout(() => setNotification({ message: "", type: "" }), 5000);
+    };
+  
+    const fetchTableData = async () => {
+      setLoading(true);
+      setError(null);
       try {
         const headers = getAuthHeader();
-        const [volumeRes, sacadosRes] = await Promise.all([
-          fetch(`/api/portal/volume-operado?period=${volumeFilter}`, {
-            headers,
-          }),
-          fetch(`/api/portal/maiores-sacados?period=${volumeFilter}`, {
-            headers,
-          }),
+        const [operacoesRes, duplicatasRes] = await Promise.all([
+          fetch("/api/portal/operacoes", { headers }),
+          fetch("/api/portal/duplicatas", { headers }),
         ]);
-        if (!volumeRes.ok || !sacadosRes.ok)
-          throw new Error("Falha ao carregar dados dos gráficos.");
-        const volume = await volumeRes.json();
-        const sacados = await sacadosRes.json();
-        setVolumeData(volume);
-        setMaioresSacadosData(sacados);
+        if (!operacoesRes.ok)
+          throw new Error("Falha ao buscar suas operações.");
+        if (!duplicatasRes.ok)
+          throw new Error("Falha ao buscar suas duplicatas.");
+        const operacoesData = await operacoesRes.json();
+        const duplicatasData = await duplicatasRes.json();
+        setOperacoes(operacoesData);
+        setDuplicatas(duplicatasData);
       } catch (err) {
-        showNotification(err.message, "error");
+        setError(err.message);
       } finally {
-        setChartsLoading(false);
+        setLoading(false);
       }
     };
+  
+    useEffect(() => {
+        setToday(new Date().toISOString().split("T")[0]);
+        const fetchChartData = async () => {
+            setChartsLoading(true);
+            try {
+              const headers = getAuthHeader();
+              const [volumeRes, sacadosRes, vencimentosRes] = await Promise.all([
+                fetch(`/api/portal/volume-operado?period=${volumeFilter}`, { headers }),
+                fetch(`/api/portal/maiores-sacados?period=${volumeFilter}`, { headers }),
+                fetch(`/api/portal/vencimentos?diasVencimento=${diasVencimento}`, { headers })
+              ]);
+              if (!volumeRes.ok || !sacadosRes.ok || !vencimentosRes.ok)
+                throw new Error("Falha ao carregar dados do dashboard.");
+              
+              setVolumeData(await volumeRes.json());
+              setMaioresSacadosData(await sacadosRes.json());
+              setVencimentos(await vencimentosRes.json());
+      
+            } catch (err) {
+              showNotification(err.message, "error");
+            } finally {
+              setChartsLoading(false);
+            }
+          };
 
-    if (activeView === "consultas") {
-      fetchChartData();
-    }
-  }, [activeView, volumeFilter]);
-
-  const TabButton = ({ viewName, currentView, setView, children }) => (
-    <button
-      onClick={() => setView(viewName)}
-      className={`font-semibold py-2 px-5 rounded-md transition-colors text-sm
-                ${
-                  currentView === viewName
-                    ? "bg-orange-500 text-white"
-                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                }
-            `}
-    >
-      {children}
-    </button>
-  );
-
-  return (
-    <div className="py-8">
-      <Notification
-        message={notification.message}
-        type={notification.type}
-        onClose={() => setNotification({ message: "", type: "" })}
-      />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-6 bg-gray-800 p-2 rounded-lg inline-flex items-center space-x-2">
-          <TabButton
-            viewName="consultas"
-            currentView={activeView}
-            setView={setActiveView}
-          >
-            Minhas Operações
-          </TabButton>
-          <TabButton
-            viewName="nova-operacao"
-            currentView={activeView}
-            setView={setActiveView}
-          >
-            Enviar Nova Operação
-          </TabButton>
-        </div>
-
-        <div id="page-content">
-          {activeView === "consultas" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <HistoricoOperacoesTable
-                operacoes={operacoes}
-                loading={loading}
-                error={error}
-                getAuthHeader={getAuthHeader}
-                showNotification={showNotification}
-              />
-              <AcompanhamentoDuplicatasTable
-                duplicatas={duplicatas}
-                loading={loading}
-                error={error}
-              />
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-white">
-                      Volume Operado
-                    </h3>
-                    <select
-                      value={volumeFilter}
-                      onChange={(e) => setVolumeFilter(e.target.value)}
-                      className="bg-gray-700 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
-                    >
-                      <option value="last_6_months">Últimos 6 Meses</option>
-                      <option value="current_month">Mês Atual</option>
-                      <option value="last_month">Mês Passado</option>
-                      <option value="current_year">Este Ano</option>
-                    </select>
-                  </div>
-                  {chartsLoading ? (
-                    <div className="h-[250px] flex items-center justify-center text-gray-400">
-                      Carregando...
+      if (activeView === "consultas") {
+        fetchTableData();
+        fetchChartData();
+      }
+    }, [activeView, volumeFilter, diasVencimento]);
+  
+    const TabButton = ({ viewName, currentView, setView, children }) => (
+      <button
+        onClick={() => setView(viewName)}
+        className={`font-semibold py-2 px-5 rounded-md transition-colors text-sm
+                  ${
+                    currentView === viewName
+                      ? "bg-orange-500 text-white"
+                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                  }
+              `}
+      >
+        {children}
+      </button>
+    );
+  
+    return (
+      <div className="py-8">
+        <Notification
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification({ message: "", type: "" })}
+        />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mb-6 bg-gray-800 p-2 rounded-lg inline-flex items-center space-x-2">
+            <TabButton
+              viewName="consultas"
+              currentView={activeView}
+              setView={setActiveView}
+            >
+              Minhas Operações
+            </TabButton>
+            <TabButton
+              viewName="nova-operacao"
+              currentView={activeView}
+              setView={setActiveView}
+            >
+              Enviar Nova Operação
+            </TabButton>
+          </div>
+  
+          <div id="page-content">
+            {activeView === "consultas" && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                    {/* Card de Pendências e Vencimentos */}
+                    <div className="p-6 rounded-lg shadow-lg transition bg-gray-800">
+                        <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold text-gray-100">
+                            Pendências e Vencimentos
+                        </h3>
+                        <select
+                            value={diasVencimento}
+                            onChange={(e) => setDiasVencimento(Number(e.target.value))}
+                            className="bg-gray-700 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+                        >
+                            <option value={5}>Próximos 5 dias</option>
+                            <option value={15}>Próximos 15 dias</option>
+                            <option value={30}>Próximos 30 dias</option>
+                        </select>
+                        </div>
+                        <div className="space-y-3 max-h-80 overflow-auto pr-2">
+                        {chartsLoading ? <p className="text-center text-gray-400">Carregando...</p> : vencimentos.length > 0 ? (
+                            vencimentos.map((dup) => {
+                                const isVencido = dup.data_vencimento < today;
+                                return (
+                                <div
+                                    key={dup.id}
+                                    className="flex justify-between items-center text-sm border-b border-gray-700 pb-2 last:border-none p-2"
+                                >
+                                    <div>
+                                    <p className="font-medium text-gray-200">
+                                        {dup.cliente_sacado}
+                                    </p>
+                                    <p className="text-xs text-gray-400">
+                                        NF {dup.nf_cte}
+                                    </p>
+                                    </div>
+                                    <div className="text-right">
+                                    <p
+                                        className={`font-semibold ${
+                                        isVencido ? "text-red-500" : "text-yellow-400"
+                                        }`}
+                                    >
+                                        {formatDate(dup.data_vencimento)}
+                                    </p>
+                                    <p className="text-gray-300">
+                                        {formatBRLNumber(dup.valor_bruto)}
+                                    </p>
+                                    </div>
+                                </div>
+                                );
+                            })
+                        ) : (
+                            <p className="text-gray-400 text-center py-10">
+                            Nenhuma duplicata a vencer nos próximos {diasVencimento} dias.
+                            </p>
+                        )}
+                        </div>
                     </div>
-                  ) : (
-                    <VolumeOperadoChart data={volumeData} />
-                  )}
+
+                    {/* Gráfico de Volume Operado */}
+                    <div className="lg:col-span-2 bg-gray-800 p-6 rounded-lg shadow-lg">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-semibold text-white">
+                            Volume Operado
+                            </h3>
+                            <select
+                                value={volumeFilter}
+                                onChange={(e) => setVolumeFilter(e.target.value)}
+                                className="bg-gray-700 text-gray-200 border-gray-600 rounded-md p-1 text-sm focus:ring-orange-500 focus:border-orange-500"
+                            >
+                            <option value="last_6_months">Últimos 6 Meses</option>
+                            <option value="current_month">Mês Atual</option>
+                            <option value="last_month">Mês Passado</option>
+                            <option value="current_year">Este Ano</option>
+                            </select>
+                        </div>
+                        {chartsLoading ? (
+                            <div className="h-[250px] flex items-center justify-center text-gray-400">
+                            Carregando...
+                            </div>
+                        ) : (
+                            <VolumeOperadoChart data={volumeData} />
+                        )}
+                    </div>
                 </div>
-                <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+
+                <HistoricoOperacoesTable
+                  operacoes={operacoes}
+                  loading={loading}
+                  error={error}
+                  getAuthHeader={getAuthHeader}
+                  showNotification={showNotification}
+                />
+                <AcompanhamentoDuplicatasTable
+                  duplicatas={duplicatas}
+                  loading={loading}
+                  error={error}
+                />
+                 <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
                   <h3 className="text-lg font-semibold text-white mb-4">
-                    Maiores Sacados
+                    Maiores Sacados (no período selecionado)
                   </h3>
                   {chartsLoading ? (
                     <div className="h-[250px] flex items-center justify-center text-gray-400">
@@ -1050,26 +1107,25 @@ export default function ClientDashboardPage() {
                     <TopFiveApex data={maioresSacadosData} />
                   )}
                 </div>
-              </div>
-            </motion.div>
+              </motion.div>
           )}
-
-          {activeView === "nova-operacao" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <NovaOperacaoView
-                showNotification={showNotification}
-                getAuthHeader={getAuthHeader}
-                onOperationSubmitted={() => {
-                    setTimeout(() => {
-                       fetchTableData();
-                    }, 1500);
-                    setActiveView('consultas');
-                }}
-              />
-            </motion.div>
-          )}
+  
+            {activeView === "nova-operacao" && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <NovaOperacaoView
+                  showNotification={showNotification}
+                  getAuthHeader={getAuthHeader}
+                  onOperationSubmitted={() => {
+                      setTimeout(() => {
+                         fetchTableData();
+                      }, 1500);
+                      setActiveView('consultas');
+                  }}
+                />
+              </motion.div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
