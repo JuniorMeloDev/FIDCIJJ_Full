@@ -7,12 +7,12 @@ import EditLancamentoModal from "@/app/components/EditLancamentoModal";
 import Notification from "@/app/components/Notification";
 import ConfirmacaoModal from "@/app/components/ConfirmacaoModal";
 import EmailModal from "@/app/components/EmailModal";
-import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal"; // Adicione esta linha
 import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
 import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
-import ComplementModal from "@/app/components/ComplementModal"; // Importar o novo modal
+import ComplementModal from "@/app/components/ComplementModal";
+import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal";
 
 const ITEMS_PER_PAGE = 8;
 
@@ -52,11 +52,10 @@ export default function FluxoDeCaixaPage() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
-  const [estornoInfo, setEstornoInfo] = useState(null);
-
-  // NOVOS STATES: Para o modal de complemento
   const [isComplementModalOpen, setIsComplementModalOpen] = useState(false);
-  const [lancamentoParaComplemento, setLancamentoParaComplemento] = useState(null);
+  const [lancamentoParaComplemento, setLancamentoParaComplemento] =
+    useState(null);
+  const [estornoInfo, setEstornoInfo] = useState(null);
 
   const getAuthHeader = () => {
     const token = sessionStorage.getItem("authToken");
@@ -267,26 +266,26 @@ export default function FluxoDeCaixaPage() {
 
   const handleEstornarRequest = () => {
     if (!contextMenu.selectedItem) return;
-    // Agora salvamos o item inteiro para usar no modal e na confirmação
-    setEstornoInfo(contextMenu.selectedItem); 
+    setEstornoInfo(contextMenu.selectedItem);
   };
 
   const confirmarEstorno = async () => {
     if (!estornoInfo) return;
 
-    // --- CORREÇÃO PRINCIPAL AQUI ---
-    // Pega o ID da duplicata vinculada, não da movimentação de caixa
-    const duplicataParaEstornar = estornoInfo.duplicatas?.[0];
+    const duplicataParaEstornar = estornoInfo.duplicata;
 
     if (!duplicataParaEstornar?.id) {
-        showNotification('Erro: Não foi possível encontrar a duplicata vinculada a este recebimento para estornar.', 'error');
-        setEstornoInfo(null);
-        return;
+      showNotification(
+        "Erro: Lançamento de recebimento não está vinculado a uma duplicata específica para estornar.",
+        "error"
+      );
+      setEstornoInfo(null);
+      return;
     }
 
     try {
       const response = await fetch(
-        `/api/duplicatas/${duplicataParaEstornar.id}/estornar`, // Usa a ID correta da duplicata
+        `/api/duplicatas/${duplicataParaEstornar.id}/estornar`,
         {
           method: "POST",
           headers: getAuthHeader(),
@@ -355,21 +354,21 @@ export default function FluxoDeCaixaPage() {
         const errorData = await response.json();
         throw new Error(errorData.message || "Não foi possível gerar o PDF.");
       }
-  
+
       const contentDisposition = response.headers.get("content-disposition");
-      let filename = `bordero-${operacaoId}.pdf`; 
+      let filename = `bordero-${operacaoId}.pdf`;
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
         if (filenameMatch && filenameMatch.length > 1) {
           filename = filenameMatch[1];
         }
       }
-  
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = filename; 
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -389,33 +388,31 @@ export default function FluxoDeCaixaPage() {
     });
   };
 
-  // NOVA FUNÇÃO: Para abrir o modal de complemento
   const handleAbrirModalComplemento = () => {
     if (!contextMenu.selectedItem) return;
     setLancamentoParaComplemento(contextMenu.selectedItem);
     setIsComplementModalOpen(true);
   };
 
-  // NOVA FUNÇÃO: Para salvar o complemento
   const handleSaveComplemento = async (payload) => {
     try {
       const response = await fetch(`/api/operacoes/complemento`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-          body: JSON.stringify(payload),
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-          const errorText = await response.json();
-          throw new Error(errorText.message || 'Falha ao salvar complemento.');
+        const errorText = await response.json();
+        throw new Error(errorText.message || "Falha ao salvar complemento.");
       }
-      showNotification('Complemento do borderô salvo com sucesso!', 'success');
+      showNotification("Complemento do borderô salvo com sucesso!", "success");
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
-      return true; // Indica sucesso para o modal fechar
+      return true;
     } catch (error) {
-        showNotification(error.message, 'error');
-        return false; // Indica falha
+      showNotification(error.message, "error");
+      return false;
     }
   };
 
@@ -470,11 +467,11 @@ export default function FluxoDeCaixaPage() {
         item={estornoInfo}
       />
       <ComplementModal
-          isOpen={isComplementModalOpen}
-          onClose={() => setIsComplementModalOpen(false)}
-          onSave={handleSaveComplemento}
-          lancamentoOriginal={lancamentoParaComplemento}
-          contasMaster={contasMaster}
+        isOpen={isComplementModalOpen}
+        onClose={() => setIsComplementModalOpen(false)}
+        onSave={handleSaveComplemento}
+        lancamentoOriginal={lancamentoParaComplemento}
+        contasMaster={contasMaster}
       />
 
       <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
@@ -644,16 +641,21 @@ export default function FluxoDeCaixaPage() {
             >
               Editar Lançamento
             </a>
-            {
-              contextMenu.selectedItem?.categoria === 'Pagamento de Borderô' &&
+            {contextMenu.selectedItem?.categoria === "Pagamento de Borderô" &&
               contextMenu.selectedItem?.operacao &&
-              Math.abs(contextMenu.selectedItem.valor) < contextMenu.selectedItem.operacao.valor_liquido &&
-              (
-                  <a href="#" onClick={(e) => { e.preventDefault(); handleAbrirModalComplemento(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">
-                      Complemento Borderô
-                  </a>
-              )
-            }
+              Math.abs(contextMenu.selectedItem.valor) <
+                contextMenu.selectedItem.operacao.valor_liquido && (
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleAbrirModalComplemento();
+                  }}
+                  className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                >
+                  Complemento Borderô
+                </a>
+              )}
             {contextMenu.selectedItem?.operacaoId && (
               <>
                 <div className="border-t border-gray-600 my-1"></div>
@@ -679,8 +681,8 @@ export default function FluxoDeCaixaPage() {
                 </a>
               </>
             )}
-             <div className="border-t border-gray-600 my-1"></div>
-            {contextMenu.selectedItem?.categoria === 'Recebimento' ? (
+            <div className="border-t border-gray-600 my-1"></div>
+            {contextMenu.selectedItem?.categoria === "Recebimento" ? (
               <a
                 href="#"
                 onClick={(e) => {
@@ -693,22 +695,29 @@ export default function FluxoDeCaixaPage() {
               </a>
             ) : (
               <button
-                onClick={(e) => { e.preventDefault(); handleDeleteRequest(); }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDeleteRequest();
+                }}
                 className={`block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-600 ${
-                  ["Pagamento de Borderô", "Transferencia Enviada", "Transferencia Recebida"].includes(
-                    contextMenu.selectedItem?.categoria
-                  )
+                  [
+                    "Pagamento de Borderô",
+                    "Transferencia Enviada",
+                    "Transferencia Recebida",
+                  ].includes(contextMenu.selectedItem?.categoria)
                     ? "opacity-50 cursor-not-allowed"
                     : ""
                 }`}
-                disabled={["Pagamento de Borderô", "Recebimento", "Transferencia Enviada", "Transferencia Recebida"].includes(
-                  contextMenu.selectedItem?.categoria
-                )}
+                disabled={[
+                  "Pagamento de Borderô",
+                  "Recebimento",
+                  "Transferencia Enviada",
+                  "Transferencia Recebida",
+                ].includes(contextMenu.selectedItem?.categoria)}
               >
                 Excluir Lançamento
               </button>
             )}
-
           </div>
         </div>
       )}

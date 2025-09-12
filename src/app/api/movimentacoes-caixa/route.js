@@ -12,8 +12,13 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
         
-        // --- ALTERAÇÃO AQUI: Adicionado 'duplicatas(id, nf_cte)' para buscar a duplicata vinculada ---
-        let query = supabase.from('movimentacoes_caixa').select('*, operacao:operacoes(valor_liquido), duplicatas(id, nf_cte)');
+        // --- CORREÇÃO AQUI: Junção reversa opcional com a tabela de duplicatas. ---
+        // Isso busca a duplicata correspondente APENAS para os lançamentos que a possuem.
+        let query = supabase.from('movimentacoes_caixa').select(`
+            *, 
+            operacao:operacoes ( valor_liquido, cliente_id ),
+            duplicata:duplicatas!liquidacao_mov_id ( id, nf_cte )
+        `);
 
         // ... (filtros permanecem iguais) ...
         if (searchParams.get('dataInicio')) query = query.gte('data_movimento', searchParams.get('dataInicio'));
@@ -31,7 +36,7 @@ export async function GET(request) {
         const { data, error } = await query;
         if (error) throw error;
 
-        // --- ALTERAÇÃO AQUI: Garante que os novos dados sejam passados corretamente ---
+        // --- ALTERAÇÃO NO FORMATO DOS DADOS ---
         const formattedData = data.map(m => ({
             ...m,
             dataMovimento: m.data_movimento,
@@ -39,7 +44,8 @@ export async function GET(request) {
             empresaAssociada: m.empresa_associada,
             operacaoId: m.operacao_id,
             operacao: m.operacao,
-            duplicatas: m.duplicatas // Passa o array de duplicatas (geralmente com um item)
+            // A Supabase retorna a duplicata como um objeto único (ou null), que é o que precisamos.
+            duplicata: m.duplicata 
         }));
 
         return NextResponse.json(formattedData, { status: 200 });
