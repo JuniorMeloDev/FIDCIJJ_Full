@@ -12,15 +12,15 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
         
-        // --- CORREÇÃO AQUI: Junção reversa opcional com a tabela de duplicatas. ---
-        // Isso busca a duplicata correspondente APENAS para os lançamentos que a possuem.
+        // --- CORREÇÃO FINAL AQUI: Usando a Foreign Key correta ('fk_movimentacao_caixa') ---
+        // Esta é a sintaxe exata para a junção reversa, especificando que na tabela 'duplicatas',
+        // a coluna 'fk_movimentacao_caixa' é a que se conecta ao 'id' da 'movimentacoes_caixa'.
         let query = supabase.from('movimentacoes_caixa').select(`
             *, 
             operacao:operacoes ( valor_liquido, cliente_id ),
-            duplicata:duplicatas!liquidacao_mov_id ( id, nf_cte )
+            duplicata:duplicatas!fk_movimentacao_caixa ( id, nf_cte )
         `);
 
-        // ... (filtros permanecem iguais) ...
         if (searchParams.get('dataInicio')) query = query.gte('data_movimento', searchParams.get('dataInicio'));
         if (searchParams.get('dataFim')) query = query.lte('data_movimento', searchParams.get('dataFim'));
         if (searchParams.get('descricao')) query = query.ilike('descricao', `%${searchParams.get('descricao')}%`);
@@ -34,9 +34,11 @@ export async function GET(request) {
         query = query.order(sortKey, { ascending: sortDirection === 'ASC' });
 
         const { data, error } = await query;
-        if (error) throw error;
+        if (error) {
+            console.error("Erro na consulta do Supabase:", error);
+            throw error;
+        }
 
-        // --- ALTERAÇÃO NO FORMATO DOS DADOS ---
         const formattedData = data.map(m => ({
             ...m,
             dataMovimento: m.data_movimento,
@@ -45,11 +47,12 @@ export async function GET(request) {
             operacaoId: m.operacao_id,
             operacao: m.operacao,
             // A Supabase retorna a duplicata como um objeto único (ou null), que é o que precisamos.
-            duplicata: m.duplicata 
+            duplicata: m.duplicata
         }));
 
         return NextResponse.json(formattedData, { status: 200 });
     } catch (error) {
-        return NextResponse.json({ message: error.message }, { status: 500 });
+        console.error("Erro no endpoint de movimentações de caixa:", error.message);
+        return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
     }
 }
