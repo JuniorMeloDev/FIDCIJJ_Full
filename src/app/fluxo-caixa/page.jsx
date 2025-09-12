@@ -11,9 +11,9 @@ import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
 import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
-import ComplementModal from "@/app/components/ComplementModal";
+import ComplementModal from "@/app/components/ComplementModal"; // Importar o novo modal
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 8;
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -38,21 +38,24 @@ export default function FluxoDeCaixaPage() {
     key: "data_movimento",
     direction: "DESC",
   });
+
   const [contextMenu, setContextMenu] = useState({
     visible: false,
     x: 0,
     y: 0,
     selectedItem: null,
   });
+
   const menuRef = useRef(null);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [itemParaEditar, setItemParaEditar] = useState(null);
+
+  // NOVOS STATES: Para o modal de complemento
   const [isComplementModalOpen, setIsComplementModalOpen] = useState(false);
   const [lancamentoParaComplemento, setLancamentoParaComplemento] = useState(null);
 
-  // ... (todas as suas funções como getAuthHeader, fetchMovimentacoes, etc. permanecem as mesmas) ...
   const getAuthHeader = () => {
     const token = sessionStorage.getItem("authToken");
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -343,12 +346,14 @@ export default function FluxoDeCaixaPage() {
     });
   };
 
+  // NOVA FUNÇÃO: Para abrir o modal de complemento
   const handleAbrirModalComplemento = () => {
     if (!contextMenu.selectedItem) return;
     setLancamentoParaComplemento(contextMenu.selectedItem);
     setIsComplementModalOpen(true);
   };
 
+  // NOVA FUNÇÃO: Para salvar o complemento
   const handleSaveComplemento = async (payload) => {
     try {
       const response = await fetch(`/api/operacoes/complemento`, {
@@ -364,10 +369,10 @@ export default function FluxoDeCaixaPage() {
       showNotification('Complemento do borderô salvo com sucesso!', 'success');
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
-      return true;
+      return true; // Indica sucesso para o modal fechar
     } catch (error) {
         showNotification(error.message, 'error');
-        return false;
+        return false; // Indica falha
     }
   };
 
@@ -445,9 +450,10 @@ export default function FluxoDeCaixaPage() {
           </motion.header>
         </div>
 
-        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
-          <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
+        <div className="flex flex-col lg:flex-row gap-6 flex-grow">
+          <div className="w-full flex-shrink-0 flex flex-col gap-4 lg:w-72 lg:overflow-y-auto lg:max-h-[calc(100vh-120px)]">
             <motion.div
+              className=""
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2 }}
@@ -483,8 +489,8 @@ export default function FluxoDeCaixaPage() {
             />
           </div>
 
-          <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
-            <div className="flex-grow overflow-auto">
+          <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0 overflow-x-auto">
+            <div>
               <table className="min-w-full divide-y divide-gray-700">
                 <thead className="bg-gray-700 sticky top-0 z-10">
                   <tr>
