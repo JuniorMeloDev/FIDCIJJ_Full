@@ -148,13 +148,15 @@ export default function PortalLayout({ children }) {
                 onUpdateCount={fetchUnreadCount}
                 isAdmin={false}
             />
+            {/* O Navbar do Portal continua fixo */}
             <PortalNavbar 
                 user={user} 
                 onLogout={handleLogout} 
                 unreadCount={unreadCount}
                 onBellClick={() => setIsNotificationModalOpen(true)}
             />
-            <main className="pt-16 flex-grow overflow-y-auto">
+            {/* A área de <main> agora é responsável pela rolagem do seu próprio conteúdo */}
+            <main className="flex-grow overflow-y-auto">
                 {children}
             </main>
         </div>

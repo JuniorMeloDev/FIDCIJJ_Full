@@ -1,14 +1,13 @@
 'use client';
 
-
 export default function FiltroLateral({ filters, onFilterChange, onClear, saldos }) {
     
     const contas = Array.isArray(saldos) ? saldos : [];
     
     return (
-        <div className="w-full lg:w-66 flex-shrink-0 bg-gray-800 rounded-lg shadow-md flex flex-col overflow-hidden">
+        <div className="w-full lg:w-72 flex-shrink-0 bg-gray-800 rounded-lg shadow-md flex flex-col overflow-hidden">
             
-            <div className="p-4 border-b border-gray-700">
+            <div className="p-4 border-b border-gray-700 flex-shrink-0">
                 <h2 className="text-lg font-semibold text-gray-100">Filtros</h2>
             </div>
             
@@ -45,10 +44,7 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
             </div>
 
             <div className="flex-shrink-0 p-4 border-t border-gray-700 bg-gray-800 rounded-b-lg">
-                <div className="flex flex-col space-y-2">
-                    {/* Botão "Aplicar" foi removido */}
-                    <button onClick={onClear} className="w-full bg-orange-500 text-white font-semibold py-2 rounded-md hover:bg-orange-600 transition">Limpar</button>
-                </div>
+                <button onClick={onClear} className="w-full bg-orange-500 text-white font-semibold py-2 rounded-md hover:bg-orange-600 transition">Limpar</button>
             </div>
         </div>
     );
