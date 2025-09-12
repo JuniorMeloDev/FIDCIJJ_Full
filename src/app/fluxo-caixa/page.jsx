@@ -8,12 +8,12 @@ import Notification from "@/app/components/Notification";
 import ConfirmacaoModal from "@/app/components/ConfirmacaoModal";
 import EmailModal from "@/app/components/EmailModal";
 import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
-import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 import ComplementModal from "@/app/components/ComplementModal";
 
-const ITEMS_PER_PAGE = 20;
+// AJUSTE: Itens por página alterado para 6, conforme solicitado.
+const ITEMS_PER_PAGE = 6;
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -52,7 +52,6 @@ export default function FluxoDeCaixaPage() {
   const [isComplementModalOpen, setIsComplementModalOpen] = useState(false);
   const [lancamentoParaComplemento, setLancamentoParaComplemento] = useState(null);
 
-  // ... (todas as suas funções como getAuthHeader, fetchMovimentacoes, etc. permanecem as mesmas) ...
   const getAuthHeader = () => {
     const token = sessionStorage.getItem("authToken");
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -392,10 +391,11 @@ export default function FluxoDeCaixaPage() {
       <ConfirmacaoModal isOpen={!!itemParaExcluir} onClose={() => setItemParaExcluir(null)} onConfirm={handleConfirmDelete} title="Confirmar Exclusão" message="Tem a certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita." />
       <EmailModal isOpen={isEmailModalOpen} onClose={() => setIsEmailModalOpen(false)} onSend={handleSendEmail} isSending={isSendingEmail} clienteId={operacaoParaEmail?.clienteId} />
       <ComplementModal isOpen={isComplementModalOpen} onClose={() => setIsComplementModalOpen(false)} onSave={handleSaveComplemento} lancamentoOriginal={lancamentoParaComplemento} contasMaster={contasMaster} />
-
-      {/* A estrutura principal agora é um flex-col para ocupar toda a altura */}
+      
+      {/* ALTERAÇÃO: Container principal com altura total e layout flexível */}
       <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
-        {/* Cabeçalho fixo */}
+        
+        {/* ALTERAÇÃO: Cabeçalho não encolhe, permanece fixo no topo da área de conteúdo */}
         <div className="flex-shrink-0">
           <motion.header
             className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
@@ -417,18 +417,17 @@ export default function FluxoDeCaixaPage() {
           </motion.header>
         </div>
 
-        {/* Área de conteúdo que cresce e permite rolagem interna */}
+        {/* ALTERAÇÃO: Este container cresce para preencher o espaço e min-h-0 evita que ele transborde */}
         <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
-          {/* Painel Esquerdo (Saldos e Filtros) */}
-          <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
-            {/* Saldos */}
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
-              <h2 className="text-lg font-semibold text-gray-100 mb-2">
+          
+          {/* ALTERAÇÃO: Painel lateral agora tem sua própria rolagem */}
+          <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4 bg-gray-800 p-4 rounded-lg shadow-md overflow-y-auto">
+              <h2 className="text-lg font-semibold text-gray-100 mb-2 flex-shrink-0">
                 {saldosTitle}
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 flex-shrink-0">
                 {saldos.map((saldo, index) => (
-                  <div key={index} className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500">
+                  <div key={index} className="bg-gray-700 p-3 rounded-lg shadow-lg border-l-4 border-orange-500">
                     <p className="text-sm text-gray-400 truncate">{saldo.contaBancaria}</p>
                     <p className={`text-xl font-bold ${saldo.saldo >= 0 ? "text-green-400" : "text-red-400"}`}>
                       {formatBRLNumber(saldo.saldo)}
@@ -436,14 +435,31 @@ export default function FluxoDeCaixaPage() {
                   </div>
                 ))}
               </div>
-            </motion.div>
-            {/* Filtros */}
-            <FiltroLateral filters={filters} saldos={saldos} onFilterChange={handleFilterChange} onClear={clearFilters} />
+              <div className="border-t border-gray-700 my-4 flex-shrink-0"></div>
+              <h2 className="text-lg font-semibold text-gray-100 mb-2 flex-shrink-0">Filtros</h2>
+              <div className="space-y-4">
+                  {/* Filtros aqui */}
+                  <div>
+                      <label className="block text-sm font-semibold text-gray-300">Período</label>
+                      <div className="mt-1 space-y-2">
+                          <input type="date" name="dataInicio" value={filters.dataInicio} onChange={handleFilterChange} className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"/>
+                          <input type="date" name="dataFim" value={filters.dataFim} onChange={handleFilterChange} className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"/>
+                      </div>
+                  </div>
+                   <div>
+                        <label htmlFor="descricao" className="block text-sm font-semibold text-gray-300">Descrição</label>
+                        <input id="descricao" type="text" name="descricao" placeholder="Parte da descrição..." value={filters.descricao} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"/>
+                    </div>
+              </div>
+               <div className="mt-auto pt-4">
+                 <button onClick={clearFilters} className="w-full bg-orange-500 text-white font-semibold py-2 rounded-md hover:bg-orange-600 transition">Limpar</button>
+              </div>
           </div>
 
-          {/* Painel Direito (Tabela de Movimentações) */}
+          {/* ALTERAÇÃO: Painel da tabela agora é um container flex que gerencia a rolagem da tabela interna */}
           <div className="flex-grow bg-gray-800 rounded-lg shadow-md flex flex-col min-h-0">
             <div className="flex-grow p-4 overflow-hidden flex flex-col">
+              {/* Esta div interna permite que a tabela tenha rolagem sem afetar a paginação */}
               <div className="flex-grow overflow-auto">
                 <table className="min-w-full divide-y divide-gray-700">
                   <thead className="bg-gray-700 sticky top-0 z-10">
@@ -485,6 +501,7 @@ export default function FluxoDeCaixaPage() {
                   </tbody>
                 </table>
               </div>
+              {/* A paginação fica fora da área de rolagem, fixa na parte inferior do painel */}
               <div className="flex-shrink-0 pt-4">
                 <Pagination totalItems={movimentacoes.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={(page) => setCurrentPage(page)} />
               </div>
