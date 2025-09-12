@@ -23,9 +23,19 @@ export async function GET(request) {
     const dataLimite = new Date();
     dataLimite.setDate(hoje.getDate() + diasVencimento);
 
+    // --- CORREÇÃO AQUI ---
+    // A consulta foi ajustada para filtrar corretamente as duplicatas
+    // com base no cliente_id que está na tabela 'operacoes'.
     const { data, error } = await supabase
       .from('duplicatas')
-      .select('id, nf_cte, data_vencimento, valor_bruto, cliente_sacado')
+      .select(`
+        id, 
+        nf_cte, 
+        data_vencimento, 
+        valor_bruto, 
+        cliente_sacado,
+        operacao:operacoes!inner(cliente_id)
+      `)
       .eq('operacao.cliente_id', clienteId)
       .eq('status_recebimento', 'Pendente')
       .lte('data_vencimento', format(dataLimite, 'yyyy-MM-dd'))
