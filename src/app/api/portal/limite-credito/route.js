@@ -15,18 +15,42 @@ export async function GET(request) {
       return NextResponse.json({ message: 'Usuário cliente sem empresa associada.' }, { status: 403 });
     }
 
-    // Chama a função RPC do Supabase para obter os dados do limite de crédito
-    const { data, error } = await supabase.rpc('get_limite_credito_cliente', {
-      p_cliente_id: clienteId
-    });
+    // 1. Buscar o limite de crédito total do cliente
+    const { data: clienteData, error: clienteError } = await supabase
+      .from('clientes')
+      .select('limite_credito')
+      .eq('id', clienteId)
+      .single();
 
-    if (error) {
-      console.error('Erro ao chamar RPC get_limite_credito_cliente:', error);
-      throw error;
+    if (clienteError) {
+      console.error('Erro ao buscar limite de crédito do cliente:', clienteError);
+      throw new Error('Não foi possível buscar os dados de limite de crédito.');
     }
 
-    // A função RPC retorna um array com um objeto, então pegamos o primeiro elemento
-    const result = data[0] || { limite_total: 0, limite_utilizado: 0, limite_disponivel: 0 };
+    const limite_total = clienteData?.limite_credito || 0;
+
+    // 2. Calcular o limite utilizado somando as duplicatas pendentes
+    const { data: duplicatasPendentes, error: duplicatasError } = await supabase
+      .from('duplicatas')
+      .select('valor_bruto, operacao:operacoes!inner(cliente_id)')
+      .eq('operacao.cliente_id', clienteId)
+      .eq('status_recebimento', 'Pendente');
+    
+    if (duplicatasError) {
+      console.error('Erro ao buscar duplicatas pendentes:', duplicatasError);
+      throw new Error('Não foi possível calcular o limite utilizado.');
+    }
+
+    const limite_utilizado = duplicatasPendentes.reduce((sum, dup) => sum + dup.valor_bruto, 0);
+
+    // 3. Calcular o limite disponível
+    const limite_disponivel = limite_total - limite_utilizado;
+
+    const result = {
+      limite_total,
+      limite_utilizado,
+      limite_disponivel,
+    };
 
     return NextResponse.json(result, { status: 200 });
 

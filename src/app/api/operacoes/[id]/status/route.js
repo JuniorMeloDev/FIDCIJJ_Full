@@ -95,8 +95,8 @@ export async function PUT(request, { params }) {
             status: "Aprovada", 
             conta_bancaria_id,
             valor_liquido: novoValorLiquido,
-            valor_total_descontos: operacao.valor_total_descontos + totalDescontosAdicionais,
-            limite_utilizado: (operacao.limite_utilizado || 0) + novoValorLiquido, // Atualiza o limite
+            valor_total_descontos: operacao.valor_total_descontos + totalDescontosAdicionais
+            // A linha incorreta de 'limite_utilizado' foi removida daqui
         })
         .eq("id", id);
 
