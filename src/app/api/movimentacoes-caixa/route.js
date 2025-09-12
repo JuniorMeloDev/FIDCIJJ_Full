@@ -12,13 +12,13 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
         
-        // --- CORREÇÃO FINAL AQUI: Usando a Foreign Key correta ('fk_movimentacao_caixa') ---
-        // Esta é a sintaxe exata para a junção reversa, especificando que na tabela 'duplicatas',
-        // a coluna 'fk_movimentacao_caixa' é a que se conecta ao 'id' da 'movimentacoes_caixa'.
+        // --- CORREÇÃO FINAL AQUI ---
+        // A sintaxe correta para a junção reversa é especificar a coluna na tabela `duplicatas` que referencia a `movimentacoes_caixa`.
+        // Com base em outros arquivos, a relação correta é `duplicatas_liquidacao_mov_id_fkey`.
         let query = supabase.from('movimentacoes_caixa').select(`
             *, 
             operacao:operacoes ( valor_liquido, cliente_id ),
-            duplicata:duplicatas!fk_movimentacao_caixa ( id, nf_cte )
+            duplicata:duplicatas!duplicatas_liquidacao_mov_id_fkey ( id, nf_cte )
         `);
 
         if (searchParams.get('dataInicio')) query = query.gte('data_movimento', searchParams.get('dataInicio'));
