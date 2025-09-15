@@ -66,6 +66,11 @@ export default function ConsultasPage() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
+  const showNotification = (message, type) => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification({ message: "", type: "" }), 5000);
+  };
+
   const fetchDuplicatas = async (currentFilters, currentSortConfig) => {
     setLoading(true);
     const params = new URLSearchParams();
@@ -232,11 +237,6 @@ export default function ConsultasPage() {
     });
   };
 
-  const showNotification = (message, type) => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification({ message: "", type: "" }), 5000);
-  };
-
   const handleAbrirModalLiquidacao = () => {
     let itemsParaLiquidar = [];
     if (isSelectionMode && selectedItems.size > 0) {
@@ -285,6 +285,7 @@ export default function ConsultasPage() {
     if (!contextMenu.selectedItem) return;
     setEstornoInfo({ id: contextMenu.selectedItem.id });
   };
+
   const confirmarEstorno = async () => {
     if (!estornoInfo) return;
     try {
@@ -342,7 +343,7 @@ export default function ConsultasPage() {
       setItemParaExcluir(null);
     }
   };
-
+  
   const handleAbrirEmailModal = () => {
     if (!contextMenu.selectedItem) return;
     setOperacaoParaEmail({
@@ -351,6 +352,7 @@ export default function ConsultasPage() {
     });
     setIsEmailModalOpen(true);
   };
+  
   const handleSendEmail = async (destinatarios) => {
     if (!operacaoParaEmail) return;
     setIsSendingEmail(true);
@@ -433,6 +435,53 @@ export default function ConsultasPage() {
       clearSelection();
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handleEmitirBoleto = async () => {
+    if (!contextMenu.selectedItem) return;
+
+    const duplicata = contextMenu.selectedItem;
+    showNotification(`A preparar dados do boleto para NF ${duplicata.nfCte}...`, 'info');
+
+    try {
+        // 1. Busca os dados formatados do nosso próprio backend
+        const dadosResponse = await fetch(`/api/dados-boleto/${duplicata.id}`, {
+            headers: getAuthHeader()
+        });
+        if (!dadosResponse.ok) {
+            const errorData = await dadosResponse.json();
+            throw new Error(errorData.message || "Não foi possível obter os dados para o boleto.");
+        }
+        const dadosParaBoleto = await dadosResponse.json();
+
+        // 2. Envia os dados para a API do Bradesco através da nossa outra rota
+        showNotification('A contactar o Bradesco para emitir o boleto...', 'info');
+        const bradescoResponse = await fetch('/api/bradesco/registrar-boleto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify(dadosParaBoleto),
+        });
+
+        if (!bradescoResponse.ok) {
+            const errorData = await bradescoResponse.json();
+            throw new Error(errorData.message || "Falha ao emitir o boleto no Bradesco.");
+        }
+
+        const boletoGerado = await bradescoResponse.json();
+        
+        // 3. Sucesso! Agora você pode usar os dados retornados para gerar o PDF
+        console.log('Boleto gerado:', boletoGerado);
+        showNotification('Boleto emitido com sucesso!', 'success');
+        
+        // Ação temporária para visualizar os dados
+        alert(`Boleto emitido!\nLinha Digitável: ${boletoGerado.linhaDigitavel}`);
+        
+        // PRÓXIMO PASSO: Chamar uma função que gera o PDF aqui.
+        // gerarPdfBoleto(boletoGerado);
+
+    } catch (err) {
+        showNotification(err.message, 'error');
     }
   };
 
@@ -673,7 +722,6 @@ export default function ConsultasPage() {
                               }`}
                             >
                               {formatDate(dup.dataVencimento)}
-                              {/* // --- CORREÇÃO PRINCIPAL AQUI --- // */}
                               {isLiquidado && dup.dataLiquidacao && (
                                 <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-900 bg-opacity-80 pointer-events-none transition-opacity duration-300">
                                   {dup.contaLiquidacao ? (
@@ -749,16 +797,28 @@ export default function ConsultasPage() {
                 Estornar Liquidação
               </a>
             ) : (
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleAbrirModalLiquidacao();
-                }}
-                className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-              >
-                Liquidar Duplicata
-              </a>
+              <>
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleAbrirModalLiquidacao();
+                  }}
+                  className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                >
+                  Liquidar Duplicata
+                </a>
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleEmitirBoleto();
+                  }}
+                  className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                >
+                  Emitir Boleto
+                </a>
+              </>
             )}
             <a
               href="#"
