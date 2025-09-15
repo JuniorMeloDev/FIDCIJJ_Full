@@ -4,13 +4,12 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// Função para formatar datas para o padrão YYYYMMDD
+// Funções auxiliares para formatação correta dos dados
 const formatDateToBradesco = (dateString) => {
     if (!dateString) return '';
     return new Date(dateString + 'T12:00:00Z').toISOString().slice(0, 10).replace(/-/g, '');
 };
 
-// Função para formatar valores para centavos como string
 const formatValueToBradesco = (value) => {
     if (typeof value !== 'number') return '0';
     return Math.round(value * 100).toString();
@@ -24,12 +23,12 @@ export async function GET(request, { params }) {
 
         const { id } = params;
 
+        // Busca todos os dados necessários do seu banco de dados
         const { data: duplicata, error: dupError } = await supabase
             .from('duplicatas')
             .select('*, operacao:operacoes(cliente_id)')
             .eq('id', id)
             .single();
-
         if (dupError) throw new Error('Duplicata não encontrada.');
 
         const { data: cedente, error: cedenteError } = await supabase
@@ -37,7 +36,6 @@ export async function GET(request, { params }) {
             .select('*, contas_bancarias(*)')
             .eq('id', duplicata.operacao.cliente_id)
             .single();
-
         if (cedenteError || !cedente || !cedente.contas_bancarias || cedente.contas_bancarias.length === 0) {
             throw new Error('Dados do cedente ou conta bancária não encontrados no cadastro do cliente.');
         }
@@ -52,23 +50,23 @@ export async function GET(request, { params }) {
             .eq('nome', duplicata.cliente_sacado)
             .limit(1)
             .single();
-        
         if (sacadoError || !sacado) {
             throw new Error(`Dados cadastrais do sacado "${duplicata.cliente_sacado}" não encontrados.`);
         }
 
-        const nuNegociacao = `${process.env.BRADESCO_CARTEIRA}${agenciaFormatada}${contaFormatada}`;
-        const nossoNumero = duplicata.id.toString().padStart(11, '0');
-
+        // --- CORREÇÃO FINAL: Montagem do payload completo ---
         const payload = {
-            "nuCPFCNPJ": cedente.cnpj.replace(/\D/g, ''),
+            // Campos do nível superior que estavam em falta
             "filialCPFCNPJ": process.env.BRADESCO_FILIAL_CNPJ,
             "ctrlCPFCNPJ": process.env.BRADESCO_CTRL_CNPJ,
             "codigoUsuarioSolicitante": process.env.BRADESCO_CODIGO_USUARIO,
+            
+            // Campos que já estavam corretos
+            "nuCPFCNPJ": cedente.cnpj.replace(/\D/g, ''),
             "registraTitulo": {
                 "idProduto": "9",
-                "nuNegociacao": nuNegociacao,
-                "nossoNumero": nossoNumero,
+                "nuNegociacao": `${process.env.BRADESCO_CARTEIRA}${agenciaFormatada}${contaFormatada}`,
+                "nossoNumero": duplicata.id.toString().padStart(11, '0'),
                 "dtEmissaoTitulo": formatDateToBradesco(duplicata.data_operacao),
                 "dtVencimentoTitulo": formatDateToBradesco(duplicata.data_vencimento),
                 "valorNominalTitulo": formatValueToBradesco(duplicata.valor_bruto),
@@ -83,7 +81,6 @@ export async function GET(request, { params }) {
                     "uf": sacado.uf || 'PE',
                 },
                 "especieTitulo": "DM",
-                // --- CAMPOS ADICIONADOS/CORRIGIDOS ---
                 "percentualJuros": "0",
                 "valorJuros": "0",
                 "qtdeDiasJuros": "0",
@@ -91,11 +88,11 @@ export async function GET(request, { params }) {
                 "valorMulta": "0",
                 "qtdeDiasMulta": "0"
             }
-            
         };
-        console.log("Payload montado a partir do Supabase:", JSON.stringify(payload, null, 2));
 
-        
+        // Log para confirmar que o payload agora está completo
+        console.log("Payload final montado:", JSON.stringify(payload, null, 2));
+
         return NextResponse.json(payload);
 
     } catch (error) {
