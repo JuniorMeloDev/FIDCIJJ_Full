@@ -96,6 +96,7 @@ export async function registrarBoleto(accessToken, dadosBoletoPayload) {
     "codigoUsuarioSolicitante": dadosBoletoPayload.codigoUsuarioSolicitante,
     "registraTitulo": dadosBoletoPayload.registraTitulo
   });
+  console.log("Payload final a ser enviado para o Bradesco:", payloadFinal);
 
   const options = {
     method: 'POST',
@@ -112,6 +113,8 @@ export async function registrarBoleto(accessToken, dadosBoletoPayload) {
       let data = '';
       res.on('data', (chunk) => data += chunk);
       res.on('end', () => {
+                console.log(`Resposta Bradesco (Status ${res.statusCode}):`, data);
+
         try {
           const jsonData = JSON.parse(data);
           if (res.statusCode >= 200 && res.statusCode < 300) {

@@ -10,6 +10,9 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Dados do boleto, incluindo pagador, são obrigatórios.' }, { status: 400 });
         }
 
+        console.log("Payload recebido do frontend para enviar ao Bradesco:", JSON.stringify(dadosBoleto, null, 2));
+
+
         // 1. Obtém um novo token de acesso
         const tokenData = await getBradescoAccessToken();
         const accessToken = tokenData.access_token;

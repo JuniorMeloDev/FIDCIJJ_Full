@@ -91,7 +91,10 @@ export async function GET(request, { params }) {
                 "valorMulta": "0",
                 "qtdeDiasMulta": "0"
             }
+            
         };
+        console.log("Payload montado a partir do Supabase:", JSON.stringify(payload, null, 2));
+
         
         return NextResponse.json(payload);
 
