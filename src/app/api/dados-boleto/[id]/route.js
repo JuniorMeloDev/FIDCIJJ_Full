@@ -1,4 +1,5 @@
-// src/app/api/dados-boleto/[id]/route.js
+// Substitua todo o conteúdo de: src/app/api/dados-boleto/[id]/route.js
+
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
@@ -9,9 +10,9 @@ export async function GET(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params;
+        const { id } = params; // ID da duplicata
 
-        // 1. Busca a duplicata e a operação associada para encontrar o cedente e o sacado
+        // 1. Busca a duplicata, cedente e sacado
         const { data: duplicata, error: dupError } = await supabase
             .from('duplicatas')
             .select('*, operacao:operacoes(cliente_id)')
@@ -20,54 +21,49 @@ export async function GET(request, { params }) {
 
         if (dupError) throw new Error('Duplicata não encontrada.');
 
-        // 2. Busca os dados completos do cedente (beneficiário) e sua conta bancária principal
         const { data: cedente, error: cedenteError } = await supabase
             .from('clientes')
-            .select('*, contas_bancarias(*)')
+            .select('*')
             .eq('id', duplicata.operacao.cliente_id)
             .single();
 
-        if (cedenteError || !cedente || cedente.contas_bancarias.length === 0) {
-            throw new Error('Dados do cedente ou conta bancária não encontrados.');
-        }
+        if (cedenteError) throw new Error('Dados do cedente não encontrados.');
 
-        // 3. Busca os dados completos do sacado (pagador)
         const { data: sacado, error: sacadoError } = await supabase
             .from('sacados')
             .select('*')
-            .eq('nome', duplicata.cliente_sacado) // Assumindo que o nome é único. O ideal seria ter o ID.
+            .eq('nome', duplicata.cliente_sacado)
             .single();
         
-        if (sacadoError || !sacado) {
-            throw new Error(`Dados cadastrais do sacado "${duplicata.cliente_sacado}" não encontrados.`);
-        }
+        if (sacadoError) throw new Error(`Dados cadastrais do sacado "${duplicata.cliente_sacado}" não encontrados.`);
 
-        // 4. Monta o payload do boleto com os dados reais do seu banco de dados
-        const dadosBoleto = {
-            beneficiario: {
-                agencia: cedente.contas_bancarias[0].agencia,
-                conta: cedente.contas_bancarias[0].conta_corrente,
-                nome: cedente.nome,
-                documento: cedente.cnpj
-            },
-            pagador: {
-                nome: sacado.nome,
-                documento: sacado.cnpj,
-                endereco: {
-                    logradouro: sacado.endereco,
-                    bairro: sacado.bairro,
-                    cidade: sacado.municipio,
-                    uf: sacado.uf,
-                    cep: sacado.cep
+        // 2. Monta o payload no formato EXATO do seu Postman
+        const payload = {
+            "nuCPFCNPJ": cedente.cnpj.replace(/\D/g, ''),
+            "filialCPFCNPJ": process.env.BRADESCO_FILIAL_CNPJ,
+            "ctrlCPFCNPJ": process.env.BRADESCO_CTRL_CNPJ,
+            "codigoUsuarioSolicitante": process.env.BRADESCO_CODIGO_USUARIO,
+            "registraTitulo": {
+                "idProduto": "9", // Fixo para cobrança
+                "nuNegociacao": process.env.BRADESCO_CONTRATO_COBRANCA, // Da sua carteira de cobrança
+                "nossoNumero": duplicata.id.toString().padStart(11, '0'),
+                "dtEmissaoTitulo": duplicata.data_operacao.replace(/-/g, ''), // Formato YYYYMMDD
+                "dtVencimentoTitulo": duplicata.data_vencimento.replace(/-/g, ''), // Formato YYYYMMDD
+                "valorNominalTitulo": duplicata.valor_bruto.toFixed(2).replace('.', ''), // Valor em centavos
+                "pagador": {
+                    "nuCPFCNPJ": sacado.cnpj.replace(/\D/g, ''),
+                    "nome": sacado.nome.substring(0, 40), // Limite de 40 caracteres
+                    "logradouro": sacado.endereco.substring(0, 40),
+                    "nuLogradouro": "0", // Ajuste se tiver o número separado
+                    "bairro": sacado.bairro.substring(0, 15),
+                    "cep": sacado.cep.replace(/\D/g, ''),
+                    "cidade": sacado.municipio.substring(0, 15),
+                    "uf": sacado.uf,
                 }
-            },
-            nossoNumero: duplicata.id.toString().padStart(11, '0'),
-            valor: duplicata.valor_bruto,
-            dataVencimento: duplicata.data_vencimento,
-            instrucoes: [`Referente a NF ${duplicata.nf_cte}`]
+            }
         };
 
-        return NextResponse.json(dadosBoleto);
+        return NextResponse.json(payload);
 
     } catch (error) {
         return NextResponse.json({ message: error.message }, { status: 500 });

@@ -147,7 +147,7 @@ export async function registrarBoleto(accessToken, dadosBoleto) {
     key: privateKey,
   });
 
-  const apiEndpoint = 'https://openapisandbox.prebanco.com.br/v1/boleto/registros';
+  const apiEndpoint = 'https://openapisandbox.prebanco.com.br/boleto/cobranca-registro/v1/cobranca';
   const payload = JSON.stringify(dadosBoleto);
 
   const options = {
