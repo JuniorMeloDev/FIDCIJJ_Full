@@ -7,13 +7,13 @@ import jwt from 'jsonwebtoken';
 // Funções auxiliares para formatação correta dos dados
 const formatDateToBradesco = (dateString) => {
     if (!dateString) return '';
+    // Garante que a data está em UTC para evitar problemas de fuso horário
     return new Date(dateString + 'T12:00:00Z').toISOString().slice(0, 10).replace(/-/g, '');
 };
 
 const formatValueToBradesco = (value) => {
-    if (typeof value !== 'number') return '0';
+    if (typeof value !== 'number') return 0;
     return Math.round(value * 100);
-
 };
 
 export async function GET(request, { params }) {
@@ -54,16 +54,19 @@ export async function GET(request, { params }) {
         if (sacadoError || !sacado) {
             throw new Error(`Dados cadastrais do sacado "${duplicata.cliente_sacado}" não encontrados.`);
         }
+        
+        const cedenteCnpjLimpo = cedente.cnpj.replace(/\D/g, '');
 
         // --- CORREÇÃO FINAL: Montagem do payload completo ---
         const payload = {
-            // Campos do nível superior que estavam em falta
             "filialCPFCNPJ": process.env.BRADESCO_FILIAL_CNPJ,
             "ctrlCPFCNPJ": process.env.BRADESCO_CTRL_CNPJ,
             "codigoUsuarioSolicitante": process.env.BRADESCO_CODIGO_USUARIO,
             
-            // Campos que já estavam corretos
-            "nuCPFCNPJ": cedente.cnpj.replace(/\D/g, ''),
+            // *** CORREÇÃO APLICADA AQUI ***
+            // Garante que o campo nuCPFCNPJ envie apenas a raiz do CNPJ (8 dígitos)
+            "nuCPFCNPJ": cedenteCnpjLimpo.substring(0, 8),
+
             "registraTitulo": {
                 "idProduto": "9",
                 "nuNegociacao": `${process.env.BRADESCO_CARTEIRA}${agenciaFormatada}${contaFormatada}`,
@@ -90,9 +93,6 @@ export async function GET(request, { params }) {
                 "qtdeDiasMulta": "0"
             }
         };
-
-        // Log para confirmar que o payload agora está completo
-        console.log("Payload final montado:", JSON.stringify(payload, null, 2));
 
         return NextResponse.json(payload);
 
