@@ -1,26 +1,28 @@
-// Substitua todo o conteúdo de: src/app/lib/bradescoService.js
 import https from 'https';
+import fs from 'fs';
 
-// ... (A função getBradescoAccessToken permanece exatamente igual) ...
+/**
+ * Obtém o token de acesso
+ */
 export async function getBradescoAccessToken() {
   const clientId = process.env.BRADESCO_CLIENT_ID;
   const clientSecret = process.env.BRADESCO_CLIENT_SECRET;
-  const certificate = process.env.BRADESCO_PUBLIC_CERT;
-  const privateKey = process.env.BRADESCO_PRIVATE_KEY;
+  const certPath = process.env.BRADESCO_CERT_PATH;      // caminho do .pem
+  const keyPath  = process.env.BRADESCO_KEY_PATH;       // caminho do .key
 
-  if (!clientId || !clientSecret || !certificate || !privateKey) {
+  if (!clientId || !clientSecret || !certPath || !keyPath) {
     throw new Error('Variáveis de ambiente do Bradesco não configuradas corretamente.');
   }
 
   const agent = new https.Agent({
-    cert: certificate,
-    key: privateKey,
+    cert: fs.readFileSync(certPath),
+    key:  fs.readFileSync(keyPath),
+    servername: 'openapisandbox.prebanco.com.br',
+    rejectUnauthorized: true
   });
 
   const tokenEndpoint = 'https://openapisandbox.prebanco.com.br/auth/server/oauth/token';
-  const postData = new URLSearchParams({
-    'grant_type': 'client_credentials'
-  }).toString();
+  const postData = new URLSearchParams({ grant_type: 'client_credentials' }).toString();
 
   const options = {
     method: 'POST',
@@ -28,109 +30,92 @@ export async function getBradescoAccessToken() {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
     },
-    agent: agent
+    agent
   };
 
   return new Promise((resolve, reject) => {
-    const req = https.request(tokenEndpoint, options, (res) => {
+    const req = https.request(tokenEndpoint, options, res => {
       let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
+      res.on('data', c => data += c);
       res.on('end', () => {
         try {
-          const jsonData = JSON.parse(data);
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(jsonData);
-          } else {
-            const errorMessage = jsonData.error_description || jsonData.error || `Erro ${res.statusCode}: ${data}`;
-            reject(new Error(errorMessage));
-          }
-        } catch (e) {
+          const json = JSON.parse(data);
+          if (res.statusCode >= 200 && res.statusCode < 300) resolve(json);
+          else reject(new Error(json.error_description || data));
+        } catch {
           reject(new Error(`Falha ao processar resposta do servidor: ${data}`));
         }
       });
     });
-
-    req.on('error', (e) => {
-      reject(new Error(`Erro na requisição: ${e.message}`));
-    });
-
+    req.on('error', e => reject(new Error(`Erro na requisição: ${e.message}`)));
     req.write(postData);
     req.end();
   });
 }
 
-
-// ... (A função validarBoletoBradesco pode ser mantida ou removida se não a for usar) ...
-
-
 /**
- * Registra um novo boleto na API de Cobrança do Bradesco.
- * @param {string} accessToken - O token de acesso obtido previamente.
- * @param {object} dadosBoletoPayload - O payload completo vindo da nossa API /dados-boleto.
- * @returns {Promise<object>} Uma promessa que resolve com a resposta do registro do boleto.
+ * Registro de boleto
  */
-export async function registrarBoleto(accessToken, dadosBoletoPayload) {
-  const certificate = process.env.BRADESCO_PUBLIC_CERT;
-  const privateKey = process.env.BRADESCO_PRIVATE_KEY;
-
-  if (!certificate || !privateKey) {
-    throw new Error('Variáveis de ambiente dos certificados não encontradas.');
-  }
+export async function registrarBoleto(accessToken, payload) {
+  const certPath = process.env.BRADESCO_CERT_PATH;
+  const keyPath  = process.env.BRADESCO_KEY_PATH;
 
   const agent = new https.Agent({
-    cert: certificate,
-    key: privateKey,
+    cert: fs.readFileSync(certPath),
+    key:  fs.readFileSync(keyPath),
+    servername: 'openapisandbox.prebanco.com.br',
+    rejectUnauthorized: true
   });
 
-  const apiEndpoint = 'https://openapisandbox.prebanco.com.br/boleto/cobranca-registro/v1/cobranca';
-  
-  // --- CORREÇÃO PRINCIPAL AQUI ---
-  // Reconstruímos o payload para garantir que a estrutura enviada ao Bradesco
-  // seja exatamente a que funcionou no Postman.
-  const payloadFinal = JSON.stringify({
-    "nuCPFCNPJ": dadosBoletoPayload.nuCPFCNPJ,
-    "filialCPFCNPJ": dadosBoletoPayload.filialCPFCNPJ,
-    "ctrlCPFCNPJ": dadosBoletoPayload.ctrlCPFCNPJ,
-    "codigoUsuarioSolicitante": dadosBoletoPayload.codigoUsuarioSolicitante,
-    "registraTitulo": dadosBoletoPayload.registraTitulo
+  // ✅ Monta o payload final garantindo números
+  const body = JSON.stringify({
+    nuCPFCNPJ: payload.nuCPFCNPJ,
+    filialCPFCNPJ: payload.filialCPFCNPJ,
+    ctrlCPFCNPJ: payload.ctrlCPFCNPJ,
+    codigoUsuarioSolicitante: payload.codigoUsuarioSolicitante,
+    registraTitulo: {
+      ...payload.registraTitulo,
+      valorNominalTitulo: Number(payload.registraTitulo.valorNominalTitulo),
+      percentualJuros: Number(payload.registraTitulo.percentualJuros),
+      valorJuros: Number(payload.registraTitulo.valorJuros),
+      qtdeDiasJuros: Number(payload.registraTitulo.qtdeDiasJuros),
+      percentualMulta: Number(payload.registraTitulo.percentualMulta),
+      valorMulta: Number(payload.registraTitulo.valorMulta),
+      qtdeDiasMulta: Number(payload.registraTitulo.qtdeDiasMulta)
+    }
   });
-  console.log("Payload final a ser enviado para o Bradesco:", payloadFinal);
+
+  console.log('Payload final enviado ao Bradesco:', body);
 
   const options = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${accessToken}`,
-      'Content-Length': Buffer.byteLength(payloadFinal)
+      'Content-Length': Buffer.byteLength(body)
     },
-    agent: agent
+    agent
   };
 
-  return new Promise((resolve, reject) => {
-    const req = https.request(apiEndpoint, options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => data += chunk);
-      res.on('end', () => {
-                console.log(`Resposta Bradesco (Status ${res.statusCode}):`, data);
+  const apiEndpoint = 'https://openapisandbox.prebanco.com.br/boleto/cobranca-registro/v1/cobranca';
 
+  return new Promise((resolve, reject) => {
+    const req = https.request(apiEndpoint, options, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        console.log(`Resposta Bradesco (Status ${res.statusCode}):`, data);
         try {
-          const jsonData = JSON.parse(data);
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(jsonData);
-          } else {
-            const errorDetails = jsonData.erros ? JSON.stringify(jsonData.erros) : data;
-            reject(new Error(`Erro ${res.statusCode}: ${errorDetails}`));
-          }
-        } catch (e) {
+          const json = JSON.parse(data);
+          if (res.statusCode >= 200 && res.statusCode < 300) resolve(json);
+          else reject(new Error(`Erro ${res.statusCode}: ${data}`));
+        } catch {
           reject(new Error(`Falha ao processar resposta do Bradesco: ${data}`));
         }
       });
     });
-
-    req.on('error', (e) => reject(new Error(`Erro na requisição: ${e.message}`)));
-    req.write(payloadFinal);
+    req.on('error', e => reject(new Error(`Erro na requisição: ${e.message}`)));
+    req.write(body);
     req.end();
   });
 }
