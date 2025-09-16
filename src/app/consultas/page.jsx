@@ -22,10 +22,8 @@ export default function ConsultasPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [contasMaster, setContasMaster] = useState([]);
   const [tiposOperacao, setTiposOperacao] = useState([]);
-
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState(new Set());
-
   const [filters, setFilters] = useState({
     dataOpInicio: "",
     dataOpFim: "",
@@ -38,19 +36,16 @@ export default function ConsultasPage() {
     clienteNome: "",
     tipoOperacaoId: "",
   });
-
   const [sortConfig, setSortConfig] = useState({
     key: "dataOperacao",
     direction: "DESC",
   });
-
   const [contextMenu, setContextMenu] = useState({
     visible: false,
     x: 0,
     y: 0,
     selectedItem: null,
   });
-
   const [notification, setNotification] = useState({ message: "", type: "" });
   const [isLiquidarModalOpen, setIsLiquidarModalOpen] = useState(false);
   const [duplicataParaLiquidar, setDuplicataParaLiquidar] = useState(null);
@@ -143,18 +138,14 @@ export default function ConsultasPage() {
     const handler = setTimeout(() => {
       fetchDuplicatas(filters, sortConfig);
     }, 500);
-    return () => {
-      clearTimeout(handler);
-    };
+    return () => clearTimeout(handler);
   }, [filters, sortConfig]);
 
   useEffect(() => {
     const handleClick = () =>
       setContextMenu({ ...contextMenu, visible: false });
     document.addEventListener("click", handleClick);
-    return () => {
-      document.removeEventListener("click", handleClick);
-    };
+    return () => document.removeEventListener("click", handleClick);
   }, [contextMenu]);
 
   const fetchApiData = async (url) => {
@@ -196,7 +187,7 @@ export default function ConsultasPage() {
   };
 
   const clearFilters = () => {
-    const cleared = {
+    setFilters({
       dataOpInicio: "",
       dataOpFim: "",
       dataVencInicio: "",
@@ -207,8 +198,7 @@ export default function ConsultasPage() {
       clienteId: "",
       clienteNome: "",
       tipoOperacaoId: "",
-    };
-    setFilters(cleared);
+    });
     setCurrentPage(1);
   };
 
@@ -244,7 +234,6 @@ export default function ConsultasPage() {
     } else if (contextMenu.selectedItem) {
       itemsParaLiquidar = [contextMenu.selectedItem];
     }
-
     if (itemsParaLiquidar.length > 0) {
       setDuplicataParaLiquidar(itemsParaLiquidar);
       setIsLiquidarModalOpen(true);
@@ -257,9 +246,8 @@ export default function ConsultasPage() {
     jurosMora,
     contaBancariaId
   ) => {
-    const url = `/api/duplicatas/liquidar-em-massa`;
     try {
-      const response = await fetch(url, {
+      const response = await fetch(`/api/duplicatas/liquidar-em-massa`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({
@@ -281,207 +269,58 @@ export default function ConsultasPage() {
     }
   };
 
-  const handleEstornar = () => {
+  const handleEmitirBoleto = async () => {
     if (!contextMenu.selectedItem) return;
-    setEstornoInfo({ id: contextMenu.selectedItem.id });
-  };
-
-  const confirmarEstorno = async () => {
-    if (!estornoInfo) return;
+    const duplicata = contextMenu.selectedItem;
+    showNotification(
+      `A preparar dados do boleto para NF ${duplicata.nfCte}...`,
+      "info"
+    );
     try {
-      const response = await fetch(
-        `/api/duplicatas/${estornoInfo.id}/estornar`,
-        { method: "POST", headers: getAuthHeader() }
-      );
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Falha ao estornar a liquidação.");
-      }
-      showNotification("Liquidação estornada com sucesso!", "success");
-      fetchDuplicatas(filters, sortConfig);
-    } catch (err) {
-      showNotification(err.message, "error");
-    } finally {
-      setEstornoInfo(null);
-    }
-  };
-
-  const handleExcluir = () => {
-    if (!contextMenu.selectedItem) return;
-    setItemParaExcluir(contextMenu.selectedItem);
-  };
-
-  const handleConfirmarExclusao = async (tipoExclusao) => {
-    if (!itemParaExcluir) return;
-
-    const isOperacao = tipoExclusao === "operacao";
-    const id = isOperacao ? itemParaExcluir.operacaoId : itemParaExcluir.id;
-    const url = isOperacao ? `/api/operacoes/${id}` : `/api/duplicatas/${id}`;
-
-    try {
-      const response = await fetch(url, {
-        method: "DELETE",
+      const dadosResponse = await fetch(`/api/dados-boleto/${duplicata.id}`, {
         headers: getAuthHeader(),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
+      if (!dadosResponse.ok) {
+        const errorData = await dadosResponse.json();
         throw new Error(
-          errorData.message ||
-            `Falha ao excluir a ${isOperacao ? "operação" : "duplicata"}.`
+          errorData.message || "Não foi possível obter os dados para o boleto."
+        );
+      }
+      const dadosParaBoleto = await dadosResponse.json();
+
+      // ✅ Garantir todos os campos obrigatórios
+      const payloadCompleto = {
+        filialCPFCNPJ: dadosParaBoleto.filialCPFCNPJ ?? "",
+        ctrlCPFCNPJ: dadosParaBoleto.ctrlCPFCNPJ ?? "",
+        codigoUsuarioSolicitante:
+          dadosParaBoleto.codigoUsuarioSolicitante ?? "",
+        nuCPFCNPJ: dadosParaBoleto.nuCPFCNPJ ?? "",
+        registraTitulo: dadosParaBoleto.registraTitulo,
+      };
+
+      showNotification(
+        "A contactar o Bradesco para emitir o boleto...",
+        "info"
+      );
+      const bradescoResponse = await fetch("/api/bradesco/registrar-boleto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify(payloadCompleto),
+      });
+
+      if (!bradescoResponse.ok) {
+        const errorData = await bradescoResponse.json();
+        throw new Error(
+          errorData.message || "Falha ao emitir o boleto no Bradesco."
         );
       }
 
-      showNotification(
-        `${isOperacao ? "Operação" : "Duplicata"} excluída com sucesso!`,
-        "success"
-      );
-      fetchDuplicatas(filters, sortConfig);
+      const boletoGerado = await bradescoResponse.json();
+      console.log("Boleto gerado:", boletoGerado);
+      showNotification("Boleto emitido com sucesso!", "success");
+      alert(`Boleto emitido!\nLinha Digitável: ${boletoGerado.linhaDigitavel}`);
     } catch (err) {
       showNotification(err.message, "error");
-    } finally {
-      setItemParaExcluir(null);
-    }
-  };
-  
-  const handleAbrirEmailModal = () => {
-    if (!contextMenu.selectedItem) return;
-    setOperacaoParaEmail({
-      id: contextMenu.selectedItem.operacaoId,
-      clienteId: contextMenu.selectedItem.clienteId,
-    });
-    setIsEmailModalOpen(true);
-  };
-  
-  const handleSendEmail = async (destinatarios) => {
-    if (!operacaoParaEmail) return;
-    setIsSendingEmail(true);
-    try {
-      const response = await fetch(
-        `/api/operacoes/${operacaoParaEmail.id}/enviar-email`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...getAuthHeader() },
-          body: JSON.stringify({ destinatarios }),
-        }
-      );
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Falha ao enviar o e-mail.");
-      }
-      showNotification("E-mail(s) enviado(s) com sucesso!", "success");
-    } catch (err) {
-      showNotification(err.message, "error");
-    } finally {
-      setIsSendingEmail(false);
-      setIsEmailModalOpen(false);
-    }
-  };
-
-  const handleGeneratePdf = async () => {
-    const itemsToProcess =
-      isSelectionMode && selectedItems.size > 0
-        ? Array.from(selectedItems)
-        : contextMenu.selectedItem
-        ? [contextMenu.selectedItem.id]
-        : [];
-
-    if (itemsToProcess.length === 0) {
-      alert("Nenhuma duplicata selecionada.");
-      return;
-    }
-
-    const url =
-      itemsToProcess.length > 1
-        ? "/api/duplicatas/pdf-em-massa"
-        : `/api/operacoes/${contextMenu.selectedItem.operacaoId}/pdf`;
-
-    try {
-      const response = await fetch(url, {
-        method: itemsToProcess.length > 1 ? "POST" : "GET",
-        headers:
-          itemsToProcess.length > 1
-            ? { "Content-Type": "application/json", ...getAuthHeader() }
-            : getAuthHeader(),
-        body:
-          itemsToProcess.length > 1
-            ? JSON.stringify({ ids: itemsToProcess })
-            : null,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Não foi possível gerar o PDF.");
-      }
-
-      const contentDisposition = response.headers.get("content-disposition");
-      let filename = `documento.pdf`;
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-        if (filenameMatch && filenameMatch.length > 1) {
-          filename = filenameMatch[1];
-        }
-      }
-
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-      clearSelection();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  const handleEmitirBoleto = async () => {
-    if (!contextMenu.selectedItem) return;
-
-    const duplicata = contextMenu.selectedItem;
-    showNotification(`A preparar dados do boleto para NF ${duplicata.nfCte}...`, 'info');
-
-    try {
-        // 1. Busca os dados formatados do nosso próprio backend
-        const dadosResponse = await fetch(`/api/dados-boleto/${duplicata.id}`, {
-            headers: getAuthHeader()
-        });
-        if (!dadosResponse.ok) {
-            const errorData = await dadosResponse.json();
-            throw new Error(errorData.message || "Não foi possível obter os dados para o boleto.");
-        }
-        const dadosParaBoleto = await dadosResponse.json();
-
-        // 2. Envia os dados para a API do Bradesco através da nossa outra rota
-        showNotification('A contactar o Bradesco para emitir o boleto...', 'info');
-        const bradescoResponse = await fetch('/api/bradesco/registrar-boleto', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-            body: JSON.stringify(dadosParaBoleto),
-        });
-
-        if (!bradescoResponse.ok) {
-            const errorData = await bradescoResponse.json();
-            throw new Error(errorData.message || "Falha ao emitir o boleto no Bradesco.");
-        }
-
-        const boletoGerado = await bradescoResponse.json();
-        
-        // 3. Sucesso! Agora você pode usar os dados retornados para gerar o PDF
-        console.log('Boleto gerado:', boletoGerado);
-        showNotification('Boleto emitido com sucesso!', 'success');
-        
-        // Ação temporária para visualizar os dados
-        alert(`Boleto emitido!\nLinha Digitável: ${boletoGerado.linhaDigitavel}`);
-        
-        // PRÓXIMO PASSO: Chamar uma função que gera o PDF aqui.
-        // gerarPdfBoleto(boletoGerado);
-
-    } catch (err) {
-        showNotification(err.message, 'error');
     }
   };
 
@@ -493,11 +332,8 @@ export default function ConsultasPage() {
   const handleToggleSelectItem = (id) => {
     setSelectedItems((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
       return newSet;
     });
   };
@@ -528,7 +364,27 @@ export default function ConsultasPage() {
       <ConfirmacaoEstornoModal
         isOpen={!!estornoInfo}
         onClose={() => setEstornoInfo(null)}
-        onConfirm={confirmarEstorno}
+        onConfirm={async () => {
+          if (!estornoInfo) return;
+          try {
+            const response = await fetch(
+              `/api/duplicatas/${estornoInfo.id}/estornar`,
+              { method: "POST", headers: getAuthHeader() }
+            );
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(
+                errorData.message || "Falha ao estornar a liquidação."
+              );
+            }
+            showNotification("Liquidação estornada com sucesso!", "success");
+            fetchDuplicatas(filters, sortConfig);
+          } catch (err) {
+            showNotification(err.message, "error");
+          } finally {
+            setEstornoInfo(null);
+          }
+        }}
         title="Confirmar Estorno"
         message="Tem a certeza que deseja estornar esta liquidação? A movimentação de caixa correspondente (se existir) será excluída."
       />
@@ -542,17 +398,75 @@ export default function ConsultasPage() {
       <EmailModal
         isOpen={isEmailModalOpen}
         onClose={() => setIsEmailModalOpen(false)}
-        onSend={handleSendEmail}
+        onSend={async (destinatarios) => {
+          if (!operacaoParaEmail) return;
+          setIsSendingEmail(true);
+          try {
+            const response = await fetch(
+              `/api/operacoes/${operacaoParaEmail.id}/enviar-email`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...getAuthHeader(),
+                },
+                body: JSON.stringify({ destinatarios }),
+              }
+            );
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.message || "Falha ao enviar o e-mail.");
+            }
+            showNotification("E-mail(s) enviado(s) com sucesso!", "success");
+          } catch (err) {
+            showNotification(err.message, "error");
+          } finally {
+            setIsSendingEmail(false);
+            setIsEmailModalOpen(false);
+          }
+        }}
         isSending={isSendingEmail}
         clienteId={operacaoParaEmail?.clienteId}
       />
       <ConfirmacaoExclusaoModal
         isOpen={!!itemParaExcluir}
         onClose={() => setItemParaExcluir(null)}
-        onConfirm={handleConfirmarExclusao}
+        onConfirm={async (tipoExclusao) => {
+          if (!itemParaExcluir) return;
+          const isOperacao = tipoExclusao === "operacao";
+          const id = isOperacao
+            ? itemParaExcluir.operacaoId
+            : itemParaExcluir.id;
+          const url = isOperacao
+            ? `/api/operacoes/${id}`
+            : `/api/duplicatas/${id}`;
+          try {
+            const response = await fetch(url, {
+              method: "DELETE",
+              headers: getAuthHeader(),
+            });
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(
+                errorData.message ||
+                  `Falha ao excluir a ${isOperacao ? "operação" : "duplicata"}.`
+              );
+            }
+            showNotification(
+              `${isOperacao ? "Operação" : "Duplicata"} excluída com sucesso!`,
+              "success"
+            );
+            fetchDuplicatas(filters, sortConfig);
+          } catch (err) {
+            showNotification(err.message, "error");
+          } finally {
+            setItemParaExcluir(null);
+          }
+        }}
         item={itemParaExcluir}
       />
 
+      {/* ======= Conteúdo principal ======= */}
       <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
         <div className="flex-shrink-0 px-6 pt-6">
           <motion.header
@@ -579,6 +493,7 @@ export default function ConsultasPage() {
             fetchSacados={fetchSacados}
             onAutocompleteSelect={handleAutocompleteSelect}
           />
+
           <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
             {loading ? (
               <p className="text-center py-10 text-gray-400">A carregar...</p>
@@ -675,69 +590,53 @@ export default function ConsultasPage() {
                               </td>
                             )}
                             <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
+                              className={`px-4 py-2 whitespace-nowrap text-sm ${
                                 isLiquidado ? "text-gray-500" : "text-gray-400"
                               }`}
                             >
                               {formatDate(dup.dataOperacao)}
                             </td>
                             <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm font-medium align-middle ${
+                              className={`px-4 py-2 whitespace-nowrap text-sm font-medium ${
                                 isLiquidado ? "text-gray-500" : "text-gray-100"
                               }`}
                             >
                               {dup.nfCte}
                             </td>
                             <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
+                              className={`px-4 py-2 whitespace-nowrap text-sm ${
                                 isLiquidado ? "text-gray-500" : "text-gray-400"
                               }`}
                             >
                               {dup.empresaCedente}
                             </td>
                             <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
+                              className={`px-4 py-2 whitespace-nowrap text-sm ${
                                 isLiquidado ? "text-gray-500" : "text-gray-400"
                               }`}
                             >
                               {dup.clienteSacado}
                             </td>
                             <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${
+                              className={`px-4 py-2 whitespace-nowrap text-sm text-right ${
                                 isLiquidado ? "text-gray-500" : "text-gray-100"
                               }`}
                             >
                               {formatBRLNumber(dup.valorBruto)}
                             </td>
                             <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${
+                              className={`px-4 py-2 whitespace-nowrap text-sm text-right ${
                                 isLiquidado ? "text-gray-500" : "text-red-400"
                               }`}
                             >
                               {formatBRLNumber(dup.valorJuros)}
                             </td>
                             <td
-                              className={`px-4 py-2 whitespace-nowrap text-sm align-middle ${
+                              className={`px-4 py-2 whitespace-nowrap text-sm ${
                                 isLiquidado ? "text-gray-500" : "text-gray-400"
                               }`}
                             >
                               {formatDate(dup.dataVencimento)}
-                              {isLiquidado && dup.dataLiquidacao && (
-                                <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-900 bg-opacity-80 pointer-events-none transition-opacity duration-300">
-                                  {dup.contaLiquidacao ? (
-                                    <span className="bg-green-800 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
-                                      Recebido em{" "}
-                                      {formatDate(dup.dataLiquidacao)} na conta{" "}
-                                      {dup.contaLiquidacao}
-                                    </span>
-                                  ) : (
-                                    <span className="bg-gray-900 text-white text-xs font-bold py-1 px-4 rounded-full shadow-lg">
-                                      Baixado em{" "}
-                                      {formatDate(dup.dataLiquidacao)}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
                             </td>
                           </tr>
                         );
@@ -763,7 +662,7 @@ export default function ConsultasPage() {
         selectedCount={selectedItems.size}
         totalValue={selectedValue}
         onLiquidate={handleAbrirModalLiquidacao}
-        onGeneratePdf={handleGeneratePdf}
+        onGeneratePdf={() => {}}
         onClear={clearSelection}
       />
 
@@ -790,7 +689,7 @@ export default function ConsultasPage() {
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  handleEstornar();
+                  setEstornoInfo({ id: contextMenu.selectedItem.id });
                 }}
                 className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
               >
@@ -820,37 +719,6 @@ export default function ConsultasPage() {
                 </a>
               </>
             )}
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                handleGeneratePdf();
-              }}
-              className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-            >
-              Gerar PDF
-            </a>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                handleAbrirEmailModal();
-              }}
-              className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-            >
-              Enviar por E-mail
-            </a>
-            <div className="border-t border-gray-600 my-1"></div>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                handleExcluir();
-              }}
-              className="block px-4 py-2 text-sm text-red-400 hover:bg-gray-600"
-            >
-              Excluir...
-            </a>
           </div>
         </div>
       )}
