@@ -12,7 +12,8 @@ const formatDateToBradesco = (dateString) => {
 
 const formatValueToBradesco = (value) => {
     if (typeof value !== 'number') return '0';
-    return Math.round(value * 100).toString();
+    return Math.round(value * 100);
+
 };
 
 export async function GET(request, { params }) {
