@@ -4,10 +4,8 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// Funções auxiliares para formatação correta dos dados
 const formatDateToBradesco = (dateString) => {
     if (!dateString) return '';
-    // Garante que a data está em UTC para evitar problemas de fuso horário
     return new Date(dateString + 'T12:00:00Z').toISOString().slice(0, 10).replace(/-/g, '');
 };
 
@@ -24,7 +22,6 @@ export async function GET(request, { params }) {
 
         const { id } = params;
 
-        // Busca todos os dados necessários do seu banco de dados
         const { data: duplicata, error: dupError } = await supabase
             .from('duplicatas')
             .select('*, operacao:operacoes(cliente_id)')
@@ -34,16 +31,12 @@ export async function GET(request, { params }) {
 
         const { data: cedente, error: cedenteError } = await supabase
             .from('clientes')
-            .select('*, contas_bancarias(*)')
+            .select('*')
             .eq('id', duplicata.operacao.cliente_id)
             .single();
-        if (cedenteError || !cedente || !cedente.contas_bancarias || cedente.contas_bancarias.length === 0) {
-            throw new Error('Dados do cedente ou conta bancária não encontrados no cadastro do cliente.');
+        if (cedenteError) {
+            throw new Error('Dados do cedente não encontrados.');
         }
-        
-        const contaPrincipal = cedente.contas_bancarias[0];
-        const agenciaFormatada = contaPrincipal.agencia.replace(/\D/g, '').padStart(5, '0');
-        const contaFormatada = contaPrincipal.conta_corrente.replace(/\D/g, '').padStart(8, '0');
 
         const { data: sacado, error: sacadoError } = await supabase
             .from('sacados')
@@ -56,20 +49,21 @@ export async function GET(request, { params }) {
         }
         
         const cedenteCnpjLimpo = cedente.cnpj.replace(/\D/g, '');
-
-        // --- CORREÇÃO FINAL: Montagem do payload completo ---
+        
+        // --- CORREÇÃO FINAL APLICADA AQUI ---
+        // Monta o nuNegociacao com base nos seus dados reais do boleto
+        const agenciaFormatada = process.env.BRADESCO_AGENCIA.padStart(5, '0');
+        const contaFormatada = process.env.BRADESCO_CONTA.padStart(7, '0');
+        const nuNegociacao = `${process.env.BRADESCO_CARTEIRA.padStart(3, '0')}${agenciaFormatada}${contaFormatada}${process.env.BRADESCO_CONTA_DV}`;
+        
         const payload = {
             "filialCPFCNPJ": process.env.BRADESCO_FILIAL_CNPJ,
             "ctrlCPFCNPJ": process.env.BRADESCO_CTRL_CNPJ,
             "codigoUsuarioSolicitante": process.env.BRADESCO_CODIGO_USUARIO,
-            
-            // *** CORREÇÃO APLICADA AQUI ***
-            // Garante que o campo nuCPFCNPJ envie apenas a raiz do CNPJ (8 dígitos)
             "nuCPFCNPJ": cedenteCnpjLimpo.substring(0, 8),
-
             "registraTitulo": {
                 "idProduto": "9",
-                "nuNegociacao": `${process.env.BRADESCO_CARTEIRA}${agenciaFormatada}${contaFormatada}`,
+                "nuNegociacao": nuNegociacao,
                 "nossoNumero": duplicata.id.toString().padStart(11, '0'),
                 "dtEmissaoTitulo": formatDateToBradesco(duplicata.data_operacao),
                 "dtVencimentoTitulo": formatDateToBradesco(duplicata.data_vencimento),
