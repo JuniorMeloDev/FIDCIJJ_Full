@@ -10,9 +10,11 @@ export async function POST(request) {
 
         const body = await request.json();
 
-        const valorTotalBruto = body.notasFiscais.reduce((acc, nf) => acc + nf.valorNf, 0);
-        const valorTotalJuros = body.notasFiscais.reduce((acc, nf) => acc + nf.jurosCalculado, 0);
-        const valorTotalDescontos = body.descontos.reduce((acc, d) => acc + d.valor, 0);
+        // Utiliza os valores pré-calculados enviados pelo frontend
+        const { totais } = body;
+        const valorTotalBruto = totais.valorTotalBruto;
+        const valorTotalJuros = totais.valorTotalJuros;
+        const valorTotalDescontos = totais.valorTotalDescontos;
 
         const duplicatasParaSalvar = body.notasFiscais.flatMap(nf => {
             const isCteSingleParcela = body.cedenteRamo === 'Transportes' && nf.parcelasCalculadas.length === 1;
@@ -42,8 +44,7 @@ export async function POST(request) {
 
         if (rpcError) throw rpcError;
 
-        // CORREÇÃO: Após criar a operação, define seu status como 'Aprovada'
-        // pois foi criada por um administrador e não precisa de análise.
+        // Após criar a operação, define seu status como 'Aprovada'
         const { error: updateError } = await supabase
             .from('operacoes')
             .update({ status: 'Aprovada' })
@@ -51,7 +52,6 @@ export async function POST(request) {
 
         if (updateError) {
             console.error('Falha ao atualizar status da operação criada pelo admin:', updateError);
-            // Mesmo com este erro, a operação foi criada. Lançar erro para alertar sobre a inconsistência.
             throw new Error('Operação salva, mas falha ao definir o status como Aprovada.');
         }
 

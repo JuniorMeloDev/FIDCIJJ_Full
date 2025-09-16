@@ -373,11 +373,17 @@ export default function OperacaoBorderoPage() {
       tipoOperacaoId: parseInt(tipoOperacaoId),
       clienteId: empresaCedenteId,
       contaBancariaId: parseInt(contaBancariaId),
+      totais: {
+        valorTotalBruto: totais.valorTotalBruto,
+        valorTotalJuros: totais.desagioTotal,
+        valorTotalDescontos: totais.totalOutrosDescontos,
+        valorLiquidoFinal: totais.liquidoOperacao,
+      },
       descontos: todosOsDescontos.map(({ id, ...rest }) => rest),
       notasFiscais: notasFiscais.map((nf) => ({
         ...nf,
         peso: parseFloat(String(nf.peso).replace(",", ".")) || null,
-        jurosCalculado: jurosPre ? nf.jurosCalculado : 0,
+        jurosCalculado: nf.jurosCalculado,
       })),
       cedenteRamo,
       valorDebito: valorDebito,
