@@ -39,19 +39,14 @@ export async function GET(request, { params }) {
             throw new Error(`Dados cadastrais do sacado "${duplicata.cliente_sacado}" não encontrados.`);
         }
         
-        // --- CORREÇÃO FINAL APLICADA AQUI ---
-        // O nuCPFCNPJ agora é fixo, vindo das variáveis de ambiente,
-        // garantindo que seja sempre o mesmo CNPJ da credencial.
-        const seuCnpjRaiz = process.env.BRADESCO_CPFCNPJ_RAIZ; // Ex: "23927402"
-
         const payload = {
             "filialCPFCNPJ": process.env.BRADESCO_FILIAL_CNPJ,
             "ctrlCPFCNPJ": process.env.BRADESCO_CTRL_CNPJ,
             "codigoUsuarioSolicitante": process.env.BRADESCO_CODIGO_USUARIO,
-            "nuCPFCNPJ": seuCnpjRaiz, // Usando a variável de ambiente
+            "nuCPFCNPJ": process.env.BRADESCO_CPFCNPJ_RAIZ,
             "registraTitulo": {
                 "idProduto": "9",
-                "nuNegociacao": process.env.BRADESCO_NU_NEGOCIACAO,
+                "nuNegociacao": process.env.BRADESCO_NU_NEGOCIACAO, // Usa a variável de ambiente diretamente
                 "nossoNumero": duplicata.id.toString().padStart(11, '0'),
                 "dtEmissaoTitulo": formatDateToBradesco(duplicata.data_operacao),
                 "dtVencimentoTitulo": formatDateToBradesco(duplicata.data_vencimento),
