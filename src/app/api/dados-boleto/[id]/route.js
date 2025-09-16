@@ -24,19 +24,10 @@ export async function GET(request, { params }) {
 
         const { data: duplicata, error: dupError } = await supabase
             .from('duplicatas')
-            .select('*, operacao:operacoes(cliente_id)')
+            .select('*')
             .eq('id', id)
             .single();
         if (dupError) throw new Error('Duplicata não encontrada.');
-
-        const { data: cedente, error: cedenteError } = await supabase
-            .from('clientes')
-            .select('*')
-            .eq('id', duplicata.operacao.cliente_id)
-            .single();
-        if (cedenteError) {
-            throw new Error('Dados do cedente não encontrados.');
-        }
 
         const { data: sacado, error: sacadoError } = await supabase
             .from('sacados')
@@ -48,22 +39,19 @@ export async function GET(request, { params }) {
             throw new Error(`Dados cadastrais do sacado "${duplicata.cliente_sacado}" não encontrados.`);
         }
         
-        const cedenteCnpjLimpo = cedente.cnpj.replace(/\D/g, '');
-        
         // --- CORREÇÃO FINAL APLICADA AQUI ---
-        // Monta o nuNegociacao com base nos seus dados reais do boleto
-        const agenciaFormatada = process.env.BRADESCO_AGENCIA.padStart(5, '0');
-        const contaFormatada = process.env.BRADESCO_CONTA.padStart(7, '0');
-        const nuNegociacao = `${process.env.BRADESCO_CARTEIRA.padStart(3, '0')}${agenciaFormatada}${contaFormatada}${process.env.BRADESCO_CONTA_DV}`;
-        
+        // O nuCPFCNPJ agora é fixo, vindo das variáveis de ambiente,
+        // garantindo que seja sempre o mesmo CNPJ da credencial.
+        const seuCnpjRaiz = process.env.BRADESCO_CPFCNPJ_RAIZ; // Ex: "23927402"
+
         const payload = {
             "filialCPFCNPJ": process.env.BRADESCO_FILIAL_CNPJ,
             "ctrlCPFCNPJ": process.env.BRADESCO_CTRL_CNPJ,
             "codigoUsuarioSolicitante": process.env.BRADESCO_CODIGO_USUARIO,
-            "nuCPFCNPJ": cedenteCnpjLimpo.substring(0, 8),
+            "nuCPFCNPJ": seuCnpjRaiz, // Usando a variável de ambiente
             "registraTitulo": {
                 "idProduto": "9",
-                "nuNegociacao": nuNegociacao,
+                "nuNegociacao": process.env.BRADESCO_NU_NEGOCIACAO,
                 "nossoNumero": duplicata.id.toString().padStart(11, '0'),
                 "dtEmissaoTitulo": formatDateToBradesco(duplicata.data_operacao),
                 "dtVencimentoTitulo": formatDateToBradesco(duplicata.data_vencimento),
