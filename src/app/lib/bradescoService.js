@@ -11,12 +11,12 @@ const createBradescoAgent = () => {
         throw new Error('Certificados do Bradesco não configurados corretamente.');
     }
 
-    console.log("Certificados encontrados. Criando agente HTTPS...");
+    // console.log("Certificados encontrados. Criando agente HTTPS..."); // Log já confirmado, pode ser removido
 
     return new https.Agent({
         cert: Buffer.from(certificate, 'utf-8'),
         key: Buffer.from(privateKey, 'utf-8'),
-        rejectUnauthorized: false // Adicionado para ambientes de sandbox, pode ser necessário
+        rejectUnauthorized: false
     });
 };
 
@@ -44,13 +44,11 @@ export async function getBradescoAccessToken() {
         agent: agent
     };
 
-    console.log("Requisitando token de acesso do Bradesco...");
     return new Promise((resolve, reject) => {
         const req = https.request(tokenEndpoint, options, (res) => {
             let data = '';
             res.on('data', (chunk) => data += chunk);
             res.on('end', () => {
-                console.log(`Resposta do Token Bradesco (Status ${res.statusCode}):`, data);
                 try {
                     const jsonData = JSON.parse(data);
                     if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -83,12 +81,13 @@ export async function registrarBoleto(accessToken, dadosBoletoPayload) {
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`,
+            // *** CORREÇÃO APLICADA AQUI ***
+            'Accept': 'application/json', 
             'Content-Length': Buffer.byteLength(payloadFinal)
         },
         agent: agent
     };
 
-    console.log("Registrando boleto no Bradesco...");
     return new Promise((resolve, reject) => {
         const req = https.request(apiEndpoint, options, (res) => {
             let data = '';
@@ -96,6 +95,7 @@ export async function registrarBoleto(accessToken, dadosBoletoPayload) {
             res.on('end', () => {
                 console.log(`Resposta do Registro de Boleto (Status ${res.statusCode}):`, data);
                 try {
+                    // Tenta fazer o parse como JSON, mesmo em caso de erro
                     const jsonData = JSON.parse(data);
                     if (res.statusCode >= 200 && res.statusCode < 300) {
                         resolve(jsonData);
@@ -104,6 +104,7 @@ export async function registrarBoleto(accessToken, dadosBoletoPayload) {
                         reject(new Error(`Erro ${res.statusCode} ao registrar boleto: ${errorDetails}`));
                     }
                 } catch (e) {
+                    // Se o parse falhar (ex: resposta em XML), usa o texto original
                     reject(new Error(`Falha ao processar resposta do Bradesco no registro: ${data}`));
                 }
             });
