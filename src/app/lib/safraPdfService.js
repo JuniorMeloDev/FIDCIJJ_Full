@@ -152,7 +152,6 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         const vencimentoDate = new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z');
 
         // --- Recibo do Pagador (Layout com caixas) ---
-        // ALTERAÇÃO: Aumenta o tamanho do logo do Safra no recibo
         if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 12, 25, 8);
         doc.setFont('helvetica', 'bold').setFontSize(10).text('Recibo do Pagador', 195, 15, { align: 'right' });
         doc.line(15, 20, 195, 20);
@@ -177,21 +176,23 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.setLineDashPattern([2, 1], 0).line(15, 80, 195, 80).setLineDashPattern([], 0);
 
         // --- Ficha de Compensação ---
-        // ALTERAÇÃO: Aumenta o tamanho do logo do Safra na ficha
         if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 86, 25, 8);
         
         doc.setLineWidth(0.5).line(40, 86, 40, 93);
-        // ALTERAÇÃO: Centraliza o código do banco entre as barras
         doc.setFont('helvetica', 'bold').setFontSize(12).text('422-7', 47.5, 90, { align: 'center' });
-        
         doc.setLineWidth(0.5).line(55, 86, 55, 93);
         doc.setFontSize(11).setFont('courier', 'bold').text(linhaDigitavel, 125, 90, { align: 'center' });
+        
         const x = 15, y = 95, w = 180;
         
-        doc.setLineWidth(0.2).rect(x, y, w, 65);
+        // ALTERAÇÃO: Apenas desenha as linhas horizontais e a linha vertical da direita para a caixa principal
+        doc.setLineWidth(0.2);
+        doc.line(x, y, x + w, y); // Topo
+        doc.line(x + w, y, x + w, y + 65); // Direita
+        doc.line(x, y + 65, x + w, y + 65); // Fundo
         
         drawField('Local de Pagamento', 'Pagável em qualquer banco', x, y, 130, 10);
-        doc.line(x + 130, y, x + 130, y + 65);
+        doc.line(x + 130, y, x + 130, y + 65); // Linha vertical principal do lado direito
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), x + 130, y, 50, 10, 'right', 10);
         doc.line(x, y + 10, x + w, y + 10);
         
@@ -239,7 +240,11 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.line(x + 130, y + 55 + hCampoValor, x + w, y + 55 + hCampoValor);
         drawField('(=)Valor Cobrado', '', x + 130, y + 60, 50, hCampoValor);
 
-        doc.rect(x, y + 65, w, 15);
+        // ALTERAÇÃO: Apenas desenha as linhas horizontais e a linha vertical da direita para a caixa do pagador
+        doc.line(x, y + 65, x + w, y + 65); // Topo
+        doc.line(x + w, y + 65, x + w, y + 80); // Direita
+        doc.line(x, y + 80, x + w, y + 80); // Fundo
+        
         const pagadorAddressFicha = `${dadosBoleto.documento.pagador.endereco.logradouro}\n${dadosBoleto.documento.pagador.endereco.cidade} ${dadosBoleto.documento.pagador.endereco.uf} CEP: ${dadosBoleto.documento.pagador.endereco.cep}`;
         const pagadorLinesFicha = doc.splitTextToSize(`${dadosBoleto.documento.pagador.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}\n${pagadorAddressFicha}`, 178);
         drawField('Pagador', pagadorLinesFicha, x, y + 65, 180, 15, 'left', 9, 6);

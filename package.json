@@ -12,7 +12,6 @@
     "@supabase/supabase-js": "^2.53.0",
     "apexcharts": "^5.3.1",
     "bcryptjs": "^3.0.2",
-    "bwip-js": "^4.7.0",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.23.6",
     "jsonwebtoken": "^9.0.2",
