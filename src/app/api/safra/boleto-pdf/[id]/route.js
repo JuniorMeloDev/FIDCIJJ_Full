@@ -80,9 +80,14 @@ export async function GET(request, { params }) {
 
         const pdfBuffer = gerarPdfBoletoSafra(listaBoletos);
         
+        // --- LÓGICA DO NOME DO ARQUIVO ALTERADA AQUI ---
+        const tipoDocumento = duplicatas[0]?.operacao?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
+        const numerosDocumento = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join('_');
+        const filename = `Boletos ${tipoDocumento} ${numerosDocumento}.pdf`;
+        
         const headers = new Headers();
         headers.append('Content-Type', 'application/pdf');
-        headers.append('Content-Disposition', `attachment; filename="boletos_op_${operacaoId}.pdf"`);
+        headers.append('Content-Disposition', `attachment; filename="${filename}"`);
 
         return new Response(pdfBuffer, { headers });
 
