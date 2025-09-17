@@ -45,7 +45,10 @@ export async function GET(request) {
       .from('duplicatas')
       .select(`
         id, nf_cte, data_vencimento, valor_bruto, valor_juros, cliente_sacado,
-        operacao:operacoes!inner(*, cliente:clientes(nome), tipo_operacao:tipos_operacao(nome))
+        operacao:operacoes!inner(
+          id, valor_liquido, valor_total_bruto, valor_total_juros,
+          cliente:clientes(nome), tipo_operacao:tipos_operacao(nome)
+        )
       `)
       .eq('status_recebimento', 'Pendente')
       .lte('data_vencimento', format(dataLimite, 'yyyy-MM-dd'));
@@ -85,26 +88,33 @@ export async function GET(request) {
 
     /**
      * >>> AJUSTE PRINCIPAL <<<
-     * Subtrai do total de juros os juros de operações PÓS (juros_pre = false)
-     * que foram liquidados, pois esses já foram contabilizados no dia da operação.
-     * Juros de mora continuam sendo somados normalmente.
+     * Pega todas duplicatas liquidadas com a operação associada,
+     * identifica as que são PÓS (valor_liquido ~ valor_total_bruto)
+     * e soma seus juros de operação para subtrair do total.
      */
-    // substituir a parte anterior por isto
-const { data: jurosPosLiquidadosData, error: jurosPosErr } = await supabase
-  .from('duplicatas')
-  .select('valor_juros, operacao:operacoes!inner(juros_pre)')
-  .eq('status_recebimento', 'Liquidado')
-  .eq('operacao.juros_pre', false);
+    const { data: duplicatasLiquidadas, error: dupErr } = await supabase
+      .from('duplicatas')
+      .select(`
+        valor_juros,
+        operacao:operacoes(id, valor_liquido, valor_total_bruto)
+      `)
+      .eq('status_recebimento', 'Liquidado');
 
-if (jurosPosErr) {
-  console.error('Erro ao buscar juros pós liquidados:', jurosPosErr);
-  // retorna detalhe para facilitar debug (remova em produção)
-  return NextResponse.json({ message: 'Erro ao buscar juros pós liquidados', detail: jurosPosErr }, { status: 500 });
-}
+    if (dupErr) {
+      console.error('Erro ao buscar duplicatas liquidadas:', dupErr);
+      throw new Error('Falha ao ajustar juros pós-fixados.');
+    }
 
-const jurosPosLiquidados = (jurosPosLiquidadosData || [])
-  .reduce((sum, d) => sum + (d.valor_juros || 0), 0);
+    const jurosPosLiquidados = (duplicatasLiquidadas || []).reduce((sum, d) => {
+      const op = d.operacao;
+      if (!op) return sum;
 
+      // Mesmo critério usado no front-end:
+      const valorLiquidoSemJuros = op.valor_total_bruto; // sem desconto
+      const isPostFixed = Math.abs(op.valor_liquido - valorLiquidoSemJuros) < 0.01;
+
+      return isPostFixed ? sum + (d.valor_juros || 0) : sum;
+    }, 0);
 
     const totalJurosAjustado = (totais.total_juros || 0) - jurosPosLiquidados;
     const lucroLiquido = totalJurosAjustado - (totais.total_despesas || 0);
@@ -122,7 +132,6 @@ const jurosPosLiquidados = (jurosPosLiquidadosData || [])
         clienteSacado: v.cliente_sacado,
         operacao: v.operacao
       })),
-      // >>> totalJuros já corrigido <<<
       totalJuros: totalJurosAjustado,
       totalDespesas: totais.total_despesas || 0,
       lucroLiquido
