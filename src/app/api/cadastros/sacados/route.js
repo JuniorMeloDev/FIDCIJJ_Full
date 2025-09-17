@@ -20,6 +20,8 @@ export async function GET(request) {
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
 }
+
+// POST: Lida com a criação de novos sacados e a vinculação de existentes como filiais
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -56,7 +58,7 @@ export async function POST(request) {
         }
 
         // Se não existe, cria um novo
-        // CORREÇÃO: Remove o campo 'id' antes de inserir um novo registro
+        // **CORREÇÃO APLICADA AQUI:** Remove o campo 'id' antes de inserir um novo registro
         delete sacadoData.id;
 
         const { data: newSacado, error: insertError } = await supabase
@@ -79,9 +81,17 @@ export async function POST(request) {
         return NextResponse.json(newSacado, { status: 201 });
 
     } catch (error) {
+        // Log detalhado do erro no servidor Vercel
+        console.error("Erro ao criar/vincular sacado:", {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+        });
+
         if (error.code === '23505') { 
+            // Constraint de CNPJ único
             return NextResponse.json({ message: 'Já existe um sacado com este CNPJ.' }, { status: 409 });
         }
-        return NextResponse.json({ message: error.message }, { status: 500 });
+        return NextResponse.json({ message: error.message || 'Erro interno no servidor.' }, { status: 500 });
     }
 }
