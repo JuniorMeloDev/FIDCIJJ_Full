@@ -12,13 +12,14 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
         
-        // --- CORREÇÃO FINAL AQUI ---
-        // A sintaxe correta para a junção reversa é especificar a coluna na tabela `duplicatas` que referencia a `movimentacoes_caixa`.
-        // Com base em outros arquivos, a relação correta é `duplicatas_liquidacao_mov_id_fkey`.
+        // #### CORREÇÃO APLICADA AQUI ####
+        // A sintaxe da junção reversa foi corrigida. Em vez de usar o nome da constraint da FK,
+        // usamos a forma padrão que o Supabase entende para relações one-to-one/one-to-many.
+        // O Supabase irá inferir a relação correta a partir do esquema do banco de dados.
         let query = supabase.from('movimentacoes_caixa').select(`
             *, 
             operacao:operacoes ( valor_liquido, cliente_id ),
-            duplicata:duplicatas!duplicatas_liquidacao_mov_id_fkey ( id, nf_cte )
+            duplicata:duplicatas ( id, nf_cte )
         `);
 
         if (searchParams.get('dataInicio')) query = query.gte('data_movimento', searchParams.get('dataInicio'));
@@ -46,7 +47,6 @@ export async function GET(request) {
             empresaAssociada: m.empresa_associada,
             operacaoId: m.operacao_id,
             operacao: m.operacao,
-            // A Supabase retorna a duplicata como um objeto único (ou null), que é o que precisamos.
             duplicata: m.duplicata
         }));
 
