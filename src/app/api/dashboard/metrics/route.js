@@ -28,19 +28,19 @@ export async function GET(request) {
       p_cliente_id: clienteId,
       p_sacado_nome: sacadoNome
     };
-    
+
     const topNParams = {
-        p_data_inicio: dataInicio,
-        p_data_fim: dataFim,
-        p_tipo_operacao_id: tipoOperacaoId,
-        p_limit: topNLimit
+      p_data_inicio: dataInicio,
+      p_data_fim: dataFim,
+      p_tipo_operacao_id: tipoOperacaoId,
+      p_limit: topNLimit
     };
 
     const hoje = new Date();
     const dataLimite = new Date();
     dataLimite.setDate(hoje.getDate() + diasVencimento);
 
-    // CORREÇÃO: A consulta agora busca todos os campos da operação (`operacoes!inner(*, ...)`)
+    // Vencimentos próximos
     let vencimentosQuery = supabase
       .from('duplicatas')
       .select(`
@@ -49,11 +49,10 @@ export async function GET(request) {
       `)
       .eq('status_recebimento', 'Pendente')
       .lte('data_vencimento', format(dataLimite, 'yyyy-MM-dd'));
-    
+
     if (tipoOperacaoId) vencimentosQuery = vencimentosQuery.eq('operacao.tipo_operacao_id', tipoOperacaoId);
     if (clienteId) vencimentosQuery = vencimentosQuery.eq('operacao.cliente_id', clienteId);
     if (sacadoNome) vencimentosQuery = vencimentosQuery.ilike('cliente_sacado', `%${sacadoNome}%`);
-
 
     const [
       valorOperadoRes,
@@ -83,7 +82,29 @@ export async function GET(request) {
     }
 
     const totais = totaisFinanceirosRes.data?.[0] || { total_juros: 0, total_despesas: 0 };
-    const lucroLiquido = (totais.total_juros || 0) - (totais.total_despesas || 0);
+
+    /**
+     * >>> AJUSTE PRINCIPAL <<<
+     * Subtrai do total de juros os juros de operações PÓS (juros_pre = false)
+     * que foram liquidados, pois esses já foram contabilizados no dia da operação.
+     * Juros de mora continuam sendo somados normalmente.
+     */
+    const { data: jurosPosLiquidadosData, error: jurosPosErr } = await supabase
+      .from('duplicatas')
+      .select('valor_juros, operacao(juros_pre)')
+      .eq('status_recebimento', 'Liquidado')
+      .eq('operacao.juros_pre', false);
+
+    if (jurosPosErr) {
+      console.error('Erro ao buscar juros pós liquidados:', jurosPosErr);
+      throw new Error('Falha ao ajustar juros pós-fixados.');
+    }
+
+    const jurosPosLiquidados = (jurosPosLiquidadosData || [])
+      .reduce((sum, d) => sum + (d.valor_juros || 0), 0);
+
+    const totalJurosAjustado = (totais.total_juros || 0) - jurosPosLiquidados;
+    const lucroLiquido = totalJurosAjustado - (totais.total_despesas || 0);
 
     const metrics = {
       valorOperadoNoMes: valorOperadoRes.data || 0,
@@ -96,18 +117,20 @@ export async function GET(request) {
         valorBruto: v.valor_bruto,
         valorJuros: v.valor_juros,
         clienteSacado: v.cliente_sacado,
-        operacao: v.operacao // Passa o objeto de operação completo
+        operacao: v.operacao
       })),
-      totalJuros: totais.total_juros || 0,
+      // >>> totalJuros já corrigido <<<
+      totalJuros: totalJurosAjustado,
       totalDespesas: totais.total_despesas || 0,
-      lucroLiquido: lucroLiquido,
+      lucroLiquido
     };
 
     return NextResponse.json(metrics, { status: 200 });
   } catch (error) {
     console.error('Erro no endpoint de métricas:', error.message);
     return NextResponse.json(
-      { message: error.message || 'Erro interno do servidor' }, { status: 500 }
+      { message: error.message || 'Erro interno do servidor' },
+      { status: 500 }
     );
   }
 }
