@@ -21,20 +21,13 @@ export default function LiquidacaoModal({
 
   const isMultiple = Array.isArray(duplicata);
 
+  // #### LÓGICA CORRIGIDA E SIMPLIFICADA ####
+  // O valor total a ser liquidado é sempre a soma dos valores brutos das duplicatas.
+  // A lógica complexa que tentava adicionar os juros da operação foi removida.
   const totalValue = useMemo(() => {
     if (!duplicata) return 0;
     const items = isMultiple ? duplicata : [duplicata];
-
-    return items.reduce((sum, d) => {
-      const op = d.operacao;
-      if (!op) return sum + d.valorBruto;
-
-      const jurosNaoDescontados =
-        op.valor_total_juros < 0.01 && d.valorJuros > 0;
-      return (
-        sum + (jurosNaoDescontados ? d.valorBruto + d.valorJuros : d.valorBruto)
-      );
-    }, 0);
+    return items.reduce((sum, d) => sum + d.valorBruto, 0);
   }, [duplicata, isMultiple]);
 
   const valorTotalComJuros = useMemo(() => {
@@ -61,15 +54,13 @@ export default function LiquidacaoModal({
     }
     setError("");
 
-    const liquidacoes = duplicata.map((dup) => {
-      const op = dup.operacao;
-      const jurosNaoDescontados =
-        op && op.valor_total_juros < 0.01 && dup.valorJuros > 0;
-      return {
-        id: dup.id,
-        juros_a_somar: jurosNaoDescontados ? dup.valorJuros : 0,
-      };
-    });
+    // #### LÓGICA CORRIGIDA E SIMPLIFICADA ####
+    // Não enviamos mais os juros da operação para serem somados no backend.
+    // A liquidação agora lida apenas com o valor de face da duplicata + juros de mora.
+    const liquidacoes = duplicata.map((dup) => ({
+      id: dup.id,
+      juros_a_somar: 0, // Sempre será 0
+    }));
 
     onConfirm(
       liquidacoes,
@@ -82,10 +73,8 @@ export default function LiquidacaoModal({
 
   const handleApenasBaixa = () => {
     setError("");
-    // Captura a data atual no formato YYYY-MM-DD
     const hoje = new Date().toISOString().split("T")[0];
     const liquidacoes = duplicata.map((d) => ({ id: d.id, juros_a_somar: 0 }));
-    // Envia a data de hoje como data da liquidação, mas null para os outros campos
     onConfirm(liquidacoes, hoje, null, null);
     onClose();
   };
