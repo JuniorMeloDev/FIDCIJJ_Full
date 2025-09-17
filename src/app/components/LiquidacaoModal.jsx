@@ -85,7 +85,6 @@ export default function LiquidacaoModal({
         const isPostFixed = isPostFixedInterest(op, dup);
         return {
             id: dup.id,
-            // Enviamos os juros da operação para serem somados no backend apenas se for pós-fixado.
             juros_a_somar: isPostFixed ? dup.valorJuros : 0,
         };
     });
@@ -107,12 +106,9 @@ export default function LiquidacaoModal({
         const isPostFixed = isPostFixedInterest(op, d);
         return {
           id: d.id, 
-          // Mesmo na baixa sem crédito, é importante considerar os juros pós-fixados
-          // para que o balanço contábil fique correto.
           juros_a_somar: isPostFixed ? d.valorJuros : 0
         };
     });
-    // Na baixa sem crédito, não há juros de mora ou conta.
     onConfirm(liquidacoes, hoje, 0, null);
     onClose();
   };

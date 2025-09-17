@@ -463,18 +463,10 @@ export default function ResumoPage() {
                         const jurosNaoDescontados = op && op.valor_total_juros < 0.01 && dup.valorJuros > 0;
                         const valorExibido = jurosNaoDescontados ? dup.valorBruto + dup.valorJuros : dup.valorBruto;
                         
-                        // #### CORREÇÃO APLICADA AQUI ####
-                        // Criamos um novo objeto 'itemParaModal' que contém o valorBruto corrigido.
-                        // Este objeto será passado para a função de contexto e, consequentemente, para o modal.
-                        const itemParaModal = {
-                          ...dup,
-                          valorBruto: valorExibido,
-                        };
-
                         return (
                           <div
                             key={dup.id}
-                            onContextMenu={(e) => handleContextMenu(e, itemParaModal)}
+                            onContextMenu={(e) => handleContextMenu(e, dup)}
                             className="flex justify-between items-center text-sm border-b border-gray-600 pb-2 last:border-none cursor-pointer hover:bg-gray-600 rounded-md p-2"
                           >
                             <div>
