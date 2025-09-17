@@ -136,7 +136,7 @@ export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
         });
         const vencimentoDate = new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z');
 
-        // --- Recibo do Pagador (Layout com caixas) ---
+        // --- Recibo do Pagador ---
         if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 12, 18, 7);
         doc.setFont('helvetica', 'bold').setFontSize(10).text('Recibo do Pagador', 195, 15, { align: 'right' });
         doc.line(15, 20, 195, 20);
@@ -147,7 +147,6 @@ export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
         doc.line(xRecibo + 125, yRecibo, xRecibo + 125, yRecibo + 10);
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), xRecibo + 125, yRecibo + 10, 55, 10);
         doc.line(xRecibo, yRecibo + 10, xRecibo + wRecibo, yRecibo + 10);
-        
         drawField('Data do documento', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), xRecibo, yRecibo + 10, 30, 10);
         doc.line(xRecibo + 30, yRecibo + 10, xRecibo + 30, yRecibo + 20);
         drawField('Número do documento', dadosBoleto.documento.numeroCliente, xRecibo + 30, yRecibo + 10, 30, 10);
@@ -157,9 +156,7 @@ export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
         drawField('Agência/Cód. Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, xRecibo + 75, yRecibo + 10, 50, 10);
         drawField('Valor', formatBRLNumber(dadosBoleto.documento.valor), xRecibo + 125, yRecibo + 20, 55, 10);
         doc.line(xRecibo, yRecibo + 20, xRecibo + wRecibo, yRecibo + 20);
-        
         drawField('Pagador', `${dadosBoleto.documento.pagador.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, xRecibo, yRecibo + 20, 125, 10);
-        
         doc.text('Autenticação Mecânica', 195, 70, { align: 'right' });
         doc.setLineDashPattern([2, 1], 0).line(15, 80, 195, 80).setLineDashPattern([], 0);
 
@@ -169,21 +166,23 @@ export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
         doc.setFont('helvetica', 'bold').setFontSize(12).text('422-7', 45, 90);
         doc.setLineWidth(0.5).line(55, 86, 55, 93);
         doc.setFontSize(11).setFont('courier', 'bold').text(linhaDigitavel, 125, 90, { align: 'center' });
+        
         const x = 15, y = 95, w = 180;
         
-        // ALTERAÇÃO: Aumenta a altura total da Ficha de Compensação para incluir o Pagador
+        // ALTERAÇÃO: Define a altura da caixa principal para acomodar as 5 linhas de campos
         doc.setLineWidth(0.2).rect(x, y, w, 65);
         
+        // Linha 1
         drawField('Local de Pagamento', 'Pagável em qualquer banco', x, y, 130, 10);
-        
-        // ALTERAÇÃO: Diminui a altura da linha vertical principal para parar antes da seção do pagador
-        doc.line(x + 130, y, x + 130, y + 40);
-        
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), x + 130, y, 50, 10, 'right', 10);
         doc.line(x, y + 10, x + w, y + 10);
-        drawField('Beneficiário', `${dadosBoleto.cedente.nome}`, x, y + 10, 130, 10);
+
+        // Linha 2
+        drawField('Beneficiário', `${dadosBoleto.cedente.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, x, y + 10, 130, 10);
         drawField('Agência/Cód. Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, x + 130, y + 10, 50, 10, 'right');
         doc.line(x, y + 20, x + w, y + 20);
+
+        // Linha 3
         drawField('Data do Doc.', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), x, y + 20, 25, 10);
         doc.line(x + 25, y + 20, x + 25, y + 30);
         drawField('Nº do Doc.', dadosBoleto.documento.numeroCliente, x + 25, y + 20, 35, 10);
@@ -195,41 +194,47 @@ export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
         drawField('Data do Movto', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), x + 90, y + 20, 40, 10);
         drawField('Nosso Número', dadosBoleto.documento.numero, x + 130, y + 20, 50, 10, 'right');
         doc.line(x, y + 30, x + w, y + 30);
-        drawField('Carteira', '60', x + 30, y + 30, 20, 10);
-        doc.line(x + 30, y + 30, x + 30, y + 40);
-        doc.line(x + 50, y + 30, x + 50, y + 40);
-        drawField('Espécie', 'R$', x + 50, y + 30, 20, 10);
-        drawField('(=) Valor do Documento', formatBRLNumber(dadosBoleto.documento.valor), x + 130, y + 30, 50, 10, 'right', 10);
-        doc.line(x, y + 40, x + 130, y + 40);
-        
-        // ALTERAÇÃO: Aumenta a altura do campo de instruções
+
+        // Linha 4
+        drawField('Data do Oper.', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), x, y+30, 25, 10);
+        doc.line(x + 25, y + 30, x + 25, y + 40);
+        drawField('Carteira', '60', x + 25, y + 30, 20, 10);
+        doc.line(x + 45, y + 30, x + 45, y + 40);
+        drawField('Espécie', 'R$', x + 45, y + 30, 20, 10);
+        doc.line(x + 65, y + 30, x + 65, y + 40);
+        drawField('Quantidade', '', x + 65, y + 30, 30, 10);
+        doc.line(x + 95, y + 30, x + 95, y + 40);
+        drawField('Valor', '', x + 95, y + 30, 35, 10);
+        drawField('(=)Valor do Documento', formatBRLNumber(dadosBoleto.documento.valor), x + 130, y + 30, 50, 10, 'right', 10);
+        doc.line(x, y + 40, x + w, y + 40);
+
+        // Linha 5 (Instruções e valores)
         const dataJurosMulta = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
-        drawField('Instruções', [`JUROS DE R$ 22,40 AO DIA A PARTIR DE ${dataJurosMulta}`, `MULTA DE 2,00% A PARTIR DE ${dataJurosMulta}`], x, y + 40, 130, 20);
+        drawField('Instruções', [`JUROS DE R$ 22,40 AO DIA A PARTIR DE ${dataJurosMulta}`, `MULTA DE 2,00% A PARTIR DE ${dataJurosMulta}`], x, y + 40, 130, 25);
+        
+        // ALTERAÇÃO: Reposiciona os campos de valores para se alinharem corretamente e com a altura certa
+        const hCampoValor = 5;
+        drawField('(-)Desconto/Abatimento', '', x + 130, y + 40, 50, hCampoValor);
+        doc.line(x + 130, y + 40 + hCampoValor, x + w, y + 40 + hCampoValor);
+        drawField('(-)Outras Deduções', '', x + 130, y + 45, 50, hCampoValor);
+        doc.line(x + 130, y + 45 + hCampoValor, x + w, y + 45 + hCampoValor);
+        drawField('(+)Mora/Multa', '', x + 130, y + 50, 50, hCampoValor);
+        doc.line(x + 130, y + 50 + hCampoValor, x + w, y + 50 + hCampoValor);
+        drawField('(+)Outros Acréscimos', '', x + 130, y + 55, 50, hCampoValor);
+        doc.line(x + 130, y + 55 + hCampoValor, x + w, y + 55 + hCampoValor);
+        drawField('(=)Valor Cobrado', '', x + 130, y + 60, 50, hCampoValor);
 
-        // ALTERAÇÃO: Reposiciona os campos de valores para se alinharem corretamente
-        drawField('(-) Desconto/Abatimento', '', x + 130, y + 40, 50, 6);
-        doc.line(x + 130, y + 46, x + w, y + 46);
-        drawField('(-) Outras Deduções', '', x + 130, y + 46, 50, 6);
-        doc.line(x + 130, y + 52, x + w, y + 52);
-        drawField('(+) Mora/Multa', '', x + 130, y + 52, 50, 6);
-        doc.line(x + 130, y + 58, x + w, y + 58);
-        drawField('(+) Outros Acréscimos', '', x + 130, y + 58, 50, 6);
-        doc.line(x + 130, y + 64, x + w, y + 64);
-        drawField('(=) Valor Cobrado', '', x + 130, y + 64, 50, 6);
-
-        // ALTERAÇÃO: Adiciona a linha horizontal acima do pagador
-        doc.line(x, y + 60, x + w, y + 60);
-
-        // ALTERAÇÃO: Desenha o campo do Pagador dentro da caixa principal, sem criar uma nova caixa (rect)
+        // ALTERAÇÃO: Desenha a caixa do Pagador separadamente, abaixo da caixa principal
+        doc.rect(x, y + 65, w, 15);
         const pagadorAddressFicha = `${dadosBoleto.documento.pagador.endereco.logradouro}\n${dadosBoleto.documento.pagador.endereco.cidade} ${dadosBoleto.documento.pagador.endereco.uf} CEP: ${dadosBoleto.documento.pagador.endereco.cep}`;
         const pagadorLinesFicha = doc.splitTextToSize(`${dadosBoleto.documento.pagador.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}\n${pagadorAddressFicha}`, 178);
-        drawField('Pagador', pagadorLinesFicha, x, y + 60, 180, 20, 'left', 9, 6);
+        drawField('Pagador', pagadorLinesFicha, x, y + 65, 180, 15, 'left', 9, 6);
 
-        // ALTERAÇÃO: Posição do Código de Barras movida para cima para se adequar ao novo layout
-        drawInterleaved2of5(doc, 15, 165, codigoBarras, 103, 15);
+        // ALTERAÇÃO: Posiciona o código de barras no final da página
+        drawInterleaved2of5(doc, 15, 185, codigoBarras, 103, 15);
 
         doc.setFont('helvetica', 'normal').setFontSize(8);
-        doc.text('Autenticação Mecânica - Ficha de Compensação', 195, 185, { align: 'right' });
+        doc.text('Autenticação Mecânica - Ficha de Compensação', 195, 205, { align: 'right' });
     });
     
     return doc.output('arraybuffer');
