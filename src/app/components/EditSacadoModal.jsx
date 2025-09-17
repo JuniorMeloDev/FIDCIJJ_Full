@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { formatCnpjCpf, formatTelefone, formatCep } from '@/app/utils/formatters';
-import AutocompleteSearch from './AutoCompleteSearch';
 
 const TabButton = ({ label, isActive, onClick }) => (
   <button
@@ -18,11 +17,24 @@ const TabButton = ({ label, isActive, onClick }) => (
   </button>
 );
 
-// Componente para o formulário de adicionar filial
+// Componente do formulário para adicionar filial (AGORA COMPLETO)
 const AddFilialForm = ({ onSave, matrizId, matrizNome }) => {
-    const [filialData, setFilialData] = useState({ cnpj: '', nome: matrizNome });
+    const initialState = {
+        cnpj: '', nome: matrizNome, ie: '', fone: '', cep: '',
+        endereco: '', bairro: '', municipio: '', uf: ''
+    };
+    const [filialData, setFilialData] = useState(initialState);
     const [isFetching, setIsFetching] = useState(false);
     const [error, setError] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        let formattedValue = value;
+        if (name === 'fone') formattedValue = formatTelefone(value);
+        if (name === 'cep') formattedValue = formatCep(value);
+        setFilialData(prev => ({ ...prev, [name]: formattedValue }));
+    };
 
     const handleCnpjChange = async (e) => {
         const cnpj = formatCnpjCpf(e.target.value);
@@ -34,7 +46,7 @@ const AddFilialForm = ({ onSave, matrizId, matrizNome }) => {
             setError('');
             try {
                 const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
-                if (!response.ok) throw new Error('CNPJ não encontrado.');
+                if (!response.ok) throw new Error('CNPJ não encontrado ou inválido.');
                 const data = await response.json();
                 setFilialData(prev => ({
                     ...prev,
@@ -55,22 +67,29 @@ const AddFilialForm = ({ onSave, matrizId, matrizNome }) => {
         }
     };
 
-    const handleSaveFilial = () => {
+    const handleSaveFilial = async () => {
         if (!filialData.cnpj) {
             setError('O CNPJ da filial é obrigatório.');
             return;
         }
-        onSave(null, { // Passa null como ID para indicar criação
+        setIsSaving(true);
+        const result = await onSave(null, {
             ...filialData,
-            matriz_id: matrizId, // Vincula à matriz atual
-            condicoesPagamento: [] // Filiais herdam as condições da matriz por padrão
+            matriz_id: matrizId,
+            condicoesPagamento: [] 
         });
-        // Limpa o formulário após salvar
-        setFilialData({ cnpj: '', nome: matrizNome });
+
+        if (result.success) {
+            setFilialData(initialState);
+            setError('');
+        } else {
+            setError(result.message || 'Erro ao salvar filial.');
+        }
+        setIsSaving(false);
     };
 
     return (
-        <div className="mt-4 p-4 border border-gray-700 rounded-lg bg-gray-900/50 space-y-3">
+        <div className="mt-4 p-4 border border-gray-700 rounded-lg bg-gray-900/50 space-y-4">
             <h4 className="text-md font-semibold text-gray-200">Adicionar Nova Filial</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-1">
@@ -80,21 +99,23 @@ const AddFilialForm = ({ onSave, matrizId, matrizNome }) => {
                 </div>
                 <div className="md:col-span-2">
                     <label className="block text-xs font-bold text-gray-300">Nome (Razão Social)</label>
-                    <input type="text" value={filialData.nome || ''} readOnly className="mt-1 block w-full bg-gray-600 p-1.5 text-sm cursor-not-allowed"/>
+                    <input type="text" name="nome" value={filialData.nome || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/>
                 </div>
-                 <div className="md:col-span-3">
-                    <label className="block text-xs font-bold text-gray-300">Endereço</label>
-                    <input type="text" value={filialData.endereco || ''} readOnly className="mt-1 block w-full bg-gray-600 p-1.5 text-sm cursor-not-allowed"/>
-                </div>
+                <div><label className="block text-xs font-bold text-gray-300">Inscrição Estadual</label><input type="text" name="ie" value={filialData.ie || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                <div><label className="block text-xs font-bold text-gray-300">Telefone</label><input type="text" name="fone" value={filialData.fone || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                <div><label className="block text-xs font-bold text-gray-300">CEP</label><input type="text" name="cep" value={filialData.cep || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Endereço</label><input type="text" name="endereco" value={filialData.endereco || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                <div><label className="block text-xs font-bold text-gray-300">Bairro</label><input type="text" name="bairro" value={filialData.bairro || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-300">Município</label><input type="text" name="municipio" value={filialData.municipio || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                <div><label className="block text-xs font-bold text-gray-300">UF</label><input type="text" name="uf" value={filialData.uf || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
             </div>
             {error && <p className="text-sm text-red-400">{error}</p>}
-            <button onClick={handleSaveFilial} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-md text-sm">
-                Salvar Filial
+            <button onClick={handleSaveFilial} disabled={isSaving} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-md text-sm disabled:opacity-50">
+                {isSaving ? 'Salvando...' : 'Salvar Filial'}
             </button>
         </div>
     );
 }
-
 
 export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDelete, onEditFilial }) {
     const initialState = {
@@ -130,7 +151,11 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
     const handleChange = (e) => {
         setModalError('');
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: formatCnpjCpf(value) }));
+        let formattedValue = value;
+        if (name === 'cnpj') formattedValue = formatCnpjCpf(value);
+        if (name === 'fone') formattedValue = formatTelefone(value);
+        if (name === 'cep') formattedValue = formatCep(value);
+        setFormData(prev => ({ ...prev, [name]: formattedValue }));
     };
 
     const handleCondicaoChange = (index, e) => {
@@ -197,8 +222,8 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div><label className="block text-xs font-bold text-gray-300">Inscrição Estadual</label><input type="text" name="ie" value={formData.ie || ''} onChange={e => setFormData(prev => ({...prev, ie: e.target.value}))} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
-                                <div><label className="block text-xs font-bold text-gray-300">Telefone</label><input type="text" name="fone" value={formData.fone || ''} onChange={(e) => setFormData(prev => ({...prev, fone: formatTelefone(e.target.value)}))} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
-                                <div><label className="block text-xs font-bold text-gray-300">CEP</label><input type="text" name="cep" value={formData.cep || ''} onChange={(e) => setFormData(prev => ({...prev, cep: formatCep(e.target.value)}))} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                                <div><label className="block text-xs font-bold text-gray-300">Telefone</label><input type="text" name="fone" value={formData.fone || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                                <div><label className="block text-xs font-bold text-gray-300">CEP</label><input type="text" name="cep" value={formData.cep || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Endereço</label><input type="text" name="endereco" value={formData.endereco || ''} onChange={e => setFormData(prev => ({...prev, endereco: e.target.value}))} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
@@ -243,9 +268,8 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
                                         </tbody>
                                     </table>
                                 </div>
-                            ) : (
-                                <p className="text-sm text-gray-400 italic">Nenhuma filial cadastrada para esta matriz.</p>
-                            )}
+                            ) : <p className="text-sm text-gray-400 italic">Nenhuma filial cadastrada.</p>}
+                            
                             <AddFilialForm onSave={onSave} matrizId={sacado.id} matrizNome={sacado.nome} />
                         </div>
                     )}

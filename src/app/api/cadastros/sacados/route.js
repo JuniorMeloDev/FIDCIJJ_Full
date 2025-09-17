@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// GET: Busca todos os sacados com as suas condições de pagamento
+// GET (sem alterações)
 export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -21,7 +21,7 @@ export async function GET(request) {
     }
 }
 
-// POST: Cria um novo sacado e as suas condições de pagamento
+// POST: Cria um novo sacado ou atualiza um existente para se tornar filial
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -29,33 +29,53 @@ export async function POST(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const body = await request.json();
-        
-        // Separa os dados do sacado das condições de pagamento
         const { condicoesPagamento, ...sacadoData } = body;
+        const cleanCnpj = sacadoData.cnpj?.replace(/\D/g, '');
 
-        // 1. Insere o sacado (matriz ou filial)
-        const { data: newSacado, error: sacadoError } = await supabase
+        // Verifica se já existe um sacado com este CNPJ
+        const { data: existingSacado } = await supabase
             .from('sacados')
-            .insert(sacadoData)
+            .select('id, matriz_id')
+            .eq('cnpj', cleanCnpj)
+            .single();
+
+        // Se o sacado já existe, atualiza-o (vincula como filial)
+        if (existingSacado) {
+            if (existingSacado.matriz_id && existingSacado.matriz_id !== sacadoData.matriz_id) {
+                return NextResponse.json({ message: 'Este CNPJ já está vinculado a outra matriz.' }, { status: 409 });
+            }
+            const { data: updatedSacado, error: updateError } = await supabase
+                .from('sacados')
+                .update({ ...sacadoData, cnpj: cleanCnpj })
+                .eq('id', existingSacado.id)
+                .select()
+                .single();
+            if (updateError) throw updateError;
+            return NextResponse.json(updatedSacado, { status: 200 });
+        }
+
+        // Se não existe, cria um novo
+        const { data: newSacado, error: insertError } = await supabase
+            .from('sacados')
+            .insert({ ...sacadoData, cnpj: cleanCnpj })
             .select()
             .single();
 
-        if (sacadoError) throw sacadoError;
+        if (insertError) throw insertError;
 
-        // 2. Se houver condições de pagamento, associa-as ao novo sacado
         if (condicoesPagamento && condicoesPagamento.length > 0) {
             const condicoesToInsert = condicoesPagamento.map(cond => ({
                 parcelas: cond.parcelas,
                 prazos: cond.prazos,
                 sacado_id: newSacado.id
             }));
-            const { error: condicoesError } = await supabase.from('condicoes_pagamento').insert(condicoesToInsert);
-            if (condicoesError) throw condicoesError;
+            await supabase.from('condicoes_pagamento').insert(condicoesToInsert);
         }
 
         return NextResponse.json(newSacado, { status: 201 });
+
     } catch (error) {
-        console.error("Erro ao criar sacado:", error);
+        console.error("Erro ao criar/atualizar sacado:", error);
         if (error.code === '23505') { 
             return NextResponse.json({ message: 'Já existe um sacado com este CNPJ.' }, { status: 409 });
         }
