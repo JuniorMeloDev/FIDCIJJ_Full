@@ -9,7 +9,9 @@ export async function GET(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { operacaoId } = params;
+        // --- CORREÇÃO APLICADA AQUI ---
+        // Lendo o parâmetro correto 'id' e renomeando para 'operacaoId' para manter a consistência no resto do código.
+        const { id: operacaoId } = params;
 
         // Busca TODAS as duplicatas da operação
         const { data: duplicatas, error: dupError } = await supabase
@@ -31,7 +33,7 @@ export async function GET(request, { params }) {
                 .eq('nome', duplicata.cliente_sacado)
                 .single();
             
-            if (!sacado) continue; // Pula se não encontrar o sacado
+            if (!sacado) continue;
 
             listaBoletos.push({
                 agencia: "12400",
