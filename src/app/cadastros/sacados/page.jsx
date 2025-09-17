@@ -135,6 +135,11 @@ export default function SacadosPage() {
             setIsModalOpen(false);
             await fetchData();
             showNotification(`Sacado ${isUpdating ? 'atualizado' : 'criado'} com sucesso!`, 'success');
+            
+
+            clearFilters(); // Limpa os filtros de busca
+            setCurrentPage(1); // Volta para a primeira página
+
             return { success: true };
         } catch (err) {
             showNotification(err.message, 'error');
