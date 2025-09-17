@@ -10,8 +10,10 @@ export async function GET(request, { params }) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const { id: operacaoId } = params;
+        if (!operacaoId) {
+            return NextResponse.json({ message: 'ID da Operação é obrigatório.' }, { status: 400 });
+        }
         
-        // LOG ADICIONADO PARA DEBUG
         console.log(`[LOG PDF] Iniciando geração de PDF para Operação ID: ${operacaoId}`);
 
         const { data: duplicatas, error: dupError } = await supabase
@@ -19,18 +21,22 @@ export async function GET(request, { params }) {
             .select('*, operacao:operacoes!inner(cliente:clientes!inner(*))')
             .eq('operacao_id', operacaoId);
 
-        // LOG ADICIONADO PARA DEBUG
-        console.log(`[LOG PDF] Duplicatas encontradas no DB: ${duplicatas ? duplicatas.length : 0}`);
         if (dupError) {
             console.error('[ERRO PDF] Erro ao buscar duplicatas no Supabase:', dupError);
+            throw new Error('Falha ao consultar duplicatas no banco de dados.');
         }
-
-        if (dupError || !duplicatas || duplicatas.length === 0) {
-            throw new Error('Nenhuma duplicata encontrada para esta operação.');
+        if (!duplicatas || duplicatas.length === 0) {
+            throw new Error(`Nenhuma duplicata encontrada para a operação #${operacaoId}.`);
         }
+        console.log(`[LOG PDF] ${duplicatas.length} duplicata(s) encontrada(s).`);
 
         const listaBoletos = [];
         for (const duplicata of duplicatas) {
+            if (!duplicata.operacao || !duplicata.operacao.cliente) {
+                console.warn(`[AVISO PDF] Duplicata ${duplicata.id} sem dados de operação ou cliente. Será pulada.`);
+                continue;
+            }
+            
             const { data: sacado } = await supabase
                 .from('sacados')
                 .select('*')
@@ -38,9 +44,10 @@ export async function GET(request, { params }) {
                 .single();
             
             if (!sacado) {
-                console.warn(`[AVISO PDF] Sacado não encontrado para duplicata ${duplicata.id}, será pulada.`);
+                console.warn(`[AVISO PDF] Sacado "${duplicata.cliente_sacado}" não encontrado para duplicata ${duplicata.id}. Será pulada.`);
                 continue;
             }
+
             listaBoletos.push({
                 agencia: "12400",
                 conta: "008554440",
@@ -67,7 +74,10 @@ export async function GET(request, { params }) {
             });
         }
         
-        console.log(`[LOG PDF] Gerando PDF com ${listaBoletos.length} boleto(s).`);
+        if (listaBoletos.length === 0) {
+            throw new Error("Não foi possível montar os dados para nenhum boleto da operação.");
+        }
+
         const pdfBuffer = gerarPdfBoletoSafra(listaBoletos);
         
         const headers = new Headers();
