@@ -1,6 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { format } from 'date-fns';
-import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
+import { formatBRLNumber, formatCnpjCpf, formatDate } from '../utils/formatters'; // <-- CORREÇÃO AQUI
 import fs from 'fs';
 import path from 'path';
 
@@ -138,7 +137,11 @@ function drawBarcode(doc, code, x, y, width, height) {
 
 // --- Função Principal de Geração de PDF ---
 export function gerarPdfBoletoSafra(listaBoletos) {
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+    const doc = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4'
+    });
 
     const getLogoBase64 = () => {
         try {
