@@ -25,10 +25,7 @@ export default function SacadosPage() {
     const [filters, setFilters] = useState({ nome: '', cnpj: '' });
     const [sacadoParaExcluir, setSacadoParaExcluir] = useState(null);
 
-    const getAuthHeader = () => {
-        const token = sessionStorage.getItem('authToken');
-        return token ? { 'Authorization': `Bearer ${token}` } : {};
-    };
+    const getAuthHeader = () => ({ 'Authorization': `Bearer ${sessionStorage.getItem('authToken')}` });
     
     const showNotification = (message, type) => {
         setNotification({ message, type });
@@ -36,11 +33,13 @@ export default function SacadosPage() {
     };
 
     const fetchData = async () => {
+        console.log("LOG: Iniciando fetchData para buscar todos os sacados.");
         setLoading(true);
         try {
             const response = await fetch(`/api/cadastros/sacados`, { headers: getAuthHeader() });
             if (!response.ok) throw new Error('Falha ao carregar sacados.');
             const data = await response.json();
+            console.log("LOG: Sacados recebidos da API:", data);
             setSacados(data);
         } catch (err) {
             setError(err.message);
@@ -54,6 +53,7 @@ export default function SacadosPage() {
     }, []);
 
     const groupedAndFilteredSacados = useMemo(() => {
+        console.log("LOG: Iniciando memoização de groupedAndFilteredSacados.");
         let items = [...sacados];
         items.forEach(item => {
             if (item.matriz_id) {
@@ -61,13 +61,17 @@ export default function SacadosPage() {
                 item.matriz_nome = matriz ? matriz.nome : 'Matriz não encontrada';
             }
         });
+
         if (filters.nome || filters.cnpj) {
-            return items.filter(sacado => {
+            const filtered = items.filter(sacado => {
                 const nomeMatch = !filters.nome || sacado.nome.toLowerCase().includes(filters.nome.toLowerCase());
                 const cnpjMatch = !filters.cnpj || (sacado.cnpj && sacado.cnpj.includes(filters.cnpj.replace(/\D/g, '')));
                 return nomeMatch && cnpjMatch;
             });
+            console.log("LOG: Retornando lista filtrada simples:", filtered);
+            return filtered;
         }
+        
         const matrizes = {};
         const filiais = [];
         items.forEach(sacado => {
@@ -77,11 +81,13 @@ export default function SacadosPage() {
                 matrizes[sacado.id] = { ...sacado, filiais: [] };
             }
         });
+
         filiais.forEach(filial => {
             if (matrizes[filial.matriz_id]) {
                 matrizes[filial.matriz_id].filiais.push(filial);
             }
         });
+
         const result = [];
         Object.values(matrizes).sort((a, b) => a.nome.localeCompare(b.nome)).forEach(matriz => {
             result.push(matriz);
@@ -89,6 +95,8 @@ export default function SacadosPage() {
                 result.push(...matriz.filiais.sort((a, b) => a.cnpj.localeCompare(b.cnpj)));
             }
         });
+        
+        console.log("LOG: Retornando lista agrupada (matriz/filial):", result);
         return result;
     }, [filters, sacados]);
 
@@ -103,7 +111,14 @@ export default function SacadosPage() {
     };
 
     const handleOpenAddModal = () => { setEditingSacado(null); setIsModalOpen(true); };
-    const handleOpenEditModal = (sacado) => { setEditingSacado(sacado); setIsModalOpen(true); };
+    
+    const handleOpenEditModal = (sacado) => {
+        console.log("LOG: Abrindo modal para editar. Objeto recebido do clique:", sacado);
+        const fullSacadoData = groupedAndFilteredSacados.find(s => s.id === sacado.id);
+        console.log("LOG: Objeto completo (com filiais) encontrado para o modal:", fullSacadoData);
+        setEditingSacado(fullSacadoData);
+        setIsModalOpen(true);
+    };
 
     const handleEditFilial = (filial) => {
         setIsModalOpen(false);
@@ -118,27 +133,30 @@ export default function SacadosPage() {
             const isUpdating = !!id;
             const url = isUpdating ? `/api/cadastros/sacados/${id}` : `/api/cadastros/sacados`;
             const method = isUpdating ? 'PUT' : 'POST';
-            const payload = { ...data, condicoesPagamento: data.condicoesPagamento.map(({id, ...rest}) => rest) };
+            const payload = { ...data, condicoesPagamento: data.condicoesPagamento?.map(({id, ...rest}) => rest) };
+            
+            console.log(`LOG: Salvando Sacado. URL: ${url}, Método: ${method}, Payload:`, payload);
+
             const response = await fetch(url, { 
                 method, 
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, 
                 body: JSON.stringify(payload) 
             });
+
             if (!response.ok) {
                 const errorText = await response.json();
                 throw new Error(errorText.message || 'Falha ao salvar o sacado.');
             }
-            if (!isUpdating) {
-                // Se estiver criando uma nova filial, fecha o modal da matriz e atualiza os dados
-                setIsModalOpen(false);
-            }
-            await fetchData();
-            showNotification(`Sacado ${isUpdating ? 'atualizado' : 'criado'} com sucesso!`, 'success');
+
+            setIsModalOpen(false);
+            await fetchData(); // Atualiza a lista completa
+            showNotification(`Sacado ${isUpdating ? 'atualizado' : 'criado/vinculado'} com sucesso!`, 'success');
             clearFilters(); 
             setCurrentPage(1);
             return { success: true };
         } catch (err) {
             showNotification(err.message, 'error');
+            console.error("LOG: Erro ao salvar sacado:", err);
             return { success: false, message: err.message };
         }
     };

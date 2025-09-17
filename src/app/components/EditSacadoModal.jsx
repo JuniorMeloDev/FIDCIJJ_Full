@@ -35,6 +35,7 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
                     setMessage(`Este CNPJ já é uma filial da matriz #${data.matriz_id}.`);
                     return;
                 }
+                console.log("LOG: Filial encontrada no banco de dados.", data);
                 setFilialData({ 
                     ...data, 
                     cnpj: formatCnpjCpf(data.cnpj), 
@@ -50,6 +51,7 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
                 const externalRes = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
                 if (!externalRes.ok) throw new Error('CNPJ não encontrado em nenhuma base de dados.');
                 const data = await externalRes.json();
+                console.log("LOG: Filial encontrada na API externa.", data);
                 setFilialData({
                     id: null,
                     nome: data.razao_social || '',
@@ -68,6 +70,7 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
         } catch (err) {
             setStatus('error');
             setMessage(err.message);
+            console.error("LOG: Erro na busca de CNPJ da filial:", err);
         }
     };
 
@@ -98,8 +101,9 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
         setIsSaving(false);
     };
     
-    // CORREÇÃO: Garante que matriz.filiais seja sempre um array antes de usar o .map
-    const filiaisCadastradas = Array.isArray(matriz.filiais) ? matriz.filiais : [];
+    // CORREÇÃO DO ERRO 'map': Garante que matriz.filiais seja um array
+    const filiaisCadastradas = Array.isArray(matriz?.filiais) ? matriz.filiais : [];
+    console.log("LOG (FilialManager): Renderizando com filiais:", filiaisCadastradas);
 
     return (
         <div>
@@ -163,6 +167,7 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
     const [activeTab, setActiveTab] = useState('dadosCadastrais');
 
     useEffect(() => {
+        console.log("LOG (Modal): Modal aberto/atualizado. Prop 'sacado' recebida:", sacado);
         if (isOpen) {
             setModalError('');
             setActiveTab('dadosCadastrais');
@@ -244,7 +249,7 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
                 <div className="flex-grow overflow-y-auto py-4 pr-2">
                     {activeTab === 'dadosCadastrais' && (
                         <div className="space-y-3">
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-300">CNPJ</label>
                                     <input type="text" name="cnpj" value={formData.cnpj} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/>
@@ -267,10 +272,9 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
                             </div>
                         </div>
                     )}
-
                     {activeTab === 'condicoes' && (
                         <div>
-                             <div className="flex justify-between items-center mb-2">
+                            <div className="flex justify-between items-center mb-2">
                                 <h3 className="text-md font-semibold text-gray-100">Condições de Pagamento Padrão</h3>
                                 <button type="button" onClick={addCondicao} className="text-sm font-medium text-orange-400 hover:text-orange-500 transition">+ Adicionar</button>
                             </div>
@@ -285,18 +289,15 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
                             </div>
                         </div>
                     )}
-                    
                     {activeTab === 'filiais' && isMatriz && (
                         <FilialManager matriz={sacado} onSave={onSave} onEditFilial={onEditFilial} />
                     )}
                 </div>
-
-                 {modalError && (
+                {modalError && (
                     <div className="text-center p-2 mt-4 bg-red-900/50 border border-red-500 rounded-md">
                         <p className="text-sm text-red-300">{modalError}</p>
                     </div>
                 )}
-                
                 <div className="mt-6 flex justify-between border-t border-gray-700 pt-4 flex-shrink-0">
                     <div>
                         {isEditMode && <button onClick={() => onDelete(sacado.id)} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-red-700 transition text-sm">Excluir</button>}
