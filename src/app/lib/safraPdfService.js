@@ -2,219 +2,180 @@ import { jsPDF } from 'jspdf';
 import { format, addDays } from 'date-fns';
 import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
 
-// --- Funções de Cálculo do Boleto (Baseado no Manual) ---
-
+// ---------- Cálculo da linha digitável (igual ao original) ----------
 function modulo10(bloco) {
-    const multiplicadores = [2, 1];
-    let soma = 0;
-    let i = bloco.length - 1;
-    let m = 0;
-
-    while (i >= 0) {
-        let produto = parseInt(bloco.charAt(i), 10) * multiplicadores[m % 2];
-        if (produto > 9) {
-            produto = Math.floor(produto / 10) + (produto % 10);
-        }
-        soma += produto;
-        i--;
-        m++;
+    const mult = [2, 1];
+    let soma = 0, m = 0;
+    for (let i = bloco.length - 1; i >= 0; i--, m++) {
+        let prod = parseInt(bloco[i], 10) * mult[m % 2];
+        if (prod > 9) prod = Math.floor(prod / 10) + (prod % 10);
+        soma += prod;
     }
-
     const resto = soma % 10;
-    const dv = resto === 0 ? 0 : 10 - resto;
-    return dv;
+    return resto === 0 ? 0 : 10 - resto;
 }
 
 function modulo11(bloco) {
-    const multiplicadores = [2, 3, 4, 5, 6, 7, 8, 9];
-    let soma = 0;
-    let i = bloco.length - 1;
-    let m = 0;
-
-    while (i >= 0) {
-        soma += parseInt(bloco.charAt(i), 10) * multiplicadores[m % 8];
-        i--;
-        m++;
-    }
-
+    const mult = [2, 3, 4, 5, 6, 7, 8, 9];
+    let soma = 0, m = 0;
+    for (let i = bloco.length - 1; i >= 0; i--, m++) soma += parseInt(bloco[i], 10) * mult[m % 8];
     const resto = soma % 11;
     let dac = 11 - resto;
-    if (dac === 0 || dac === 10 || dac === 11) {
-        dac = 1;
-    }
-    return dac;
+    return (dac === 0 || dac === 10 || dac === 11) ? 1 : dac;
 }
 
-function gerarLinhaDigitavelEDAC(dados) {
-    const { agencia, conta, nossoNumero, valor, vencimento } = dados;
+function gerarLinhaDigitavelEDAC({ agencia, conta, nossoNumero, valor, vencimento }) {
     const banco = "422";
     const moeda = "9";
     const tipoCobranca = "2";
     const dataBase = new Date('2022-05-29T12:00:00Z');
-    const dataVenc = new Date(vencimento + 'T12:00:00Z');
-    const diffTime = Math.abs(dataVenc - dataBase);
-    const fatorVencimento = Math.ceil(diffTime / (1000 * 60 * 60 * 24)).toString().padStart(4, '0');
-    const valorFormatado = Math.round(valor * 100).toString().padStart(10, '0');
-    const sistema = "7";
-    const campoLivre = `${sistema}${agencia}${conta}${nossoNumero}${tipoCobranca}`;
-    const blocoParaDAC = `${banco}${moeda}${fatorVencimento}${valorFormatado}${campoLivre}`;
-    const dac = modulo11(blocoParaDAC);
-    const codigoBarras = `${banco}${moeda}${dac}${fatorVencimento}${valorFormatado}${campoLivre}`;
-    const campo1 = `${banco}${moeda}${campoLivre.substring(0, 5)}`;
-    const dv1 = modulo10(campo1);
-    const campo1Formatado = `${campo1.substring(0, 5)}.${campo1.substring(5)}${dv1}`;
-    const campo2 = campoLivre.substring(5, 15);
-    const dv2 = modulo10(campo2);
-    const campo2Formatado = `${campo2.substring(0, 5)}.${campo2.substring(5)}${dv2}`;
-    const campo3 = campoLivre.substring(15, 25);
-    const dv3 = modulo10(campo3);
-    const campo3Formatado = `${campo3.substring(0, 5)}.${campo3.substring(5)}${dv3}`;
-    const campo4 = dac.toString();
-    const campo5 = `${fatorVencimento}${valorFormatado}`;
-    const linhaDigitavel = `${campo1Formatado}  ${campo2Formatado}  ${campo3Formatado}  ${campo4}  ${campo5}`;
+    const fatorVenc = Math.ceil((new Date(vencimento + 'T12:00:00Z') - dataBase) / 86400000)
+                        .toString().padStart(4, '0');
+    const valorFmt = Math.round(valor * 100).toString().padStart(10, '0');
+    const campoLivre = `7${agencia}${conta}${nossoNumero}${tipoCobranca}`;
+    const dac = modulo11(`${banco}${moeda}${fatorVenc}${valorFmt}${campoLivre}`);
+    const codigoBarras = `${banco}${moeda}${dac}${fatorVenc}${valorFmt}${campoLivre}`;
 
+    const c1 = `${banco}${moeda}${campoLivre.substring(0, 5)}`;
+    const c2 = campoLivre.substring(5, 15);
+    const c3 = campoLivre.substring(15, 25);
+
+    const campo1 = `${c1.substring(0, 5)}.${c1.substring(5)}${modulo10(c1)}`;
+    const campo2 = `${c2.substring(0, 5)}.${c2.substring(5)}${modulo10(c2)}`;
+    const campo3 = `${c3.substring(0, 5)}.${c3.substring(5)}${modulo10(c3)}`;
+    const linhaDigitavel = `${campo1}  ${campo2}  ${campo3}  ${dac}  ${fatorVenc}${valorFmt}`;
     return { linhaDigitavel, codigoBarras };
 }
 
-function drawInterleaved2of5(doc, x, y, code, width = 103, height = 12) {
+function drawInterleaved2of5(doc, x, y, code, width = 160, height = 15) {
     const patterns = ['00110', '10001', '01001', '11000', '00101', '10100', '01100', '00011', '10010', '01010'];
-    const start = '0000';
-    const stop = '100';
-    if (code.length % 2 !== 0) { code = '0' + code; }
-    let binaryCode = start;
+    const start = '0000', stop = '100';
+    if (code.length % 2) code = '0' + code;
+    let binary = start;
     for (let i = 0; i < code.length; i += 2) {
-        const pattern1 = patterns[parseInt(code[i], 10)];
-        const pattern2 = patterns[parseInt(code[i + 1], 10)];
-        for (let j = 0; j < 5; j++) { binaryCode += pattern1[j] + pattern2[j]; }
+        const p1 = patterns[parseInt(code[i], 10)], p2 = patterns[parseInt(code[i + 1], 10)];
+        for (let j = 0; j < 5; j++) binary += p1[j] + p2[j];
     }
-    binaryCode += stop;
-    const wideToNarrowRatio = 3;
-    const numNarrow = (binaryCode.match(/0/g) || []).length;
-    const numWide = (binaryCode.match(/1/g) || []).length;
-    const narrowWidth = width / (numNarrow + numWide * wideToNarrowRatio);
-    const wideWidth = narrowWidth * wideToNarrowRatio;
-    let currentX = x;
+    binary += stop;
+
+    const wideRatio = 3;
+    const numN = (binary.match(/0/g) || []).length;
+    const numW = (binary.match(/1/g) || []).length;
+    const narrow = width / (numN + numW * wideRatio);
+    const wide = narrow * wideRatio;
+
+    let cx = x;
     doc.setFillColor(0, 0, 0);
-    for (let i = 0; i < binaryCode.length; i++) {
+    for (let i = 0; i < binary.length; i++) {
         const isBar = i % 2 === 0;
-        const barWidth = binaryCode[i] === '1' ? wideWidth : narrowWidth;
-        if (isBar) { doc.rect(currentX, y, barWidth, height, 'F'); }
-        currentX += barWidth;
+        const w = binary[i] === '1' ? wide : narrow;
+        if (isBar) doc.rect(cx, y, w, height, 'F');
+        cx += w;
     }
 }
 
-// --- Função Principal de Geração de PDF ---
-export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
+// ---------- Geração do PDF ----------
+export function gerarPdfBoletoSafra(listaBoletos) {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
-    const drawField = (label, value, x, y, width, height, valueAlign = 'left', valueSize = 9, labelSize = 6) => {
-        doc.setFontSize(labelSize);
-        doc.setTextColor(100, 100, 100);
-        doc.text(label, x + 1.5, y + 2.5);
-        doc.setFontSize(valueSize);
-        doc.setTextColor(0, 0, 0);
-        const textX = valueAlign === 'right' ? x + width - 1.5 : x + 1.5;
-        const lines = Array.isArray(value) ? value : [value];
-        lines.forEach((line, i) => {
-            doc.text(String(line || ''), textX, y + height - 1.5 - (lines.length - 1 - i) * 3.5, { align: valueAlign, baseline: 'bottom' });
-        });
-    };
-
-    listaBoletos.forEach((dadosBoleto, index) => {
-        if (index > 0) doc.addPage();
-        
+    listaBoletos.forEach((b, idx) => {
+        if (idx > 0) doc.addPage();
         const { linhaDigitavel, codigoBarras } = gerarLinhaDigitavelEDAC({
-            agencia: dadosBoleto.agencia, conta: dadosBoleto.conta, nossoNumero: dadosBoleto.documento.numero,
-            valor: dadosBoleto.documento.valor, vencimento: dadosBoleto.documento.dataVencimento
+            agencia: b.agencia,
+            conta: b.conta,
+            nossoNumero: b.documento.numero,
+            valor: b.documento.valor,
+            vencimento: b.documento.dataVencimento
         });
-        const vencimentoDate = new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z');
+        const vencDate = new Date(b.documento.dataVencimento + 'T12:00:00Z');
+        const emissao = new Date(b.documento.dataEmissao + 'T12:00:00Z');
+        const dataJuros = format(addDays(vencDate, 1), 'dd/MM/yyyy');
 
-        // --- Recibo do Pagador ---
+        // -------- Recibo do Pagador --------
         doc.setFont('helvetica', 'bold').setFontSize(10).text('Recibo do Pagador', 15, 15);
-        doc.setFont('helvetica', 'normal').setFontSize(8);
+        doc.setFontSize(8);
+        // Cabeçalho único
+        doc.text('Beneficiário        Nosso Número        Vencimento', 15, 22);
+        doc.text(`${b.cedente.nome} - CNPJ/CPF: ${formatCnpjCpf(b.cedente.cnpj)}    ${b.documento.numero}    ${format(vencDate,'dd/MM/yyyy')}`, 15, 27);
 
-        doc.text('Beneficiário', 15, 22);
-        doc.text(`${dadosBoleto.cedente.nome} - CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, 15, 26);
-        doc.text('Pagador', 15, 32);
-        const pagadorRecibo = doc.splitTextToSize(`${dadosBoleto.documento.pagador.nome} - CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, 130);
-        doc.text(pagadorRecibo, 15, 36);
-        
-        // CORREÇÃO DE ALINHAMENTO: Coloca os valores ao lado dos rótulos
-        doc.text('Vencimento', 150, 22);
-        doc.text('Agência/Cód. Beneficiário', 150, 29);
-        doc.text('Nosso Número', 150, 36);
-        doc.text('Nº do Documento', 150, 43);
-        doc.text('Valor do Documento', 150, 50);
+        // Tabela compacta
+        doc.text('Data Doc.   Nº Doc.   Carteira   Agência/Cód. Benef.   Valor', 15, 34);
+        doc.text(`${format(emissao,'dd/MM/yyyy')}   ${b.documento.numeroCliente}   60   ${b.agencia}/${b.conta}   ${formatBRLNumber(b.documento.valor)}`, 15, 39);
 
-        doc.setFont('helvetica', 'bold');
-        doc.text(format(vencimentoDate, 'dd/MM/yyyy'), 195, 22, { align: 'right' });
-        doc.text(`${dadosBoleto.agencia}/${dadosBoleto.conta}`, 195, 29, { align: 'right' });
-        doc.text(dadosBoleto.documento.numero, 195, 36, { align: 'right' });
-        doc.text(dadosBoleto.documento.numeroCliente, 195, 43, { align: 'right' });
-        doc.text(formatBRLNumber(dadosBoleto.documento.valor), 195, 50, { align: 'right' });
-        
-        doc.setFont('helvetica', 'normal');
-        doc.text('Autenticação Mecânica', 195, 70, { align: 'right' });
-        doc.setLineDashPattern([2, 1], 0).line(15, 80, 195, 80).setLineDashPattern([], 0);
+        // Pagador e referência
+        doc.text(`Pagador: ${b.documento.pagador.nome} - CNPJ/CPF: ${formatCnpjCpf(b.documento.pagador.numeroDocumento)}`, 15, 47);
+        doc.text(`FORNECEDOR: ${b.cedente.nome}  CNPJ: ${formatCnpjCpf(b.cedente.cnpj)}`, 15, 52);
+        if (b.documento.referenciaNF) {
+            doc.text(`REFERENTE A NF ${b.documento.referenciaNF}`, 15, 56);
+        }
 
-        // --- Ficha de Compensação ---
-        doc.setFont('helvetica', 'bold').setFontSize(12).text('Safra', 25, 90);
-        doc.setLineWidth(0.5).line(40, 86, 40, 93);
-        doc.text('422-7', 45, 90);
-        doc.setLineWidth(0.5).line(55, 86, 55, 93);
-        doc.setFontSize(11).setFont('courier', 'bold').text(linhaDigitavel, 125, 90, { align: 'center' });
-        
-        const x = 15, y = 95, w = 180;
-        doc.setLineWidth(0.2).rect(x, y, w, 85); // Aumenta a altura da caixa principal
+        // Rodapé recibo
+        doc.text('Boleto impresso eletronicamente através do Canal Safra Empresas', 15, 62);
+        doc.text('Autenticação Mecânica', 150, 62);
 
-        drawField('Local de Pagamento', 'Pagável em qualquer banco', x, y, 130, 10);
-        doc.line(x + 130, y, x + 130, y + 85); // Aumenta a linha vertical
-        drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), x + 130, y, 50, 10, 'right', 10);
-        doc.line(x, y + 10, x + w, y + 10);
-        drawField('Beneficiário', `${dadosBoleto.cedente.nome}`, x, y + 10, 130, 10);
-        drawField('Agência/Cód. Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, x + 130, y + 10, 50, 10, 'right');
-        doc.line(x, y + 20, x + w, y + 20);
-        drawField('Data do Doc.', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), x, y + 20, 25, 10);
-        doc.line(x + 25, y + 20, x + 25, y + 30);
-        drawField('Nº do Doc.', dadosBoleto.documento.numeroCliente, x + 25, y + 20, 35, 10);
-        doc.line(x + 60, y + 20, x + 60, y + 30);
-        drawField('Esp. Doc.', dadosBoleto.documento.especie, x + 60, y + 20, 15, 10);
-        doc.line(x + 75, y + 20, x + 75, y + 30);
-        drawField('Aceite', 'Não', x + 75, y + 20, 15, 10);
-        doc.line(x + 90, y + 20, x + 90, y + 30);
-        drawField('Data do Movto', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), x + 90, y + 20, 40, 10);
-        drawField('Nosso Número', dadosBoleto.documento.numero, x + 130, y + 20, 50, 10, 'right');
-        doc.line(x, y + 30, x + w, y + 30);
-        drawField('Carteira', '60', x + 30, y + 30, 20, 10);
-        doc.line(x + 30, y + 30, x + 30, y + 40);
-        doc.line(x + 50, y + 30, x + 50, y + 40);
-        drawField('Espécie', 'R$', x + 50, y + 30, 20, 10);
-        drawField('(=) Valor do Documento', formatBRLNumber(dadosBoleto.documento.valor), x + 130, y + 30, 50, 10, 'right', 10);
-        doc.line(x, y + 40, x + 130, y + 40);
-        const dataJurosMulta = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
-        drawField('Instruções', [`JUROS DE R$ 22,40 AO DIA A PARTIR DE ${dataJurosMulta}`, `MULTA DE 2,00% A PARTIR DE ${dataJurosMulta}`], x, y + 40, 130, 15);
-        drawField('(-) Desconto/Abatimento', '', x + 130, y + 40, 50, 7.5);
-        doc.line(x + 130, y + 47.5, x + w, y + 47.5);
-        drawField('(-) Outras Deduções', '', x + 130, y + 47.5, 50, 7.5);
+        doc.setLineDashPattern([1,1],0).line(15,66,195,66).setLineDashPattern([],0);
 
-        // CORREÇÃO DE POSIÇÃO: Move o pagador para baixo do código de barras
-        doc.line(x, y + 70, x + w, y + 70); 
-        const pagadorAddressFicha = `${dadosBoleto.documento.pagador.endereco.logradouro}\n${dadosBoleto.documento.pagador.endereco.cidade} ${dadosBoleto.documento.pagador.endereco.uf} CEP: ${dadosBoleto.documento.pagador.endereco.cep}`;
-        const pagadorLinesFicha = doc.splitTextToSize(`${dadosBoleto.documento.pagador.nome}\n${pagadorAddressFicha}`, 128);
-        drawField('Pagador', pagadorLinesFicha, x, y + 70, 130, 20);
-        
-        drawField('(+) Mora/Multa', '', x + 130, y + 55, 50, 7.5);
-        doc.line(x + 130, y + 62.5, x + w, y + 62.5);
-        drawField('(+) Outros Acréscimos', '', x + 130, y + 62.5, 50, 7.5);
-        doc.line(x + 130, y + 70, x + w, y + 70);
-        drawField('(=) Valor Cobrado', '', x + 130, y + 70, 50, 10);
-        
-        // CORREÇÃO DE POSIÇÃO: Move o código de barras para cima do pagador
-        drawInterleaved2of5(doc, x + 1, 153, codigoBarras);
+        // -------- Ficha de Compensação --------
+        doc.setFont('helvetica','bold').setFontSize(12).text('Safra', 25, 75);
+        doc.line(40,71,40,78);
+        doc.text('422-7', 45, 75);
+        doc.line(55,71,55,78);
+        doc.setFont('courier','bold').setFontSize(13)
+            .text(linhaDigitavel, 115, 75, { align:'center' });
 
-        doc.setFont('helvetica', 'normal').setFontSize(8);
-        doc.text('Autenticação Mecânica - Ficha de Compensação', 195, 185, { align: 'right' });
+        // Caixa principal
+        const x = 15, y = 80, w = 180;
+        doc.setLineWidth(0.2).rect(x, y, w, 95);
+
+        const draw = (label, value, xx, yy, ww, hh, align='left', vSize=9) => {
+            doc.setFont('helvetica','normal').setFontSize(6).text(label, xx+1.5, yy+3);
+            doc.setFontSize(vSize).text(value, align==='right'?xx+ww-1.5:xx+1.5, yy+hh-2, {align});
+        };
+
+        draw('Local de Pagamento','Pagável em qualquer banco', x, y, 130, 10);
+        draw('Vencimento', format(vencDate,'dd/MM/yyyy'), x+130, y, 50, 10, 'right', 10);
+
+        doc.line(x, y+10, x+w, y+10);
+        draw('Beneficiário', b.cedente.nome, x, y+10, 130, 10);
+        draw('Agência/Cód. Beneficiário', `${b.agencia}/${b.conta}`, x+130, y+10, 50, 10,'right');
+
+        doc.line(x, y+20, x+w, y+20);
+        draw('Data do Doc.', format(emissao,'dd/MM/yyyy'), x, y+20, 25, 10);
+        draw('Nº do Doc.', b.documento.numeroCliente, x+25, y+20, 35, 10);
+        draw('Esp. Doc.', b.documento.especie || 'DM', x+60, y+20, 15, 10);
+        draw('Aceite','Não', x+75, y+20, 15, 10);
+        draw('Data do Movto', format(emissao,'dd/MM/yyyy'), x+90, y+20, 40, 10);
+        draw('Nosso Número', b.documento.numero, x+130, y+20, 50, 10,'right');
+
+        doc.line(x, y+30, x+w, y+30);
+        draw('Carteira','60', x, y+30, 20, 10);
+        draw('Espécie','R$', x+20, y+30, 20, 10);
+        draw('(=) Valor do Documento', formatBRLNumber(b.documento.valor), x+130, y+30, 50, 10, 'right', 10);
+
+        doc.line(x, y+40, x+w, y+40);
+        draw('Instruções',
+             `JUROS DE R$22,40 AO DIA A PARTIR DE ${dataJuros}\nMULTA DE 2,00% A PARTIR DE ${dataJuros}`,
+             x, y+40, 130, 15);
+
+        // Pagador com endereço
+        const endPag = `${b.documento.pagador.endereco.logradouro}, ${b.documento.pagador.endereco.numero}\n`+
+                       `${b.documento.pagador.endereco.cidade} ${b.documento.pagador.endereco.uf} CEP: ${b.documento.pagador.endereco.cep}`;
+        doc.line(x, y+65, x+w, y+65);
+        draw('Pagador', `${b.documento.pagador.nome}\n${endPag}`, x, y+65, 130, 20);
+
+        // Outras linhas de valores
+        draw('(-) Desconto/Abatimento','', x+130, y+40, 50, 7);
+        draw('(-) Outras Deduções','', x+130, y+47, 50, 7);
+        draw('(+) Mora/Multa','', x+130, y+54, 50, 7);
+        draw('(+) Outros Acréscimos','', x+130, y+61, 50, 7);
+        draw('(=) Valor Cobrado','', x+130, y+68, 50, 10);
+
+        // Código de barras
+        drawInterleaved2of5(doc, x+10, y+150, codigoBarras);
+
+        doc.setFont('helvetica','normal').setFontSize(8)
+           .text('Autenticação Mecânica - Ficha de Compensação', 195, 180, {align:'right'});
     });
-    
+
     return doc.output('arraybuffer');
 }
