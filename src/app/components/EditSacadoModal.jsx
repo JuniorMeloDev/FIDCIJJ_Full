@@ -4,7 +4,21 @@ import { useState, useEffect } from 'react';
 import { formatCnpjCpf, formatTelefone, formatCep } from '@/app/utils/formatters';
 import AutocompleteSearch from './AutoCompleteSearch';
 
-export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDelete }) {
+const TabButton = ({ label, isActive, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`px-4 py-2 text-sm font-medium whitespace-nowrap ${
+      isActive
+        ? "border-orange-500 text-orange-400 border-b-2"
+        : "border-transparent text-gray-400 hover:text-gray-200"
+    }`}
+  >
+    {label}
+  </button>
+);
+
+export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDelete, onEditFilial }) {
     const initialState = {
         nome: '', cnpj: '', ie: '', cep: '', endereco: '', bairro: '', 
         municipio: '', uf: '', fone: '', condicoesPagamento: [],
@@ -16,6 +30,7 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
     const [isSaving, setIsSaving] = useState(false);
     const [modalError, setModalError] = useState('');
     const [matrizNome, setMatrizNome] = useState('');
+    const [activeTab, setActiveTab] = useState('dadosCadastrais');
 
     const getAuthHeader = () => {
         const token = sessionStorage.getItem('authToken');
@@ -26,7 +41,6 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
         try {
             const res = await fetch(`/api/cadastros/sacados/search?nome=${query}`, { headers: getAuthHeader() });
             if (!res.ok) return [];
-            // Filtra para mostrar apenas matrizes (empresas que não têm matriz_id)
             const data = await res.json();
             return data.filter(s => !s.matriz_id);
         } catch {
@@ -35,13 +49,9 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
     };
 
     useEffect(() => {
-        const fetchMatrizNome = async (matrizId) => {
-            // Esta função seria ideal se você precisasse buscar o nome da matriz separadamente
-            // Por enquanto, vamos assumir que os dados já vêm com o necessário.
-        };
-
         if (isOpen) {
             setModalError('');
+            setActiveTab('dadosCadastrais');
             if (sacado) {
                 setFormData({
                     ...initialState, ...sacado,
@@ -152,70 +162,110 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
     };
     
     const isEditMode = !!sacado?.id;
+    const isMatrizComFiliais = isEditMode && !formData.matriz_id && sacado.filiais && sacado.filiais.length > 0;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
-            <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] overflow-y-auto">
-                <h2 className="text-xl font-bold mb-4">{isEditMode ? 'Editar Sacado' : 'Adicionar Novo Sacado'}</h2>
-                <div className="space-y-3">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-300">Empresa Matriz (Opcional - para filiais)</label>
-                        <AutocompleteSearch
-                            name="matriz"
-                            value={matrizNome}
-                            onChange={(e) => {
-                                setMatrizNome(e.target.value);
-                                if (e.target.value === '') {
-                                    setFormData(prev => ({ ...prev, matriz_id: null }));
-                                }
-                            }}
-                            onSelect={handleSelectMatriz}
-                            fetchSuggestions={fetchSacados}
-                            placeholder="Pesquise para vincular a uma matriz"
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-300">CNPJ {isFetchingCnpj && <span className="text-xs text-orange-400">(A consultar...)</span>}</label>
-                            <input type="text" name="cnpj" value={formData.cnpj} onChange={handleChange} placeholder="Digite para buscar..." className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
+            <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] flex flex-col">
+                <h2 className="text-xl font-bold mb-4 flex-shrink-0">{isEditMode ? 'Editar Sacado' : 'Adicionar Novo Sacado'}</h2>
+                
+                <div className="border-b border-gray-700 flex-shrink-0">
+                    <nav className="-mb-px flex space-x-6" aria-label="Tabs">
+                        <TabButton label="Dados Cadastrais" isActive={activeTab === 'dadosCadastrais'} onClick={() => setActiveTab('dadosCadastrais')} />
+                        <TabButton label="Condições Pag." isActive={activeTab === 'condicoes'} onClick={() => setActiveTab('condicoes')} />
+                        {isMatrizComFiliais && (
+                            <TabButton label={`Filiais (${sacado.filiais.length})`} isActive={activeTab === 'filiais'} onClick={() => setActiveTab('filiais')} />
+                        )}
+                    </nav>
+                </div>
+                
+                <div className="flex-grow overflow-y-auto py-4 pr-2">
+                    {activeTab === 'dadosCadastrais' && (
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-300">Empresa Matriz (Opcional - para filiais)</label>
+                                <AutocompleteSearch
+                                    name="matriz" value={matrizNome}
+                                    onChange={(e) => {
+                                        setMatrizNome(e.target.value);
+                                        if (e.target.value === '') setFormData(prev => ({ ...prev, matriz_id: null }));
+                                    }}
+                                    onSelect={handleSelectMatriz} fetchSuggestions={fetchSacados}
+                                    placeholder="Pesquise para vincular a uma matriz"
+                                />
+                            </div>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-300">CNPJ {isFetchingCnpj && <span className="text-xs text-orange-400">(A consultar...)</span>}</label>
+                                    <input type="text" name="cnpj" value={formData.cnpj} onChange={handleChange} placeholder="Digite para buscar..." className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-300">Nome do Sacado (Matriz ou Filial)</label>
+                                    <input type="text" name="nome" value={formData.nome || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
+                                </div>
+                            </div>
+                            {(dataFetched || isEditMode) && (
+                                <>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div><label className="block text-xs font-bold text-gray-300">Inscrição Estadual</label><input type="text" name="ie" value={formData.ie || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                        <div><label className="block text-xs font-bold text-gray-300">Telefone</label><input type="text" name="fone" value={formData.fone || ''} onChange={(e) => setFormData(prev => ({...prev, fone: formatTelefone(e.target.value)}))} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                        <div><label className="block text-xs font-bold text-gray-300">CEP</label><input type="text" name="cep" value={formData.cep || ''} onChange={(e) => setFormData(prev => ({...prev, cep: formatCep(e.target.value)}))} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Endereço</label><input type="text" name="endereco" value={formData.endereco || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                        <div><label className="block text-xs font-bold text-gray-300">Bairro</label><input type="text" name="bairro" value={formData.bairro || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                        <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Município</label><input type="text" name="municipio" value={formData.municipio || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                        <div><label className="block text-xs font-bold text-gray-300">UF</label><input type="text" name="uf" value={formData.uf || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                                    </div>
+                                </>
+                            )}
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-300">Nome do Sacado (Matriz ou Filial)</label>
-                            <input type="text" name="nome" value={formData.nome || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
-                        </div>
-                    </div>
+                    )}
 
-                    {(dataFetched || isEditMode) && (
-                        <>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div><label className="block text-xs font-bold text-gray-300">Inscrição Estadual</label><input type="text" name="ie" value={formData.ie || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                <div><label className="block text-xs font-bold text-gray-300">Telefone</label><input type="text" name="fone" value={formData.fone || ''} onChange={(e) => setFormData(prev => ({...prev, fone: formatTelefone(e.target.value)}))} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                <div><label className="block text-xs font-bold text-gray-300">CEP</label><input type="text" name="cep" value={formData.cep || ''} onChange={(e) => setFormData(prev => ({...prev, cep: formatCep(e.target.value)}))} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                    {activeTab === 'condicoes' && (
+                        <div>
+                             <div className="flex justify-between items-center mb-2">
+                                <h3 className="text-md font-semibold text-gray-100">Condições de Pagamento Padrão</h3>
+                                <button type="button" onClick={addCondicao} className="text-sm font-medium text-orange-400 hover:text-orange-500 transition">+ Adicionar</button>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Endereço</label><input type="text" name="endereco" value={formData.endereco || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                <div><label className="block text-xs font-bold text-gray-300">Bairro</label><input type="text" name="bairro" value={formData.bairro || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Município</label><input type="text" name="municipio" value={formData.municipio || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                <div><label className="block text-xs font-bold text-gray-300">UF</label><input type="text" name="uf" value={formData.uf || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-2 border border-gray-700 rounded-md p-2">
+                                {formData.condicoesPagamento?.length > 0 ? formData.condicoesPagamento.map((cond, index) => (
+                                    <div key={index} className="grid grid-cols-3 gap-2 items-center">
+                                        <input type="number" name="parcelas" placeholder="1" min="1" value={cond.parcelas || ''} onChange={e => handleCondicaoChange(index, e)} className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm text-center" />
+                                        <input type="text" name="prazos" placeholder="ex: 15/30" value={cond.prazos || ''} onChange={e => handleCondicaoChange(index, e)} className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm" />
+                                        <button type="button" onClick={() => removeCondicao(index)} className="bg-red-500 text-white text-xs font-semibold py-1.5 px-2 rounded-md hover:bg-red-600 transition">Remover</button>
+                                    </div>
+                                )) : (
+                                    <p className="text-center text-sm text-gray-400 py-3">Nenhuma condição adicionada.</p>
+                                )}
                             </div>
-                            <div className="border-t border-gray-700 pt-3 mt-3">
-                                <div className="flex justify-between items-center mb-2">
-                                    <h3 className="text-md font-semibold text-gray-100">Condições de Pagamento Padrão</h3>
-                                    <button type="button" onClick={addCondicao} className="text-sm font-medium text-orange-400 hover:text-orange-500 transition">+ Adicionar</button>
-                                </div>
-                                <div className="space-y-2 max-h-32 overflow-y-auto pr-2 border border-gray-700 rounded-md p-2">
-                                    {formData.condicoesPagamento?.length > 0 ? formData.condicoesPagamento.map((cond, index) => (
-                                        <div key={index} className="grid grid-cols-3 gap-2 items-center">
-                                            <input type="number" name="parcelas" placeholder="1" min="1" value={cond.parcelas || ''} onChange={e => handleCondicaoChange(index, e)} className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm text-center" />
-                                            <input type="text" name="prazos" placeholder="ex: 15/30" value={cond.prazos || ''} onChange={e => handleCondicaoChange(index, e)} className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm" />
-                                            <button type="button" onClick={() => removeCondicao(index)} className="bg-red-500 text-white text-xs font-semibold py-1.5 px-2 rounded-md hover:bg-red-600 transition">Remover</button>
-                                        </div>
-                                    )) : (
-                                        <p className="text-center text-sm text-gray-400 py-3">Nenhuma condição adicionada.</p>
-                                    )}
-                                </div>
+                        </div>
+                    )}
+                    
+                    {activeTab === 'filiais' && isMatrizComFiliais && (
+                        <div>
+                            <h3 className="text-md font-semibold text-gray-100 mb-2">Filiais Vinculadas</h3>
+                            <div className="overflow-x-auto border border-gray-700 rounded-md">
+                                <table className="min-w-full divide-y divide-gray-600 text-sm">
+                                    <thead className="bg-gray-700/50">
+                                        <tr>
+                                            <th className="px-4 py-2 text-left">CNPJ</th>
+                                            <th className="px-4 py-2 text-left">Local</th>
+                                            <th className="px-4 py-2 text-left">Telefone</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-600">
+                                        {sacado.filiais.map(filial => (
+                                            <tr key={filial.id} onClick={() => onEditFilial(filial)} className="hover:bg-gray-700 cursor-pointer">
+                                                <td className="px-4 py-2">{formatCnpjCpf(filial.cnpj)}</td>
+                                                <td className="px-4 py-2">{filial.municipio} - {filial.uf}</td>
+                                                <td className="px-4 py-2">{formatTelefone(filial.fone)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
-                        </>
+                        </div>
                     )}
                 </div>
 
@@ -225,7 +275,7 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
                     </div>
                 )}
                 
-                <div className="mt-6 flex justify-between border-t border-gray-700 pt-4">
+                <div className="mt-6 flex justify-between border-t border-gray-700 pt-4 flex-shrink-0">
                     <div>
                         {isEditMode && <button onClick={() => onDelete(sacado.id)} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-red-700 transition text-sm">Excluir</button>}
                     </div>
