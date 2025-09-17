@@ -12,10 +12,10 @@ export async function PUT(request, { params }) {
         const { id } = params;
         const body = await request.json();
         
-        // --- CORREÇÃO AQUI: Garante que ambas as propriedades de condição de pagamento sejam removidas ---
+        // Garante que ambas as propriedades de condição de pagamento sejam removidas antes do update
         const { condicoesPagamento, condicoes_pagamento, ...sacadoData } = body;
 
-        // 1. Atualiza os dados principais do sacado (agora sem as propriedades de relacionamento)
+        // 1. Atualiza os dados principais do sacado
         const { error: sacadoError } = await supabase
             .from('sacados')
             .update(sacadoData)

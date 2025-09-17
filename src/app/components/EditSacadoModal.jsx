@@ -18,6 +18,84 @@ const TabButton = ({ label, isActive, onClick }) => (
   </button>
 );
 
+// Componente para o formulário de adicionar filial
+const AddFilialForm = ({ onSave, matrizId, matrizNome }) => {
+    const [filialData, setFilialData] = useState({ cnpj: '', nome: matrizNome });
+    const [isFetching, setIsFetching] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleCnpjChange = async (e) => {
+        const cnpj = formatCnpjCpf(e.target.value);
+        setFilialData(prev => ({ ...prev, cnpj }));
+        const cleanCnpj = cnpj.replace(/\D/g, '');
+
+        if (cleanCnpj.length === 14) {
+            setIsFetching(true);
+            setError('');
+            try {
+                const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
+                if (!response.ok) throw new Error('CNPJ não encontrado.');
+                const data = await response.json();
+                setFilialData(prev => ({
+                    ...prev,
+                    nome: data.razao_social || matrizNome,
+                    fone: data.ddd_telefone_1 ? formatTelefone(`${data.ddd_telefone_1}${data.telefone_1 || ''}`) : '',
+                    cep: data.cep ? formatCep(data.cep) : '',
+                    endereco: `${data.logradouro || ''}, ${data.numero || ''}`,
+                    bairro: data.bairro || '',
+                    municipio: data.municipio || '',
+                    uf: data.uf || '',
+                    ie: '',
+                }));
+            } catch (err) {
+                setError(err.message);
+            } finally {
+                setIsFetching(false);
+            }
+        }
+    };
+
+    const handleSaveFilial = () => {
+        if (!filialData.cnpj) {
+            setError('O CNPJ da filial é obrigatório.');
+            return;
+        }
+        onSave(null, { // Passa null como ID para indicar criação
+            ...filialData,
+            matriz_id: matrizId, // Vincula à matriz atual
+            condicoesPagamento: [] // Filiais herdam as condições da matriz por padrão
+        });
+        // Limpa o formulário após salvar
+        setFilialData({ cnpj: '', nome: matrizNome });
+    };
+
+    return (
+        <div className="mt-4 p-4 border border-gray-700 rounded-lg bg-gray-900/50 space-y-3">
+            <h4 className="text-md font-semibold text-gray-200">Adicionar Nova Filial</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-gray-300">CNPJ da Filial</label>
+                    <input type="text" value={filialData.cnpj} onChange={handleCnpjChange} placeholder="Digite o CNPJ para buscar" className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/>
+                    {isFetching && <p className="text-xs text-orange-400 mt-1">Buscando...</p>}
+                </div>
+                <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-gray-300">Nome (Razão Social)</label>
+                    <input type="text" value={filialData.nome || ''} readOnly className="mt-1 block w-full bg-gray-600 p-1.5 text-sm cursor-not-allowed"/>
+                </div>
+                 <div className="md:col-span-3">
+                    <label className="block text-xs font-bold text-gray-300">Endereço</label>
+                    <input type="text" value={filialData.endereco || ''} readOnly className="mt-1 block w-full bg-gray-600 p-1.5 text-sm cursor-not-allowed"/>
+                </div>
+            </div>
+            {error && <p className="text-sm text-red-400">{error}</p>}
+            <button onClick={handleSaveFilial} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-md text-sm">
+                Salvar Filial
+            </button>
+        </div>
+    );
+}
+
+
 export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDelete, onEditFilial }) {
     const initialState = {
         nome: '', cnpj: '', ie: '', cep: '', endereco: '', bairro: '', 
@@ -25,29 +103,9 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
         matriz_id: null
     };
     const [formData, setFormData] = useState(initialState);
-    const [isFetchingCnpj, setIsFetchingCnpj] = useState(false);
-    const [dataFetched, setDataFetched] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [modalError, setModalError] = useState('');
-    const [matrizNome, setMatrizNome] = useState('');
     const [activeTab, setActiveTab] = useState('dadosCadastrais');
-
-    const getAuthHeader = () => {
-        const token = sessionStorage.getItem('authToken');
-        return token ? { 'Authorization': `Bearer ${token}` } : {};
-    };
-
-    const fetchSacados = async (query) => {
-        try {
-            const res = await fetch(`/api/cadastros/sacados/search?nome=${query}`, { headers: getAuthHeader() });
-            if (!res.ok) return [];
-            const data = await res.json();
-            // Garante que uma filial não possa ser matriz de outra filial
-            return data.filter(s => !s.matriz_id);
-        } catch {
-            return [];
-        }
-    };
 
     useEffect(() => {
         if (isOpen) {
@@ -61,63 +119,18 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
                     cep: sacado.cep ? formatCep(sacado.cep) : '',
                     condicoesPagamento: sacado.condicoes_pagamento || sacado.condicoesPagamento || []
                 });
-                setDataFetched(true);
-                
-                if (sacado.matriz_id && sacado.matriz_nome) {
-                    setMatrizNome(sacado.matriz_nome);
-                } else {
-                    setMatrizNome('');
-                }
-
             } else {
                 setFormData(initialState);
-                setDataFetched(false);
-                setMatrizNome('');
             }
         }
     }, [sacado, isOpen]);
 
     if (!isOpen) return null;
-
-    const handleCnpjSearch = async (cnpjValue) => {
-        const cleanCnpj = cnpjValue.replace(/\D/g, '');
-        if (cleanCnpj.length !== 14) return;
-        setIsFetchingCnpj(true);
-        try {
-            const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
-            if (!response.ok) throw new Error('CNPJ não encontrado na base de dados externa.');
-            const data = await response.json();
-            setFormData(prev => ({
-                ...prev,
-                nome: data.razao_social || '',
-                fone: data.ddd_telefone_1 ? formatTelefone(`${data.ddd_telefone_1}${data.telefone_1 || ''}`) : '',
-                cep: data.cep ? formatCep(data.cep) : '',
-                endereco: `${data.logradouro || ''}, ${data.numero || ''}`,
-                bairro: data.bairro || '',
-                municipio: data.municipio || '',
-                uf: data.uf || '',
-                ie: '', 
-            }));
-            setDataFetched(true);
-        } catch (error) {
-            setModalError(error.message);
-            setDataFetched(true); 
-        } finally {
-            setIsFetchingCnpj(false);
-        }
-    };
-
+    
     const handleChange = (e) => {
         setModalError('');
         const { name, value } = e.target;
-        let formattedValue = value;
-        if (name === 'cnpj') {
-            formattedValue = formatCnpjCpf(value);
-            if (formattedValue.replace(/\D/g, '').length === 14) {
-                handleCnpjSearch(formattedValue);
-            }
-        }
-        setFormData(prev => ({ ...prev, [name]: formattedValue }));
+        setFormData(prev => ({ ...prev, [name]: formatCnpjCpf(value) }));
     };
 
     const handleCondicaoChange = (index, e) => {
@@ -128,20 +141,12 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
             setFormData(prev => ({ ...prev, condicoesPagamento: condicoes }));
         }
     };
-
-    const addCondicao = () => {
-        setFormData(prev => ({ ...prev, condicoesPagamento: [...prev.condicoesPagamento, { parcelas: '1', prazos: '' }] }));
-    };
-
+    
+    const addCondicao = () => setFormData(prev => ({ ...prev, condicoesPagamento: [...(prev.condicoesPagamento || []), { parcelas: '1', prazos: '' }] }));
     const removeCondicao = (index) => {
         const condicoes = [...formData.condicoesPagamento];
         condicoes.splice(index, 1);
         setFormData(prev => ({ ...prev, condicoesPagamento: condicoes }));
-    };
-
-    const handleSelectMatriz = (matrizSelecionada) => {
-        setFormData(prev => ({ ...prev, matriz_id: matrizSelecionada.id, nome: matrizSelecionada.nome }));
-        setMatrizNome(matrizSelecionada.nome);
     };
 
     const handleSave = async () => {
@@ -153,17 +158,14 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
             fone: formData.fone?.replace(/\D/g, ''), 
             cep: formData.cep?.replace(/\D/g, ''),
             condicoesPagamento: formData.condicoesPagamento.map(c => ({ ...c, parcelas: parseInt(c.parcelas, 10) || 1 })),
-            matriz_id: formData.matriz_id,
         }; 
         const result = await onSave(sacado?.id, dataToSave);
         setIsSaving(false);
-        if (!result.success) {
-            setModalError(result.message);
-        }
+        if (!result.success) setModalError(result.message);
     };
-    
+
     const isEditMode = !!sacado?.id;
-    const isMatrizComFiliais = isEditMode && !formData.matriz_id && sacado.filiais && sacado.filiais.length > 0;
+    const isMatriz = isEditMode && !formData.matriz_id;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
@@ -174,52 +176,36 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
                     <nav className="-mb-px flex space-x-6" aria-label="Tabs">
                         <TabButton label="Dados Cadastrais" isActive={activeTab === 'dadosCadastrais'} onClick={() => setActiveTab('dadosCadastrais')} />
                         <TabButton label="Condições Pag." isActive={activeTab === 'condicoes'} onClick={() => setActiveTab('condicoes')} />
-                        {isMatrizComFiliais && (
-                            <TabButton label={`Filiais (${sacado.filiais.length})`} isActive={activeTab === 'filiais'} onClick={() => setActiveTab('filiais')} />
+                        {isMatriz && (
+                            <TabButton label="Filiais" isActive={activeTab === 'filiais'} onClick={() => setActiveTab('filiais')} />
                         )}
                     </nav>
                 </div>
-                
+
                 <div className="flex-grow overflow-y-auto py-4 pr-2">
                     {activeTab === 'dadosCadastrais' && (
                         <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-300">Empresa Matriz (Opcional - para filiais)</label>
-                                <AutocompleteSearch
-                                    name="matriz" value={matrizNome}
-                                    onChange={(e) => {
-                                        setMatrizNome(e.target.value);
-                                        if (e.target.value === '') setFormData(prev => ({ ...prev, matriz_id: null }));
-                                    }}
-                                    onSelect={handleSelectMatriz} fetchSuggestions={fetchSacados}
-                                    placeholder="Pesquise para vincular a uma matriz"
-                                />
-                            </div>
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-300">CNPJ {isFetchingCnpj && <span className="text-xs text-orange-400">(A consultar...)</span>}</label>
-                                    <input type="text" name="cnpj" value={formData.cnpj} onChange={handleChange} placeholder="Digite para buscar..." className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
+                                    <label className="block text-xs font-bold text-gray-300">CNPJ</label>
+                                    <input type="text" name="cnpj" value={formData.cnpj} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-300">Nome do Sacado (Matriz ou Filial)</label>
-                                    <input type="text" name="nome" value={formData.nome || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
+                                    <label className="block text-xs font-bold text-gray-300">Nome do Sacado</label>
+                                    <input type="text" name="nome" value={formData.nome || ''} onChange={e => setFormData(prev => ({...prev, nome: e.target.value}))} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/>
                                 </div>
                             </div>
-                            {(dataFetched || isEditMode) && (
-                                <>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div><label className="block text-xs font-bold text-gray-300">Inscrição Estadual</label><input type="text" name="ie" value={formData.ie || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                        <div><label className="block text-xs font-bold text-gray-300">Telefone</label><input type="text" name="fone" value={formData.fone || ''} onChange={(e) => setFormData(prev => ({...prev, fone: formatTelefone(e.target.value)}))} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                        <div><label className="block text-xs font-bold text-gray-300">CEP</label><input type="text" name="cep" value={formData.cep || ''} onChange={(e) => setFormData(prev => ({...prev, cep: formatCep(e.target.value)}))} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Endereço</label><input type="text" name="endereco" value={formData.endereco || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                        <div><label className="block text-xs font-bold text-gray-300">Bairro</label><input type="text" name="bairro" value={formData.bairro || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                        <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Município</label><input type="text" name="municipio" value={formData.municipio || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                        <div><label className="block text-xs font-bold text-gray-300">UF</label><input type="text" name="uf" value={formData.uf || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
-                                    </div>
-                                </>
-                            )}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div><label className="block text-xs font-bold text-gray-300">Inscrição Estadual</label><input type="text" name="ie" value={formData.ie || ''} onChange={e => setFormData(prev => ({...prev, ie: e.target.value}))} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                                <div><label className="block text-xs font-bold text-gray-300">Telefone</label><input type="text" name="fone" value={formData.fone || ''} onChange={(e) => setFormData(prev => ({...prev, fone: formatTelefone(e.target.value)}))} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                                <div><label className="block text-xs font-bold text-gray-300">CEP</label><input type="text" name="cep" value={formData.cep || ''} onChange={(e) => setFormData(prev => ({...prev, cep: formatCep(e.target.value)}))} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Endereço</label><input type="text" name="endereco" value={formData.endereco || ''} onChange={e => setFormData(prev => ({...prev, endereco: e.target.value}))} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                                <div><label className="block text-xs font-bold text-gray-300">Bairro</label><input type="text" name="bairro" value={formData.bairro || ''} onChange={e => setFormData(prev => ({...prev, bairro: e.target.value}))} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                                <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-300">Município</label><input type="text" name="municipio" value={formData.municipio || ''} onChange={e => setFormData(prev => ({...prev, municipio: e.target.value}))} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                                <div><label className="block text-xs font-bold text-gray-300">UF</label><input type="text" name="uf" value={formData.uf || ''} onChange={e => setFormData(prev => ({...prev, uf: e.target.value}))} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
+                            </div>
                         </div>
                     )}
 
@@ -232,40 +218,35 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
                             <div className="space-y-2 max-h-48 overflow-y-auto pr-2 border border-gray-700 rounded-md p-2">
                                 {formData.condicoesPagamento?.length > 0 ? formData.condicoesPagamento.map((cond, index) => (
                                     <div key={index} className="grid grid-cols-3 gap-2 items-center">
-                                        <input type="number" name="parcelas" placeholder="1" min="1" value={cond.parcelas || ''} onChange={e => handleCondicaoChange(index, e)} className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm text-center" />
-                                        <input type="text" name="prazos" placeholder="ex: 15/30" value={cond.prazos || ''} onChange={e => handleCondicaoChange(index, e)} className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm" />
-                                        <button type="button" onClick={() => removeCondicao(index)} className="bg-red-500 text-white text-xs font-semibold py-1.5 px-2 rounded-md hover:bg-red-600 transition">Remover</button>
+                                        <input type="number" name="parcelas" placeholder="1" min="1" value={cond.parcelas || ''} onChange={e => handleCondicaoChange(index, e)} className="bg-gray-700 p-1.5 text-sm text-center" />
+                                        <input type="text" name="prazos" placeholder="ex: 15/30" value={cond.prazos || ''} onChange={e => handleCondicaoChange(index, e)} className="bg-gray-700 p-1.5 text-sm" />
+                                        <button type="button" onClick={() => removeCondicao(index)} className="bg-red-500 text-white text-xs py-1.5 px-2 rounded-md hover:bg-red-600">Remover</button>
                                     </div>
-                                )) : (
-                                    <p className="text-center text-sm text-gray-400 py-3">Nenhuma condição adicionada.</p>
-                                )}
+                                )) : <p className="text-center text-sm text-gray-400 py-3">Nenhuma condição adicionada.</p>}
                             </div>
                         </div>
                     )}
                     
-                    {activeTab === 'filiais' && isMatrizComFiliais && (
+                    {activeTab === 'filiais' && isMatriz && (
                         <div>
-                            <h3 className="text-md font-semibold text-gray-100 mb-2">Filiais Vinculadas</h3>
-                            <div className="overflow-x-auto border border-gray-700 rounded-md">
-                                <table className="min-w-full divide-y divide-gray-600 text-sm">
-                                    <thead className="bg-gray-700/50">
-                                        <tr>
-                                            <th className="px-4 py-2 text-left">CNPJ</th>
-                                            <th className="px-4 py-2 text-left">Local</th>
-                                            <th className="px-4 py-2 text-left">Telefone</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-600">
-                                        {sacado.filiais.map(filial => (
-                                            <tr key={filial.id} onClick={() => onEditFilial(filial)} className="hover:bg-gray-700 cursor-pointer">
-                                                <td className="px-4 py-2">{formatCnpjCpf(filial.cnpj)}</td>
-                                                <td className="px-4 py-2">{filial.municipio} - {filial.uf}</td>
-                                                <td className="px-4 py-2">{formatTelefone(filial.fone)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                            <h3 className="text-md font-semibold text-gray-100 mb-2">Filiais Cadastradas</h3>
+                            {sacado.filiais && sacado.filiais.length > 0 ? (
+                                <div className="overflow-x-auto border border-gray-700 rounded-md">
+                                    <table className="min-w-full divide-y divide-gray-600 text-sm">
+                                        <tbody className="divide-y divide-gray-600">
+                                            {sacado.filiais.map(filial => (
+                                                <tr key={filial.id} onClick={() => onEditFilial(filial)} className="hover:bg-gray-700 cursor-pointer">
+                                                    <td className="px-4 py-2">{formatCnpjCpf(filial.cnpj)}</td>
+                                                    <td className="px-4 py-2">{filial.municipio} - {filial.uf}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <p className="text-sm text-gray-400 italic">Nenhuma filial cadastrada para esta matriz.</p>
+                            )}
+                            <AddFilialForm onSave={onSave} matrizId={sacado.id} matrizNome={sacado.nome} />
                         </div>
                     )}
                 </div>

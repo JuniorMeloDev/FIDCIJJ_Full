@@ -30,10 +30,10 @@ export async function POST(request) {
 
         const body = await request.json();
         
-        // --- CORREÇÃO AQUI: Separa os dados do sacado das condições de pagamento ---
+        // Separa os dados do sacado das condições de pagamento
         const { condicoesPagamento, ...sacadoData } = body;
 
-        // 1. Insere o sacado
+        // 1. Insere o sacado (matriz ou filial)
         const { data: newSacado, error: sacadoError } = await supabase
             .from('sacados')
             .insert(sacadoData)
