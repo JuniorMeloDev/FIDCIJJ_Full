@@ -207,8 +207,6 @@ export default function ResumoPage() {
 
   const totalGeral = saldos.reduce((sum, c) => sum + (c.saldo || 0), 0);
   
-  // *** NOVA LÓGICA AQUI ***
-  // Define quando os cards de Despesa e Lucro devem ser exibidos
   const shouldShowGlobalMetrics = 
     !filters.tipoOperacaoId && 
     !filters.clienteId && 
@@ -352,7 +350,6 @@ export default function ResumoPage() {
               </motion.div>
             </section>
 
-            {/* *** CARDS COM A LÓGICA APLICADA *** */}
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
               <motion.div
                 key="juros"
@@ -463,14 +460,21 @@ export default function ResumoPage() {
                       .map((dup) => {
                         const isVencido = dup.dataVencimento < today;
                         const op = dup.operacao;
-                      
                         const jurosNaoDescontados = op && op.valor_total_juros < 0.01 && dup.valorJuros > 0;
                         const valorExibido = jurosNaoDescontados ? dup.valorBruto + dup.valorJuros : dup.valorBruto;
                         
+                        // #### CORREÇÃO APLICADA AQUI ####
+                        // Criamos um novo objeto 'itemParaModal' que contém o valorBruto corrigido.
+                        // Este objeto será passado para a função de contexto e, consequentemente, para o modal.
+                        const itemParaModal = {
+                          ...dup,
+                          valorBruto: valorExibido,
+                        };
+
                         return (
                           <div
                             key={dup.id}
-                            onContextMenu={(e) => handleContextMenu(e, dup)}
+                            onContextMenu={(e) => handleContextMenu(e, itemParaModal)}
                             className="flex justify-between items-center text-sm border-b border-gray-600 pb-2 last:border-none cursor-pointer hover:bg-gray-600 rounded-md p-2"
                           >
                             <div>
