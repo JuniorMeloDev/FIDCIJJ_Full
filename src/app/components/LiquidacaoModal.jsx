@@ -7,6 +7,20 @@ import {
   formatBRLNumber,
 } from "@/app/utils/formatters";
 
+// Função auxiliar para identificar de forma robusta se os juros são pós-fixados
+const isPostFixedInterest = (operation, duplicate) => {
+    if (!operation || !duplicate) return false;
+
+    // Se o valor líquido pago ao cliente foi (Bruto - Descontos), sem abater os juros,
+    // então os juros são pós-fixados e devem ser cobrados na liquidação.
+    // Usamos uma pequena tolerância para evitar problemas com arredondamento.
+    const expectedNetForPreFixed = operation.valor_total_bruto - operation.valor_total_juros - (operation.valor_total_descontos || 0);
+    const isPreFixed = Math.abs(operation.valor_liquido - expectedNetForPreFixed) < 0.01;
+
+    return !isPreFixed;
+};
+
+
 export default function LiquidacaoModal({
   isOpen,
   onClose,
@@ -21,13 +35,23 @@ export default function LiquidacaoModal({
 
   const isMultiple = Array.isArray(duplicata);
 
-  // #### LÓGICA CORRIGIDA E SIMPLIFICADA ####
-  // O valor total a ser liquidado é sempre a soma dos valores brutos das duplicatas.
-  // A lógica complexa que tentava adicionar os juros da operação foi removida.
+  // #### LÓGICA CORRIGIDA E ROBUSTA PARA O VALOR TOTAL ####
   const totalValue = useMemo(() => {
     if (!duplicata) return 0;
     const items = isMultiple ? duplicata : [duplicata];
-    return items.reduce((sum, d) => sum + d.valorBruto, 0);
+
+    return items.reduce((sum, d) => {
+      const op = d.operacao;
+      if (!op) return sum + d.valorBruto; // Fallback
+
+      // Para juros pós-fixados, o valor recebido é o principal + juros da operação.
+      if (isPostFixedInterest(op, d)) {
+        return sum + d.valorBruto + d.valorJuros;
+      }
+      
+      // Para juros pré-fixados, o valor recebido é apenas o principal.
+      return sum + d.valorBruto;
+    }, 0);
   }, [duplicata, isMultiple]);
 
   const valorTotalComJuros = useMemo(() => {
@@ -54,13 +78,16 @@ export default function LiquidacaoModal({
     }
     setError("");
 
-    // #### LÓGICA CORRIGIDA E SIMPLIFICADA ####
-    // Não enviamos mais os juros da operação para serem somados no backend.
-    // A liquidação agora lida apenas com o valor de face da duplicata + juros de mora.
-    const liquidacoes = duplicata.map((dup) => ({
-      id: dup.id,
-      juros_a_somar: 0, // Sempre será 0
-    }));
+    // #### LÓGICA CORRIGIDA PARA ENVIAR À API ####
+    const liquidacoes = duplicata.map((dup) => {
+        const op = dup.operacao;
+        // Identifica se é pós-fixado para enviar os juros a somar para a RPC
+        const isPostFixed = isPostFixedInterest(op, dup);
+        return {
+            id: dup.id,
+            juros_a_somar: isPostFixed ? dup.valorJuros : 0,
+        };
+    });
 
     onConfirm(
       liquidacoes,
