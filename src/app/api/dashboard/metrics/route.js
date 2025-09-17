@@ -89,19 +89,22 @@ export async function GET(request) {
      * que foram liquidados, pois esses já foram contabilizados no dia da operação.
      * Juros de mora continuam sendo somados normalmente.
      */
-    const { data: jurosPosLiquidadosData, error: jurosPosErr } = await supabase
-      .from('duplicatas')
-      .select('valor_juros, operacao(juros_pre)')
-      .eq('status_recebimento', 'Liquidado')
-      .eq('operacao.juros_pre', false);
+    // substituir a parte anterior por isto
+const { data: jurosPosLiquidadosData, error: jurosPosErr } = await supabase
+  .from('duplicatas')
+  .select('valor_juros, operacao:operacoes!inner(juros_pre)')
+  .eq('status_recebimento', 'Liquidado')
+  .eq('operacao.juros_pre', false);
 
-    if (jurosPosErr) {
-      console.error('Erro ao buscar juros pós liquidados:', jurosPosErr);
-      throw new Error('Falha ao ajustar juros pós-fixados.');
-    }
+if (jurosPosErr) {
+  console.error('Erro ao buscar juros pós liquidados:', jurosPosErr);
+  // retorna detalhe para facilitar debug (remova em produção)
+  return NextResponse.json({ message: 'Erro ao buscar juros pós liquidados', detail: jurosPosErr }, { status: 500 });
+}
 
-    const jurosPosLiquidados = (jurosPosLiquidadosData || [])
-      .reduce((sum, d) => sum + (d.valor_juros || 0), 0);
+const jurosPosLiquidados = (jurosPosLiquidadosData || [])
+  .reduce((sum, d) => sum + (d.valor_juros || 0), 0);
+
 
     const totalJurosAjustado = (totais.total_juros || 0) - jurosPosLiquidados;
     const lucroLiquido = totalJurosAjustado - (totais.total_despesas || 0);
