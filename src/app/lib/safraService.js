@@ -104,3 +104,48 @@ export async function registrarBoletoSafra(accessToken, dadosBoleto) {
         req.end();
     });
 }
+
+export async function consultarBoletoSafra(accessToken, params) {
+    console.log("\n--- [SAFRAPAY API] Etapa 2.1: Consulta de Boleto Existente ---");
+    
+    const { agencia, conta, nossoNumero, numeroCliente } = params;
+    const queryString = new URLSearchParams({ agencia, conta, numero: nossoNumero, numeroCliente }).toString();
+    const apiEndpoint = `https://api-hml.safranegocios.com.br/gateway/cobrancas/v1/boletos?${queryString}`;
+    const correlationId = crypto.randomUUID();
+
+    const options = {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Safra-Correlation-ID': correlationId
+        },
+    };
+
+    console.log(`[LOG SAFRA] Enviando requisição de consulta para: ${apiEndpoint}`);
+
+    return new Promise((resolve, reject) => {
+        const req = https.request(apiEndpoint, options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => (data += chunk));
+            res.on('end', () => {
+                console.log(`[LOG SAFRA] Resposta da consulta (Status ${res.statusCode}):`, data);
+                try {
+                    const jsonData = JSON.parse(data);
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        console.log("--- [SAFRAPAY API] Boleto consultado com sucesso. ---");
+                        resolve(jsonData);
+                    } else {
+                        reject(new Error(`Erro ${res.statusCode} ao consultar boleto: ${jsonData.message || data}`));
+                    }
+                } catch (e) {
+                    reject(new Error(`Falha ao processar a resposta da consulta: ${data}`));
+                }
+            });
+        });
+        req.on('error', (e) => {
+            console.error("[ERRO SAFRA] Erro na requisição de consulta:", e);
+            reject(new Error(`Erro de rede na requisição de consulta: ${e.message}`));
+        });
+        req.end();
+    });
+}

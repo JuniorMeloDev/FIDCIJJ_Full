@@ -4,12 +4,12 @@ import jwt from 'jsonwebtoken';
 import { format } from 'date-fns';
 
 // Serviços dos bancos
-import { getSafraAccessToken, registrarBoletoSafra } from '@/app/lib/safraService';
+import { getSafraAccessToken, registrarBoletoSafra, consultarBoletoSafra } from '@/app/lib/safraService';
 import { getBradescoAccessToken, registrarBoleto } from '@/app/lib/bradescoService';
 
 // --- Funções Auxiliares para Preparar os Dados ---
-
 async function getDadosParaBoleto(duplicataId, banco) {
+    // ... (o conteúdo desta função permanece o mesmo da resposta anterior)
     const { data: duplicata, error: dupError } = await supabase
         .from('duplicatas')
         .select('*')
@@ -85,9 +85,11 @@ async function getDadosParaBoleto(duplicataId, banco) {
     throw new Error("Banco inválido.");
 }
 
-
 // --- ROTA PRINCIPAL ---
 export async function POST(request) {
+    let tokenData;
+    let dadosParaBoleto;
+
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
@@ -95,26 +97,42 @@ export async function POST(request) {
 
         const { duplicataId, banco } = await request.json();
 
-        // 1. Obter dados formatados para o banco (agora localmente)
-        const dadosParaBoleto = await getDadosParaBoleto(duplicataId, banco);
+        dadosParaBoleto = await getDadosParaBoleto(duplicataId, banco);
 
-        // 2. Registrar no banco selecionado
         let boletoGerado;
         let linhaDigitavel;
 
         if (banco === 'safra') {
-            const tokenData = await getSafraAccessToken();
-            boletoGerado = await registrarBoletoSafra(tokenData.access_token, dadosParaBoleto);
-            linhaDigitavel = boletoGerado.data?.codigoBarras || 'N/A';
+            tokenData = await getSafraAccessToken();
+            try {
+                boletoGerado = await registrarBoletoSafra(tokenData.access_token, dadosParaBoleto);
+            } catch (error) {
+                // SE O ERRO FOR "JÁ REGISTRADO", TENTA CONSULTAR
+                if (error.message && error.message.includes('DUPLICADOS')) {
+                    console.log(`Boleto já registrado para ${dadosParaBoleto.documento.numero}. Tentando consultar...`);
+                    const consultaParams = {
+                        agencia: dadosParaBoleto.agencia,
+                        conta: dadosParaBoleto.conta,
+                        nossoNumero: dadosParaBoleto.documento.numero,
+                        numeroCliente: dadosParaBoleto.documento.numeroCliente,
+                    };
+                    boletoGerado = await consultarBoletoSafra(tokenData.access_token, consultaParams);
+                } else {
+                    throw error; // Se for outro erro, propaga
+                }
+            }
+            linhaDigitavel = boletoGerado.data?.documento?.codigoBarras || boletoGerado.data?.codigoBarras || 'N/A';
+        
         } else if (banco === 'bradesco') {
-            const tokenData = await getBradescoAccessToken();
+            tokenData = await getBradescoAccessToken();
             boletoGerado = await registrarBoleto(tokenData.access_token, dadosParaBoleto);
             linhaDigitavel = boletoGerado.linhaDigitavel || 'N/A';
+        
         } else {
             throw new Error("Banco selecionado inválido.");
         }
         
-        // 3. Atualizar a duplicata no nosso banco de dados
+        // Atualiza a duplicata no nosso banco de dados
         const { error: updateError } = await supabase
             .from('duplicatas')
             .update({ 
