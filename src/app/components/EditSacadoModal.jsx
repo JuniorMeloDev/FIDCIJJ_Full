@@ -35,15 +35,9 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
                     setMessage(`Este CNPJ já é uma filial da matriz #${data.matriz_id}.`);
                     return;
                 }
-                setFilialData({ 
-                    ...data, 
-                    nome: matriz.nome, // FORÇA O NOME DA MATRIZ
-                    cnpj: formatCnpjCpf(data.cnpj), 
-                    fone: formatTelefone(data.fone), 
-                    cep: formatCep(data.cep) 
-                });
+                setFilialData({ ...data, nome: matriz.nome, cnpj: formatCnpjCpf(data.cnpj), fone: formatTelefone(data.fone), cep: formatCep(data.cep) });
                 setStatus('found');
-                setMessage('Sacado encontrado. Para vinculá-lo, clique em "Vincular Filial".');
+                setMessage('Sacado encontrado no sistema. Para vinculá-lo, clique em "Vincular Filial".');
                 return;
             }
 
@@ -52,16 +46,11 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
                 if (!externalRes.ok) throw new Error('CNPJ não encontrado em nenhuma base de dados.');
                 const data = await externalRes.json();
                 setFilialData({
-                    id: null,
-                    nome: matriz.nome, // FORÇA O NOME DA MATRIZ
-                    cnpj: formatCnpjCpf(cleanCnpj),
+                    id: null, nome: matriz.nome, cnpj: formatCnpjCpf(cleanCnpj),
                     fone: data.ddd_telefone_1 ? formatTelefone(`${data.ddd_telefone_1}${data.telefone_1 || ''}`) : '',
                     cep: data.cep ? formatCep(data.cep) : '',
                     endereco: `${data.logradouro || ''}, ${data.numero || ''}`,
-                    bairro: data.bairro || '',
-                    municipio: data.municipio || '',
-                    uf: data.uf || '',
-                    ie: '',
+                    bairro: data.bairro || '', municipio: data.municipio || '', uf: data.uf || '', ie: '',
                 });
                 setStatus('notFound');
                 setMessage('CNPJ novo. Dados preenchidos pela API externa.');
@@ -83,11 +72,8 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
 
     const handleSaveClick = async () => {
         setIsSaving(true);
-        const isUpdating = status === 'found';
-        const filialIdToSave = isUpdating ? filialData.id : null;
-        const dataToSave = { ...filialData, nome: matriz.nome, matriz_id: matriz.id }; // Garante o nome da matriz ao salvar
-
-        const result = await onSave(filialIdToSave, dataToSave);
+        // A API POST agora lida com a lógica de criar ou vincular
+        const result = await onSave(null, { ...filialData, matriz_id: matriz.id });
         if (result.success) {
             setFilialData(initialState);
             setStatus('idle');
@@ -99,7 +85,6 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
         setIsSaving(false);
     };
     
-    // CORREÇÃO DO ERRO 'map': Garante que matriz.filiais seja sempre um array antes de usar o .map
     const filiaisCadastradas = Array.isArray(matriz?.filiais) ? matriz.filiais : [];
 
     return (
@@ -132,10 +117,7 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
                 {status === 'found' || status === 'notFound' ? (
                     <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="md:col-span-3">
-                                <label className="block text-xs font-bold text-gray-300">Nome (Razão Social)</label>
-                                <input type="text" name="nome" value={filialData.nome || ''} readOnly className="mt-1 block w-full bg-gray-600 p-1.5 text-sm cursor-not-allowed"/>
-                            </div>
+                            <div className="md:col-span-3"><label className="block text-xs font-bold text-gray-300">Nome (Razão Social)</label><input type="text" name="nome" value={filialData.nome || ''} readOnly className="mt-1 block w-full bg-gray-600 p-1.5 text-sm cursor-not-allowed"/></div>
                             <div><label className="block text-xs font-bold text-gray-300">Inscrição Estadual</label><input type="text" name="ie" value={filialData.ie || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
                             <div><label className="block text-xs font-bold text-gray-300">Telefone</label><input type="text" name="fone" value={filialData.fone || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>
                             <div><label className="block text-xs font-bold text-gray-300">CEP</label><input type="text" name="cep" value={filialData.cep || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 p-1.5 text-sm"/></div>

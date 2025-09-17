@@ -32,31 +32,35 @@ export async function POST(request) {
         const { condicoesPagamento, ...sacadoData } = body;
         const cleanCnpj = sacadoData.cnpj?.replace(/\D/g, '');
 
-        // Se a requisição for para criar/vincular uma filial, a lógica é diferente
-        if (sacadoData.matriz_id) {
-            const { data: existingSacado } = await supabase
-                .from('sacados')
-                .select('id, matriz_id')
-                .eq('cnpj', cleanCnpj)
-                .single();
+        // Verifica se já existe um sacado com este CNPJ
+        const { data: existingSacado } = await supabase
+            .from('sacados')
+            .select('id, matriz_id')
+            .eq('cnpj', cleanCnpj)
+            .single();
 
-            // Se a filial já existe no BD, apenas atualiza (vincula)
-            if (existingSacado) {
-                if (existingSacado.matriz_id && existingSacado.matriz_id !== sacadoData.matriz_id) {
-                    return NextResponse.json({ message: 'Este CNPJ já está vinculado a outra matriz.' }, { status: 409 });
-                }
-                const { data: updatedSacado, error: updateError } = await supabase
-                    .from('sacados')
-                    .update({ ...sacadoData, cnpj: cleanCnpj })
-                    .eq('id', existingSacado.id)
-                    .select()
-                    .single();
-                if (updateError) throw updateError;
-                return NextResponse.json(updatedSacado, { status: 200 }); // Retorna 200 OK para atualização
+        // Se o sacado já existe, ATUALIZA (vincula como filial) em vez de criar
+        if (existingSacado) {
+            // Se já for filial de outra matriz, retorna erro.
+            if (existingSacado.matriz_id && existingSacado.matriz_id !== sacadoData.matriz_id) {
+                return NextResponse.json({ message: 'Este CNPJ já está vinculado a outra matriz.' }, { status: 409 });
             }
+            
+            // Remove o ID do corpo para evitar conflito na atualização dos dados do objeto.
+            delete sacadoData.id;
+
+            const { data: updatedSacado, error: updateError } = await supabase
+                .from('sacados')
+                .update({ ...sacadoData, cnpj: cleanCnpj })
+                .eq('id', existingSacado.id)
+                .select()
+                .single();
+                
+            if (updateError) throw updateError;
+            return NextResponse.json(updatedSacado, { status: 200 }); // Retorna 200 OK para atualização
         }
 
-        // Se não for filial ou se a filial não existir, cria um novo registro
+        // Se não existe, cria um novo
         const { data: newSacado, error: insertError } = await supabase
             .from('sacados')
             .insert({ ...sacadoData, cnpj: cleanCnpj })
@@ -78,6 +82,7 @@ export async function POST(request) {
 
     } catch (error) {
         console.error("Erro ao criar/vincular sacado:", error);
+        // O código 23505 é de violação de constraint única (como o CNPJ)
         if (error.code === '23505') { 
             return NextResponse.json({ message: 'Já existe um sacado com este CNPJ.' }, { status: 409 });
         }
