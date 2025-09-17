@@ -136,7 +136,6 @@ function drawInterleaved2of5(doc, x, y, code, width = 103, height = 12) {
 // --- Função Principal de Geração de PDF ---
 export function gerarPdfBoletoSafra(listaBoletos) {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    const safraLogoBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFgAAAAXCAYAAAB/oB20AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAFkSURBVHgB7doxSgNBFAbw/+BCQrGwsBEs/At/QdjaWmgv2HgD/mDRF/APFlpZW3sLkQQbQUHUgqAgsBKz4mdlcfDyzs7M3d2Xj51kl+e5l8wks/1AFAVxwT8ACiL/S+i/oCCi0/95GkAVZSgr03/P4gj2iAtAHg8W9fQ9wUUBxL93wAT4pQhSAVxQxW6gCq2A44GjYhYlA5jYjRSgCq2AG7ARiUIjZgQBqmAjrARiUIjZgQBsQDgS/Qz0/kMWyRno+UCTw1+SoQ3Al6+Vn3gK9ADw0T4Rbt/kI8A0wY48pAXvQAu0gK3oAnQBX0AvoAnQBT0AvoAXQBT0AvoAXQBT0AvoATQBT0AvoATQBT0AvoATQBT0AvoAUA/k3/w5gq9gMykALvoAmwE4lCI2YEAaoAI6wEYlCI2YEAahALz+f+k6AEYlCL0+/+n/sP/oBywY48pA/wHpVp/9g8W9NCk1e/0ttAAAAAElFTkSuQmCC';
 
     const drawField = (label, value, x, y, width, height, valueAlign = 'left', valueSize = 9, labelSize = 6) => {
         doc.setFontSize(labelSize);
@@ -197,7 +196,6 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.setLineDashPattern([], 0);
 
         // --- Ficha de Compensação ---
-        doc.addImage(safraLogoBase64, 'PNG', 15, 86, 18, 7);
         doc.setLineWidth(0.5).line(40, 86, 40, 93);
         doc.setFont('helvetica', 'bold').setFontSize(12).text('422-7', 45, 90);
         doc.setLineWidth(0.5).line(55, 86, 55, 93);
