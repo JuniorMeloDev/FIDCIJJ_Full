@@ -112,6 +112,7 @@ function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
     }
 }
 
+// --- Função Principal de Geração de PDF ---
 export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
@@ -130,6 +131,7 @@ export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
 
     listaBoletos.forEach((dadosBoleto, index) => {
         if (index > 0) doc.addPage();
+        
         const { linhaDigitavel, codigoBarras } = gerarLinhaDigitavelEDAC({
             agencia: dadosBoleto.agencia, conta: dadosBoleto.conta, nossoNumero: dadosBoleto.documento.numero,
             valor: dadosBoleto.documento.valor, vencimento: dadosBoleto.documento.dataVencimento
@@ -142,24 +144,22 @@ export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
         doc.line(15, 20, 195, 20);
         
         const xRecibo = 15, yRecibo = 22, wRecibo = 180;
-        drawField('Beneficiário', `${dadosBoleto.cedente.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, xRecibo, yRecibo, 125, 10);
-        drawField('Nosso Número', dadosBoleto.documento.numero, xRecibo + 125, yRecibo, 55, 10);
-        doc.line(xRecibo + 125, yRecibo, xRecibo + 125, yRecibo + 10);
-        drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), xRecibo + 125, yRecibo + 10, 55, 10);
-        doc.line(xRecibo, yRecibo + 10, xRecibo + wRecibo, yRecibo + 10);
         
-        drawField('Data do documento', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), xRecibo, yRecibo + 10, 30, 10);
-        doc.line(xRecibo + 30, yRecibo + 10, xRecibo + 30, yRecibo + 20);
-        drawField('Número do documento', dadosBoleto.documento.numeroCliente, xRecibo + 30, yRecibo + 10, 30, 10);
-        doc.line(xRecibo + 60, yRecibo + 10, xRecibo + 60, yRecibo + 20);
-        drawField('Carteira', '60', xRecibo + 60, yRecibo + 10, 15, 10);
-        doc.line(xRecibo + 75, yRecibo + 10, xRecibo + 75, yRecibo + 20);
-        drawField('Agência/Cód. Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, xRecibo + 75, yRecibo + 10, 50, 10);
-        drawField('Valor', formatBRLNumber(dadosBoleto.documento.valor), xRecibo + 125, yRecibo + 20, 55, 10);
-        doc.line(xRecibo, yRecibo + 20, xRecibo + wRecibo, yRecibo + 20);
-        
-        drawField('Pagador', `${dadosBoleto.documento.pagador.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, xRecibo, yRecibo + 20, 125, 10);
-        
+        doc.rect(xRecibo, yRecibo, 125, 28); // Beneficiário e Pagador Box
+        drawField('Beneficiário', `${dadosBoleto.cedente.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, xRecibo, yRecibo, 125, 14, 'left', 8);
+        doc.line(xRecibo, yRecibo + 14, xRecibo + 125, yRecibo + 14);
+        drawField('Pagador', `${dadosBoleto.documento.pagador.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, xRecibo, yRecibo + 14, 125, 14, 'left', 8);
+
+        doc.rect(xRecibo + 125, yRecibo, 55, 28); // Box da direita
+        drawField('Nosso Número', dadosBoleto.documento.numero, xRecibo + 125, yRecibo, 55, 7);
+        doc.line(xRecibo + 125, yRecibo + 7, xRecibo + wRecibo, yRecibo + 7);
+        drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), xRecibo + 125, yRecibo + 7, 55, 7);
+        doc.line(xRecibo + 125, yRecibo + 14, xRecibo + wRecibo, yRecibo + 14);
+        drawField('Agência/Cód. Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, xRecibo + 125, yRecibo + 14, 55, 7);
+        doc.line(xRecibo + 125, yRecibo + 21, xRecibo + wRecibo, yRecibo + 21);
+        drawField('Valor', formatBRLNumber(dadosBoleto.documento.valor), xRecibo + 125, yRecibo + 21, 55, 7);
+
+        doc.setFont('helvetica', 'normal').setFontSize(8);
         doc.text('Autenticação Mecânica', 195, 70, { align: 'right' });
         doc.setLineDashPattern([2, 1], 0).line(15, 80, 195, 80).setLineDashPattern([], 0);
 
@@ -169,10 +169,11 @@ export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
         doc.setFont('helvetica', 'bold').setFontSize(12).text('422-7', 45, 90);
         doc.setLineWidth(0.5).line(55, 86, 55, 93);
         doc.setFontSize(11).setFont('courier', 'bold').text(linhaDigitavel, 125, 90, { align: 'center' });
+        
         const x = 15, y = 95, w = 180;
-        doc.setLineWidth(0.2).rect(x, y, w, 55);
+        doc.setLineWidth(0.2).rect(x, y, w, 55); 
         drawField('Local de Pagamento', 'Pagável em qualquer banco', x, y, 130, 10);
-        doc.line(x + 130, y, x + 130, y + 55);
+        doc.line(x + 130, y, x + 130, y + 55); 
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), x + 130, y, 50, 10, 'right', 10);
         doc.line(x, y + 10, x + w, y + 10);
         drawField('Beneficiário', `${dadosBoleto.cedente.nome}`, x, y + 10, 130, 10);
@@ -200,21 +201,25 @@ export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
         drawField('(-) Desconto/Abatimento', '', x + 130, y + 40, 50, 7.5);
         doc.line(x + 130, y + 47.5, x + w, y + 47.5);
         drawField('(-) Outras Deduções', '', x + 130, y + 47.5, 50, 7.5);
-        doc.line(x, y + 55, x + w, y + 55);
+        
+        // **CORREÇÃO DO PAGADOR E CÓDIGO DE BARRAS**
+        const yPagador = 150;
+        doc.line(x, yPagador, x + w, yPagador);
+        
         const pagadorAddressFicha = `${dadosBoleto.documento.pagador.endereco.logradouro}\n${dadosBoleto.documento.pagador.endereco.cidade} ${dadosBoleto.documento.pagador.endereco.uf} CEP: ${dadosBoleto.documento.pagador.endereco.cep}`;
         const pagadorLinesFicha = doc.splitTextToSize(`${dadosBoleto.documento.pagador.nome}\n${pagadorAddressFicha}`, 128);
-        drawField('Pagador', pagadorLinesFicha, x, y + 55, 130, 25);
+        drawField('Pagador', pagadorLinesFicha, x, yPagador, 130, 25);
+        
         drawField('(+) Mora/Multa', '', x + 130, y + 55, 50, 7.5);
         doc.line(x + 130, y + 62.5, x + w, y + 62.5);
         drawField('(+) Outros Acréscimos', '', x + 130, y + 62.5, 50, 7.5);
         doc.line(x + 130, y + 70, x + w, y + 70);
         drawField('(=) Valor Cobrado', '', x + 130, y + 70, 50, 10);
         
-        // CORREÇÃO: Posiciona o código de barras mais para baixo
-        drawInterleaved2of5(doc, x + 5, 160, codigoBarras);
+        drawInterleaved2of5(doc, 15, 180, codigoBarras, 103, 15);
 
         doc.setFont('helvetica', 'normal').setFontSize(8);
-        doc.text('Autenticação Mecânica - Ficha de Compensação', 195, 185, { align: 'right' });
+        doc.text('Autenticação Mecânica - Ficha de Compensação', 195, 200, { align: 'right' });
     });
     
     return doc.output('arraybuffer');
