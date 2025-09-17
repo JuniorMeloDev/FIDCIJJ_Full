@@ -8,15 +8,15 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
     const [isLoading, setIsLoading] = useState(false);
     const [resultados, setResultados] = useState([]);
     const [jaEmitido, setJaEmitido] = useState(false);
+    
+    const operacaoId = duplicatas[0]?.operacaoId;
 
     useEffect(() => {
         if (isOpen && duplicatas.length > 0) {
             setResultados([]);
-            // Verifica se TODAS as duplicatas já têm uma linha digitável
             const todosEmitidos = duplicatas.every(d => d.linha_digitavel);
             setJaEmitido(todosEmitidos);
             if(todosEmitidos) {
-                // Se já foram emitidos, popula os resultados para exibição imediata
                 setResultados(duplicatas.map(d => ({
                     duplicataId: d.id,
                     nfCte: d.nfCte,
@@ -35,21 +35,22 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     };
 
-    const handleDownloadPdf = async (duplicataId, nfCte, banco) => {
-        if (!banco) {
-            showNotification('Não é possível imprimir, banco emissor desconhecido.', 'error');
+    const handleImprimirTodos = async () => {
+        if (!operacaoId) {
+            showNotification('ID da operação não encontrado.', 'error');
             return;
         }
+        showNotification(`Gerando PDF para a operação #${operacaoId}...`, 'info');
         try {
-            const res = await fetch(`/api/${banco}/boleto-pdf/${duplicataId}`, { headers: getAuthHeader() });
+            const res = await fetch(`/api/safra/boleto-pdf/${operacaoId}`, { headers: getAuthHeader() });
             if (!res.ok) {
-                throw new Error("Não foi possível gerar o PDF do boleto.");
+                throw new Error("Não foi possível gerar o PDF dos boletos.");
             }
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `boleto_${nfCte}.pdf`;
+            a.download = `boletos_op_${operacaoId}.pdf`;
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -59,22 +60,11 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
         }
     };
     
-    const handleImprimirTodos = () => {
-        showNotification(`Iniciando download de ${resultados.length} boletos...`, 'info');
-        resultados.forEach(res => {
-            if(res.success) {
-                handleDownloadPdf(res.duplicataId, res.nfCte, res.banco);
-            }
-        });
-    }
-
     const handleEmitirBoletos = async () => {
         setIsLoading(true);
         setResultados([]);
         showNotification(`Iniciando emissão de ${duplicatas.length} boleto(s)...`, 'info');
-
         const resultadosEmissao = [];
-
         for (const duplicata of duplicatas) {
             try {
                 const response = await fetch('/api/boletos/emitir', {
@@ -82,12 +72,10 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                     headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
                     body: JSON.stringify({ duplicataId: duplicata.id, banco: bancoSelecionado }),
                 });
-
                 const resultado = await response.json();
                 if (!response.ok) {
                     throw new Error(resultado.message || `Falha ao registrar boleto para a duplicata ${duplicata.nfCte}.`);
                 }
-                
                 resultadosEmissao.push({
                     duplicataId: duplicata.id,
                     nfCte: duplicata.nfCte,
@@ -95,7 +83,6 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                     linhaDigitavel: resultado.linhaDigitavel,
                     banco: bancoSelecionado,
                 });
-
             } catch (err) {
                 resultadosEmissao.push({
                     duplicataId: duplicata.id,
@@ -108,10 +95,9 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
         setResultados(resultadosEmissao);
         setIsLoading(false);
         showNotification('Processo de emissão finalizado.', 'success');
-        onSucesso(); // Chama a função para recarregar os dados na página de consulta
+        onSucesso();
     };
 
-    const operacaoId = duplicatas[0]?.operacaoId;
     const cedente = duplicatas[0]?.empresaCedente;
     const sacado = duplicatas[0]?.clienteSacado;
 
@@ -160,22 +146,12 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                         <h3 className="text-lg font-semibold mb-4">{jaEmitido ? 'Boletos Já Emitidos:' : 'Resultados da Emissão:'}</h3>
                         <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                             {resultados.map((res, index) => (
-                                <div key={index} className={`p-2 rounded-md flex justify-between items-center ${res.success ? 'bg-green-900/50' : 'bg-red-900/50'}`}>
-                                    <div>
-                                        <p className="font-bold">{res.nfCte}</p>
-                                        {res.success ? (
-                                            <p className="text-sm text-green-300">Linha Digitável: {res.linhaDigitavel}</p>
-                                        ) : (
-                                            <p className="text-sm text-red-300">Erro: {res.error}</p>
-                                        )}
-                                    </div>
-                                    {res.success && res.banco === 'safra' && ( // Habilita o PDF apenas para Safra por enquanto
-                                        <button 
-                                            onClick={() => handleDownloadPdf(res.duplicataId, res.nfCte, res.banco)}
-                                            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-3 rounded-md text-xs"
-                                        >
-                                            PDF
-                                        </button>
+                                <div key={index} className={`p-2 rounded-md ${res.success ? 'bg-green-900/50' : 'bg-red-900/50'}`}>
+                                    <p className="font-bold">{res.nfCte}</p>
+                                    {res.success ? (
+                                        <p className="text-sm text-green-300">Sucesso! Linha Digitável: {res.linhaDigitavel}</p>
+                                    ) : (
+                                        <p className="text-sm text-red-300">Erro: {res.error}</p>
                                     )}
                                 </div>
                             ))}
