@@ -86,38 +86,11 @@ export async function GET(request) {
 
     const totais = totaisFinanceirosRes.data?.[0] || { total_juros: 0, total_despesas: 0 };
 
-    /**
-     * >>> AJUSTE PRINCIPAL <<<
-     * Pega todas duplicatas liquidadas com a operação associada,
-     * identifica as que são PÓS (valor_liquido ~ valor_total_bruto)
-     * e soma seus juros de operação para subtrair do total.
-     */
-    const { data: duplicatasLiquidadas, error: dupErr } = await supabase
-      .from('duplicatas')
-      .select(`
-        valor_juros,
-        operacao:operacoes(id, valor_liquido, valor_total_bruto)
-      `)
-      .eq('status_recebimento', 'Liquidado');
+    // A lógica de ajuste de juros pós-fixados foi removida daqui.
+    // O valor de juros agora vem diretamente da função 'get_totais_financeiros'.
 
-    if (dupErr) {
-      console.error('Erro ao buscar duplicatas liquidadas:', dupErr);
-      throw new Error('Falha ao ajustar juros pós-fixados.');
-    }
-
-    const jurosPosLiquidados = (duplicatasLiquidadas || []).reduce((sum, d) => {
-      const op = d.operacao;
-      if (!op) return sum;
-
-      // Mesmo critério usado no front-end:
-      const valorLiquidoSemJuros = op.valor_total_bruto; // sem desconto
-      const isPostFixed = Math.abs(op.valor_liquido - valorLiquidoSemJuros) < 0.01;
-
-      return isPostFixed ? sum + (d.valor_juros || 0) : sum;
-    }, 0);
-
-    const totalJurosAjustado = (totais.total_juros || 0) - jurosPosLiquidados;
-    const lucroLiquido = totalJurosAjustado - (totais.total_despesas || 0);
+    const totalJurosBruto = totais.total_juros || 0;
+    const lucroLiquido = totalJurosBruto - (totais.total_despesas || 0);
 
     const metrics = {
       valorOperadoNoMes: valorOperadoRes.data || 0,
@@ -132,7 +105,7 @@ export async function GET(request) {
         clienteSacado: v.cliente_sacado,
         operacao: v.operacao
       })),
-      totalJuros: totalJurosAjustado,
+      totalJuros: totalJurosBruto,
       totalDespesas: totais.total_despesas || 0,
       lucroLiquido
     };
