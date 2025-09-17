@@ -26,7 +26,6 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
         setStatus('loading');
         setMessage('Buscando CNPJ...');
         
-        // 1. Tenta encontrar no banco de dados interno
         try {
             const internalRes = await fetch(`/api/cadastros/sacados/by-cnpj/${cleanCnpj}`, { headers: getAuthHeader() });
             if (internalRes.ok) {
@@ -36,13 +35,17 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
                     setMessage(`Este CNPJ já é uma filial da matriz #${data.matriz_id}.`);
                     return;
                 }
-                setFilialData({ ...data, cnpj: formatCnpjCpf(data.cnpj), fone: formatTelefone(data.fone), cep: formatCep(data.cep) });
+                setFilialData({ 
+                    ...data, 
+                    cnpj: formatCnpjCpf(data.cnpj), 
+                    fone: formatTelefone(data.fone), 
+                    cep: formatCep(data.cep) 
+                });
                 setStatus('found');
                 setMessage('Sacado encontrado no sistema. Os dados foram preenchidos.');
                 return;
             }
 
-            // 2. Se não encontrou (404), busca na API externa
             if (internalRes.status === 404) {
                 const externalRes = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
                 if (!externalRes.ok) throw new Error('CNPJ não encontrado em nenhuma base de dados.');
@@ -79,7 +82,8 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
 
     const handleSaveClick = async () => {
         setIsSaving(true);
-        const filialIdToSave = status === 'found' ? filialData.id : null;
+        const isUpdating = status === 'found';
+        const filialIdToSave = isUpdating ? filialData.id : null;
         const dataToSave = { ...filialData, matriz_id: matriz.id };
 
         const result = await onSave(filialIdToSave, dataToSave);
@@ -93,15 +97,18 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
         }
         setIsSaving(false);
     };
+    
+    // CORREÇÃO: Garante que matriz.filiais seja sempre um array antes de usar o .map
+    const filiaisCadastradas = Array.isArray(matriz.filiais) ? matriz.filiais : [];
 
     return (
         <div>
             <h3 className="text-md font-semibold text-gray-100 mb-2">Filiais Cadastradas</h3>
-            {matriz.filiais && matriz.filiais.length > 0 ? (
+            {filiaisCadastradas.length > 0 ? (
                 <div className="overflow-x-auto border border-gray-700 rounded-md mb-6">
                     <table className="min-w-full divide-y divide-gray-600 text-sm">
                         <tbody className="divide-y divide-gray-600">
-                            {matriz.filiais.map(filial => (
+                            {filiaisCadastradas.map(filial => (
                                 <tr key={filial.id} onClick={() => onEditFilial(filial)} className="hover:bg-gray-700 cursor-pointer">
                                     <td className="px-4 py-2">{formatCnpjCpf(filial.cnpj)}</td>
                                     <td className="px-4 py-2">{filial.municipio} - {filial.uf}</td>
@@ -143,8 +150,8 @@ const FilialManager = ({ matriz, onSave, onEditFilial }) => {
     );
 };
 
+
 export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDelete, onEditFilial }) {
-    // ... O resto do componente (states, useEffect, handlers) permanece o mesmo da resposta anterior ...
     const initialState = {
         nome: '', cnpj: '', ie: '', cep: '', endereco: '', bairro: '', 
         municipio: '', uf: '', fone: '', condicoesPagamento: [],
@@ -155,7 +162,7 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
     const [modalError, setModalError] = useState('');
     const [activeTab, setActiveTab] = useState('dadosCadastrais');
 
-     useEffect(() => {
+    useEffect(() => {
         if (isOpen) {
             setModalError('');
             setActiveTab('dadosCadastrais');
@@ -218,10 +225,10 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
 
     const isEditMode = !!sacado?.id;
     const isMatriz = isEditMode && !formData.matriz_id;
-    
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
-             <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] flex flex-col">
+            <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] flex flex-col">
                 <h2 className="text-xl font-bold mb-4 flex-shrink-0">{isEditMode ? 'Editar Sacado' : 'Adicionar Novo Sacado'}</h2>
                 
                 <div className="border-b border-gray-700 flex-shrink-0">
@@ -236,8 +243,7 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
 
                 <div className="flex-grow overflow-y-auto py-4 pr-2">
                     {activeTab === 'dadosCadastrais' && (
-                        // ... O conteúdo desta aba permanece o mesmo ...
-                          <div className="space-y-3">
+                        <div className="space-y-3">
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-300">CNPJ</label>
@@ -263,7 +269,6 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
                     )}
 
                     {activeTab === 'condicoes' && (
-                        // ... O conteúdo desta aba permanece o mesmo ...
                         <div>
                              <div className="flex justify-between items-center mb-2">
                                 <h3 className="text-md font-semibold text-gray-100">Condições de Pagamento Padrão</h3>
