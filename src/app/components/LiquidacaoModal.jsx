@@ -9,15 +9,18 @@ import {
 
 // Função auxiliar para identificar de forma robusta se os juros são pós-fixados
 const isPostFixedInterest = (operation, duplicate) => {
-    if (!operation || !duplicate) return false;
+    if (!operation || !duplicate || !duplicate.valorJuros) return false;
 
-    // Se o valor líquido pago ao cliente foi (Bruto - Descontos), sem abater os juros,
-    // então os juros são pós-fixados e devem ser cobrados na liquidação.
-    // Usamos uma pequena tolerância para evitar problemas com arredondamento.
-    const expectedNetForPreFixed = operation.valor_total_bruto - operation.valor_total_juros - (operation.valor_total_descontos || 0);
-    const isPreFixed = Math.abs(operation.valor_liquido - expectedNetForPreFixed) < 0.01;
+    // A forma mais fiável de verificar é ver se o valor líquido pago ao cliente
+    // foi próximo ao valor bruto (sem o desconto dos juros da operação).
+    // Isso indica que os juros não foram pré-descontados.
+    const valorLiquidoSemJuros = operation.valor_total_bruto - (operation.valor_total_descontos || 0);
+    
+    // Se o valor líquido real for muito próximo do valor bruto (descontando apenas taxas), é pós-fixado.
+    // Usamos uma tolerância para problemas de arredondamento.
+    const isPostFixed = Math.abs(operation.valor_liquido - valorLiquidoSemJuros) < 0.01;
 
-    return !isPreFixed;
+    return isPostFixed;
 };
 
 
@@ -35,21 +38,20 @@ export default function LiquidacaoModal({
 
   const isMultiple = Array.isArray(duplicata);
 
-  // #### LÓGICA CORRIGIDA E ROBUSTA PARA O VALOR TOTAL ####
   const totalValue = useMemo(() => {
     if (!duplicata) return 0;
     const items = isMultiple ? duplicata : [duplicata];
 
     return items.reduce((sum, d) => {
       const op = d.operacao;
-      if (!op) return sum + d.valorBruto; // Fallback
+      if (!op) return sum + d.valorBruto;
 
-      // Para juros pós-fixados, o valor recebido é o principal + juros da operação.
+      // Se for juros pós-fixados, o valor a ser recebido no final é o Bruto + Juros da Operação.
       if (isPostFixedInterest(op, d)) {
         return sum + d.valorBruto + d.valorJuros;
       }
       
-      // Para juros pré-fixados, o valor recebido é apenas o principal.
+      // Se for juros pré-fixados, o valor a receber é apenas o Bruto.
       return sum + d.valorBruto;
     }, 0);
   }, [duplicata, isMultiple]);
@@ -78,13 +80,12 @@ export default function LiquidacaoModal({
     }
     setError("");
 
-    // #### LÓGICA CORRIGIDA PARA ENVIAR À API ####
     const liquidacoes = duplicata.map((dup) => {
         const op = dup.operacao;
-        // Identifica se é pós-fixado para enviar os juros a somar para a RPC
         const isPostFixed = isPostFixedInterest(op, dup);
         return {
             id: dup.id,
+            // Enviamos os juros da operação para serem somados no backend apenas se for pós-fixado.
             juros_a_somar: isPostFixed ? dup.valorJuros : 0,
         };
     });
@@ -101,8 +102,18 @@ export default function LiquidacaoModal({
   const handleApenasBaixa = () => {
     setError("");
     const hoje = new Date().toISOString().split("T")[0];
-    const liquidacoes = duplicata.map((d) => ({ id: d.id, juros_a_somar: 0 }));
-    onConfirm(liquidacoes, hoje, null, null);
+    const liquidacoes = duplicata.map((d) => {
+        const op = d.operacao;
+        const isPostFixed = isPostFixedInterest(op, d);
+        return {
+          id: d.id, 
+          // Mesmo na baixa sem crédito, é importante considerar os juros pós-fixados
+          // para que o balanço contábil fique correto.
+          juros_a_somar: isPostFixed ? d.valorJuros : 0
+        };
+    });
+    // Na baixa sem crédito, não há juros de mora ou conta.
+    onConfirm(liquidacoes, hoje, 0, null);
     onClose();
   };
 
