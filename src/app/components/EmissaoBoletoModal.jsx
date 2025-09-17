@@ -21,6 +21,29 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     };
 
+    const handleDownloadPdf = async (nfCte) => {
+        const resultado = resultados.find(r => r.nfCte === nfCte);
+        if (!resultado || !resultado.duplicataId) return;
+
+        try {
+            const res = await fetch(`/api/safra/boleto-pdf/${resultado.duplicataId}`, { headers: getAuthHeader() });
+            if (!res.ok) {
+                throw new Error("Não foi possível gerar o PDF.");
+            }
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `boleto_${nfCte}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            showNotification(err.message, 'error');
+        }
+    };
+
     const handleEmitirBoletos = async () => {
         setIsLoading(true);
         setResultados([]);
@@ -56,6 +79,7 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
 
                 const boletoGerado = await registroResponse.json();
                 resultadosEmissao.push({
+                    duplicataId: duplicata.id,
                     nfCte: duplicata.nfCte,
                     success: true,
                     linhaDigitavel: boletoGerado.data?.codigoBarras || boletoGerado.linhaDigitavel || 'Disponível no banco',
@@ -63,6 +87,7 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
 
             } catch (err) {
                 resultadosEmissao.push({
+                    duplicataId: duplicata.id,
                     nfCte: duplicata.nfCte,
                     success: false,
                     error: err.message,
@@ -125,12 +150,22 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                         <h3 className="text-lg font-semibold mb-4">Resultados da Emissão:</h3>
                         <div className="space-y-2 max-h-60 overflow-y-auto">
                             {resultados.map((res, index) => (
-                                <div key={index} className={`p-2 rounded-md ${res.success ? 'bg-green-900/50' : 'bg-red-900/50'}`}>
-                                    <p className="font-bold">{res.nfCte}</p>
-                                    {res.success ? (
-                                        <p className="text-sm text-green-300">Sucesso! Linha Digitável: {res.linhaDigitavel}</p>
-                                    ) : (
-                                        <p className="text-sm text-red-300">Erro: {res.error}</p>
+                                <div key={index} className={`p-2 rounded-md flex justify-between items-center ${res.success ? 'bg-green-900/50' : 'bg-red-900/50'}`}>
+                                    <div>
+                                        <p className="font-bold">{res.nfCte}</p>
+                                        {res.success ? (
+                                            <p className="text-sm text-green-300">Sucesso! Linha Digitável: {res.linhaDigitavel}</p>
+                                        ) : (
+                                            <p className="text-sm text-red-300">Erro: {res.error}</p>
+                                        )}
+                                    </div>
+                                    {res.success && (
+                                        <button 
+                                            onClick={() => handleDownloadPdf(res.nfCte)}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-3 rounded-md text-xs"
+                                        >
+                                            Baixar PDF
+                                        </button>
                                     )}
                                 </div>
                             ))}
