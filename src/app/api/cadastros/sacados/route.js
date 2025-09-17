@@ -20,8 +20,6 @@ export async function GET(request) {
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
 }
-
-// POST: Lida com a criação de novos sacados e a vinculação de existentes como filiais
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -39,14 +37,11 @@ export async function POST(request) {
             .eq('cnpj', cleanCnpj)
             .single();
 
-        // Se o sacado já existe, ATUALIZA (vincula como filial) em vez de criar
+        // Se o sacado já existe, ATUALIZA (vincula como filial)
         if (existingSacado) {
-            // Se já for filial de outra matriz, retorna erro.
             if (existingSacado.matriz_id && existingSacado.matriz_id !== sacadoData.matriz_id) {
                 return NextResponse.json({ message: 'Este CNPJ já está vinculado a outra matriz.' }, { status: 409 });
             }
-            
-            // Remove o ID do corpo para evitar conflito na atualização dos dados do objeto.
             delete sacadoData.id;
 
             const { data: updatedSacado, error: updateError } = await supabase
@@ -57,10 +52,13 @@ export async function POST(request) {
                 .single();
                 
             if (updateError) throw updateError;
-            return NextResponse.json(updatedSacado, { status: 200 }); // Retorna 200 OK para atualização
+            return NextResponse.json(updatedSacado, { status: 200 });
         }
 
         // Se não existe, cria um novo
+        // CORREÇÃO: Remove o campo 'id' antes de inserir um novo registro
+        delete sacadoData.id;
+
         const { data: newSacado, error: insertError } = await supabase
             .from('sacados')
             .insert({ ...sacadoData, cnpj: cleanCnpj })
@@ -78,11 +76,9 @@ export async function POST(request) {
             await supabase.from('condicoes_pagamento').insert(condicoesToInsert);
         }
 
-        return NextResponse.json(newSacado, { status: 201 }); // Retorna 201 Created para novo registro
+        return NextResponse.json(newSacado, { status: 201 });
 
     } catch (error) {
-        console.error("Erro ao criar/vincular sacado:", error);
-        // O código 23505 é de violação de constraint única (como o CNPJ)
         if (error.code === '23505') { 
             return NextResponse.json({ message: 'Já existe um sacado com este CNPJ.' }, { status: 409 });
         }
