@@ -112,7 +112,6 @@ function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
     }
 }
 
-// --- Função Principal de Geração de PDF ---
 export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
@@ -137,27 +136,34 @@ export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
         });
         const vencimentoDate = new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z');
 
-        // --- Recibo do Pagador (Layout com caixas) - NÃO MODIFICADO ---
+        // --- Recibo do Pagador (Layout com caixas) ---
         if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 12, 18, 7);
         doc.setFont('helvetica', 'bold').setFontSize(10).text('Recibo do Pagador', 195, 15, { align: 'right' });
         doc.line(15, 20, 195, 20);
+        
         const xRecibo = 15, yRecibo = 22, wRecibo = 180;
-        doc.rect(xRecibo, yRecibo, 125, 28);
-        drawField('Beneficiário', `${dadosBoleto.cedente.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, xRecibo, yRecibo, 125, 14, 'left', 8);
-        doc.line(xRecibo, yRecibo + 14, xRecibo + 125, yRecibo + 14);
-        drawField('Pagador', `${dadosBoleto.documento.pagador.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, xRecibo, yRecibo + 14, 125, 14, 'left', 8);
-        doc.rect(xRecibo + 125, yRecibo, 55, 28);
-        drawField('Nosso Número', dadosBoleto.documento.numero, xRecibo + 125, yRecibo, 55, 7);
-        doc.line(xRecibo + 125, yRecibo + 7, xRecibo + wRecibo, yRecibo + 7);
-        drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), xRecibo + 125, yRecibo + 7, 55, 7);
-        doc.line(xRecibo + 125, yRecibo + 14, xRecibo + wRecibo, yRecibo + 14);
-        drawField('Agência/Cód. Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, xRecibo + 125, yRecibo + 14, 55, 7);
-        doc.line(xRecibo + 125, yRecibo + 21, xRecibo + wRecibo, yRecibo + 21);
-        drawField('Valor', formatBRLNumber(dadosBoleto.documento.valor), xRecibo + 125, yRecibo + 21, 55, 7);
-        doc.setFont('helvetica', 'normal').setFontSize(8).text('Autenticação Mecânica', 195, 70, { align: 'right' });
+        drawField('Beneficiário', `${dadosBoleto.cedente.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, xRecibo, yRecibo, 125, 10);
+        drawField('Nosso Número', dadosBoleto.documento.numero, xRecibo + 125, yRecibo, 55, 10);
+        doc.line(xRecibo + 125, yRecibo, xRecibo + 125, yRecibo + 10);
+        drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), xRecibo + 125, yRecibo + 10, 55, 10);
+        doc.line(xRecibo, yRecibo + 10, xRecibo + wRecibo, yRecibo + 10);
+        
+        drawField('Data do documento', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), xRecibo, yRecibo + 10, 30, 10);
+        doc.line(xRecibo + 30, yRecibo + 10, xRecibo + 30, yRecibo + 20);
+        drawField('Número do documento', dadosBoleto.documento.numeroCliente, xRecibo + 30, yRecibo + 10, 30, 10);
+        doc.line(xRecibo + 60, yRecibo + 10, xRecibo + 60, yRecibo + 20);
+        drawField('Carteira', '60', xRecibo + 60, yRecibo + 10, 15, 10);
+        doc.line(xRecibo + 75, yRecibo + 10, xRecibo + 75, yRecibo + 20);
+        drawField('Agência/Cód. Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, xRecibo + 75, yRecibo + 10, 50, 10);
+        drawField('Valor', formatBRLNumber(dadosBoleto.documento.valor), xRecibo + 125, yRecibo + 20, 55, 10);
+        doc.line(xRecibo, yRecibo + 20, xRecibo + wRecibo, yRecibo + 20);
+        
+        drawField('Pagador', `${dadosBoleto.documento.pagador.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, xRecibo, yRecibo + 20, 125, 10);
+        
+        doc.text('Autenticação Mecânica', 195, 70, { align: 'right' });
         doc.setLineDashPattern([2, 1], 0).line(15, 80, 195, 80).setLineDashPattern([], 0);
 
-        // --- Ficha de Compensação ---
+      // --- Ficha de Compensação ---
         if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 86, 18, 7);
         doc.setLineWidth(0.5).line(40, 86, 40, 93);
         doc.setFont('helvetica', 'bold').setFontSize(12).text('422-7', 45, 90);
@@ -215,4 +221,5 @@ export function gerarPdfBoletoSafra(listaBoletos, safraLogoBase64) {
     });
     
     return doc.output('arraybuffer');
+
 }
