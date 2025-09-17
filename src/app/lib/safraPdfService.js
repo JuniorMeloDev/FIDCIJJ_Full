@@ -95,6 +95,11 @@ function drawInterleaved2of5(doc, x, y, code, width = 103, height = 12) {
     const start = '0000';
     const stop = '100';
 
+    if (code.length % 2 !== 0) {
+       // O código de barras I2of5 requer um número par de dígitos
+       code = '0' + code;
+    }
+
     let binaryCode = start;
     for (let i = 0; i < code.length; i += 2) {
         const digit1 = parseInt(code[i], 10);
@@ -107,14 +112,20 @@ function drawInterleaved2of5(doc, x, y, code, width = 103, height = 12) {
     }
     binaryCode += stop;
 
-    const narrowBarWidth = width / (binaryCode.length * 1.5 + (binaryCode.match(/1/g) || []).length * 0.5);
-    const wideBarWidth = narrowBarWidth * 2;
+    // Ajuste no cálculo da largura da barra para evitar distorções
+    const wideToNarrowRatio = 3;
+    const numNarrowBars = binaryCode.match(/0/g).length;
+    const numWideBars = binaryCode.match(/1/g).length;
+    const narrowBarWidth = width / (numNarrowBars + numWideBars * wideToNarrowRatio);
+    const wideBarWidth = narrowBarWidth * wideToNarrowRatio;
     
     let currentX = x;
+    doc.setFillColor(0, 0, 0); // Preto
     for (let i = 0; i < binaryCode.length; i++) {
-        const isBar = i % 2 === 0;
+        const isBar = i % 2 === 0; // Pares são barras, ímpares são espaços
         const isWide = binaryCode[i] === '1';
         const barWidth = isWide ? wideBarWidth : narrowBarWidth;
+
         if (isBar) {
             doc.rect(currentX, y, barWidth, height, 'F');
         }
@@ -163,9 +174,9 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.text('Beneficiário', 15, 22);
         doc.text(`${dadosBoleto.cedente.nome} - CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, 15, 26);
         doc.text('Pagador', 15, 32);
-        const pagadorLines = doc.splitTextToSize(`${dadosBoleto.documento.pagador.nome} - CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, 130);
-        doc.text(pagadorLines, 15, 36);
-        
+        const pagadorRecibo = doc.splitTextToSize(`${dadosBoleto.documento.pagador.nome} - CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, 130);
+        doc.text(pagadorRecibo, 15, 36);
+
         doc.text('Vencimento', 150, 22);
         doc.text('Agência/Cód. Beneficiário', 150, 29);
         doc.text('Nosso Número', 150, 36);
@@ -233,18 +244,20 @@ export function gerarPdfBoletoSafra(listaBoletos) {
 
         doc.line(x, y + 55, x + w, y + 55);
         const pagadorAddressFicha = `${dadosBoleto.documento.pagador.endereco.logradouro}\n${dadosBoleto.documento.pagador.endereco.cidade} ${dadosBoleto.documento.pagador.endereco.uf} CEP: ${dadosBoleto.documento.pagador.endereco.cep}`;
-        drawField('Pagador', [`${dadosBoleto.documento.pagador.nome}`, pagadorAddressFicha], x, y + 55, 130, 25);
+        const pagadorLinesFicha = doc.splitTextToSize(`${dadosBoleto.documento.pagador.nome}\n${pagadorAddressFicha}`, 128);
+        drawField('Pagador', pagadorLinesFicha, x, y + 55, 130, 25);
         
         drawField('(+) Mora/Multa', '', x + 130, y + 55, 50, 7.5);
         doc.line(x + 130, y + 62.5, x + w, y + 62.5);
         drawField('(+) Outros Acréscimos', '', x + 130, y + 62.5, 50, 7.5);
         doc.line(x + 130, y + 70, x + w, y + 70);
-        drawField('(=) Valor Cobrado', '', x + 130, y + 70, 10, 10);
+        drawField('(=) Valor Cobrado', '', x + 130, y + 70, 50, 10);
+
+        // Desenha o código de barras
+        drawInterleaved2of5(doc, x + 15, 155, codigoBarras);
 
         doc.setFont('helvetica', 'normal').setFontSize(8);
         doc.text('Autenticação Mecânica - Ficha de Compensação', 195, 185, { align: 'right' });
-        
-        drawInterleaved2of5(doc, 15, 155, codigoBarras);
     });
     
     return doc.output('arraybuffer');
