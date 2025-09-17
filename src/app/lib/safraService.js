@@ -2,6 +2,7 @@ import https from 'https';
 
 // Função para obter o token de acesso da API do Safra
 export async function getSafraAccessToken() {
+    console.log("\n--- [SAFRAPAY API] Etapa 1: Obtenção de Token ---");
     const clientId = process.env.SAFRA_CLIENT_ID;
     const username = process.env.SAFRA_USERNAME;
     const password = process.env.SAFRA_PASSWORD;
@@ -12,10 +13,10 @@ export async function getSafraAccessToken() {
 
     const tokenEndpoint = 'https://api-hml.safranegocios.com.br/gateway/v1/oauth2/token';
     const postData = new URLSearchParams({
-        grant_type: 'password',
-        client_id: clientId,
-        username: username,
-        password: password
+        'grant_type': 'password',
+        'client_id': clientId,
+        'username': username,
+        'password': password
     }).toString();
 
     const options = {
@@ -25,14 +26,18 @@ export async function getSafraAccessToken() {
         }
     };
 
+    console.log("[LOG SAFRA] Enviando requisição de token para:", tokenEndpoint);
+
     return new Promise((resolve, reject) => {
         const req = https.request(tokenEndpoint, options, (res) => {
             let data = '';
             res.on('data', (chunk) => (data += chunk));
             res.on('end', () => {
+                console.log(`[LOG SAFRA] Resposta da requisição de token (Status ${res.statusCode}):`, data);
                 try {
                     const jsonData = JSON.parse(data);
                     if (res.statusCode >= 200 && res.statusCode < 300) {
+                        console.log("--- [SAFRAPAY API] Token obtido com sucesso. ---");
                         resolve(jsonData);
                     } else {
                         reject(new Error(`Erro ${res.statusCode}: ${jsonData.message || data}`));
@@ -42,7 +47,10 @@ export async function getSafraAccessToken() {
                 }
             });
         });
-        req.on('error', (e) => reject(new Error(`Erro de rede na requisição de token: ${e.message}`)));
+        req.on('error', (e) => {
+            console.error("[ERRO SAFRA] Erro na requisição de token:", e);
+            reject(new Error(`Erro de rede na requisição de token: ${e.message}`));
+        });
         req.write(postData);
         req.end();
     });
@@ -50,7 +58,9 @@ export async function getSafraAccessToken() {
 
 // Função para registrar um boleto na API do Safra
 export async function registrarBoletoSafra(accessToken, dadosBoleto) {
+    console.log("\n--- [SAFRAPAY API] Etapa 2: Registro de Boleto ---");
     const apiEndpoint = 'https://api-hml.safranegocios.com.br/gateway/cobrancas/v1/boletos';
+    const correlationId = crypto.randomUUID();
     const payload = JSON.stringify(dadosBoleto);
 
     const options = {
@@ -58,28 +68,38 @@ export async function registrarBoletoSafra(accessToken, dadosBoleto) {
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`,
-            'Safra-Correlation-ID': crypto.randomUUID()
+            'Safra-Correlation-ID': correlationId
         },
     };
+
+    console.log(`[LOG SAFRA] Enviando requisição de registro para: ${apiEndpoint} (Correlation-ID: ${correlationId})`);
+    console.log("[LOG SAFRA] Payload enviado:", payload);
 
     return new Promise((resolve, reject) => {
         const req = https.request(apiEndpoint, options, (res) => {
             let data = '';
             res.on('data', (chunk) => (data += chunk));
             res.on('end', () => {
+                console.log(`[LOG SAFRA] Resposta do registro (Status ${res.statusCode}):`, data);
                 try {
                     const jsonData = JSON.parse(data);
                     if (res.statusCode >= 200 && res.statusCode < 300) {
+                        console.log("--- [SAFRAPAY API] Boleto registrado com sucesso. ---");
                         resolve(jsonData);
                     } else {
-                        reject(new Error(`Erro ${res.statusCode} ao registrar boleto: ${jsonData.message || data}`));
+                        // Extrai a mensagem de erro específica do Safra, se disponível
+                        const errorMessage = jsonData.fields?.[0]?.message || jsonData.message || data;
+                        reject(new Error(`Erro ${res.statusCode} ao registrar boleto: ${errorMessage}`));
                     }
                 } catch (e) {
                     reject(new Error(`Falha ao processar a resposta do registro de boleto: ${data}`));
                 }
             });
         });
-        req.on('error', (e) => reject(new Error(`Erro de rede na requisição de registro: ${e.message}`)));
+        req.on('error', (e) => {
+            console.error("[ERRO SAFRA] Erro na requisição de registro:", e);
+            reject(new Error(`Erro de rede na requisição de registro: ${e.message}`));
+        });
         req.write(payload);
         req.end();
     });
