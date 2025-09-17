@@ -3,13 +3,13 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { format } from 'date-fns';
 
-// CORREÇÃO DEFINITIVA: Importando do serviço correto (safraService e bradescoService)
+// Serviços dos bancos
 import { getSafraAccessToken, registrarBoletoSafra, consultarBoletoSafra } from '@/app/lib/safraService';
 import { getBradescoAccessToken, registrarBoleto } from '@/app/lib/bradescoService';
 
-// (O restante do arquivo permanece o mesmo, mas vamos garantir que esteja correto)
-
+// --- Funções Auxiliares para Preparar os Dados ---
 async function getDadosParaBoleto(duplicataId, banco) {
+    // ... (o conteúdo desta função permanece o mesmo da resposta anterior)
     const { data: duplicata, error: dupError } = await supabase
         .from('duplicatas')
         .select('*')
@@ -76,30 +76,39 @@ async function getDadosParaBoleto(duplicataId, banco) {
                     "uf": sacado.uf || 'PE',
                 },
                 "especieTitulo": "DM",
+                "percentualJuros": "0", "valorJuros": "0", "qtdeDiasJuros": "0",
+                "percentualMulta": "0", "valorMulta": "0", "qtdeDiasMulta": "0"
             }
         };
     }
+    
     throw new Error("Banco inválido.");
 }
 
-
+// --- ROTA PRINCIPAL ---
 export async function POST(request) {
     let tokenData;
     let dadosParaBoleto;
+
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
+
         const { duplicataId, banco } = await request.json();
+
         dadosParaBoleto = await getDadosParaBoleto(duplicataId, banco);
+
         let boletoGerado;
         let linhaDigitavel;
+
         if (banco === 'safra') {
             tokenData = await getSafraAccessToken();
             try {
                 boletoGerado = await registrarBoletoSafra(tokenData.access_token, dadosParaBoleto);
             } catch (error) {
-                if (error.message && (error.message.includes('DUPLICADOS') || error.message.includes('JA EXISTENTE'))) {
+                // SE O ERRO FOR "JÁ REGISTRADO", TENTA CONSULTAR
+                if (error.message && error.message.includes('DUPLICADOS')) {
                     console.log(`Boleto já registrado para ${dadosParaBoleto.documento.numero}. Tentando consultar...`);
                     const consultaParams = {
                         agencia: dadosParaBoleto.agencia,
@@ -108,20 +117,37 @@ export async function POST(request) {
                         numeroCliente: dadosParaBoleto.documento.numeroCliente,
                     };
                     boletoGerado = await consultarBoletoSafra(tokenData.access_token, consultaParams);
-                } else { throw error; }
+                } else {
+                    throw error; // Se for outro erro, propaga
+                }
             }
             linhaDigitavel = boletoGerado.data?.documento?.codigoBarras || boletoGerado.data?.codigoBarras || 'N/A';
+        
         } else if (banco === 'bradesco') {
             tokenData = await getBradescoAccessToken();
             boletoGerado = await registrarBoleto(tokenData.access_token, dadosParaBoleto);
             linhaDigitavel = boletoGerado.linhaDigitavel || 'N/A';
-        } else { throw new Error("Banco selecionado inválido."); }
-        const { error: updateError } = await supabase.from('duplicatas').update({ linha_digitavel: linhaDigitavel, banco_emissor_boleto: banco }).eq('id', duplicataId);
+        
+        } else {
+            throw new Error("Banco selecionado inválido.");
+        }
+        
+        // Atualiza a duplicata no nosso banco de dados
+        const { error: updateError } = await supabase
+            .from('duplicatas')
+            .update({ 
+                linha_digitavel: linhaDigitavel,
+                banco_emissor_boleto: banco 
+            })
+            .eq('id', duplicataId);
+
         if (updateError) {
             console.error("Erro ao salvar linha digitável no DB:", updateError);
             return NextResponse.json({ success: true, linhaDigitavel, warning: "Boleto emitido, mas falha ao salvar no banco de dados local." });
         }
+
         return NextResponse.json({ success: true, linhaDigitavel });
+
     } catch (error) {
         console.error(`Erro na API de emissão de boleto: ${error.message}`);
         return NextResponse.json({ message: error.message }, { status: 500 });
