@@ -14,7 +14,6 @@ import useAuth from '@/app/hooks/useAuth';
 const ITEMS_PER_PAGE = 10;
 
 export default function SacadosPage() {
-    // ... (todo o código dos states e funções permanece o mesmo) ...
     const { isAdmin } = useAuth();
     const [sacados, setSacados] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -31,7 +30,6 @@ export default function SacadosPage() {
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     };
     
-    // ... (restante das funções) ...
     const showNotification = (message, type) => {
         setNotification({ message, type });
         setTimeout(() => setNotification({ message: '', type: '' }), 5000);
@@ -44,11 +42,7 @@ export default function SacadosPage() {
             if (!response.ok) throw new Error('Falha ao carregar sacados.');
 
             const data = await response.json();
-            const formattedData = data.map(sacado => ({
-                ...sacado,
-                condicoesPagamento: sacado.condicoes_pagamento || []
-            }));
-            setSacados(formattedData);
+            setSacados(data);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -60,13 +54,48 @@ export default function SacadosPage() {
         fetchData();
     }, []);
 
-    const filteredSacados = useMemo(() => {
-        return sacados.filter(sacado => {
+    const groupedAndFilteredSacados = useMemo(() => {
+        // Primeiro, filtra os sacados com base nos filtros de nome e cnpj
+        const filtered = sacados.filter(sacado => {
             const nomeMatch = !filters.nome || sacado.nome.toLowerCase().includes(filters.nome.toLowerCase());
             const cnpjMatch = !filters.cnpj || (sacado.cnpj && sacado.cnpj.includes(filters.cnpj.replace(/\D/g, '')));
             return nomeMatch && cnpjMatch;
         });
+
+        // Se o filtro de nome ou CNPJ estiver ativo, não agrupa para mostrar resultados diretos da busca
+        if (filters.nome || filters.cnpj) {
+            return filtered;
+        }
+
+        // Se não houver filtros, agrupa matriz e filiais
+        const matrizes = {};
+        const filiais = [];
+
+        filtered.forEach(sacado => {
+            if (sacado.matriz_id) {
+                filiais.push(sacado);
+            } else {
+                matrizes[sacado.id] = { ...sacado, filiais: [] };
+            }
+        });
+
+        filiais.forEach(filial => {
+            if (matrizes[filial.matriz_id]) {
+                matrizes[filial.matriz_id].filiais.push(filial);
+            }
+        });
+
+        const result = [];
+        Object.values(matrizes).forEach(matriz => {
+            result.push(matriz);
+            if (matriz.filiais.length > 0) {
+                result.push(...matriz.filiais.sort((a,b) => a.cnpj.localeCompare(b.cnpj))); // Ordena filiais pelo CNPJ
+            }
+        });
+
+        return result;
     }, [filters, sacados]);
+
 
     const handleFilterChange = (e) => {
         setCurrentPage(1);
@@ -138,7 +167,7 @@ export default function SacadosPage() {
 
     const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
     const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-    const currentItems = filteredSacados.slice(indexOfFirstItem, indexOfLastItem);
+    const currentItems = groupedAndFilteredSacados.slice(indexOfFirstItem, indexOfLastItem);
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
     return (
@@ -186,20 +215,26 @@ export default function SacadosPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-gray-800 divide-y divide-gray-700">
-                                    {currentItems.map((sacado) => (
-                                        <tr key={sacado.id} onClick={() => handleOpenEditModal(sacado)} className="hover:bg-gray-700 cursor-pointer">
-                                            <td className="px-6 py-4 text-sm font-medium text-gray-100">{sacado.nome}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-400 whitespace-nowrap">{formatCnpjCpf(sacado.cnpj)}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-400">{sacado.municipio ? `${sacado.municipio} - ${sacado.uf}`: ''}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-400 whitespace-nowrap">{formatTelefone(sacado.fone)}</td>
-                                        </tr>
-                                    ))}
+                                    {currentItems.map((sacado) => {
+                                        const isFilial = !!sacado.matriz_id;
+                                        return (
+                                            <tr key={sacado.id} onClick={() => handleOpenEditModal(sacado)} className="hover:bg-gray-700 cursor-pointer">
+                                                <td className={`px-6 py-4 text-sm font-medium ${isFilial ? 'pl-10' : 'font-bold'} text-gray-100`}>
+                                                    {isFilial && <span className="mr-2 text-gray-500">↳</span>}
+                                                    {sacado.nome}
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-gray-400 whitespace-nowrap">{formatCnpjCpf(sacado.cnpj)}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-400">{sacado.municipio ? `${sacado.municipio} - ${sacado.uf}`: ''}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-400 whitespace-nowrap">{formatTelefone(sacado.fone)}</td>
+                                            </tr>
+                                        )
+                                    })}
                                 </tbody>
                             </table>
                         )}
                     </div>
                     <div className="flex-shrink-0 mt-4">
-                        <Pagination totalItems={filteredSacados.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={paginate} />
+                        <Pagination totalItems={groupedAndFilteredSacados.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={paginate} />
                     </div>
                 </div>
             </div>

@@ -2,18 +2,44 @@
 
 import { useState, useEffect } from 'react';
 import { formatCnpjCpf, formatTelefone, formatCep } from '@/app/utils/formatters';
+import AutocompleteSearch from './AutoCompleteSearch';
 
 export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDelete }) {
     const initialState = {
-        nome: '', cnpj: '', ie: '', cep: '', endereco: '', bairro: '', municipio: '', uf: '', fone: '', condicoesPagamento: []
+        nome: '', cnpj: '', ie: '', cep: '', endereco: '', bairro: '', 
+        municipio: '', uf: '', fone: '', condicoesPagamento: [],
+        matriz_id: null
     };
     const [formData, setFormData] = useState(initialState);
     const [isFetchingCnpj, setIsFetchingCnpj] = useState(false);
     const [dataFetched, setDataFetched] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [modalError, setModalError] = useState('');
+    const [matrizNome, setMatrizNome] = useState('');
+
+    const getAuthHeader = () => {
+        const token = sessionStorage.getItem('authToken');
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    };
+
+    const fetchSacados = async (query) => {
+        try {
+            const res = await fetch(`/api/cadastros/sacados/search?nome=${query}`, { headers: getAuthHeader() });
+            if (!res.ok) return [];
+            // Filtra para mostrar apenas matrizes (empresas que não têm matriz_id)
+            const data = await res.json();
+            return data.filter(s => !s.matriz_id);
+        } catch {
+            return [];
+        }
+    };
 
     useEffect(() => {
+        const fetchMatrizNome = async (matrizId) => {
+            // Esta função seria ideal se você precisasse buscar o nome da matriz separadamente
+            // Por enquanto, vamos assumir que os dados já vêm com o necessário.
+        };
+
         if (isOpen) {
             setModalError('');
             if (sacado) {
@@ -22,12 +48,20 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
                     cnpj: sacado.cnpj ? formatCnpjCpf(sacado.cnpj) : '',
                     fone: sacado.fone ? formatTelefone(sacado.fone) : '',
                     cep: sacado.cep ? formatCep(sacado.cep) : '',
-                    condicoesPagamento: sacado.condicoesPagamento || []
+                    condicoesPagamento: sacado.condicoes_pagamento || sacado.condicoesPagamento || []
                 });
                 setDataFetched(true);
+                
+                if (sacado.matriz_id && sacado.matriz_nome) {
+                    setMatrizNome(sacado.matriz_nome);
+                } else {
+                    setMatrizNome('');
+                }
+
             } else {
                 setFormData(initialState);
                 setDataFetched(false);
+                setMatrizNome('');
             }
         }
     }, [sacado, isOpen]);
@@ -94,6 +128,11 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
         setFormData(prev => ({ ...prev, condicoesPagamento: condicoes }));
     };
 
+    const handleSelectMatriz = (matrizSelecionada) => {
+        setFormData(prev => ({ ...prev, matriz_id: matrizSelecionada.id, nome: matrizSelecionada.nome }));
+        setMatrizNome(matrizSelecionada.nome);
+    };
+
     const handleSave = async () => {
         setModalError('');
         setIsSaving(true);
@@ -102,7 +141,8 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
             cnpj: formData.cnpj.replace(/\D/g, ''), 
             fone: formData.fone?.replace(/\D/g, ''), 
             cep: formData.cep?.replace(/\D/g, ''),
-            condicoesPagamento: formData.condicoesPagamento.map(c => ({ ...c, parcelas: parseInt(c.parcelas, 10) || 1 }))
+            condicoesPagamento: formData.condicoesPagamento.map(c => ({ ...c, parcelas: parseInt(c.parcelas, 10) || 1 })),
+            matriz_id: formData.matriz_id,
         }; 
         const result = await onSave(sacado?.id, dataToSave);
         setIsSaving(false);
@@ -118,18 +158,34 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
             <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] overflow-y-auto">
                 <h2 className="text-xl font-bold mb-4">{isEditMode ? 'Editar Sacado' : 'Adicionar Novo Sacado'}</h2>
                 <div className="space-y-3">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-300">Empresa Matriz (Opcional - para filiais)</label>
+                        <AutocompleteSearch
+                            name="matriz"
+                            value={matrizNome}
+                            onChange={(e) => {
+                                setMatrizNome(e.target.value);
+                                if (e.target.value === '') {
+                                    setFormData(prev => ({ ...prev, matriz_id: null }));
+                                }
+                            }}
+                            onSelect={handleSelectMatriz}
+                            fetchSuggestions={fetchSacados}
+                            placeholder="Pesquise para vincular a uma matriz"
+                        />
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-gray-300">CNPJ {isFetchingCnpj && <span className="text-xs text-orange-400">(A consultar...)</span>}</label>
                             <input type="text" name="cnpj" value={formData.cnpj} onChange={handleChange} placeholder="Digite para buscar..." className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-300">Nome do Sacado</label>
+                            <label className="block text-xs font-bold text-gray-300">Nome do Sacado (Matriz ou Filial)</label>
                             <input type="text" name="nome" value={formData.nome || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
                         </div>
                     </div>
 
-                    {dataFetched && (
+                    {(dataFetched || isEditMode) && (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div><label className="block text-xs font-bold text-gray-300">Inscrição Estadual</label><input type="text" name="ie" value={formData.ie || ''} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/></div>
