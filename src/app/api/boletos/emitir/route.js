@@ -1,12 +1,92 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
+import { format } from 'date-fns';
 
-// Importe os serviços dos bancos
+// Serviços dos bancos
 import { getSafraAccessToken, registrarBoletoSafra } from '@/app/lib/safraService';
-// Assumindo que você tenha um bradescoService similar
 import { getBradescoAccessToken, registrarBoleto } from '@/app/lib/bradescoService';
 
+// --- Funções Auxiliares para Preparar os Dados ---
+
+async function getDadosParaBoleto(duplicataId, banco) {
+    const { data: duplicata, error: dupError } = await supabase
+        .from('duplicatas')
+        .select('*')
+        .eq('id', duplicataId)
+        .single();
+    if (dupError || !duplicata) throw new Error(`Duplicata com ID ${duplicataId} não encontrada.`);
+
+    const { data: sacado, error: sacadoError } = await supabase
+        .from('sacados')
+        .select('*')
+        .eq('nome', duplicata.cliente_sacado)
+        .single();
+    if (sacadoError || !sacado) throw new Error(`Sacado "${duplicata.cliente_sacado}" não encontrado.`);
+
+    if (banco === 'safra') {
+        const idPart = duplicata.id.toString().slice(-4).padStart(4, '0');
+        const randomPart = Math.floor(10000 + Math.random() * 90000).toString().slice(0, 5);
+        const nossoNumeroUnico = `${idPart}${randomPart}`;
+
+        return {
+            agencia: "12400",
+            conta: "008554440",
+            documento: {
+                numero: nossoNumeroUnico,
+                numeroCliente: duplicata.nf_cte.substring(0, 10),
+                especie: "02",
+                dataVencimento: format(new Date(duplicata.data_vencimento + 'T12:00:00Z'), 'yyyy-MM-dd'),
+                valor: parseFloat(duplicata.valor_bruto.toFixed(2)),
+                pagador: {
+                    nome: sacado.nome.substring(0, 40),
+                    tipoPessoa: (sacado.cnpj || '').length > 11 ? "J" : "F",
+                    numeroDocumento: (sacado.cnpj || '').replace(/\D/g, ''),
+                    endereco: {
+                        logradouro: (sacado.endereco || 'NAO INFORMADO').substring(0, 40),
+                        bairro: (sacado.bairro || 'NAO INFORMADO').substring(0, 10),
+                        cidade: (sacado.municipio || 'NAO INFORMADO').substring(0, 15),
+                        uf: sacado.uf || 'SP',
+                        cep: (sacado.cep || '00000000').replace(/\D/g, ''),
+                    }
+                }
+            }
+        };
+    } else if (banco === 'bradesco') {
+         return {
+            "filialCPFCNPJ": process.env.BRADESCO_FILIAL_CNPJ,
+            "ctrlCPFCNPJ": process.env.BRADESCO_CTRL_CNPJ,
+            "codigoUsuarioSolicitante": process.env.BRADESCO_CODIGO_USUARIO,
+            "nuCPFCNPJ": process.env.BRADESCO_CPFCNPJ_RAIZ,
+            "registraTitulo": {
+                "idProduto": "9",
+                "nuNegociacao": process.env.BRADESCO_NU_NEGOCIACAO,
+                "nossoNumero": duplicata.id.toString().padStart(11, '0'),
+                "dtEmissaoTitulo": new Date(duplicata.data_operacao + 'T12:00:00Z').toISOString().slice(0, 10).replace(/-/g, ''),
+                "dtVencimentoTitulo": new Date(duplicata.data_vencimento + 'T12:00:00Z').toISOString().slice(0, 10).replace(/-/g, ''),
+                "valorNominalTitulo": Math.round(duplicata.valor_bruto * 100),
+                "pagador": {
+                    "nuCPFCNPJ": (sacado.cnpj || '').replace(/\D/g, ''),
+                    "nome": sacado.nome.substring(0, 40),
+                    "logradouro": (sacado.endereco || 'NAO INFORMADO').substring(0, 40),
+                    "nuLogradouro": "0",
+                    "bairro": (sacado.bairro || 'NAO INFORMADO').substring(0, 15),
+                    "cep": (sacado.cep || '00000000').replace(/\D/g, ''),
+                    "cidade": (sacado.municipio || 'NAO INFORMADO').substring(0, 15),
+                    "uf": sacado.uf || 'PE',
+                },
+                "especieTitulo": "DM",
+                "percentualJuros": "0", "valorJuros": "0", "qtdeDiasJuros": "0",
+                "percentualMulta": "0", "valorMulta": "0", "qtdeDiasMulta": "0"
+            }
+        };
+    }
+    
+    throw new Error("Banco inválido.");
+}
+
+
+// --- ROTA PRINCIPAL ---
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -15,30 +95,25 @@ export async function POST(request) {
 
         const { duplicataId, banco } = await request.json();
 
-        // 1. Obter dados formatados para o banco
-        const dadosResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/dados-boleto/${banco}/${duplicataId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!dadosResponse.ok) {
-            const error = await dadosResponse.json();
-            throw new Error(error.message || `Falha ao buscar dados do boleto para o banco ${banco}.`);
-        }
-        const dadosParaBoleto = await dadosResponse.json();
+        // 1. Obter dados formatados para o banco (agora localmente)
+        const dadosParaBoleto = await getDadosParaBoleto(duplicataId, banco);
 
         // 2. Registrar no banco selecionado
         let boletoGerado;
+        let linhaDigitavel;
+
         if (banco === 'safra') {
             const tokenData = await getSafraAccessToken();
             boletoGerado = await registrarBoletoSafra(tokenData.access_token, dadosParaBoleto);
+            linhaDigitavel = boletoGerado.data?.codigoBarras || 'N/A';
         } else if (banco === 'bradesco') {
             const tokenData = await getBradescoAccessToken();
             boletoGerado = await registrarBoleto(tokenData.access_token, dadosParaBoleto);
+            linhaDigitavel = boletoGerado.linhaDigitavel || 'N/A';
         } else {
             throw new Error("Banco selecionado inválido.");
         }
         
-        const linhaDigitavel = boletoGerado.data?.codigoBarras || boletoGerado.linhaDigitavel || 'N/A';
-
         // 3. Atualizar a duplicata no nosso banco de dados
         const { error: updateError } = await supabase
             .from('duplicatas')
@@ -50,7 +125,6 @@ export async function POST(request) {
 
         if (updateError) {
             console.error("Erro ao salvar linha digitável no DB:", updateError);
-            // Mesmo com erro aqui, o boleto foi gerado, então retornamos sucesso com um aviso.
             return NextResponse.json({ success: true, linhaDigitavel, warning: "Boleto emitido, mas falha ao salvar no banco de dados local." });
         }
 
