@@ -44,19 +44,15 @@ export async function GET(request, { params }) {
             throw new Error(`Dados cadastrais do sacado "${duplicata.cliente_sacado}" não encontrados.`);
         }
 
-        // --- LÓGICA DE CORREÇÃO DO NOSSO NÚMERO ---
-        // Gera um número de 9 dígitos único para cada tentativa, usando parte do ID da duplicata
-        // e um sufixo aleatório. Isso evita colisões no ambiente de testes do Safra.
         const idPart = duplicata.id.toString().slice(-4).padStart(4, '0');
         const randomPart = Math.floor(10000 + Math.random() * 90000).toString().slice(0, 5);
         const nossoNumeroUnico = `${idPart}${randomPart}`;
-        // --- FIM DA CORREÇÃO ---
         
         const payload = {
             agencia: "12400",
             conta: "008554440",
             documento: {
-                numero: nossoNumeroUnico, // Utiliza o número único gerado
+                numero: nossoNumeroUnico,
                 numeroCliente: duplicata.nf_cte.substring(0, 10),
                 especie: "02",
                 dataVencimento: formatDateToSafra(duplicata.data_vencimento),
@@ -67,7 +63,8 @@ export async function GET(request, { params }) {
                     numeroDocumento: (sacado.cnpj || '').replace(/\D/g, ''),
                     endereco: {
                         logradouro: (sacado.endereco || 'NAO INFORMADO').substring(0, 40),
-                        bairro: (sacado.bairro || 'NAO INFORMADO').substring(0, 15),
+                        // --- CORREÇÃO APLICADA AQUI ---
+                        bairro: (sacado.bairro || 'NAO INFORMADO').substring(0, 10),
                         cidade: (sacado.municipio || 'NAO INFORMADO').substring(0, 15),
                         uf: sacado.uf || 'SP',
                         cep: (sacado.cep || '00000000').replace(/\D/g, ''),
