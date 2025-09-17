@@ -5,13 +5,13 @@ import { format } from 'date-fns';
 
 const formatDateToSafra = (dateString) => {
     if (!dateString) return '';
-    // O formato esperado é YYYY-MM-DD
-    return format(new Date(dateString), 'yyyy-MM-dd');
+    // Adiciona o fuso para evitar problemas de conversão e formata para YYYY-MM-DD
+    const date = new Date(dateString + 'T12:00:00Z');
+    return format(date, 'yyyy-MM-dd');
 };
 
 const formatValueToSafra = (value) => {
     if (typeof value !== 'number') return 0;
-    // O valor é enviado como número, sem multiplicação por 100
     return parseFloat(value.toFixed(2));
 };
 
@@ -23,13 +23,15 @@ export async function GET(request, { params }) {
 
         const { id } = params;
 
+        // Query corrigida para buscar apenas os dados necessários sem causar erro
         const { data: duplicata, error: dupError } = await supabase
             .from('duplicatas')
-            .select('*, operacao:operacoes(cliente:clientes(agencia, conta))')
+            .select('*')
             .eq('id', id)
             .single();
 
         if (dupError || !duplicata) {
+            console.error('Erro ao buscar duplicata:', dupError);
             throw new Error('Duplicata não encontrada ou dados da operação incompletos.');
         }
 
@@ -43,10 +45,11 @@ export async function GET(request, { params }) {
         if (sacadoError || !sacado) {
             throw new Error(`Dados cadastrais do sacado "${duplicata.cliente_sacado}" não encontrados.`);
         }
-
+        
+        // Payload montado com os dados de teste do Safra
         const payload = {
-            agencia: duplicata.operacao.cliente.agencia,
-            conta: duplicata.operacao.cliente.conta,
+            agencia: "12400", // CONTA DE TESTE FORNECIDA PELO SAFRA
+            conta: "008554440", // CONTA DE TESTE FORNECIDA PELO SAFRA
             documento: {
                 numero: duplicata.id.toString(),
                 numeroCliente: duplicata.nf_cte.substring(0, 10),
@@ -55,8 +58,8 @@ export async function GET(request, { params }) {
                 valor: formatValueToSafra(duplicata.valor_bruto),
                 pagador: {
                     nome: sacado.nome.substring(0, 40),
-                    tipoPessoa: sacado.cnpj.length > 11 ? "J" : "F",
-                    numeroDocumento: sacado.cnpj.replace(/\D/g, ''),
+                    tipoPessoa: (sacado.cnpj || '').length > 11 ? "J" : "F",
+                    numeroDocumento: (sacado.cnpj || '').replace(/\D/g, ''),
                     endereco: {
                         logradouro: (sacado.endereco || 'NAO INFORMADO').substring(0, 40),
                         bairro: (sacado.bairro || 'NAO INFORMADO').substring(0, 10),
