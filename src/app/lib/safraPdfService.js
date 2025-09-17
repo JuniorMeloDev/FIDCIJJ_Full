@@ -84,23 +84,24 @@ function gerarLinhaDigitavelEDAC(dados) {
   return { linhaDigitavel, codigoBarras };
 }
 
-// Geração da imagem do código de barras
+// Geração da imagem do código de barras (versão para navegador)
 async function gerarImagemCodigoBarras(codigo) {
   return new Promise((resolve, reject) => {
-    bwipjs.toBuffer({
-      bcid: 'code128',
-      text: codigo,
-      scale: 3,
-      height: 10,
-      includetext: false,
-      textxalign: 'center',
-    }, (err, png) => {
-      if (err) reject(err);
-      else {
-        const base64 = png.toString('base64');
-        resolve(`data:image/png;base64,${base64}`);
-      }
-    });
+    try {
+      const canvas = document.createElement('canvas');
+      bwipjs.toCanvas(canvas, {
+        bcid: 'code128',
+        text: codigo,
+        scale: 3,
+        height: 10,
+        includetext: false,
+        textxalign: 'center',
+      });
+      const base64 = canvas.toDataURL('image/png');
+      resolve(base64);
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
@@ -162,10 +163,8 @@ export async function gerarPdfBoletoSafra(listaBoletos) {
     doc.setFontSize(14).setFont('courier', 'bold');
     doc.text(linhaDigitavel, 105, 95, { align: 'center' });
 
-    // Ficha de Compensação (continuação)
-    doc.rect(17, 100, 185, 85); // contorno da ficha
-
-    drawField('Local de Pagamento', 'Pagável em qualquer banco até o vencimento', 17, 100, 130, 10);
+    doc.rect(17, 100, 185, 85);
+    drawField('Local de Pagamento', 'Pagável em qualquer banco até o vencimento', 17, 100, 50, 10);
     drawField('Vencimento', format(new Date(dadosBoleto.documento.dataVencimento), 'dd/MM/yyyy'), 152, 100, 50, 10, 'right');
 
     doc.line(17, 110, 200, 110);
