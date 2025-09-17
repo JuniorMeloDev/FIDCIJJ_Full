@@ -12,14 +12,14 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
         
-        // #### CORREÇÃO APLICADA AQUI ####
-        // A sintaxe da junção reversa foi corrigida. Em vez de usar o nome da constraint da FK,
-        // usamos a forma padrão que o Supabase entende para relações one-to-one/one-to-many.
-        // O Supabase irá inferir a relação correta a partir do esquema do banco de dados.
+        // #### CORREÇÃO DEFINITIVA APLICADA AQUI ####
+        // Especificamos explicitamente a relação a ser usada para evitar a ambiguidade.
+        // A sintaxe `duplicatas!duplicatas_liquidacao_mov_id_fkey` diz ao Supabase para
+        // juntar a tabela `duplicatas` usando a chave estrangeira nomeada `duplicatas_liquidacao_mov_id_fkey`.
         let query = supabase.from('movimentacoes_caixa').select(`
             *, 
             operacao:operacoes ( valor_liquido, cliente_id ),
-            duplicata:duplicatas ( id, nf_cte )
+            duplicata:duplicatas!duplicatas_liquidacao_mov_id_fkey ( id, nf_cte )
         `);
 
         if (searchParams.get('dataInicio')) query = query.gte('data_movimento', searchParams.get('dataInicio'));
