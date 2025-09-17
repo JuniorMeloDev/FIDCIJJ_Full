@@ -56,6 +56,7 @@ export default function SacadosPage() {
     const groupedAndFilteredSacados = useMemo(() => {
         let items = [...sacados];
 
+        // Adiciona o nome da matriz em cada filial para referência
         items.forEach(item => {
             if (item.matriz_id) {
                 const matriz = items.find(m => m.id === item.matriz_id);
@@ -63,6 +64,7 @@ export default function SacadosPage() {
             }
         });
 
+        // Se houver filtros ativos, retorna a lista filtrada simples
         if (filters.nome || filters.cnpj) {
             return items.filter(sacado => {
                 const nomeMatch = !filters.nome || sacado.nome.toLowerCase().includes(filters.nome.toLowerCase());
@@ -71,9 +73,10 @@ export default function SacadosPage() {
             });
         }
         
+        // Lógica para agrupar matrizes e filiais
         const matrizes = {};
         const filiais = [];
-        const outros = [];
+        const outros = []; // Sacados que porventura tenham matriz_id inválido
 
         items.forEach(sacado => {
             if (sacado.matriz_id) {
@@ -116,10 +119,12 @@ export default function SacadosPage() {
     const handleOpenAddModal = () => { setEditingSacado(null); setIsModalOpen(true); };
     const handleOpenEditModal = (sacado) => { setEditingSacado(sacado); setIsModalOpen(true); };
 
+    // Função para fechar o modal atual e abrir o da filial clicada
     const handleEditFilial = (filial) => {
-        setIsModalOpen(false);
+        setIsModalOpen(false); // Fecha o modal da matriz
         const filialCompleta = sacados.find(s => s.id === filial.id);
         if (filialCompleta) {
+            // Pequeno delay para garantir que o modal feche antes de abrir o próximo
             setTimeout(() => {
                 handleOpenEditModal(filialCompleta);
             }, 50);
@@ -134,6 +139,7 @@ export default function SacadosPage() {
 
             const payload = {
                 ...data,
+                // Remove o ID temporário das condições de pagamento antes de salvar
                 condicoesPagamento: data.condicoesPagamento.map(({id, ...rest}) => rest)
             };
 
@@ -152,10 +158,9 @@ export default function SacadosPage() {
             await fetchData();
             showNotification(`Sacado ${isUpdating ? 'atualizado' : 'criado'} com sucesso!`, 'success');
             
-            // --- CORREÇÃO APLICADA AQUI ---
+            // Limpa os filtros e volta para a primeira página para ver o resultado
             clearFilters(); 
             setCurrentPage(1);
-            // --- FIM DA CORREÇÃO ---
 
             return { success: true };
         } catch (err) {
@@ -201,7 +206,7 @@ export default function SacadosPage() {
                 sacado={editingSacado} 
                 onSave={handleSaveSacado} 
                 onDelete={handleDeleteRequest}
-                onEditFilial={handleEditFilial}
+                onEditFilial={handleEditFilial} // Passa a nova função
             />
             <ConfirmacaoModal isOpen={!!sacadoParaExcluir} onClose={() => setSacadoParaExcluir(null)} onConfirm={handleConfirmarExclusao} title="Confirmar Exclusão" message={`Deseja excluir o sacado "${sacadoParaExcluir?.nome}"?`} />
 

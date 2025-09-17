@@ -42,6 +42,7 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
             const res = await fetch(`/api/cadastros/sacados/search?nome=${query}`, { headers: getAuthHeader() });
             if (!res.ok) return [];
             const data = await res.json();
+            // Garante que uma filial não possa ser matriz de outra filial
             return data.filter(s => !s.matriz_id);
         } catch {
             return [];
@@ -91,7 +92,7 @@ export default function EditSacadoModal({ isOpen, onClose, sacado, onSave, onDel
                 nome: data.razao_social || '',
                 fone: data.ddd_telefone_1 ? formatTelefone(`${data.ddd_telefone_1}${data.telefone_1 || ''}`) : '',
                 cep: data.cep ? formatCep(data.cep) : '',
-                endereco: `${data.logouro || ''}, ${data.numero || ''}`,
+                endereco: `${data.logradouro || ''}, ${data.numero || ''}`,
                 bairro: data.bairro || '',
                 municipio: data.municipio || '',
                 uf: data.uf || '',
