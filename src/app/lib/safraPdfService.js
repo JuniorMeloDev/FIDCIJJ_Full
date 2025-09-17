@@ -4,7 +4,6 @@ import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
-// NOVO: Função para carregar o logo do Safra
 const getSafraLogoBase64 = () => {
     try {
         const imagePath = path.resolve(process.cwd(), 'public', 'safra.png');
@@ -129,7 +128,7 @@ function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
 
 export function gerarPdfBoletoSafra(listaBoletos) {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    const safraLogoBase64 = getSafraLogoBase64(); // NOVO: Carrega o logo
+    const safraLogoBase64 = getSafraLogoBase64();
 
     const drawField = (label, value, x, y, width, height, valueAlign = 'left', valueSize = 9, labelSize = 6) => {
         doc.setFontSize(labelSize);
@@ -153,7 +152,8 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         const vencimentoDate = new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z');
 
         // --- Recibo do Pagador (Layout com caixas) ---
-        if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 12, 18, 7);
+        // ALTERAÇÃO: Aumenta o tamanho do logo do Safra no recibo
+        if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 12, 25, 8);
         doc.setFont('helvetica', 'bold').setFontSize(10).text('Recibo do Pagador', 195, 15, { align: 'right' });
         doc.line(15, 20, 195, 20);
         
@@ -177,12 +177,12 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.setLineDashPattern([2, 1], 0).line(15, 80, 195, 80).setLineDashPattern([], 0);
 
         // --- Ficha de Compensação ---
-        // ALTERAÇÃO: Adiciona o logo do Safra
-        if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 86, 18, 7);
+        // ALTERAÇÃO: Aumenta o tamanho do logo do Safra na ficha
+        if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 86, 25, 8);
         
         doc.setLineWidth(0.5).line(40, 86, 40, 93);
-        // ALTERAÇÃO: Adiciona a barra vertical e ajusta a posição do código
-        doc.setFont('helvetica', 'bold').setFontSize(12).text('| 422-7', 42, 90);
+        // ALTERAÇÃO: Centraliza o código do banco entre as barras
+        doc.setFont('helvetica', 'bold').setFontSize(12).text('422-7', 47.5, 90, { align: 'center' });
         
         doc.setLineWidth(0.5).line(55, 86, 55, 93);
         doc.setFontSize(11).setFont('courier', 'bold').text(linhaDigitavel, 125, 90, { align: 'center' });
@@ -191,7 +191,7 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.setLineWidth(0.2).rect(x, y, w, 65);
         
         drawField('Local de Pagamento', 'Pagável em qualquer banco', x, y, 130, 10);
-        doc.line(x + 130, y, x + 130, y + 65); // Linha vertical principal
+        doc.line(x + 130, y, x + 130, y + 65);
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), x + 130, y, 50, 10, 'right', 10);
         doc.line(x, y + 10, x + w, y + 10);
         
@@ -223,7 +223,6 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         drawField('(=)Valor do Documento', formatBRLNumber(dadosBoleto.documento.valor), x + 130, y + 30, 50, 10, 'right', 10);
         doc.line(x, y + 40, x + w, y + 40);
         
-        // ALTERAÇÃO: Remove o drawField de Instruções e o substitui por chamadas diretas de doc.text para alinhar no topo.
         const dataJurosMulta = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
         const instrucoes = [`JUROS DE R$ 22,40 AO DIA A PARTIR DE ${dataJurosMulta}`, `MULTA DE 2,00% A PARTIR DE ${dataJurosMulta}`];
         doc.setFontSize(6).setTextColor(100, 100, 100).text('Instruções', x + 1.5, y + 40 + 2.5);
@@ -240,13 +239,11 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.line(x + 130, y + 55 + hCampoValor, x + w, y + 55 + hCampoValor);
         drawField('(=)Valor Cobrado', '', x + 130, y + 60, 50, hCampoValor);
 
-        // Caixa do Pagador
         doc.rect(x, y + 65, w, 15);
         const pagadorAddressFicha = `${dadosBoleto.documento.pagador.endereco.logradouro}\n${dadosBoleto.documento.pagador.endereco.cidade} ${dadosBoleto.documento.pagador.endereco.uf} CEP: ${dadosBoleto.documento.pagador.endereco.cep}`;
         const pagadorLinesFicha = doc.splitTextToSize(`${dadosBoleto.documento.pagador.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}\n${pagadorAddressFicha}`, 178);
         drawField('Pagador', pagadorLinesFicha, x, y + 65, 180, 15, 'left', 9, 6);
         
-        // ALTERAÇÃO: Posição final do Código de Barras e texto
         drawInterleaved2of5(doc, 15, 185, codigoBarras, 103, 15);
         doc.setFont('helvetica', 'normal').setFontSize(8).text('Autenticação Mecânica - Ficha de Compensação', 195, 205, { align: 'right' });
     });
