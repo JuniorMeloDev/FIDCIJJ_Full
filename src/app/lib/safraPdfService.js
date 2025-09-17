@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { formatBRLNumber, formatCnpjCpf, formatDate } from '../utils/formatters'; // <-- CORREÇÃO AQUI
+import { formatBRLNumber, formatCnpjCpf, formatDate } from '../utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
@@ -64,9 +64,11 @@ function gerarLinhaDigitavelEDAC(dados) {
 
     const valorFormatado = Math.round(valor * 100).toString().padStart(10, '0');
 
-    // Campo Livre (25 posições)
+    // --- CORREÇÃO PRINCIPAL AQUI ---
+    // Ajuste no Campo Livre para o padrão Safra: 25 posições
+    // Sistema(1) + Agência(5) + Conta(9) + NossoNumero(9) + Tipo(1) = 25
     const sistema = "7"; 
-    const campoLivre = `${sistema}${agencia.padStart(5, '0')}${conta.padStart(7, '0')}${nossoNumero.padStart(9, '0')}${tipoCobranca}`;
+    const campoLivre = `${sistema}${agencia.padStart(5, '0')}${conta.padStart(9, '0')}${nossoNumero.padStart(9, '0')}${tipoCobranca}`;
 
     // Cálculo do DAC (Dígito de Autoconferência) do Código de Barras
     const blocoParaDAC = `${banco}${moeda}${fatorVencimento}${valorFormatado}${campoLivre}`;
