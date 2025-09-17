@@ -3,13 +3,12 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { format } from 'date-fns';
 
-// Serviços dos bancos
+// CORREÇÃO: Importando do serviço correto (safraService e bradescoService)
 import { getSafraAccessToken, registrarBoletoSafra, consultarBoletoSafra } from '@/app/lib/safraService';
 import { getBradescoAccessToken, registrarBoleto } from '@/app/lib/bradescoService';
 
 // --- Funções Auxiliares para Preparar os Dados ---
 async function getDadosParaBoleto(duplicataId, banco) {
-    // ... (o conteúdo desta função permanece o mesmo da resposta anterior)
     const { data: duplicata, error: dupError } = await supabase
         .from('duplicatas')
         .select('*')
@@ -85,6 +84,7 @@ async function getDadosParaBoleto(duplicataId, banco) {
     throw new Error("Banco inválido.");
 }
 
+
 // --- ROTA PRINCIPAL ---
 export async function POST(request) {
     let tokenData;
@@ -107,8 +107,7 @@ export async function POST(request) {
             try {
                 boletoGerado = await registrarBoletoSafra(tokenData.access_token, dadosParaBoleto);
             } catch (error) {
-                // SE O ERRO FOR "JÁ REGISTRADO", TENTA CONSULTAR
-                if (error.message && error.message.includes('DUPLICADOS')) {
+                if (error.message && (error.message.includes('DUPLICADOS') || error.message.includes('JA EXISTENTE'))) {
                     console.log(`Boleto já registrado para ${dadosParaBoleto.documento.numero}. Tentando consultar...`);
                     const consultaParams = {
                         agencia: dadosParaBoleto.agencia,
@@ -118,7 +117,7 @@ export async function POST(request) {
                     };
                     boletoGerado = await consultarBoletoSafra(tokenData.access_token, consultaParams);
                 } else {
-                    throw error; // Se for outro erro, propaga
+                    throw error;
                 }
             }
             linhaDigitavel = boletoGerado.data?.documento?.codigoBarras || boletoGerado.data?.codigoBarras || 'N/A';
@@ -132,7 +131,6 @@ export async function POST(request) {
             throw new Error("Banco selecionado inválido.");
         }
         
-        // Atualiza a duplicata no nosso banco de dados
         const { error: updateError } = await supabase
             .from('duplicatas')
             .update({ 
