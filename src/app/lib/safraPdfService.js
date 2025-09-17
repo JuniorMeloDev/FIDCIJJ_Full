@@ -96,57 +96,63 @@ function gerarLinhaDigitavelEDAC(dados) {
 
 
 // --- Função Principal de Geração de PDF ---
-export function gerarPdfBoletoSafra(dadosBoleto) {
+export function gerarPdfBoletoSafra(listaBoletos) {
     const doc = new jsPDF({
         orientation: 'p',
         unit: 'mm',
         format: 'a4'
     });
 
-    const { linhaDigitavel } = gerarLinhaDigitavelEDAC({
-        agencia: dadosBoleto.agencia,
-        conta: dadosBoleto.conta,
-        nossoNumero: dadosBoleto.documento.numero,
-        valor: dadosBoleto.documento.valor,
-        vencimento: dadosBoleto.documento.dataVencimento
+    listaBoletos.forEach((dadosBoleto, index) => {
+        if (index > 0) {
+            doc.addPage();
+        }
+
+        const { linhaDigitavel } = gerarLinhaDigitavelEDAC({
+            agencia: dadosBoleto.agencia,
+            conta: dadosBoleto.conta,
+            nossoNumero: dadosBoleto.documento.numero,
+            valor: dadosBoleto.documento.valor,
+            vencimento: dadosBoleto.documento.dataVencimento
+        });
+
+        // --- Layout do Boleto (simplificado para demonstração) ---
+        doc.setFontSize(10);
+        doc.text('Local de Pagamento', 10, 20);
+        doc.text('Pagável em qualquer Banco do Sistema de Compensação', 10, 25);
+
+        doc.text('Beneficiário', 10, 35);
+        doc.text(dadosBoleto.cedente.nome, 10, 40);
+
+        doc.text('Vencimento', 150, 20);
+        doc.setFontSize(12).setFont(undefined, 'bold');
+        doc.text(format(new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z'), 'dd/MM/yyyy'), 150, 25);
+        doc.setFontSize(10).setFont(undefined, 'normal');
+
+        doc.text('Agência / Código Beneficiário', 150, 35);
+        doc.text(`${dadosBoleto.agencia} / ${dadosBoleto.conta}`, 150, 40);
+
+        doc.text('Nosso Número', 150, 50);
+        doc.text(dadosBoleto.documento.numero, 150, 55);
+
+        doc.text('(=) Valor do Documento', 150, 65);
+        doc.text(formatBRLNumber(dadosBoleto.documento.valor), 150, 70);
+
+        doc.text('Pagador', 10, 80);
+        doc.text(dadosBoleto.documento.pagador.nome, 10, 85);
+        doc.text(`${dadosBoleto.documento.pagador.endereco.logradouro}`, 10, 90);
+        doc.text(`${dadosBoleto.documento.pagador.endereco.cidade} - ${dadosBoleto.documento.pagador.endereco.uf} - CEP: ${dadosBoleto.documento.pagador.endereco.cep}`, 10, 95);
+
+
+        // Linha digitável
+        doc.setFontSize(12).setFont(undefined, 'bold');
+        doc.text('422-7', 150, 10, { align: 'center' });
+        doc.text(linhaDigitavel, 105, 15, { align: 'center' });
+
+        // Placeholder para código de barras (requer biblioteca externa)
+        doc.rect(10, 120, 100, 20);
+        doc.text('Espaço para Código de Barras', 35, 130);
     });
-
-    // --- Layout do Boleto (simplificado para demonstração) ---
-    doc.setFontSize(10);
-    doc.text('Local de Pagamento', 10, 20);
-    doc.text('Pagável em qualquer Banco do Sistema de Compensação', 10, 25);
-
-    doc.text('Beneficiário', 10, 35);
-    doc.text(dadosBoleto.cedente.nome, 10, 40);
-
-    doc.text('Vencimento', 150, 20);
-    doc.setFontSize(12).setFont(undefined, 'bold');
-    doc.text(format(new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z'), 'dd/MM/yyyy'), 150, 25);
-    doc.setFontSize(10).setFont(undefined, 'normal');
-
-    doc.text('Agência / Código Beneficiário', 150, 35);
-    doc.text(`${dadosBoleto.agencia} / ${dadosBoleto.conta}`, 150, 40);
-
-    doc.text('Nosso Número', 150, 50);
-    doc.text(dadosBoleto.documento.numero, 150, 55);
-
-    doc.text('(=) Valor do Documento', 150, 65);
-    doc.text(formatBRLNumber(dadosBoleto.documento.valor), 150, 70);
-
-    doc.text('Pagador', 10, 80);
-    doc.text(dadosBoleto.documento.pagador.nome, 10, 85);
-    doc.text(`${dadosBoleto.documento.pagador.endereco.logradouro}`, 10, 90);
-    doc.text(`${dadosBoleto.documento.pagador.endereco.cidade} - ${dadosBoleto.documento.pagador.endereco.uf} - CEP: ${dadosBoleto.documento.pagador.endereco.cep}`, 10, 95);
-
-
-    // Linha digitável
-    doc.setFontSize(12).setFont(undefined, 'bold');
-    doc.text('422-7', 150, 10, { align: 'center' });
-    doc.text(linhaDigitavel, 105, 15, { align: 'center' });
-
-    // Placeholder para código de barras (requer biblioteca externa)
-    doc.rect(10, 120, 100, 20);
-    doc.text('Espaço para Código de Barras', 35, 130);
     
     return doc.output('arraybuffer');
 }
