@@ -12,6 +12,7 @@ import Pagination from "@/app/components/Pagination";
 import FiltroLateralConsultas from "@/app/components/FiltroLateralConsultas";
 import SelectionActionsBar from "@/app/components/SelectionActionsBar";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
+import EmissaoBoletoModal from "@/app/components/EmissaoBoletoModal";
 
 const ITEMS_PER_PAGE = 8;
 
@@ -60,6 +61,10 @@ export default function ConsultasPage() {
   const menuRef = useRef(null);
   const [estornoInfo, setEstornoInfo] = useState(null);
   const [itemParaExcluir, setItemParaExcluir] = useState(null);
+
+  // States para o novo modal de emissão de boleto
+  const [isEmissaoBoletoModalOpen, setIsEmissaoBoletoModalOpen] = useState(false);
+  const [duplicatasParaBoleto, setDuplicatasParaBoleto] = useState([]);
 
   const getAuthHeader = () => {
     const token = sessionStorage.getItem("authToken");
@@ -440,53 +445,31 @@ export default function ConsultasPage() {
 
   const handleEmitirBoleto = async () => {
     if (!contextMenu.selectedItem) return;
-    const duplicata = contextMenu.selectedItem;
-    showNotification(
-      `A preparar dados do boleto para NF ${duplicata.nfCte}...`,
-      "info"
-    );
+    const operacaoId = contextMenu.selectedItem.operacaoId;
+    
     try {
-      const dadosResponse = await fetch(`/api/dados-boleto/${duplicata.id}`, {
-        headers: getAuthHeader(),
-      });
-      if (!dadosResponse.ok) {
-        const errorData = await dadosResponse.json();
-        throw new Error(
-          errorData.message || "Não foi possível obter os dados para o boleto."
-        );
-      }
-      const dadosParaBoleto = await dadosResponse.json();
+        showNotification(`Buscando todas as parcelas da operação #${operacaoId}...`, 'info');
+        const response = await fetch(`/api/duplicatas/operacao/${operacaoId}`, { headers: getAuthHeader() });
+        
+        if (!response.ok) {
+            throw new Error("Não foi possível encontrar todas as parcelas da operação.");
+        }
+        
+        const todasDuplicatas = await response.json();
+        const duplicatasPendentes = todasDuplicatas.filter(d => d.statusRecebimento !== 'Recebido');
 
-      // ✅ Garantir todos os campos obrigatórios
-      const payloadCompleto = {
-        filialCPFCNPJ: dadosParaBoleto.filialCPFCNPJ ?? "",
-        ctrlCPFCNPJ: dadosParaBoleto.ctrlCPFCNPJ ?? "",
-        codigoUsuarioSolicitante: dadosParaBoleto.codigoUsuarioSolicitante ?? "",
-        nuCPFCNPJ: dadosParaBoleto.nuCPFCNPJ ?? "",
-        registraTitulo: dadosParaBoleto.registraTitulo,
-      };
+        if (duplicatasPendentes.length === 0) {
+             showNotification("Todas as duplicatas desta operação já foram liquidadas.", "info");
+             return;
+        }
 
-      showNotification("A contactar o Bradesco para emitir o boleto...", "info");
-      const bradescoResponse = await fetch("/api/bradesco/registrar-boleto", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify(payloadCompleto),
-      });
+        setDuplicatasParaBoleto(duplicatasPendentes);
+        setIsEmissaoBoletoModalOpen(true);
 
-      if (!bradescoResponse.ok) {
-        const errorData = await bradescoResponse.json();
-        throw new Error(errorData.message || "Falha ao emitir o boleto no Bradesco.");
-      }
-
-      const boletoGerado = await bradescoResponse.json();
-      console.log("Boleto gerado:", boletoGerado);
-      showNotification("Boleto emitido com sucesso!", "success");
-      alert(`Boleto emitido!\nLinha Digitável: ${boletoGerado.linhaDigitavel}`);
     } catch (err) {
-      showNotification(err.message, "error");
+        showNotification(err.message, "error");
     }
-  }
-
+  };
 
   const handleToggleSelectionMode = () => {
     setIsSelectionMode(!isSelectionMode);
@@ -555,13 +538,19 @@ export default function ConsultasPage() {
         onConfirm={handleConfirmarExclusao}
         item={itemParaExcluir}
       />
+      <EmissaoBoletoModal
+          isOpen={isEmissaoBoletoModalOpen}
+          onClose={() => setIsEmissaoBoletoModalOpen(false)}
+          duplicatas={duplicatasParaBoleto}
+          showNotification={showNotification}
+      />
 
       <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
         <div className="flex-shrink-0 px-6 pt-6">
           <motion.header
             className="mb-4 border-b-2 border-orange-500 pb-4"
             initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
+            animate={{ opacity: 1, y: 0 }}
           >
             <h1 className="text-3xl font-bold">
               Consulta de Duplicatas Operadas
@@ -582,7 +571,7 @@ export default function ConsultasPage() {
             fetchSacados={fetchSacados}
             onAutocompleteSelect={handleAutocompleteSelect}
           />
-          <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
+          <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0 overflow-x-auto">
             {loading ? (
               <p className="text-center py-10 text-gray-400">A carregar...</p>
             ) : error ? (
@@ -753,7 +742,7 @@ export default function ConsultasPage() {
                     totalItems={duplicatas.length}
                     itemsPerPage={ITEMS_PER_PAGE}
                     currentPage={currentPage}
-                    onPageChange={paginate}
+                    onPageChange={(page) => setCurrentPage(page)}
                   />
                 </div>
               </>
