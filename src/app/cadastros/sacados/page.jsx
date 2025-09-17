@@ -40,7 +40,6 @@ export default function SacadosPage() {
         try {
             const response = await fetch(`/api/cadastros/sacados`, { headers: getAuthHeader() });
             if (!response.ok) throw new Error('Falha ao carregar sacados.');
-
             const data = await response.json();
             setSacados(data);
         } catch (err) {
@@ -55,23 +54,28 @@ export default function SacadosPage() {
     }, []);
 
     const groupedAndFilteredSacados = useMemo(() => {
-        // Primeiro, filtra os sacados com base nos filtros de nome e cnpj
-        const filtered = sacados.filter(sacado => {
-            const nomeMatch = !filters.nome || sacado.nome.toLowerCase().includes(filters.nome.toLowerCase());
-            const cnpjMatch = !filters.cnpj || (sacado.cnpj && sacado.cnpj.includes(filters.cnpj.replace(/\D/g, '')));
-            return nomeMatch && cnpjMatch;
+        let items = [...sacados];
+
+        items.forEach(item => {
+            if (item.matriz_id) {
+                const matriz = items.find(m => m.id === item.matriz_id);
+                item.matriz_nome = matriz ? matriz.nome : 'Matriz não encontrada';
+            }
         });
 
-        // Se o filtro de nome ou CNPJ estiver ativo, não agrupa para mostrar resultados diretos da busca
         if (filters.nome || filters.cnpj) {
-            return filtered;
+            return items.filter(sacado => {
+                const nomeMatch = !filters.nome || sacado.nome.toLowerCase().includes(filters.nome.toLowerCase());
+                const cnpjMatch = !filters.cnpj || (sacado.cnpj && sacado.cnpj.includes(filters.cnpj.replace(/\D/g, '')));
+                return nomeMatch && cnpjMatch;
+            });
         }
-
-        // Se não houver filtros, agrupa matriz e filiais
+        
         const matrizes = {};
         const filiais = [];
+        const outros = [];
 
-        filtered.forEach(sacado => {
+        items.forEach(sacado => {
             if (sacado.matriz_id) {
                 filiais.push(sacado);
             } else {
@@ -82,18 +86,20 @@ export default function SacadosPage() {
         filiais.forEach(filial => {
             if (matrizes[filial.matriz_id]) {
                 matrizes[filial.matriz_id].filiais.push(filial);
+            } else {
+                outros.push(filial);
             }
         });
 
         const result = [];
-        Object.values(matrizes).forEach(matriz => {
+        Object.values(matrizes).sort((a, b) => a.nome.localeCompare(b.nome)).forEach(matriz => {
             result.push(matriz);
             if (matriz.filiais.length > 0) {
-                result.push(...matriz.filiais.sort((a,b) => a.cnpj.localeCompare(b.cnpj))); // Ordena filiais pelo CNPJ
+                result.push(...matriz.filiais.sort((a, b) => a.cnpj.localeCompare(b.cnpj)));
             }
         });
 
-        return result;
+        return [...result, ...outros];
     }, [filters, sacados]);
 
 
@@ -109,6 +115,16 @@ export default function SacadosPage() {
 
     const handleOpenAddModal = () => { setEditingSacado(null); setIsModalOpen(true); };
     const handleOpenEditModal = (sacado) => { setEditingSacado(sacado); setIsModalOpen(true); };
+
+    const handleEditFilial = (filial) => {
+        setIsModalOpen(false);
+        const filialCompleta = sacados.find(s => s.id === filial.id);
+        if (filialCompleta) {
+            setTimeout(() => {
+                handleOpenEditModal(filialCompleta);
+            }, 50);
+        }
+    };
 
     const handleSaveSacado = async (id, data) => {
         try {
@@ -136,9 +152,10 @@ export default function SacadosPage() {
             await fetchData();
             showNotification(`Sacado ${isUpdating ? 'atualizado' : 'criado'} com sucesso!`, 'success');
             
-
-            clearFilters(); // Limpa os filtros de busca
-            setCurrentPage(1); // Volta para a primeira página
+            // --- CORREÇÃO APLICADA AQUI ---
+            clearFilters(); 
+            setCurrentPage(1);
+            // --- FIM DA CORREÇÃO ---
 
             return { success: true };
         } catch (err) {
@@ -178,7 +195,14 @@ export default function SacadosPage() {
     return (
         <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
-            <EditSacadoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} sacado={editingSacado} onSave={handleSaveSacado} onDelete={handleDeleteRequest} />
+            <EditSacadoModal 
+                isOpen={isModalOpen} 
+                onClose={() => setIsModalOpen(false)} 
+                sacado={editingSacado} 
+                onSave={handleSaveSacado} 
+                onDelete={handleDeleteRequest}
+                onEditFilial={handleEditFilial}
+            />
             <ConfirmacaoModal isOpen={!!sacadoParaExcluir} onClose={() => setSacadoParaExcluir(null)} onConfirm={handleConfirmarExclusao} title="Confirmar Exclusão" message={`Deseja excluir o sacado "${sacadoParaExcluir?.nome}"?`} />
 
             <div className="flex-shrink-0">
