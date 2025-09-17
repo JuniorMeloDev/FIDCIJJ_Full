@@ -186,10 +186,11 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.text(cedenteAddr, xRecibo + 2, yFornecedor + 8);
         doc.text(`REFERENTE A NF ${dadosBoleto.documento.numeroCliente.split('.')[0]}`, xRecibo + 2, yFornecedor + 12);
         doc.line(xRecibo, yFornecedor + 15, xRecibo + wRecibo, yFornecedor + 15);
-        doc.text('Boleto impresso eletronicamente através do Canal Safra Empresas', xRecibo, yFornecedor + 18);
         
+        // ALTERAÇÃO FINAL: Texto e linha de autenticação removidos
+        // doc.text('Boleto impresso eletronicamente através do Canal Safra Empresas', xRecibo, yFornecedor + 18);
         doc.text('Autenticação Mecânica', 195, yFornecedor + 18, { align: 'right' });
-        doc.line(160, yFornecedor + 18.5, 195, yFornecedor + 18.5);
+        // doc.line(160, yFornecedor + 18.5, 195, yFornecedor + 18.5);
         
         doc.setLineDashPattern([2, 1], 0).line(15, 88, 195, 88).setLineDashPattern([], 0);
 
@@ -203,23 +204,17 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         
         const x = 15, y = 101, w = 180;
         
-        // Linhas horizontais
         doc.setLineWidth(0.2);
         doc.line(x, y, x + w, y);
-        doc.line(x, y + 10, x + w, y + 10);
-        doc.line(x, y + 20, x + w, y + 20);
-        doc.line(x, y + 30, x + w, y + 30);
-        doc.line(x, y + 40, x + w, y + 40);
-        doc.line(x, y + 65, x + w, y + 65);
-        doc.line(x, y + 80, x + w, y + 80);
-        doc.line(x, y + 85, x + w, y + 85);
+        doc.line(x + 130, y, x + 130, y + 65);
         
         drawField('Local de Pagamento', 'Pagável em qualquer banco', x, y, 130, 10);
-        doc.line(x + 130, y, x + 130, y + 65);
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), x + 130, y, 50, 10, 'right', 10);
+        doc.line(x, y + 10, x + w, y + 10);
         
         drawField('Beneficiário', `${dadosBoleto.cedente.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, x, y + 10, 130, 10);
         drawField('Agência/Cód. Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, x + 130, y + 10, 50, 10, 'right');
+        doc.line(x, y + 20, x + w, y + 20);
         
         drawField('Data do Doc.', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), x, y + 20, 25, 10);
         doc.line(x + 25, y + 20, x + 25, y + 30);
@@ -231,6 +226,7 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.line(x + 90, y + 20, x + 90, y + 30);
         drawField('Data do Movto', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), x + 90, y + 20, 40, 10);
         drawField('Nosso Número', dadosBoleto.documento.numero, x + 130, y + 20, 50, 10, 'right');
+        doc.line(x, y + 30, x + w, y + 30);
         
         drawField('Data do Oper.', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), x, y+30, 25, 10);
         doc.line(x + 25, y + 30, x + 25, y + 40);
@@ -242,9 +238,12 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.line(x + 95, y + 30, x + 95, y + 40);
         drawField('Valor', '', x + 95, y + 30, 35, 10);
         drawField('(=)Valor do Documento', formatBRLNumber(dadosBoleto.documento.valor), x + 130, y + 30, 50, 10, 'right', 10);
+        doc.line(x, y + 40, x + w, y + 40);
         
+        // ALTERAÇÃO FINAL: Calcula juros dinamicamente
+        const jurosAoDia = (dadosBoleto.documento.valor * 0.02) / 30;
         const dataJurosMulta = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
-        const instrucoes = [`JUROS DE R$ 22,40 AO DIA A PARTIR DE ${dataJurosMulta}`, `MULTA DE 2,00% A PARTIR DE ${dataJurosMulta}`];
+        const instrucoes = [`JUROS DE ${formatBRLNumber(jurosAoDia)} AO DIA A PARTIR DE ${dataJurosMulta}`, `MULTA DE 2,00% A PARTIR DE ${dataJurosMulta}`];
         doc.setFontSize(6).setTextColor(100, 100, 100).text('Instruções', x + 1.5, y + 40 + 2.5);
         doc.setFontSize(9).setTextColor(0, 0, 0).text(instrucoes, x + 1.5, y + 40 + 7);
         
@@ -258,11 +257,17 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         drawField('(+)Outros Acréscimos', '', x + 130, y + 55, 50, hCampoValor);
         doc.line(x + 130, y + 55 + hCampoValor, x + w, y + 55 + hCampoValor);
         drawField('(=)Valor Cobrado', '', x + 130, y + 60, 50, hCampoValor);
+
+        doc.line(x, y + 65, x + w, y + 65);
         
         const pagadorAddressFicha = `${dadosBoleto.documento.pagador.endereco.logradouro}\n${dadosBoleto.documento.pagador.endereco.cidade} ${dadosBoleto.documento.pagador.endereco.uf} CEP: ${dadosBoleto.documento.pagador.endereco.cep}`;
         const pagadorLinesFicha = doc.splitTextToSize(`${dadosBoleto.documento.pagador.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}\n${pagadorAddressFicha}`, 178);
         drawField('Pagador', pagadorLinesFicha, x, y + 65, 180, 15, 'left', 9, 6);
+        
+        // ALTERAÇÃO FINAL: Remove a linha acima de "Beneficiário Final"
+        // doc.line(x, y + 80, x + w, y + 80);
         drawField('Beneficiário Final', '', x, y + 80, 180, 5);
+        doc.line(x, y + 85, x + w, y + 85);
         
         drawInterleaved2of5(doc, 15, 190, codigoBarras, 103, 15);
         doc.setFont('helvetica', 'normal').setFontSize(8).text('Autenticação Mecânica - Ficha de Compensação', 195, 210, { align: 'right' });
