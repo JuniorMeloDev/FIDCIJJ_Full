@@ -10,6 +10,7 @@ export async function GET(request, { params }) {
 
         const { operacaoId } = params;
 
+        // Adicionado linha_digitavel e banco_emissor_boleto ao select
         const { data, error } = await supabase
             .from('duplicatas')
             .select(`
@@ -23,7 +24,6 @@ export async function GET(request, { params }) {
 
         if (error) throw error;
         
-        // Formata os dados para o frontend
         const formattedData = data.map(d => ({
             id: d.id,
             operacaoId: d.operacao_id,
@@ -32,11 +32,14 @@ export async function GET(request, { params }) {
             clienteSacado: d.cliente_sacado,
             valorBruto: d.valor_bruto,
             dataVencimento: d.data_vencimento,
+            statusRecebimento: d.status_recebimento,
+            linha_digitavel: d.linha_digitavel, // Retornando novo campo
+            banco_emissor_boleto: d.banco_emissor_boleto // Retornando novo campo
         }));
 
         return NextResponse.json(formattedData, { status: 200 });
 
     } catch (error) {
-        return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
+        return NextResponse.json({ message: error.message }, { status: 500 });
     }
 }
