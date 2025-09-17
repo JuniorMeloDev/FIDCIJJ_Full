@@ -64,11 +64,12 @@ function gerarLinhaDigitavelEDAC(dados) {
 
     const valorFormatado = Math.round(valor * 100).toString().padStart(10, '0');
 
-    // --- CORREÇÃO PRINCIPAL AQUI ---
-    // Ajuste no Campo Livre para o padrão Safra: 25 posições
-    // Sistema(1) + Agência(5) + Conta(9) + NossoNumero(9) + Tipo(1) = 25
-    const sistema = "7"; 
-    const campoLivre = `${sistema}${agencia.padStart(5, '0')}${conta.padStart(9, '0')}${nossoNumero.padStart(9, '0')}${tipoCobranca}`;
+    // --- CORREÇÃO APLICADA AQUI ---
+    // O padrão correto para o Campo Livre do Safra é diferente.
+    // Carteira(2) + NossoNumero(9) + Agencia(4) + Conta(7) + DV da Conta(1) + 000(3)
+    const carteira = "223"; // Exemplo, pode variar
+    const campoLivre = `${carteira}${nossoNumero.padStart(9, '0')}${agencia.padStart(4, '0')}${conta.padStart(8, '0')}000`;
+
 
     // Cálculo do DAC (Dígito de Autoconferência) do Código de Barras
     const blocoParaDAC = `${banco}${moeda}${fatorVencimento}${valorFormatado}${campoLivre}`;
