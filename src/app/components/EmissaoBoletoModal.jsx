@@ -156,7 +156,7 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                                 </div>
                             ))}
                         </div>
-                        <div className="mt-6 flex justify-between">
+                        <div className="mt-6 flex justify-between cursor-pointer">
                              <button onClick={handleImprimirTodos} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition">
                                 Imprimir Todos
                             </button>
