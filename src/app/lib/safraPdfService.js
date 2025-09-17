@@ -4,7 +4,6 @@ import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
 
 // --- Funções de Cálculo do Boleto (Baseado no Manual) ---
 
-// Módulo 10 - Usado para os dígitos verificadores da linha digitável
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
     let soma = 0;
@@ -26,7 +25,6 @@ function modulo10(bloco) {
     return dv;
 }
 
-// Módulo 11 - Usado para o Dígito de Autoconferência (DAC) do código de barras
 function modulo11(bloco) {
     const multiplicadores = [2, 3, 4, 5, 6, 7, 8, 9];
     let soma = 0;
@@ -47,33 +45,27 @@ function modulo11(bloco) {
     return dac;
 }
 
-// Gera a linha digitável formatada e o código de barras
 function gerarLinhaDigitavelEDAC(dados) {
     const { agencia, conta, nossoNumero, valor, vencimento } = dados;
 
     const banco = "422";
     const moeda = "9";
-    const tipoCobranca = "2"; // Cobrança Registrada
+    const tipoCobranca = "2";
 
-    // Cálculo do Fator de Vencimento
     const dataBase = new Date('2022-05-29T12:00:00Z');
     const dataVenc = new Date(vencimento + 'T12:00:00Z');
     const diffTime = Math.abs(dataVenc - dataBase);
     const fatorVencimento = Math.ceil(diffTime / (1000 * 60 * 60 * 24)).toString().padStart(4, '0');
 
     const valorFormatado = Math.round(valor * 100).toString().padStart(10, '0');
-
-    // Campo Livre (25 posições)
-    const sistema = "7"; // Dígito do Banco Safra
+    const sistema = "7";
     const campoLivre = `${sistema}${agencia}${conta}${nossoNumero}${tipoCobranca}`;
 
-    // Cálculo do DAC (Dígito de Autoconferência) do Código de Barras
     const blocoParaDAC = `${banco}${moeda}${fatorVencimento}${valorFormatado}${campoLivre}`;
     const dac = modulo11(blocoParaDAC);
 
     const codigoBarras = `${banco}${moeda}${dac}${fatorVencimento}${valorFormatado}${campoLivre}`;
 
-    // Montagem da Linha Digitável
     const campo1 = `${banco}${moeda}${campoLivre.substring(0, 5)}`;
     const dv1 = modulo10(campo1);
     const campo1Formatado = `${campo1.substring(0, 5)}.${campo1.substring(5)}${dv1}`;
@@ -94,34 +86,66 @@ function gerarLinhaDigitavelEDAC(dados) {
     return { linhaDigitavel, codigoBarras };
 }
 
+// --- Função para desenhar o código de barras ---
+function drawInterleaved2of5(doc, x, y, code, width = 103, height = 12) {
+    const patterns = [
+        '00110', '10001', '01001', '11000', '00101',
+        '10100', '01100', '00011', '10010', '01010'
+    ];
+    const start = '0000';
+    const stop = '100';
+
+    let binaryCode = start;
+    for (let i = 0; i < code.length; i += 2) {
+        const digit1 = parseInt(code[i], 10);
+        const digit2 = parseInt(code[i + 1], 10);
+        const pattern1 = patterns[digit1];
+        const pattern2 = patterns[digit2];
+        for (let j = 0; j < 5; j++) {
+            binaryCode += pattern1[j] + pattern2[j];
+        }
+    }
+    binaryCode += stop;
+
+    const narrowBarWidth = width / (binaryCode.length * 1.5 + (binaryCode.match(/1/g) || []).length * 0.5);
+    const wideBarWidth = narrowBarWidth * 2;
+    
+    let currentX = x;
+    for (let i = 0; i < binaryCode.length; i++) {
+        const isBar = i % 2 === 0;
+        const isWide = binaryCode[i] === '1';
+        const barWidth = isWide ? wideBarWidth : narrowBarWidth;
+        if (isBar) {
+            doc.rect(currentX, y, barWidth, height, 'F');
+        }
+        currentX += barWidth;
+    }
+}
 
 // --- Função Principal de Geração de PDF ---
 export function gerarPdfBoletoSafra(listaBoletos) {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-
-    // Para adicionar o logo do Safra, converta a imagem safra.png para base64
-    // em um site como https://www.base64-image.de/ e cole a string gerada abaixo.
-    const safraLogoBase64 = ''; // Ex: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...'
+    const safraLogoBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFgAAAAXCAYAAAB/oB20AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAFkSURBVHgB7doxSgNBFAbw/+BCQrGwsBEs/At/QdjaWmgv2HgD/mDRF/APFlpZW3sLkQQbQUHUgqAgsBKz4mdlcfDyzs7M3d2Xj51kl+e5l8wks/1AFAVxwT8ACiL/S+i/oCCi0/95GkAVZSgr03/P4gj2iAtAHg8W9fQ9wUUBxL93wAT4pQhSAVxQxW6gCq2A44GjYhYlA5jYjRSgCq2AG7ARiUIjZgQBqmAjrARiUIjZgQBsQDgS/Qz0/kMWyRno+UCTw1+SoQ3Al6+Vn3gK9ADw0T4Rbt/kI8A0wY48pAXvQAu0gK3oAnQBX0AvoAnQBT0AvoAXQBT0AvoAXQBT0AvoATQBT0AvoATQBT0AvoATQBT0AvoAUA/k3/w5gq9gMykALvoAmwE4lCI2YEAaoAI6wEYlCI2YEAahALz+f+k6AEYlCL0+/+n/sP/oBywY48pA/wHpVp/9g8W9NCk1e/0ttAAAAAElFTkSuQmCC';
 
     const drawField = (label, value, x, y, width, height, valueAlign = 'left', valueSize = 9, labelSize = 6) => {
         doc.setFontSize(labelSize);
         doc.setTextColor(100, 100, 100);
-        doc.text(label, x + 1, y + 2.5);
+        doc.text(label, x + 1.5, y + 2.5);
         doc.setFontSize(valueSize);
         doc.setTextColor(0, 0, 0);
         
         const textX = valueAlign === 'right' ? x + width - 1.5 : x + 1.5;
         const textOptions = { align: valueAlign, baseline: 'bottom' };
         
-        doc.text(value, textX, y + height - 1.5, textOptions);
+        const lines = Array.isArray(value) ? value : [value];
+        lines.forEach((line, i) => {
+            doc.text(String(line || ''), textX, y + height - 1.5 - (lines.length - 1 - i) * 3.5, textOptions);
+        });
     };
 
     listaBoletos.forEach((dadosBoleto, index) => {
-        if (index > 0) {
-            doc.addPage();
-        }
+        if (index > 0) doc.addPage();
         
-        // **CORREÇÃO AQUI**: A variável 'codigoBarras' agora é extraída corretamente.
         const { linhaDigitavel, codigoBarras } = gerarLinhaDigitavelEDAC({
             agencia: dadosBoleto.agencia,
             conta: dadosBoleto.conta,
@@ -132,17 +156,16 @@ export function gerarPdfBoletoSafra(listaBoletos) {
 
         const vencimentoDate = new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z');
 
-        // --- Recibo do Pagador (Layout sem caixas, corrigido) ---
+        // --- Recibo do Pagador ---
         doc.setFont('helvetica', 'bold').setFontSize(10).text('Recibo do Pagador', 15, 15);
         doc.setFont('helvetica', 'normal').setFontSize(8);
 
         doc.text('Beneficiário', 15, 22);
         doc.text(`${dadosBoleto.cedente.nome} - CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, 15, 26);
         doc.text('Pagador', 15, 32);
-        doc.text(`${dadosBoleto.documento.pagador.nome} - CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, 15, 36);
-        const pagadorAddressRecibo = `${dadosBoleto.documento.pagador.endereco.logradouro}, ${dadosBoleto.documento.pagador.endereco.bairro}\n${dadosBoleto.documento.pagador.endereco.cidade} - ${dadosBoleto.documento.pagador.endereco.uf} - CEP: ${dadosBoleto.documento.pagador.endereco.cep}`;
-        doc.text(pagadorAddressRecibo, 15, 40);
-
+        const pagadorLines = doc.splitTextToSize(`${dadosBoleto.documento.pagador.nome} - CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, 130);
+        doc.text(pagadorLines, 15, 36);
+        
         doc.text('Vencimento', 150, 22);
         doc.text('Agência/Cód. Beneficiário', 150, 29);
         doc.text('Nosso Número', 150, 36);
@@ -163,11 +186,7 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.setLineDashPattern([], 0);
 
         // --- Ficha de Compensação ---
-        if (safraLogoBase64 && safraLogoBase64.startsWith('data:image')) {
-            doc.addImage(safraLogoBase64, 'PNG', 15, 86, 18, 7);
-        } else {
-            doc.setFont('helvetica', 'bold').setFontSize(12).text('Safra', 15, 90);
-        }
+        doc.addImage(safraLogoBase64, 'PNG', 15, 86, 18, 7);
         doc.setLineWidth(0.5).line(40, 86, 40, 93);
         doc.setFont('helvetica', 'bold').setFontSize(12).text('422-7', 45, 90);
         doc.setLineWidth(0.5).line(55, 86, 55, 93);
@@ -206,7 +225,7 @@ export function gerarPdfBoletoSafra(listaBoletos) {
 
         doc.line(x, y + 40, x + 130, y + 40);
         const dataJurosMulta = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
-        drawField('Instruções', `JUROS DE R$ 22,40 AO DIA A PARTIR DE ${dataJurosMulta}\nMULTA DE 2,00% A PARTIR DE ${dataJurosMulta}`, x, y + 40, 130, 15);
+        drawField('Instruções', [`JUROS DE R$ 22,40 AO DIA A PARTIR DE ${dataJurosMulta}`, `MULTA DE 2,00% A PARTIR DE ${dataJurosMulta}`], x, y + 40, 130, 15);
 
         drawField('(-) Desconto/Abatimento', '', x + 130, y + 40, 50, 7.5);
         doc.line(x + 130, y + 47.5, x + w, y + 47.5);
@@ -214,7 +233,7 @@ export function gerarPdfBoletoSafra(listaBoletos) {
 
         doc.line(x, y + 55, x + w, y + 55);
         const pagadorAddressFicha = `${dadosBoleto.documento.pagador.endereco.logradouro}\n${dadosBoleto.documento.pagador.endereco.cidade} ${dadosBoleto.documento.pagador.endereco.uf} CEP: ${dadosBoleto.documento.pagador.endereco.cep}`;
-        drawField('Pagador', `${dadosBoleto.documento.pagador.nome}\n${pagadorAddressFicha}`, x, y + 55, 130, 25);
+        drawField('Pagador', [`${dadosBoleto.documento.pagador.nome}`, pagadorAddressFicha], x, y + 55, 130, 25);
         
         drawField('(+) Mora/Multa', '', x + 130, y + 55, 50, 7.5);
         doc.line(x + 130, y + 62.5, x + w, y + 62.5);
@@ -225,8 +244,7 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.setFont('helvetica', 'normal').setFontSize(8);
         doc.text('Autenticação Mecânica - Ficha de Compensação', 195, 185, { align: 'right' });
         
-        // Placeholder para código de barras (requer biblioteca externa, não incluída no jsPDF)
-        doc.text(`Espaço para Código de Barras: ${codigoBarras}`, 15, 170);
+        drawInterleaved2of5(doc, 15, 155, codigoBarras);
     });
     
     return doc.output('arraybuffer');
