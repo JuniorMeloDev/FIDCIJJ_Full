@@ -16,11 +16,13 @@ export async function GET(request, { params }) {
             return NextResponse.json({ message: 'CNPJ inválido.' }, { status: 400 });
         }
 
+        // CORREÇÃO: Removido a busca pela relação 'condicoes_pagamento(*)'
+        // que estava causando o erro de schema cache.
         const { data, error } = await supabase
             .from('sacados')
-            .select('*, condicoes_pagamento(*)')
+            .select('*') // Busca apenas os dados da tabela 'sacados'
             .eq('cnpj', cleanCnpj)
-            .single(); // .single() para esperar um único resultado
+            .single();
 
         if (error) {
             // Se o erro for 'PGRST116', significa "0 rows returned", ou seja, não encontrado
@@ -32,6 +34,7 @@ export async function GET(request, { params }) {
 
         return NextResponse.json(data, { status: 200 });
     } catch (error) {
+        console.error("Erro na API /by-cnpj:", error);
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
 }
