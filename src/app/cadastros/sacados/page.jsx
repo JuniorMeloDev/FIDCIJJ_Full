@@ -11,7 +11,7 @@ import FiltroLateralSacados from '@/app/components/FiltroLateralSacados';
 import { formatCnpjCpf, formatTelefone } from '@/app/utils/formatters';
 import useAuth from '@/app/hooks/useAuth';
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 5;
 
 export default function SacadosPage() {
     const { isAdmin } = useAuth();
@@ -55,16 +55,12 @@ export default function SacadosPage() {
 
     const groupedAndFilteredSacados = useMemo(() => {
         let items = [...sacados];
-
-        // Adiciona o nome da matriz em cada filial para referência
         items.forEach(item => {
             if (item.matriz_id) {
                 const matriz = items.find(m => m.id === item.matriz_id);
                 item.matriz_nome = matriz ? matriz.nome : 'Matriz não encontrada';
             }
         });
-
-        // Se houver filtros ativos, retorna a lista filtrada simples
         if (filters.nome || filters.cnpj) {
             return items.filter(sacado => {
                 const nomeMatch = !filters.nome || sacado.nome.toLowerCase().includes(filters.nome.toLowerCase());
@@ -72,12 +68,8 @@ export default function SacadosPage() {
                 return nomeMatch && cnpjMatch;
             });
         }
-        
-        // Lógica para agrupar matrizes e filiais
         const matrizes = {};
         const filiais = [];
-        const outros = []; // Sacados que porventura tenham matriz_id inválido
-
         items.forEach(sacado => {
             if (sacado.matriz_id) {
                 filiais.push(sacado);
@@ -85,15 +77,11 @@ export default function SacadosPage() {
                 matrizes[sacado.id] = { ...sacado, filiais: [] };
             }
         });
-
         filiais.forEach(filial => {
             if (matrizes[filial.matriz_id]) {
                 matrizes[filial.matriz_id].filiais.push(filial);
-            } else {
-                outros.push(filial);
             }
         });
-
         const result = [];
         Object.values(matrizes).sort((a, b) => a.nome.localeCompare(b.nome)).forEach(matriz => {
             result.push(matriz);
@@ -101,10 +89,8 @@ export default function SacadosPage() {
                 result.push(...matriz.filiais.sort((a, b) => a.cnpj.localeCompare(b.cnpj)));
             }
         });
-
-        return [...result, ...outros];
+        return result;
     }, [filters, sacados]);
-
 
     const handleFilterChange = (e) => {
         setCurrentPage(1);
@@ -119,49 +105,37 @@ export default function SacadosPage() {
     const handleOpenAddModal = () => { setEditingSacado(null); setIsModalOpen(true); };
     const handleOpenEditModal = (sacado) => { setEditingSacado(sacado); setIsModalOpen(true); };
 
-    // Função para fechar o modal atual e abrir o da filial clicada
     const handleEditFilial = (filial) => {
-        setIsModalOpen(false); // Fecha o modal da matriz
+        setIsModalOpen(false);
         const filialCompleta = sacados.find(s => s.id === filial.id);
         if (filialCompleta) {
-            // Pequeno delay para garantir que o modal feche antes de abrir o próximo
-            setTimeout(() => {
-                handleOpenEditModal(filialCompleta);
-            }, 50);
+            setTimeout(() => handleOpenEditModal(filialCompleta), 50);
         }
     };
-
+    
     const handleSaveSacado = async (id, data) => {
         try {
             const isUpdating = !!id;
             const url = isUpdating ? `/api/cadastros/sacados/${id}` : `/api/cadastros/sacados`;
             const method = isUpdating ? 'PUT' : 'POST';
-
-            const payload = {
-                ...data,
-                // Remove o ID temporário das condições de pagamento antes de salvar
-                condicoesPagamento: data.condicoesPagamento.map(({id, ...rest}) => rest)
-            };
-
+            const payload = { ...data, condicoesPagamento: data.condicoesPagamento.map(({id, ...rest}) => rest) };
             const response = await fetch(url, { 
                 method, 
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() }, 
                 body: JSON.stringify(payload) 
             });
-
             if (!response.ok) {
                 const errorText = await response.json();
                 throw new Error(errorText.message || 'Falha ao salvar o sacado.');
             }
-
-            setIsModalOpen(false);
+            if (!isUpdating) {
+                // Se estiver criando uma nova filial, fecha o modal da matriz e atualiza os dados
+                setIsModalOpen(false);
+            }
             await fetchData();
             showNotification(`Sacado ${isUpdating ? 'atualizado' : 'criado'} com sucesso!`, 'success');
-            
-            // Limpa os filtros e volta para a primeira página para ver o resultado
             clearFilters(); 
             setCurrentPage(1);
-
             return { success: true };
         } catch (err) {
             showNotification(err.message, 'error');
@@ -206,7 +180,7 @@ export default function SacadosPage() {
                 sacado={editingSacado} 
                 onSave={handleSaveSacado} 
                 onDelete={handleDeleteRequest}
-                onEditFilial={handleEditFilial} // Passa a nova função
+                onEditFilial={handleEditFilial}
             />
             <ConfirmacaoModal isOpen={!!sacadoParaExcluir} onClose={() => setSacadoParaExcluir(null)} onConfirm={handleConfirmarExclusao} title="Confirmar Exclusão" message={`Deseja excluir o sacado "${sacadoParaExcluir?.nome}"?`} />
 
