@@ -113,12 +113,24 @@ export default function SacadosPage() {
     const handleOpenAddModal = () => { setEditingSacado(null); setIsModalOpen(true); };
     
     const handleOpenEditModal = (sacado) => {
-        console.log("LOG: Abrindo modal para editar. Objeto recebido do clique:", sacado);
-        const fullSacadoData = groupedAndFilteredSacados.find(s => s.id === sacado.id);
-        console.log("LOG: Objeto completo (com filiais) encontrado para o modal:", fullSacadoData);
-        setEditingSacado(fullSacadoData);
-        setIsModalOpen(true);
+    // Se o item clicado for uma filial, encontramos sua matriz para editar
+    const itemParaEditarId = sacado.matriz_id || sacado.id;
+
+    // Encontra o registro da matriz na lista original de sacados
+    const matriz = sacados.find(s => s.id === itemParaEditarId);
+
+    // Encontra todas as filiais que pertencem a esta matriz
+    const filiaisDaMatriz = sacados.filter(s => s.matriz_id === itemParaEditarId);
+
+    // Monta o objeto completo para o modal
+    const dadosCompletosParaModal = {
+        ...matriz,
+        filiais: filiaisDaMatriz
     };
+    
+    setEditingSacado(dadosCompletosParaModal);
+    setIsModalOpen(true);
+};
 
     const handleEditFilial = (filial) => {
         setIsModalOpen(false);
