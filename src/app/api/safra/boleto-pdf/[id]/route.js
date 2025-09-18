@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { gerarPdfBoletoSafra } from '@/app/lib/safraPdfService';
+import { format, addDays } from 'date-fns';
 
 export async function GET(request, { params }) {
     try {
@@ -16,9 +17,10 @@ export async function GET(request, { params }) {
         
         console.log(`[LOG PDF] Iniciando geração de PDF para Operação ID: ${operacaoId}`);
 
+        // --- CORREÇÃO AQUI: BUSCA A OPERAÇÃO COMPLETA PARA OBTER AS REGRAS DE JUROS/MULTA ---
         const { data: duplicatas, error: dupError } = await supabase
             .from('duplicatas')
-            .select('*, operacao:operacoes!inner(cliente:clientes!inner(*))')
+            .select('*, operacao:operacoes!inner(cliente:clientes!inner(*), tipo_operacao:tipos_operacao(*))')
             .eq('operacao_id', operacaoId);
 
         if (dupError) {
@@ -32,16 +34,11 @@ export async function GET(request, { params }) {
 
         const listaBoletos = [];
         for (const duplicata of duplicatas) {
-            if (!duplicata.operacao || !duplicata.operacao.cliente) {
-                console.warn(`[AVISO PDF] Duplicata ${duplicata.id} sem dados de operação ou cliente. Será pulada.`);
+            if (!duplicata.operacao || !duplicata.operacao.cliente || !duplicata.operacao.tipo_operacao) {
+                console.warn(`[AVISO PDF] Duplicata ${duplicata.id} com dados de operação incompletos. Será pulada.`);
                 continue;
             }
             
-            // LÓGICA DE BUSCA DO SACADO CORRIGIDA E MAIS SEGURA
-            if (!duplicata.sacado_id) {
-                throw new Error(`A duplicata ${duplicata.nf_cte} não possui um ID de sacado vinculado, impossibilitando a geração do PDF correto.`);
-            }
-
             const { data: sacado, error: sacadoError } = await supabase
                 .from('sacados')
                 .select('*')
@@ -49,9 +46,29 @@ export async function GET(request, { params }) {
                 .single();
             
             if (sacadoError || !sacado) {
-                console.warn(`[AVISO PDF] Sacado com ID ${duplicata.sacado_id} não encontrado para duplicata ${duplicata.id}. Será pulada.`);
+                console.warn(`[AVISO PDF] Sacado com ID ${duplicata.sacado_id} não encontrado. Será pulada.`);
                 continue;
             }
+
+            const tipoOperacao = duplicata.operacao.tipo_operacao;
+
+            // --- LÓGICA DE JUROS E MULTA REPLICADA AQUI ---
+            const jurosConfig = {};
+            if (tipoOperacao.taxa_juros_mora > 0) {
+                jurosConfig.tipoJuros = "TAXAMENSAL";
+                jurosConfig.valor = tipoOperacao.taxa_juros_mora;
+            } else {
+                jurosConfig.tipoJuros = "ISENTO";
+            }
+
+            const multaConfig = {};
+            if (tipoOperacao.taxa_multa > 0) {
+                multaConfig.tipoMulta = "PERCENTUAL";
+                multaConfig.percentual = tipoOperacao.taxa_multa;
+            } else {
+                multaConfig.tipoMulta = "ISENTO";
+            }
+            // --- FIM DA LÓGICA ---
 
             listaBoletos.push({
                 agencia: "12400",
@@ -74,7 +91,10 @@ export async function GET(request, { params }) {
                             uf: sacado.uf,
                             cep: sacado.cep,
                         }
-                    }
+                    },
+                    // --- Adiciona os objetos de juros e multa no payload ---
+                    juros: jurosConfig,
+                    multa: multaConfig
                 }
             });
         }
