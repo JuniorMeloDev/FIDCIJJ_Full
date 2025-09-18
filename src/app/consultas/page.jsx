@@ -401,7 +401,7 @@ export default function ConsultasPage() {
     }
   };
 
-  const handleViewBoletoJSON = async (banco = 'safra') => {
+    const handleViewBoletoJSON = async (banco = 'safra') => {
     if (!contextMenu.selectedItem) return;
     const duplicataId = contextMenu.selectedItem.id;
     showNotification('Gerando JSON do boleto...', 'info');
@@ -622,12 +622,15 @@ export default function ConsultasPage() {
                             >
                               {formatDate(dup.dataOperacao)}
                             </td>
+                            {/* --- LÓGICA DE FORMATAÇÃO DO NF/CTE APLICADA AQUI --- */}
                             <td
                               className={`px-4 py-2 font-medium ${
                                 isLiquidado ? "text-gray-500" : "text-gray-100"
                               }`}
                             >
-                              {dup.nfCte}
+                              {dup.cedenteRamoAtividade === 'Transportes'
+                                ? dup.nfCte.split('.')[0]
+                                : dup.nfCte}
                             </td>
                             <td
                               className={`px-4 py-2 text-sm ${
@@ -721,7 +724,7 @@ export default function ConsultasPage() {
         <div
           ref={menuRef}
           style={{ top: contextMenu.y, left: contextMenu.x }}
-          className="absolute origin-top-right w-48 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-50"
+          className="absolute origin-top-right w-56 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-50"
         >
           <div className="py-1" onClick={(e) => e.stopPropagation()}>
             <a
@@ -768,7 +771,7 @@ export default function ConsultasPage() {
                 >
                   Emitir Boleto
                 </a>
-                <a
+                 <a
                   href="#"
                   onClick={(e) => {
                       e.preventDefault();
@@ -788,7 +791,7 @@ export default function ConsultasPage() {
               }}
               className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
             >
-              Gerar PDF
+              Gerar PDF do Borderô
             </a>
             <a
               href="#"
@@ -798,7 +801,7 @@ export default function ConsultasPage() {
               }}
               className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
             >
-              Enviar por E-mail
+              Enviar Borderô por E-mail
             </a>
             <div className="border-t border-gray-600 my-1"></div>
             <a

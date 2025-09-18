@@ -16,7 +16,7 @@ export async function GET(request) {
                 *,
                 operacao:operacoes (
                     *,
-                    cliente:clientes ( nome )
+                    cliente:clientes ( nome, ramo_de_atividade ) 
                 ),
                 sacado:sacados ( id, nome, uf, matriz_id )
             `)
@@ -55,6 +55,8 @@ export async function GET(request) {
             dataOperacao: d.data_operacao,
             nfCte: d.nf_cte,
             empresaCedente: d.operacao?.cliente?.nome || 'N/A',
+            // --- ADICIONADO CAMPO COM O RAMO DE ATIVIDADE ---
+            cedenteRamoAtividade: d.operacao?.cliente?.ramo_de_atividade || 'Outro',
             valorBruto: d.valor_bruto,
             valorJuros: d.valor_juros,
             clienteSacado: d.cliente_sacado,

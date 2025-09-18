@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { gerarPdfBoletoSafra } from '@/app/lib/safraPdfService';
-import { format, addDays } from 'date-fns';
 
 export async function GET(request, { params }) {
     try {
