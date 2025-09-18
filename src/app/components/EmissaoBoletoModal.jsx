@@ -36,29 +36,42 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
     };
 
     const handleImprimirTodos = async () => {
-        if (!operacaoId) {
-            showNotification('ID da operação não encontrado.', 'error');
-            return;
+    if (!operacaoId) {
+        showNotification('ID da operação não encontrado.', 'error');
+        return;
+    }
+    showNotification(`Gerando PDF para a operação #${operacaoId}...`, 'info');
+    try {
+        const res = await fetch(`/api/safra/boleto-pdf/${operacaoId}`, { headers: getAuthHeader() });
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.message || "Não foi possível gerar o PDF dos boletos.");
         }
-        showNotification(`Gerando PDF para a operação #${operacaoId}...`, 'info');
-        try {
-            const res = await fetch(`/api/safra/boleto-pdf/${operacaoId}`, { headers: getAuthHeader() });
-            if (!res.ok) {
-                throw new Error("Não foi possível gerar o PDF dos boletos.");
+
+        // --- LÓGICA CORRIGIDA PARA PEGAR O NOME DO ARQUIVO DINAMICAMENTE ---
+        const contentDisposition = res.headers.get('content-disposition');
+        let filename = `boletos_op_${operacaoId}.pdf`; // Nome padrão de fallback
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+            if (filenameMatch && filenameMatch.length > 1) {
+                filename = filenameMatch[1];
             }
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `boletos_op_${operacaoId}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-        } catch (err) {
-            showNotification(err.message, 'error');
         }
-    };
+        // --- FIM DA CORREÇÃO ---
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename; // Usa o nome de arquivo extraído (ou o padrão)
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (err) {
+        showNotification(err.message, 'error');
+    }
+};
     
     const handleEmitirBoletos = async () => {
         setIsLoading(true);
