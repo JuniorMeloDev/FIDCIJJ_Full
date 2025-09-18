@@ -9,19 +9,14 @@ export async function POST(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const body = await request.json();
-
-        // Utiliza os valores pré-calculados enviados pelo frontend
         const { totais } = body;
-        const valorTotalBruto = totais.valorTotalBruto;
-        const valorTotalJuros = totais.valorTotalJuros;
-        const valorTotalDescontos = totais.valorTotalDescontos;
-
+        
+        // CORREÇÃO: Mapeia as duplicatas para incluir o sacado_id
         const duplicatasParaSalvar = body.notasFiscais.flatMap(nf => {
-            const isCteSingleParcela = body.cedenteRamo === 'Transportes' && nf.parcelasCalculadas.length === 1;
-
             return nf.parcelasCalculadas.map(p => ({
-                nfCte: isCteSingleParcela ? nf.nfCte : `${nf.nfCte}.${p.numeroParcela}`,
-                clienteSacado: nf.clienteSacado,
+                nfCte: nf.nfCte,
+                clienteSacado: nf.clienteSacado, // Mantém o nome para exibição rápida
+                sacado_id: nf.sacadoId, // <-- NOVO CAMPO ADICIONADO
                 valorParcela: p.valorParcela,
                 jurosParcela: p.jurosParcela,
                 dataVencimento: p.dataVencimento,
@@ -33,9 +28,9 @@ export async function POST(request) {
             p_tipo_operacao_id: body.tipoOperacaoId,
             p_cliente_id: body.clienteId,
             p_conta_bancaria_id: body.contaBancariaId,
-            p_valor_total_bruto: valorTotalBruto,
-            p_valor_total_juros: valorTotalJuros,
-            p_valor_total_descontos: valorTotalDescontos,
+            p_valor_total_bruto: totais.valorTotalBruto,
+            p_valor_total_juros: totais.valorTotalJuros,
+            p_valor_total_descontos: totais.totalOutrosDescontos,
             p_duplicatas: duplicatasParaSalvar,
             p_descontos: body.descontos,
             p_valor_debito_parcial: body.valorDebito, 
@@ -43,17 +38,13 @@ export async function POST(request) {
         });
 
         if (rpcError) throw rpcError;
-
-        // Após criar a operação, define seu status como 'Aprovada'
+        
         const { error: updateError } = await supabase
             .from('operacoes')
             .update({ status: 'Aprovada' })
             .eq('id', operacaoId);
 
-        if (updateError) {
-            console.error('Falha ao atualizar status da operação criada pelo admin:', updateError);
-            throw new Error('Operação salva, mas falha ao definir o status como Aprovada.');
-        }
+        if (updateError) throw new Error('Operação salva, mas falha ao definir o status como Aprovada.');
 
         return NextResponse.json(operacaoId, { status: 201 });
 

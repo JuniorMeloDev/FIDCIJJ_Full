@@ -40,9 +40,15 @@ const DropdownPortal = ({
             e.preventDefault();
             onSuggestionClick(item);
           }}
-          className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-600 text-gray-100"
+          className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-600 text-gray-100 flex justify-between items-center"
         >
-          {item.nome}
+          <span>
+            {item.nome}
+          </span>
+          {/* TAG PARA DIFERENCIAR MATRIZ E FILIAL */}
+          <span className="text-xs bg-gray-500 text-gray-200 px-2 py-0.5 rounded-full">
+            {item.matriz_id ? `Filial - ${item.uf}` : 'Matriz'}
+          </span>
         </li>
       ))}
     </ul>,

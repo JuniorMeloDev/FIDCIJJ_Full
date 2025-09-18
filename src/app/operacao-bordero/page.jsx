@@ -30,6 +30,7 @@ export default function OperacaoBorderoPage() {
     prazos: "",
     peso: "",
   });
+  const [sacadoSelecionado, setSacadoSelecionado] = useState(null);
   const [notasFiscais, setNotasFiscais] = useState([]);
   const [descontos, setDescontos] = useState([]);
   const [contasBancarias, setContasBancarias] = useState([]);
@@ -253,21 +254,27 @@ export default function OperacaoBorderoPage() {
   };
 
   const handleSelectSacado = (sacado) => {
+    setSacadoSelecionado(sacado); // Guarda o objeto completo do sacado
     const condicoes =
       sacado.condicoes_pagamento || sacado.condicoesPagamento || [];
     setCondicoesSacado(condicoes);
+
+    const nomeExibicao = sacado.matriz_id
+      ? `${sacado.nome} [Filial - ${sacado.uf}]`
+      : sacado.nome;
+
     if (condicoes.length > 0) {
       const condicaoPadrao = condicoes[0];
       setNovaNf((prev) => ({
         ...prev,
-        clienteSacado: sacado.nome,
+        clienteSacado: nomeExibicao,
         prazos: condicaoPadrao.prazos,
         parcelas: String(condicaoPadrao.parcelas),
       }));
     } else {
       setNovaNf((prev) => ({
         ...prev,
-        clienteSacado: sacado.nome,
+        clienteSacado: nomeExibicao,
         prazos: "",
         parcelas: "1",
       }));
@@ -276,6 +283,9 @@ export default function OperacaoBorderoPage() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'clienteSacado' && !value) {
+        setSacadoSelecionado(null);
+    }
     setNovaNf((prevState) => ({
       ...prevState,
       [name]: name === "valorNf" ? formatBRLInput(value) : value,
@@ -284,9 +294,9 @@ export default function OperacaoBorderoPage() {
 
   const handleAddNotaFiscal = async (e) => {
     e.preventDefault();
-    if (!tipoOperacaoId || !dataOperacao || !novaNf.clienteSacado) {
+    if (!tipoOperacaoId || !dataOperacao || !novaNf.clienteSacado || !sacadoSelecionado) {
       showNotification(
-        "Preencha os Dados da Operação e o Sacado primeiro.",
+        "Preencha os Dados da Operação e selecione um Sacado válido da lista.",
         "error"
       );
       return;
@@ -310,7 +320,7 @@ export default function OperacaoBorderoPage() {
       });
       if (!response.ok)
         throw new Error(
-          (await response.text()) || "Falha ao calcular os juros."
+          (await response.json()).message || "Falha ao calcular os juros."
         );
       const calculoResult = await response.json();
       setNotasFiscais([
@@ -318,6 +328,7 @@ export default function OperacaoBorderoPage() {
         {
           id: Date.now(),
           ...novaNf,
+          sacadoId: sacadoSelecionado.id, // Adiciona o ID do sacado
           valorNf: valorNfFloat,
           parcelas: parseInt(novaNf.parcelas) || 1,
           jurosCalculado: calculoResult.totalJuros,
@@ -334,6 +345,7 @@ export default function OperacaoBorderoPage() {
         prazos: "",
         peso: "",
       });
+      setSacadoSelecionado(null);
     } catch (error) {
       showNotification(error.message, "error");
     } finally {
@@ -467,6 +479,7 @@ export default function OperacaoBorderoPage() {
       prazos: "",
       peso: "",
     });
+    setSacadoSelecionado(null);
     setCondicoesSacado([]);
     setIgnoreDespesasBancarias(false);
     setIsPartialDebit(false);
@@ -488,7 +501,7 @@ export default function OperacaoBorderoPage() {
       });
     }
     return combined;
-  }, [descontos, tipoOperacaoId, tiposOperacao, ignoreDespesasBancarias, jurosPre]);
+  }, [descontos, tipoOperacaoId, tiposOperacao, ignoreDespesasBancarias]);
 
   const showPeso = useMemo(() => {
     const selectedOperacao = tiposOperacao.find(
@@ -521,7 +534,7 @@ export default function OperacaoBorderoPage() {
       totalOutrosDescontos,
       liquidoOperacao,
     };
-  }, [notasFiscais, todosOsDescontos, tipoOperacaoId, tiposOperacao, jurosPre]);
+  }, [notasFiscais, todosOsDescontos, jurosPre]);
 
   const handleRemoveDesconto = (idToRemove) => {
     if (idToRemove === "despesas-bancarias") {
@@ -543,7 +556,6 @@ export default function OperacaoBorderoPage() {
         onClose={() => setIsDescontoModalOpen(false)}
         onSave={(d) => setDescontos([...descontos, d])}
       />
-
       <EditClienteModal
         isOpen={isClienteModalOpen}
         onClose={() => setClienteParaCriar(null)}
@@ -556,7 +568,6 @@ export default function OperacaoBorderoPage() {
         onSave={handleSaveNovoSacado}
         sacado={sacadoParaCriar}
       />
-
       <EmailModal
         isOpen={isEmailModalOpen}
         onClose={handleCloseEmailModal}
@@ -564,14 +575,12 @@ export default function OperacaoBorderoPage() {
         isSending={isSendingEmail}
         clienteId={savedOperacaoInfo?.clienteId}
       />
-
       <PartialDebitModal
         isOpen={isPartialDebitModalOpen}
         onClose={() => setIsPartialDebitModalOpen(false)}
         onConfirm={confirmarSalvamento}
         totalValue={totais.liquidoOperacao}
       />
-
       <main className="h-full overflow-y-auto p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
         <motion.header
           className="mb-4 flex justify-between items-center border-b-2 border-orange-500 pb-4"

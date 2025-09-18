@@ -16,11 +16,9 @@ export async function GET(request) {
                 *,
                 operacao:operacoes (
                     *,
-                    cliente:clientes ( nome ),
-                    tipo_operacao:tipos_operacao ( nome )
+                    cliente:clientes ( nome )
                 ),
-                movimentacao_nova:movimentacoes_caixa!fk_movimentacao_caixa ( data_movimento, conta_bancaria ),
-                movimentacao_antiga:movimentacoes_caixa!duplicatas_liquidacao_mov_id_fkey ( data_movimento, conta_bancaria )
+                sacado:sacados ( id, nome, uf, matriz_id )
             `)
             .eq('operacao.status', 'Aprovada');
 
@@ -50,28 +48,23 @@ export async function GET(request) {
             return true;
         });
         
-        // Mapeia para o formato final, usando o resultado de qualquer uma das duas relações que retornar dados.
-        let formattedData = filteredData.map(d => {
-            const movimentacao = d.movimentacao_nova || d.movimentacao_antiga;
-            
-            return {
-                id: d.id,
-                operacaoId: d.operacao_id,
-                clienteId: d.operacao?.cliente_id,
-                dataOperacao: d.data_operacao,
-                nfCte: d.nf_cte,
-                empresaCedente: d.operacao?.cliente?.nome || 'N/A',
-                valorBruto: d.valor_bruto,
-                valorJuros: d.valor_juros,
-                clienteSacado: d.cliente_sacado,
-                dataVencimento: d.data_vencimento,
-                tipoOperacaoNome: d.operacao?.tipo_operacao?.nome,
-                statusRecebimento: d.status_recebimento,
-                dataLiquidacao: movimentacao?.data_movimento || d.data_liquidacao,
-                contaLiquidacao: movimentacao?.conta_bancaria,
-                operacao: d.operacao
-            };
-        });
+        let formattedData = filteredData.map(d => ({
+            id: d.id,
+            operacaoId: d.operacao_id,
+            clienteId: d.operacao?.cliente_id,
+            dataOperacao: d.data_operacao,
+            nfCte: d.nf_cte,
+            empresaCedente: d.operacao?.cliente?.nome || 'N/A',
+            valorBruto: d.valor_bruto,
+            valorJuros: d.valor_juros,
+            clienteSacado: d.cliente_sacado,
+            dataVencimento: d.data_vencimento,
+            statusRecebimento: d.status_recebimento,
+            dataLiquidacao: d.data_liquidacao,
+            contaLiquidacao: d.conta_liquidacao,
+            sacadoInfo: d.sacado,
+            operacao: d.operacao
+        }));
 
         const sortKey = searchParams.get('sort');
         const sortDirection = searchParams.get('direction');
