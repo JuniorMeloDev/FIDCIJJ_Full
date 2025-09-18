@@ -16,25 +16,21 @@ async function getDadosParaBoleto(duplicataId, banco) {
         .single();
     if (dupError || !duplicata) throw new Error(`Duplicata com ID ${duplicataId} não encontrada.`);
 
-    let sacado;
-    // LÓGICA DE FALLBACK: Tenta pelo ID primeiro, depois pelo nome.
-    if (duplicata.sacado_id) {
-        const { data: sacadoPorId } = await supabase.from('sacados').select('*').eq('id', duplicata.sacado_id).single();
-        sacado = sacadoPorId;
-    // ...
-} else {
-    // LÓGICA DE FALLBACK CORRIGIDA: Prioriza a matriz em caso de nomes duplicados
-    const { data: sacadoPorNome } = await supabase
+    // LÓGICA DE BUSCA DO SACADO CORRIGIDA E MAIS SEGURA
+    if (!duplicata.sacado_id) {
+        throw new Error(`A duplicata ${duplicata.nf_cte} não possui um ID de sacado vinculado. A operação pode ser antiga ou ter falhado ao salvar. Cancele e refaça a operação.`);
+    }
+
+    const { data: sacado, error: sacadoError } = await supabase
         .from('sacados')
         .select('*')
-        .eq('nome', duplicata.cliente_sacado)
-        .is('matriz_id', null) // Adicione esta linha para buscar apenas a matriz
+        .eq('id', duplicata.sacado_id)
         .single();
-    sacado = sacadoPorNome;
-}
 
-    
-    if (!sacado) throw new Error(`Sacado "${duplicata.cliente_sacado}" não encontrado.`);
+    if (sacadoError || !sacado) {
+        throw new Error(`Sacado com ID ${duplicata.sacado_id} não encontrado no cadastro.`);
+    }
+
 
     if (banco === 'safra') {
         const idPart = duplicata.id.toString().slice(-4).padStart(4, '0');
