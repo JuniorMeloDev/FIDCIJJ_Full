@@ -18,7 +18,7 @@ export async function GET(request, { params }) {
 
         const { data: duplicatas, error: dupError } = await supabase
             .from('duplicatas')
-            .select('*, operacao:operacoes!inner(cliente:clientes!inner(*)), sacado:sacados(*)') // MODIFICADO: Adicionado sacado(*) para buscar os dados do sacado
+            .select('*, operacao:operacoes!inner(cliente:clientes!inner(*))')
             .eq('operacao_id', operacaoId);
 
         if (dupError) {
@@ -37,11 +37,18 @@ export async function GET(request, { params }) {
                 continue;
             }
             
-            // MODIFICADO: Utiliza os dados do sacado que já foram carregados na consulta inicial
-            const { sacado } = duplicata;
+            let sacado;
+            // LÓGICA DE FALLBACK: Tenta pelo ID, se não tiver, busca pelo nome.
+            if (duplicata.sacado_id) {
+                const { data: sacadoPorId } = await supabase.from('sacados').select('*').eq('id', duplicata.sacado_id).single();
+                sacado = sacadoPorId;
+            } else {
+                const { data: sacadoPorNome } = await supabase.from('sacados').select('*').eq('nome', duplicata.cliente_sacado).single();
+                sacado = sacadoPorNome;
+            }
             
             if (!sacado) {
-                console.warn(`[AVISO PDF] Sacado com ID "${duplicata.sacado_id}" não encontrado para duplicata ${duplicata.id}. Será pulada.`);
+                console.warn(`[AVISO PDF] Sacado "${duplicata.cliente_sacado}" não encontrado para duplicata ${duplicata.id}. Será pulada.`);
                 continue;
             }
 

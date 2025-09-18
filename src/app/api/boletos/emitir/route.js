@@ -9,16 +9,24 @@ import { getBradescoAccessToken, registrarBoleto } from '@/app/lib/bradescoServi
 
 // --- Funções Auxiliares para Preparar os Dados ---
 async function getDadosParaBoleto(duplicataId, banco) {
-    // MODIFICADO: A consulta agora inclui os dados do sacado diretamente.
     const { data: duplicata, error: dupError } = await supabase
         .from('duplicatas')
-        .select('*, sacado:sacados(*)')
+        .select('*')
         .eq('id', duplicataId)
         .single();
     if (dupError || !duplicata) throw new Error(`Duplicata com ID ${duplicataId} não encontrada.`);
 
-    const { sacado } = duplicata;
-    if (!sacado) throw new Error(`Sacado com ID "${duplicata.sacado_id}" não encontrado.`);
+    let sacado;
+    // LÓGICA DE FALLBACK: Tenta pelo ID primeiro, depois pelo nome.
+    if (duplicata.sacado_id) {
+        const { data: sacadoPorId } = await supabase.from('sacados').select('*').eq('id', duplicata.sacado_id).single();
+        sacado = sacadoPorId;
+    } else {
+        const { data: sacadoPorNome } = await supabase.from('sacados').select('*').eq('nome', duplicata.cliente_sacado).single();
+        sacado = sacadoPorNome;
+    }
+    
+    if (!sacado) throw new Error(`Sacado "${duplicata.cliente_sacado}" não encontrado.`);
 
     if (banco === 'safra') {
         const idPart = duplicata.id.toString().slice(-4).padStart(4, '0');
