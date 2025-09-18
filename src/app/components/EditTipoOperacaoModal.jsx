@@ -13,11 +13,11 @@ export default function EditTipoOperacaoModal({
   const initialState = {
     nome: "",
     taxaJuros: "",
-    taxaMulta: "",
-    taxaJurosMora: "",
     valorFixo: "",
     despesasBancarias: "",
     descricao: "",
+    taxa_multa: "",
+    taxa_juros_mora: "", // Corrigido para usar underline
     usarPrazoSacado: false,
     usarPesoNoValorFixo: false,
   };
@@ -38,13 +38,13 @@ export default function EditTipoOperacaoModal({
           despesasBancarias: formatBRLInput(
             String((tipoOperacao.despesasBancarias || 0) * 100)
           ),
-          taxaMulta: tipoOperacao.taxa_multa
+          descricao: tipoOperacao.descricao || "",
+          taxa_multa: tipoOperacao.taxa_multa
             ? String(tipoOperacao.taxa_multa).replace(".", ",")
             : "",
-          taxaJurosMora: tipoOperacao.taxa_juros_mora
+          taxa_juros_mora: tipoOperacao.taxa_juros_mora
             ? String(tipoOperacao.taxa_juros_mora).replace(".", ",")
             : "",
-          descricao: tipoOperacao.descricao || "",
           usarPrazoSacado: tipoOperacao.usarPrazoSacado || false,
           usarPesoNoValorFixo: tipoOperacao.usarPesoNoValorFixo || false,
         });
@@ -63,7 +63,8 @@ export default function EditTipoOperacaoModal({
       setFormData((prev) => ({ ...prev, [name]: checked }));
     } else if (["valorFixo", "despesasBancarias"].includes(name)) {
       setFormData((prev) => ({ ...prev, [name]: formatBRLInput(value) }));
-    } else if (name === "taxaJuros") {
+    } else if (["taxaJuros", "taxa_multa", "taxa_juros_mora"].includes(name)) {
+      // Corrigido
       setFormData((prev) => ({
         ...prev,
         [name]: value.replace(/[^\d,]/g, ""),
@@ -74,15 +75,17 @@ export default function EditTipoOperacaoModal({
   };
 
   const handleSave = () => {
-    // CORREÇÃO AQUI: Prepara os dados corretamente para a API
+    // Prepara os dados corretamente para a API
     const dataToSave = {
       nome: formData.nome,
       taxaJuros: parseFloat(String(formData.taxaJuros).replace(",", ".")) || 0,
       valorFixo: parseBRL(formData.valorFixo),
-      taxaMulta: parseFloat(String(formData.taxaMulta).replace(',', '.')) || 0,
-      taxaJurosMora: parseFloat(String(formData.taxaJurosMora).replace(',', '.')) || 0,
       despesasBancarias: parseBRL(formData.despesasBancarias),
       descricao: formData.descricao,
+      taxa_multa:
+        parseFloat(String(formData.taxa_multa).replace(",", ".")) || 0,
+      taxa_juros_mora:
+        parseFloat(String(formData.taxa_juros_mora).replace(",", ".")) || 0,
       usarPrazoSacado: formData.usarPrazoSacado,
       usarPesoNoValorFixo: formData.usarPesoNoValorFixo,
     };
@@ -148,16 +151,16 @@ export default function EditTipoOperacaoModal({
               className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
             />
           </div>
-
+          {/* Novos campos de juros e multa */}
           <div>
             <label className="block text-sm font-medium text-gray-300">
               Taxa de Multa por Atraso (%)
             </label>
             <input
               type="text"
-              name="taxaMulta"
+              name="taxa_multa"
               placeholder="Ex: 2,00"
-              value={formData.taxaMulta || ""}
+              value={formData.taxa_multa}
               onChange={handleChange}
               className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
             />
@@ -168,14 +171,13 @@ export default function EditTipoOperacaoModal({
             </label>
             <input
               type="text"
-              name="taxaJurosMora"
+              name="taxa_juros_mora"
               placeholder="Ex: 1,00"
-              value={formData.taxaJurosMora || ""}
+              value={formData.taxa_juros_mora}
               onChange={handleChange}
               className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-300">
               Descrição (Opcional)
@@ -190,7 +192,6 @@ export default function EditTipoOperacaoModal({
             ></textarea>
           </div>
 
-          {/* Caixas de seleção */}
           <div className="border-t border-gray-700 pt-4 space-y-3">
             <label className="flex items-center">
               <input

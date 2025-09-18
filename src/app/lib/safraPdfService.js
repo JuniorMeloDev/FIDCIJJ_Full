@@ -15,8 +15,6 @@ const getSafraLogoBase64 = () => {
     }
 };
 
-// --- Funções de Cálculo do Boleto (REVISADAS) ---
-
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
     let soma = 0;
@@ -149,23 +147,28 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         
         const vencimentoDate = new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z');
 
-        // --- INÍCIO DA SEÇÃO RESTAURADA: RECIBO DO PAGADOR ---
+        // --- INÍCIO DA SEÇÃO RESTAURADA E AJUSTADA: RECIBO DO PAGADOR ---
         if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 12, 25, 8);
         doc.setFont('helvetica', 'bold').setFontSize(10).text('Recibo do Pagador', 195, 15, { align: 'right' });
         doc.line(15, 20, 195, 20);
         
-        const xRecibo = 15, yRecibo = 22;
+        const xRecibo = 15, yRecibo = 22, wRecibo = 180;
+        // Linha 1
         drawField('Beneficiário', dadosBoleto.cedente.nome, xRecibo, yRecibo, 100, 10);
         drawField('Nosso Número', dadosBoleto.documento.numero, xRecibo + 100, yRecibo, 40, 10);
+        doc.line(xRecibo + 100, yRecibo, xRecibo + 100, yRecibo + 10);
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), xRecibo + 140, yRecibo, 40, 10, 'right');
+        doc.line(xRecibo + 140, yRecibo, xRecibo + 140, yRecibo + 10);
         
-        drawField('Pagador', `${dadosBoleto.documento.pagador.nome} - CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, xRecibo, yRecibo + 10, 140, 10);
+        // Linha 2
+        doc.line(xRecibo, yRecibo + 10, xRecibo + wRecibo, yRecibo + 10);
+        drawField('Pagador', `${dadosBoleto.documento.pagador.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, xRecibo, yRecibo + 10, 140, 10);
         drawField('Valor', formatBRLNumber(dadosBoleto.documento.valor), xRecibo + 140, yRecibo + 10, 40, 10, 'right');
         
+        // Linha de Autenticação
         doc.setFontSize(8).text('Autenticação Mecânica', 195, yRecibo + 25, { align: 'right' });
         doc.setLineDashPattern([2, 1], 0).line(15, 88, 195, 88).setLineDashPattern([], 0);
-        // --- FIM DA SEÇÃO RESTAURADA: RECIBO DO PAGADOR ---
-
+        // --- FIM DA SEÇÃO RECIBO DO PAGADOR ---
 
         // --- Ficha de Compensação ---
         if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 92, 25, 8);
@@ -210,24 +213,20 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         drawField('(=)Valor do Documento', formatBRLNumber(dadosBoleto.documento.valor), x + 130, y + 30, 50, 10, 'right', 10);
         doc.line(x, y + 40, x + w, y + 40);
         
-        // --- INÍCIO DA SEÇÃO RESTAURADA: INSTRUÇÕES DE JUROS/MULTA ---
+        // Lógica de Instruções de Juros e Multa
         const instrucoes = [];
         if (dadosBoleto.documento.juros && dadosBoleto.documento.juros.tipoJuros !== 'ISENTO') {
              const valorJurosDia = (dadosBoleto.documento.valor * (dadosBoleto.documento.juros.valor / 100)) / 30;
              const dataJuros = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
-             instrucoes.push(`JUROS DE ${formatBRLNumber(valorJurosDia)} AO DIA A PARTIR DE ${dataJuros}`);
+             instrucoes.push(`APOS VENCIMENTO, JUROS DE ${formatBRLNumber(valorJurosDia)} AO DIA.`);
         }
         if (dadosBoleto.documento.multa && dadosBoleto.documento.multa.tipoMulta !== 'ISENTO') {
              const dataMulta = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
-             instrucoes.push(`MULTA DE ${ (dadosBoleto.documento.multa.percentual || 0).toFixed(2).replace('.', ',') }% A PARTIR DE ${dataMulta}`);
-        }
-        if (instrucoes.length === 0) {
-            instrucoes.push('Sem encargos por atraso configurados.');
+             instrucoes.push(`APOS ${dataMulta}, MULTA DE ${ (dadosBoleto.documento.multa.percentual || 0).toFixed(2).replace('.', ',') }%.`);
         }
 
         doc.setFontSize(6).setTextColor(100, 100, 100).text('Instruções', x + 1.5, y + 40 + 2.5);
         doc.setFontSize(9).setTextColor(0, 0, 0).text(instrucoes, x + 1.5, y + 40 + 7);
-        // --- FIM DA SEÇÃO RESTAURADA ---
         
         const hCampoValor = 5;
         drawField('(-)Desconto/Abatimento', '', x + 130, y + 40, 50, hCampoValor);
