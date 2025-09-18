@@ -14,7 +14,7 @@ import SelectionActionsBar from "@/app/components/SelectionActionsBar";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 import EmissaoBoletoModal from "@/app/components/EmissaoBoletoModal";
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 5;
 
 export default function ConsultasPage() {
   const [duplicatas, setDuplicatas] = useState([]);
