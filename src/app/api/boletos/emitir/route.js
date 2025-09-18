@@ -21,10 +21,18 @@ async function getDadosParaBoleto(duplicataId, banco) {
     if (duplicata.sacado_id) {
         const { data: sacadoPorId } = await supabase.from('sacados').select('*').eq('id', duplicata.sacado_id).single();
         sacado = sacadoPorId;
-    } else {
-        const { data: sacadoPorNome } = await supabase.from('sacados').select('*').eq('nome', duplicata.cliente_sacado).single();
-        sacado = sacadoPorNome;
-    }
+    // ...
+} else {
+    // LÓGICA DE FALLBACK CORRIGIDA: Prioriza a matriz em caso de nomes duplicados
+    const { data: sacadoPorNome } = await supabase
+        .from('sacados')
+        .select('*')
+        .eq('nome', duplicata.cliente_sacado)
+        .is('matriz_id', null) // Adicione esta linha para buscar apenas a matriz
+        .single();
+    sacado = sacadoPorNome;
+}
+
     
     if (!sacado) throw new Error(`Sacado "${duplicata.cliente_sacado}" não encontrado.`);
 
