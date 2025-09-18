@@ -46,10 +46,8 @@ export default function OperacaoBorderoPage() {
   const [savedOperacaoInfo, setSavedOperacaoInfo] = useState(null);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [jurosPre, setjurosPre] = useState(true);
-
   const [isPartialDebit, setIsPartialDebit] = useState(false);
   const [isPartialDebitModalOpen, setIsPartialDebitModalOpen] = useState(false);
-
   const fileInputRef = useRef(null);
   const [xmlDataPendente, setXmlDataPendente] = useState(null);
   const [isClienteModalOpen, setIsClienteModalOpen] = useState(false);
@@ -259,6 +257,7 @@ export default function OperacaoBorderoPage() {
       sacado.condicoes_pagamento || sacado.condicoesPagamento || [];
     setCondicoesSacado(condicoes);
 
+    // O valor exibido no input agora inclui a diferenciação
     const nomeExibicao = sacado.matriz_id
       ? `${sacado.nome} [Filial - ${sacado.uf}]`
       : sacado.nome;
@@ -328,7 +327,8 @@ export default function OperacaoBorderoPage() {
         {
           id: Date.now(),
           ...novaNf,
-          sacadoId: sacadoSelecionado.id, // Adiciona o ID do sacado
+          clienteSacado: sacadoSelecionado.nome, // Salva o nome limpo
+          sacadoId: sacadoSelecionado.id, // Salva o ID para o backend
           valorNf: valorNfFloat,
           parcelas: parseInt(novaNf.parcelas) || 1,
           jurosCalculado: calculoResult.totalJuros,
@@ -345,14 +345,14 @@ export default function OperacaoBorderoPage() {
         prazos: "",
         peso: "",
       });
-      setSacadoSelecionado(null);
+      setSacadoSelecionado(null); // Limpa o sacado selecionado
     } catch (error) {
       showNotification(error.message, "error");
     } finally {
       setIsLoading(false);
     }
   };
-
+  
   const handleSalvarOperacao = () => {
     if (notasFiscais.length === 0 || !contaBancariaId) {
       showNotification(
@@ -385,18 +385,9 @@ export default function OperacaoBorderoPage() {
       tipoOperacaoId: parseInt(tipoOperacaoId),
       clienteId: empresaCedenteId,
       contaBancariaId: parseInt(contaBancariaId),
-      totais: {
-        valorTotalBruto: totais.valorTotalBruto,
-        valorTotalJuros: totais.desagioTotal,
-        valorTotalDescontos: totais.totalOutrosDescontos,
-        valorLiquidoFinal: totais.liquidoOperacao,
-      },
+      totais: totais,
       descontos: todosOsDescontos.map(({ id, ...rest }) => rest),
-      notasFiscais: notasFiscais.map((nf) => ({
-        ...nf,
-        peso: parseFloat(String(nf.peso).replace(",", ".")) || null,
-        jurosCalculado: nf.jurosCalculado,
-      })),
+      notasFiscais,
       cedenteRamo,
       valorDebito: valorDebito,
       dataDebito: dataDebito,
