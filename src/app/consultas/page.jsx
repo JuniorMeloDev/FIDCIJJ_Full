@@ -11,22 +11,21 @@ import EmailModal from "@/app/components/EmailModal";
 import Pagination from "@/app/components/Pagination";
 import FiltroLateralConsultas from "@/app/components/FiltroLateralConsultas";
 import SelectionActionsBar from "@/app/components/SelectionActionsBar";
-import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
+import { FaSort, FaSortUp, FaSortDown, FaBuilding } from "react-icons/fa";
 import EmissaoBoletoModal from "@/app/components/EmissaoBoletoModal";
 
 const ITEMS_PER_PAGE = 8;
 
 export default function ConsultasPage() {
   const [duplicatas, setDuplicatas] = useState([]);
+  const [todosSacados, setTodosSacados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [contasMaster, setContasMaster] = useState([]);
   const [tiposOperacao, setTiposOperacao] = useState([]);
-
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState(new Set());
-
   const [filters, setFilters] = useState({
     dataOpInicio: "",
     dataOpFim: "",
@@ -39,19 +38,16 @@ export default function ConsultasPage() {
     clienteNome: "",
     tipoOperacaoId: "",
   });
-
   const [sortConfig, setSortConfig] = useState({
     key: "dataOperacao",
     direction: "DESC",
   });
-
   const [contextMenu, setContextMenu] = useState({
     visible: false,
     x: 0,
     y: 0,
     selectedItem: null,
   });
-
   const [notification, setNotification] = useState({ message: "", type: "" });
   const [isLiquidarModalOpen, setIsLiquidarModalOpen] = useState(false);
   const [duplicataParaLiquidar, setDuplicataParaLiquidar] = useState(null);
@@ -61,20 +57,41 @@ export default function ConsultasPage() {
   const menuRef = useRef(null);
   const [estornoInfo, setEstornoInfo] = useState(null);
   const [itemParaExcluir, setItemParaExcluir] = useState(null);
-
-  // States para o novo modal de emissão de boleto
-  const [isEmissaoBoletoModalOpen, setIsEmissaoBoletoModalOpen] = useState(false);
+  const [isEmissaoBoletoModalOpen, setIsEmissaoBoletoModalOpen] =
+    useState(false);
   const [duplicatasParaBoleto, setDuplicatasParaBoleto] = useState([]);
 
-  const getAuthHeader = () => {
-    const token = sessionStorage.getItem("authToken");
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
+  const getAuthHeader = () => ({
+    Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+  });
 
   const showNotification = (message, type) => {
     setNotification({ message, type });
     setTimeout(() => setNotification({ message: "", type: "" }), 5000);
   };
+
+  const nomesComFiliais = useMemo(() => {
+    const nameMap = new Map();
+    todosSacados.forEach((s) => {
+      if (!nameMap.has(s.nome)) {
+        nameMap.set(s.nome, { hasMatriz: false, hasFilial: false });
+      }
+      const status = nameMap.get(s.nome);
+      if (s.matriz_id) {
+        status.hasFilial = true;
+      } else {
+        status.hasMatriz = true;
+      }
+    });
+
+    const names = new Set();
+    for (const [name, status] of nameMap.entries()) {
+      if (status.hasMatriz && status.hasFilial) {
+        names.add(name);
+      }
+    }
+    return names;
+  }, [todosSacados]);
 
   const fetchDuplicatas = async (currentFilters, currentSortConfig) => {
     setLoading(true);
@@ -84,10 +101,8 @@ export default function ConsultasPage() {
         params.append(key, value);
       }
     });
-
     params.append("sort", currentSortConfig.key);
     params.append("direction", currentSortConfig.direction);
-
     try {
       const response = await fetch(`/api/duplicatas?${params.toString()}`, {
         headers: getAuthHeader(),
@@ -111,33 +126,20 @@ export default function ConsultasPage() {
     const fetchInitialData = async () => {
       try {
         const headers = getAuthHeader();
-        const [contasRes, tiposRes] = await Promise.all([
+        const [contasRes, tiposRes, sacadosRes] = await Promise.all([
           fetch(`/api/cadastros/contas/master`, { headers }),
           fetch(`/api/cadastros/tipos-operacao`, { headers }),
+          fetch(`/api/cadastros/sacados`, { headers }),
         ]);
+
         if (!contasRes.ok) throw new Error("Falha ao buscar contas master.");
         if (!tiposRes.ok) throw new Error("Falha ao buscar tipos de operação.");
+        if (!sacadosRes.ok) throw new Error("Falha ao buscar sacados.");
 
-        const contas = await contasRes.json();
-        const tipos = await tiposRes.json();
-
-        const formattedTipos = tipos.map((t) => ({
-          ...t,
-          taxaJuros: t.taxa_juros,
-          valorFixo: t.valor_fixo,
-          despesasBancarias: t.despesas_bancarias,
-          usarPrazoSacado: t.usar_prazo_sacado,
-          usarPesoNoValorFixo: t.usar_peso_no_valor_fixo,
-        }));
-        const formattedContas = contas.map((c) => ({
-          ...c,
-          contaCorrente: c.conta_corrente,
-        }));
-
-        setContasMaster(formattedContas);
-        setTiposOperacao(formattedTipos);
+        setContasMaster(await contasRes.json());
+        setTiposOperacao(await tiposRes.json());
+        setTodosSacados(await sacadosRes.json());
       } catch (error) {
-        console.error(error);
         showNotification(error.message, "error");
       }
     };
@@ -148,18 +150,14 @@ export default function ConsultasPage() {
     const handler = setTimeout(() => {
       fetchDuplicatas(filters, sortConfig);
     }, 500);
-    return () => {
-      clearTimeout(handler);
-    };
+    return () => clearTimeout(handler);
   }, [filters, sortConfig]);
 
   useEffect(() => {
     const handleClick = () =>
       setContextMenu({ ...contextMenu, visible: false });
     document.addEventListener("click", handleClick);
-    return () => {
-      document.removeEventListener("click", handleClick);
-    };
+    return () => document.removeEventListener("click", handleClick);
   }, [contextMenu]);
 
   const fetchApiData = async (url) => {
@@ -201,7 +199,7 @@ export default function ConsultasPage() {
   };
 
   const clearFilters = () => {
-    const cleared = {
+    setFilters({
       dataOpInicio: "",
       dataOpFim: "",
       dataVencInicio: "",
@@ -212,8 +210,7 @@ export default function ConsultasPage() {
       clienteId: "",
       clienteNome: "",
       tipoOperacaoId: "",
-    };
-    setFilters(cleared);
+    });
     setCurrentPage(1);
   };
 
@@ -249,7 +246,6 @@ export default function ConsultasPage() {
     } else if (contextMenu.selectedItem) {
       itemsParaLiquidar = [contextMenu.selectedItem];
     }
-
     if (itemsParaLiquidar.length > 0) {
       setDuplicataParaLiquidar(itemsParaLiquidar);
       setIsLiquidarModalOpen(true);
@@ -262,9 +258,8 @@ export default function ConsultasPage() {
     jurosMora,
     contaBancariaId
   ) => {
-    const url = `/api/duplicatas/liquidar-em-massa`;
     try {
-      const response = await fetch(url, {
+      const response = await fetch(`/api/duplicatas/liquidar-em-massa`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({
@@ -318,17 +313,14 @@ export default function ConsultasPage() {
 
   const handleConfirmarExclusao = async (tipoExclusao) => {
     if (!itemParaExcluir) return;
-
     const isOperacao = tipoExclusao === "operacao";
     const id = isOperacao ? itemParaExcluir.operacaoId : itemParaExcluir.id;
     const url = isOperacao ? `/api/operacoes/${id}` : `/api/duplicatas/${id}`;
-
     try {
       const response = await fetch(url, {
         method: "DELETE",
         headers: getAuthHeader(),
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(
@@ -336,7 +328,6 @@ export default function ConsultasPage() {
             `Falha ao excluir a ${isOperacao ? "operação" : "duplicata"}.`
         );
       }
-
       showNotification(
         `${isOperacao ? "Operação" : "Duplicata"} excluída com sucesso!`,
         "success"
@@ -348,7 +339,7 @@ export default function ConsultasPage() {
       setItemParaExcluir(null);
     }
   };
-  
+
   const handleAbrirEmailModal = () => {
     if (!contextMenu.selectedItem) return;
     setOperacaoParaEmail({
@@ -357,7 +348,7 @@ export default function ConsultasPage() {
     });
     setIsEmailModalOpen(true);
   };
-  
+
   const handleSendEmail = async (destinatarios) => {
     if (!operacaoParaEmail) return;
     setIsSendingEmail(true);
@@ -384,60 +375,35 @@ export default function ConsultasPage() {
   };
 
   const handleGeneratePdf = async () => {
-    const itemsToProcess =
-      isSelectionMode && selectedItems.size > 0
-        ? Array.from(selectedItems)
-        : contextMenu.selectedItem
-        ? [contextMenu.selectedItem.id]
-        : [];
-
-    if (itemsToProcess.length === 0) {
-      alert("Nenhuma duplicata selecionada.");
+    const operacaoId = contextMenu.selectedItem?.operacaoId;
+    if (!operacaoId) {
+      alert("Este lançamento não está associado a um borderô para gerar PDF.");
       return;
     }
-
-    const url =
-      itemsToProcess.length > 1
-        ? "/api/duplicatas/pdf-em-massa"
-        : `/api/operacoes/${contextMenu.selectedItem.operacaoId}/pdf`;
-
     try {
-      const response = await fetch(url, {
-        method: itemsToProcess.length > 1 ? "POST" : "GET",
-        headers:
-          itemsToProcess.length > 1
-            ? { "Content-Type": "application/json", ...getAuthHeader() }
-            : getAuthHeader(),
-        body:
-          itemsToProcess.length > 1
-            ? JSON.stringify({ ids: itemsToProcess })
-            : null,
+      const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, {
+        headers: getAuthHeader(),
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Não foi possível gerar o PDF.");
       }
-
       const contentDisposition = response.headers.get("content-disposition");
-      let filename = `documento.pdf`;
+      let filename = `bordero-${operacaoId}.pdf`;
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-        if (filenameMatch && filenameMatch.length > 1) {
+        if (filenameMatch && filenameMatch.length > 1)
           filename = filenameMatch[1];
-        }
       }
-
       const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = downloadUrl;
+      a.href = url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-      clearSelection();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
       alert(err.message);
     }
@@ -446,28 +412,33 @@ export default function ConsultasPage() {
   const handleEmitirBoleto = async () => {
     if (!contextMenu.selectedItem) return;
     const operacaoId = contextMenu.selectedItem.operacaoId;
-    
     try {
-        showNotification(`Buscando todas as parcelas da operação #${operacaoId}...`, 'info');
-        const response = await fetch(`/api/duplicatas/operacao/${operacaoId}`, { headers: getAuthHeader() });
-        
-        if (!response.ok) {
-            throw new Error("Não foi possível encontrar todas as parcelas da operação.");
-        }
-        
-        const todasDuplicatas = await response.json();
-        const duplicatasPendentes = todasDuplicatas.filter(d => d.statusRecebimento !== 'Recebido');
-
-        if (duplicatasPendentes.length === 0) {
-             showNotification("Todas as duplicatas desta operação já foram liquidadas.", "info");
-             return;
-        }
-
-        setDuplicatasParaBoleto(duplicatasPendentes);
-        setIsEmissaoBoletoModalOpen(true);
-
+      showNotification(
+        `Buscando todas as parcelas da operação #${operacaoId}...`,
+        "info"
+      );
+      const response = await fetch(`/api/duplicatas/operacao/${operacaoId}`, {
+        headers: getAuthHeader(),
+      });
+      if (!response.ok)
+        throw new Error(
+          "Não foi possível encontrar todas as parcelas da operação."
+        );
+      const todasDuplicatas = await response.json();
+      const duplicatasPendentes = todasDuplicatas.filter(
+        (d) => d.statusRecebimento !== "Recebido"
+      );
+      if (duplicatasPendentes.length === 0) {
+        showNotification(
+          "Todas as duplicatas desta operação já foram liquidadas.",
+          "info"
+        );
+        return;
+      }
+      setDuplicatasParaBoleto(duplicatasPendentes);
+      setIsEmissaoBoletoModalOpen(true);
     } catch (err) {
-        showNotification(err.message, "error");
+      showNotification(err.message, "error");
     }
   };
 
@@ -479,11 +450,8 @@ export default function ConsultasPage() {
   const handleToggleSelectItem = (id) => {
     setSelectedItems((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
       return newSet;
     });
   };
@@ -516,7 +484,7 @@ export default function ConsultasPage() {
         onClose={() => setEstornoInfo(null)}
         onConfirm={confirmarEstorno}
         title="Confirmar Estorno"
-        message="Tem a certeza que deseja estornar esta liquidação? A movimentação de caixa correspondente (se existir) será excluída."
+        message="Tem certeza que deseja estornar esta liquidação? A movimentação de caixa correspondente (se existir) será excluída."
       />
       <LiquidacaoModal
         isOpen={isLiquidarModalOpen}
@@ -539,10 +507,11 @@ export default function ConsultasPage() {
         item={itemParaExcluir}
       />
       <EmissaoBoletoModal
-          isOpen={isEmissaoBoletoModalOpen}
-          onClose={() => setIsEmissaoBoletoModalOpen(false)}
-          duplicatas={duplicatasParaBoleto}
-          showNotification={showNotification}
+        isOpen={isEmissaoBoletoModalOpen}
+        onClose={() => setIsEmissaoBoletoModalOpen(false)}
+        duplicatas={duplicatasParaBoleto}
+        showNotification={showNotification}
+        onSucesso={() => fetchDuplicatas(filters, sortConfig)}
       />
 
       <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
@@ -550,7 +519,7 @@ export default function ConsultasPage() {
           <motion.header
             className="mb-4 border-b-2 border-orange-500 pb-4"
             initial={{ y: -20, opacity: 0 }}
-            animate={{ opacity: 1, y: 0 }}
+            animate={{ y: 0, opacity: 1 }}
           >
             <h1 className="text-3xl font-bold">
               Consulta de Duplicatas Operadas
@@ -692,7 +661,15 @@ export default function ConsultasPage() {
                                 isLiquidado ? "text-gray-500" : "text-gray-400"
                               }`}
                             >
-                              {dup.clienteSacado}
+                              <div className="flex items-center gap-2">
+                                {nomesComFiliais.has(dup.clienteSacado) && (
+                                  <FaBuilding
+                                    className="text-gray-500"
+                                    title="Este sacado possui matriz e filiais cadastradas"
+                                  />
+                                )}
+                                <span>{dup.clienteSacado}</span>
+                              </div>
                             </td>
                             <td
                               className={`px-4 py-2 whitespace-nowrap text-sm text-right align-middle ${
