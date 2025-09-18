@@ -18,7 +18,7 @@ export async function GET(request, { params }) {
 
         const { data: duplicatas, error: dupError } = await supabase
             .from('duplicatas')
-            .select('*, operacao:operacoes!inner(cliente:clientes!inner(*))')
+            .select('*, operacao:operacoes!inner(cliente:clientes!inner(*)), sacado:sacados(*)') // MODIFICADO: Adicionado sacado(*) para buscar os dados do sacado
             .eq('operacao_id', operacaoId);
 
         if (dupError) {
@@ -37,14 +37,11 @@ export async function GET(request, { params }) {
                 continue;
             }
             
-            const { data: sacado } = await supabase
-                .from('sacados')
-                .select('*')
-                .eq('nome', duplicata.cliente_sacado)
-                .single();
+            // MODIFICADO: Utiliza os dados do sacado que já foram carregados na consulta inicial
+            const { sacado } = duplicata;
             
             if (!sacado) {
-                console.warn(`[AVISO PDF] Sacado "${duplicata.cliente_sacado}" não encontrado para duplicata ${duplicata.id}. Será pulada.`);
+                console.warn(`[AVISO PDF] Sacado com ID "${duplicata.sacado_id}" não encontrado para duplicata ${duplicata.id}. Será pulada.`);
                 continue;
             }
 
@@ -80,7 +77,6 @@ export async function GET(request, { params }) {
 
         const pdfBuffer = gerarPdfBoletoSafra(listaBoletos);
         
-        // --- LÓGICA DO NOME DO ARQUIVO ALTERADA AQUI ---
         const tipoDocumento = duplicatas[0]?.operacao?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const numerosDocumento = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join('_');
         const filename = `Boletos ${tipoDocumento} ${numerosDocumento}.pdf`;
