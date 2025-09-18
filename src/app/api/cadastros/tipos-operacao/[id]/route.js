@@ -18,8 +18,8 @@ export async function PUT(request, { params }) {
                 nome: body.nome,
                 taxa_juros: body.taxaJuros,
                 valor_fixo: body.valorFixo,
-                taxa_multa: body.taxaMulta,
-                taxa_juros_mora: body.taxaJurosMora,
+                taxa_multa: body.taxa_multa,
+                taxa_juros_mora: body.taxa_juros_mora,
                 despesas_bancarias: body.despesasBancarias,
                 descricao: body.descricao,
                 // Novos campos
