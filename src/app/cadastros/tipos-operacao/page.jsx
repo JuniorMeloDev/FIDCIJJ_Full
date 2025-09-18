@@ -54,6 +54,8 @@ export default function TiposOperacaoPage() {
         taxaJuros: item.taxa_juros,
         valorFixo: item.valor_fixo,
         despesasBancarias: item.despesas_bancarias,
+        taxa_multa: item.taxa_multa,
+        taxa_juros_mora: item.taxa_juros_mora, 
         usarPrazoSacado: item.usar_prazo_sacado,
         usarPesoNoValorFixo: item.usar_peso_no_valor_fixo,
       }));
