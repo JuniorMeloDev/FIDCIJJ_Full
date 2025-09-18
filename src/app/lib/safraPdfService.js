@@ -15,7 +15,7 @@ const getSafraLogoBase64 = () => {
     }
 };
 
-// --- Funções de Cálculo do Boleto (REVISADAS CONFORME MANUAL DO SAFRA) ---
+// --- Funções de Cálculo do Boleto (REVISADAS) ---
 
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
@@ -51,8 +51,8 @@ function gerarLinhaDigitavelEDAC(dados) {
     const { agencia, conta, nossoNumero, valor, vencimento } = dados;
     const banco = "422";
     const moeda = "9";
-    const tipoCobranca = "2"; // Cobrança Simples
-    const sistema = "7"; // Constante para o sistema Safra
+    const tipoCobranca = "2";
+    const sistema = "7";
 
     const dataBase = new Date('1997-10-07T12:00:00Z');
     const dataVenc = new Date(vencimento + 'T12:00:00Z');
@@ -142,7 +142,6 @@ export function gerarPdfBoletoSafra(listaBoletos) {
     listaBoletos.forEach((dadosBoleto, index) => {
         if (index > 0) doc.addPage();
         
-        // CORRIGIDO: Valor correto sendo passado para o cálculo
         const { linhaDigitavel, codigoBarras } = gerarLinhaDigitavelEDAC({
             agencia: dadosBoleto.agencia, conta: dadosBoleto.conta, nossoNumero: dadosBoleto.documento.numero,
             valor: dadosBoleto.documento.valor, vencimento: dadosBoleto.documento.dataVencimento
@@ -150,7 +149,25 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         
         const vencimentoDate = new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z');
 
-        // Layout do PDF (Com valores corrigidos)
+        // --- INÍCIO DA SEÇÃO RESTAURADA: RECIBO DO PAGADOR ---
+        if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 12, 25, 8);
+        doc.setFont('helvetica', 'bold').setFontSize(10).text('Recibo do Pagador', 195, 15, { align: 'right' });
+        doc.line(15, 20, 195, 20);
+        
+        const xRecibo = 15, yRecibo = 22;
+        drawField('Beneficiário', dadosBoleto.cedente.nome, xRecibo, yRecibo, 100, 10);
+        drawField('Nosso Número', dadosBoleto.documento.numero, xRecibo + 100, yRecibo, 40, 10);
+        drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), xRecibo + 140, yRecibo, 40, 10, 'right');
+        
+        drawField('Pagador', `${dadosBoleto.documento.pagador.nome} - CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, xRecibo, yRecibo + 10, 140, 10);
+        drawField('Valor', formatBRLNumber(dadosBoleto.documento.valor), xRecibo + 140, yRecibo + 10, 40, 10, 'right');
+        
+        doc.setFontSize(8).text('Autenticação Mecânica', 195, yRecibo + 25, { align: 'right' });
+        doc.setLineDashPattern([2, 1], 0).line(15, 88, 195, 88).setLineDashPattern([], 0);
+        // --- FIM DA SEÇÃO RESTAURADA: RECIBO DO PAGADOR ---
+
+
+        // --- Ficha de Compensação ---
         if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 92, 25, 8);
         
         doc.setLineWidth(0.5).line(40, 92, 40, 99);
@@ -165,7 +182,6 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), x + 130, y, 50, 10, 'right', 10);
         doc.line(x, y + 10, x + w, y + 10);
         
-        // CORRIGIDO: Removido o campo `cedente` do JSON, mas ainda precisamos dos dados para o PDF
         drawField('Beneficiário', `${dadosBoleto.cedente.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, x, y + 10, 130, 10);
         drawField('Agência/Cód. Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, x + 130, y + 10, 50, 10, 'right');
         doc.line(x, y + 20, x + w, y + 20);
@@ -174,7 +190,7 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.line(x + 25, y + 20, x + 25, y + 30);
         drawField('Nº do Doc.', dadosBoleto.documento.numeroCliente, x + 25, y + 20, 35, 10);
         doc.line(x + 60, y + 20, x + 60, y + 30);
-        drawField('Esp. Doc.', 'DM', x + 60, y + 20, 15, 10); // Corrigido para DM
+        drawField('Esp. Doc.', 'DM', x + 60, y + 20, 15, 10);
         doc.line(x + 75, y + 20, x + 75, y + 30);
         drawField('Aceite', 'Não', x + 75, y + 20, 15, 10);
         doc.line(x + 90, y + 20, x + 90, y + 30);
@@ -184,34 +200,35 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         
         drawField('Data do Oper.', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), x, y+30, 25, 10);
         doc.line(x + 25, y + 30, x + 25, y + 40);
-        drawField('Carteira', '01', x + 25, y + 30, 20, 10); // Corrigido para 01
+        drawField('Carteira', '01', x + 25, y + 30, 20, 10);
         doc.line(x + 45, y + 30, x + 45, y + 40);
         drawField('Espécie', 'R$', x + 45, y + 30, 20, 10);
         doc.line(x + 65, y + 30, x + 65, y + 40);
         drawField('Quantidade', '', x + 65, y + 30, 30, 10);
         doc.line(x + 95, y + 30, x + 95, y + 40);
         drawField('Valor', '', x + 95, y + 30, 35, 10);
-        drawField('(=)Valor do Documento', formatBRLNumber(dadosBoleto.documento.valor), x + 130, y + 30, 50, 10, 'right', 10); // Valor correto
+        drawField('(=)Valor do Documento', formatBRLNumber(dadosBoleto.documento.valor), x + 130, y + 30, 50, 10, 'right', 10);
         doc.line(x, y + 40, x + w, y + 40);
         
-        // CORRIGIDO: Instruções dinâmicas de juros/multa
+        // --- INÍCIO DA SEÇÃO RESTAURADA: INSTRUÇÕES DE JUROS/MULTA ---
         const instrucoes = [];
         if (dadosBoleto.documento.juros && dadosBoleto.documento.juros.tipoJuros !== 'ISENTO') {
+             const valorJurosDia = (dadosBoleto.documento.valor * (dadosBoleto.documento.juros.valor / 100)) / 30;
              const dataJuros = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
-             instrucoes.push(`JUROS DE ${formatBRLNumber(dadosBoleto.documento.juros.valor || 0)} AO DIA A PARTIR DE ${dataJuros}`);
+             instrucoes.push(`JUROS DE ${formatBRLNumber(valorJurosDia)} AO DIA A PARTIR DE ${dataJuros}`);
         }
         if (dadosBoleto.documento.multa && dadosBoleto.documento.multa.tipoMulta !== 'ISENTO') {
              const dataMulta = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
-             instrucoes.push(`MULTA DE ${ (dadosBoleto.documento.multa.percentual || 0).toFixed(2) }% A PARTIR DE ${dataMulta}`);
+             instrucoes.push(`MULTA DE ${ (dadosBoleto.documento.multa.percentual || 0).toFixed(2).replace('.', ',') }% A PARTIR DE ${dataMulta}`);
         }
         if (instrucoes.length === 0) {
-            instrucoes.push('Sem encargos adicionais configurados.');
+            instrucoes.push('Sem encargos por atraso configurados.');
         }
 
         doc.setFontSize(6).setTextColor(100, 100, 100).text('Instruções', x + 1.5, y + 40 + 2.5);
         doc.setFontSize(9).setTextColor(0, 0, 0).text(instrucoes, x + 1.5, y + 40 + 7);
+        // --- FIM DA SEÇÃO RESTAURADA ---
         
-        //... restante do layout do PDF
         const hCampoValor = 5;
         drawField('(-)Desconto/Abatimento', '', x + 130, y + 40, 50, hCampoValor);
         doc.line(x + 130, y + 40 + hCampoValor, x + w, y + 40 + hCampoValor);
