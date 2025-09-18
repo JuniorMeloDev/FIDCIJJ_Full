@@ -25,9 +25,28 @@ export default function ConsultasPage() {
   const [tiposOperacao, setTiposOperacao] = useState([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState(new Set());
-  const [filters, setFilters] = useState({ dataOpInicio: "", dataOpFim: "", dataVencInicio: "", dataVencFim: "", sacado: "", nfCte: "", status: "Todos", clienteId: "", clienteNome: "", tipoOperacaoId: "" });
-  const [sortConfig, setSortConfig] = useState({ key: "dataOperacao", direction: "DESC" });
-  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, selectedItem: null });
+  const [filters, setFilters] = useState({
+    dataOpInicio: "",
+    dataOpFim: "",
+    dataVencInicio: "",
+    dataVencFim: "",
+    sacado: "",
+    nfCte: "",
+    status: "Todos",
+    clienteId: "",
+    clienteNome: "",
+    tipoOperacaoId: "",
+  });
+  const [sortConfig, setSortConfig] = useState({
+    key: "dataOperacao",
+    direction: "DESC",
+  });
+  const [contextMenu, setContextMenu] = useState({
+    visible: false,
+    x: 0,
+    y: 0,
+    selectedItem: null,
+  });
   const [notification, setNotification] = useState({ message: "", type: "" });
   const [isLiquidarModalOpen, setIsLiquidarModalOpen] = useState(false);
   const [duplicataParaLiquidar, setDuplicataParaLiquidar] = useState(null);
@@ -37,11 +56,14 @@ export default function ConsultasPage() {
   const menuRef = useRef(null);
   const [estornoInfo, setEstornoInfo] = useState(null);
   const [itemParaExcluir, setItemParaExcluir] = useState(null);
-  const [isEmissaoBoletoModalOpen, setIsEmissaoBoletoModalOpen] = useState(false);
+  const [isEmissaoBoletoModalOpen, setIsEmissaoBoletoModalOpen] =
+    useState(false);
   const [duplicatasParaBoleto, setDuplicatasParaBoleto] = useState([]);
 
-  const getAuthHeader = () => ({ 'Authorization': `Bearer ${sessionStorage.getItem('authToken')}` });
-  
+  const getAuthHeader = () => ({
+    Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+  });
+
   const showNotification = (message, type) => {
     setNotification({ message, type });
     setTimeout(() => setNotification({ message: "", type: "" }), 5000);
@@ -51,15 +73,20 @@ export default function ConsultasPage() {
     setLoading(true);
     const params = new URLSearchParams();
     Object.entries(currentFilters).forEach(([key, value]) => {
-      if (value && value !== "Todos" && key !== "clienteNome") params.append(key, value);
+      if (value && value !== "Todos" && key !== "clienteNome")
+        params.append(key, value);
     });
     params.append("sort", currentSortConfig.key);
     params.append("direction", currentSortConfig.direction);
     try {
-      const response = await fetch(`/api/duplicatas?${params.toString()}`, { headers: getAuthHeader() });
+      const response = await fetch(`/api/duplicatas?${params.toString()}`, {
+        headers: getAuthHeader(),
+      });
       if (!response.ok) {
         const errorJson = await response.json();
-        throw new Error(errorJson.message || "Falha ao buscar os dados da API.");
+        throw new Error(
+          errorJson.message || "Falha ao buscar os dados da API."
+        );
       }
       setDuplicatas(await response.json());
     } catch (err) {
@@ -77,7 +104,8 @@ export default function ConsultasPage() {
           fetch(`/api/cadastros/contas/master`, { headers }),
           fetch(`/api/cadastros/tipos-operacao`, { headers }),
         ]);
-        if (!contasRes.ok || !tiposRes.ok) throw new Error("Falha ao carregar dados iniciais.");
+        if (!contasRes.ok || !tiposRes.ok)
+          throw new Error("Falha ao carregar dados iniciais.");
         setContasMaster(await contasRes.json());
         setTiposOperacao(await tiposRes.json());
       } catch (error) {
@@ -93,7 +121,8 @@ export default function ConsultasPage() {
   }, [filters, sortConfig]);
 
   useEffect(() => {
-    const handleClick = () => setContextMenu({ ...contextMenu, visible: false });
+    const handleClick = () =>
+      setContextMenu({ ...contextMenu, visible: false });
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, [contextMenu]);
@@ -103,44 +132,77 @@ export default function ConsultasPage() {
       const res = await fetch(url, { headers: getAuthHeader() });
       if (!res.ok) return [];
       return await res.json();
-    } catch { return []; }
+    } catch {
+      return [];
+    }
   };
 
-  const fetchClientes = (query) => fetchApiData(`/api/cadastros/clientes/search?nome=${query}`);
-  const fetchSacados = (query) => fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
-  
+  const fetchClientes = (query) =>
+    fetchApiData(`/api/cadastros/clientes/search?nome=${query}`);
+  const fetchSacados = (query) =>
+    fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
+
   const handleFilterChange = (e) => {
     setCurrentPage(1);
     const { name, value } = e.target;
-    setFilters((prev) => ({ ...prev, [name]: value, ...(name === "clienteNome" && value === "" && { clienteId: "" }) }));
+    setFilters((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "clienteNome" && value === "" && { clienteId: "" }),
+    }));
   };
-  
+
   const handleAutocompleteSelect = (name, item) => {
     setCurrentPage(1);
-    if (name === "cliente") setFilters((prev) => ({ ...prev, clienteId: item?.id || "", clienteNome: item?.nome || "" }));
-    else if (name === "sacado") setFilters((prev) => ({ ...prev, sacado: item?.nome || "" }));
+    if (name === "cliente")
+      setFilters((prev) => ({
+        ...prev,
+        clienteId: item?.id || "",
+        clienteNome: item?.nome || "",
+      }));
+    else if (name === "sacado")
+      setFilters((prev) => ({ ...prev, sacado: item?.nome || "" }));
   };
 
   const clearFilters = () => {
-    setFilters({ dataOpInicio: "", dataOpFim: "", dataVencInicio: "", dataVencFim: "", sacado: "", nfCte: "", status: "Todos", clienteId: "", clienteNome: "", tipoOperacaoId: "" });
+    setFilters({
+      dataOpInicio: "",
+      dataOpFim: "",
+      dataVencInicio: "",
+      dataVencFim: "",
+      sacado: "",
+      nfCte: "",
+      status: "Todos",
+      clienteId: "",
+      clienteNome: "",
+      tipoOperacaoId: "",
+    });
     setCurrentPage(1);
   };
 
   const handleSort = (key) => {
-    setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'ASC' ? 'DESC' : 'ASC' }));
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === "ASC" ? "DESC" : "ASC",
+    }));
     setCurrentPage(1);
   };
 
   const getSortIcon = (key) => {
     if (sortConfig.key !== key) return <FaSort className="text-gray-400" />;
-    return sortConfig.direction === 'ASC' ? <FaSortUp /> : <FaSortDown />;
+    return sortConfig.direction === "ASC" ? <FaSortUp /> : <FaSortDown />;
   };
 
   const handleContextMenu = (event, item) => {
     event.preventDefault();
-    setContextMenu({ visible: true, x: event.pageX, y: event.pageY, selectedItem: item });
+    setContextMenu({
+      visible: true,
+      x: event.pageX,
+      y: event.pageY,
+      selectedItem: item,
+    });
   };
-  
+
   const handleAbrirModalLiquidacao = () => {
     let itemsParaLiquidar = [];
     if (isSelectionMode && selectedItems.size > 0) {
@@ -154,14 +216,25 @@ export default function ConsultasPage() {
     }
   };
 
-  const handleConfirmarLiquidacao = async (liquidacoes, dataLiquidacao, jurosMora, contaBancariaId) => {
+  const handleConfirmarLiquidacao = async (
+    liquidacoes,
+    dataLiquidacao,
+    jurosMora,
+    contaBancariaId
+  ) => {
     try {
       const response = await fetch(`/api/duplicatas/liquidar-em-massa`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify({ liquidacoes, dataLiquidacao, jurosMora, contaBancariaId }),
+        body: JSON.stringify({
+          liquidacoes,
+          dataLiquidacao,
+          jurosMora,
+          contaBancariaId,
+        }),
       });
-      if (!response.ok) throw new Error("Falha ao dar baixa na(s) duplicata(s).");
+      if (!response.ok)
+        throw new Error("Falha ao dar baixa na(s) duplicata(s).");
       showNotification(`Duplicata(s) liquidada(s) com sucesso!`, "success");
       fetchDuplicatas(filters, sortConfig);
       clearSelection();
@@ -174,17 +247,23 @@ export default function ConsultasPage() {
 
   const handleEstornar = () => {
     if (!contextMenu.selectedItem) return;
-    setEstornoInfo({ id: contextMenu.selectedItem.id, duplicata: contextMenu.selectedItem });
+    setEstornoInfo({
+      id: contextMenu.selectedItem.id,
+      duplicata: contextMenu.selectedItem,
+    });
   };
-  
+
   const confirmarEstorno = async () => {
     if (!estornoInfo) return;
     try {
-      const response = await fetch(`/api/duplicatas/${estornoInfo.id}/estornar`, { method: "POST", headers: getAuthHeader() });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Falha ao estornar a liquidação.");
-      }
+      const response = await fetch(
+        `/api/duplicatas/${estornoInfo.id}/estornar`,
+        { method: "POST", headers: getAuthHeader() }
+      );
+      if (!response.ok)
+        throw new Error(
+          (await response.json()).message || "Falha ao estornar a liquidação."
+        );
       showNotification("Liquidação estornada com sucesso!", "success");
       fetchDuplicatas(filters, sortConfig);
     } catch (err) {
@@ -205,12 +284,16 @@ export default function ConsultasPage() {
     const id = isOperacao ? itemParaExcluir.operacaoId : itemParaExcluir.id;
     const url = isOperacao ? `/api/operacoes/${id}` : `/api/duplicatas/${id}`;
     try {
-      const response = await fetch(url, { method: "DELETE", headers: getAuthHeader() });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Falha ao excluir a ${isOperacao ? "operação" : "duplicata"}.`);
-      }
-      showNotification(`${isOperacao ? "Operação" : "Duplicata"} excluída com sucesso!`, "success");
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: getAuthHeader(),
+      });
+      if (!response.ok)
+        throw new Error((await response.json()).message || `Falha ao excluir.`);
+      showNotification(
+        `${isOperacao ? "Operação" : "Duplicata"} excluída com sucesso!`,
+        "success"
+      );
       fetchDuplicatas(filters, sortConfig);
     } catch (err) {
       showNotification(err.message, "error");
@@ -218,26 +301,32 @@ export default function ConsultasPage() {
       setItemParaExcluir(null);
     }
   };
-  
+
   const handleAbrirEmailModal = () => {
     if (!contextMenu.selectedItem) return;
-    setOperacaoParaEmail({ id: contextMenu.selectedItem.operacaoId, clienteId: contextMenu.selectedItem.clienteId });
+    setOperacaoParaEmail({
+      id: contextMenu.selectedItem.operacaoId,
+      clienteId: contextMenu.selectedItem.clienteId,
+    });
     setIsEmailModalOpen(true);
   };
-  
+
   const handleSendEmail = async (destinatarios) => {
     if (!operacaoParaEmail) return;
     setIsSendingEmail(true);
     try {
-      const response = await fetch(`/api/operacoes/${operacaoParaEmail.id}/enviar-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify({ destinatarios }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Falha ao enviar o e-mail.");
-      }
+      const response = await fetch(
+        `/api/operacoes/${operacaoParaEmail.id}/enviar-email`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...getAuthHeader() },
+          body: JSON.stringify({ destinatarios }),
+        }
+      );
+      if (!response.ok)
+        throw new Error(
+          (await response.json()).message || "Falha ao enviar o e-mail."
+        );
       showNotification("E-mail(s) enviado(s) com sucesso!", "success");
     } catch (err) {
       showNotification(err.message, "error");
@@ -249,33 +338,33 @@ export default function ConsultasPage() {
 
   const handleGeneratePdf = async () => {
     const operacaoId = contextMenu.selectedItem?.operacaoId;
-    if (!operacaoId) {
-        alert("Este lançamento não está associado a um borderô para gerar PDF.");
-        return;
-    }
+    if (!operacaoId) return;
     try {
-        const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, { headers: getAuthHeader() });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || "Não foi possível gerar o PDF.");
-        }
-        const contentDisposition = response.headers.get("content-disposition");
-        let filename = `bordero-${operacaoId}.pdf`;
-        if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-            if (filenameMatch && filenameMatch.length > 1) filename = filenameMatch[1];
-        }
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
+      const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, {
+        headers: getAuthHeader(),
+      });
+      if (!response.ok)
+        throw new Error(
+          (await response.json()).message || "Não foi possível gerar o PDF."
+        );
+      const contentDisposition = response.headers.get("content-disposition");
+      let filename = `bordero-${operacaoId}.pdf`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+        if (filenameMatch && filenameMatch.length > 1)
+          filename = filenameMatch[1];
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
-        alert(err.message);
+      alert(err.message);
     }
   };
 
@@ -283,14 +372,27 @@ export default function ConsultasPage() {
     if (!contextMenu.selectedItem) return;
     const operacaoId = contextMenu.selectedItem.operacaoId;
     try {
-      showNotification(`Buscando todas as parcelas da operação #${operacaoId}...`, 'info');
-      const response = await fetch(`/api/duplicatas/operacao/${operacaoId}`, { headers: getAuthHeader() });
-      if (!response.ok) throw new Error("Não foi possível encontrar todas as parcelas da operação.");
+      showNotification(
+        `Buscando todas as parcelas da operação #${operacaoId}...`,
+        "info"
+      );
+      const response = await fetch(`/api/duplicatas/operacao/${operacaoId}`, {
+        headers: getAuthHeader(),
+      });
+      if (!response.ok)
+        throw new Error(
+          "Não foi possível encontrar todas as parcelas da operação."
+        );
       const todasDuplicatas = await response.json();
-      const duplicatasPendentes = todasDuplicatas.filter(d => d.statusRecebimento !== 'Recebido');
+      const duplicatasPendentes = todasDuplicatas.filter(
+        (d) => d.statusRecebimento !== "Recebido"
+      );
       if (duplicatasPendentes.length === 0) {
-           showNotification("Todas as duplicatas desta operação já foram liquidadas.", "info");
-           return;
+        showNotification(
+          "Todas as duplicatas desta operação já foram liquidadas.",
+          "info"
+        );
+        return;
       }
       setDuplicatasParaBoleto(duplicatasPendentes);
       setIsEmissaoBoletoModalOpen(true);
@@ -318,7 +420,13 @@ export default function ConsultasPage() {
     setIsSelectionMode(false);
   };
 
-  const selectedValue = useMemo(() => duplicatas.filter(d => selectedItems.has(d.id)).reduce((sum, item) => sum + item.valorBruto, 0), [selectedItems, duplicatas]);
+  const selectedValue = useMemo(
+    () =>
+      duplicatas
+        .filter((d) => selectedItems.has(d.id))
+        .reduce((sum, item) => sum + item.valorBruto, 0),
+    [selectedItems, duplicatas]
+  );
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
   const currentItems = duplicatas.slice(indexOfFirstItem, indexOfLastItem);
@@ -326,65 +434,236 @@ export default function ConsultasPage() {
 
   return (
     <>
-      <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: "", type: "" })} />
-      <ConfirmacaoEstornoModal isOpen={!!estornoInfo} onClose={() => setEstornoInfo(null)} onConfirm={confirmarEstorno} item={estornoInfo} />
-      <LiquidacaoModal isOpen={isLiquidarModalOpen} onClose={() => setIsLiquidarModalOpen(false)} onConfirm={handleConfirmarLiquidacao} duplicata={duplicataParaLiquidar} contasMaster={contasMaster} />
-      <EmailModal isOpen={isEmailModalOpen} onClose={() => setIsEmailModalOpen(false)} onSend={handleSendEmail} isSending={isSendingEmail} clienteId={operacaoParaEmail?.clienteId} />
-      <ConfirmacaoExclusaoModal isOpen={!!itemParaExcluir} onClose={() => setItemParaExcluir(null)} onConfirm={handleConfirmarExclusao} item={itemParaExcluir} />
-      <EmissaoBoletoModal isOpen={isEmissaoBoletoModalOpen} onClose={() => setIsEmissaoBoletoModalOpen(false)} duplicatas={duplicatasParaBoleto} showNotification={showNotification} onSucesso={() => fetchDuplicatas(filters, sortConfig)} />
+      <Notification
+        message={notification.message}
+        type={notification.type}
+        onClose={() => setNotification({ message: "", type: "" })}
+      />
+      <ConfirmacaoEstornoModal
+        isOpen={!!estornoInfo}
+        onClose={() => setEstornoInfo(null)}
+        onConfirm={confirmarEstorno}
+        item={estornoInfo}
+      />
+      <LiquidacaoModal
+        isOpen={isLiquidarModalOpen}
+        onClose={() => setIsLiquidarModalOpen(false)}
+        onConfirm={handleConfirmarLiquidacao}
+        duplicata={duplicataParaLiquidar}
+        contasMaster={contasMaster}
+      />
+      <EmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => setIsEmailModalOpen(false)}
+        onSend={handleSendEmail}
+        isSending={isSendingEmail}
+        clienteId={operacaoParaEmail?.clienteId}
+      />
+      <ConfirmacaoExclusaoModal
+        isOpen={!!itemParaExcluir}
+        onClose={() => setItemParaExcluir(null)}
+        onConfirm={handleConfirmarExclusao}
+        item={itemParaExcluir}
+      />
+      <EmissaoBoletoModal
+        isOpen={isEmissaoBoletoModalOpen}
+        onClose={() => setIsEmissaoBoletoModalOpen(false)}
+        duplicatas={duplicatasParaBoleto}
+        showNotification={showNotification}
+        onSucesso={() => fetchDuplicatas(filters, sortConfig)}
+      />
 
       <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
         <div className="flex-shrink-0 px-6 pt-6">
-          <motion.header className="mb-4 border-b-2 border-orange-500 pb-4" initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-            <h1 className="text-3xl font-bold">Consulta de Duplicatas Operadas</h1>
-            <p className="text-sm text-gray-300">Histórico completo de todas as duplicatas processadas.</p>
+          <motion.header
+            className="mb-4 border-b-2 border-orange-500 pb-4"
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+          >
+            <h1 className="text-3xl font-bold">
+              Consulta de Duplicatas Operadas
+            </h1>
+            <p className="text-sm text-gray-300">
+              Histórico completo de todas as duplicatas processadas.
+            </p>
           </motion.header>
         </div>
         <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 px-6 pb-6 overflow-y-auto lg:overflow-y-hidden">
-          <FiltroLateralConsultas filters={filters} onFilterChange={handleFilterChange} onClear={clearFilters} tiposOperacao={tiposOperacao} fetchClientes={fetchClientes} fetchSacados={fetchSacados} onAutocompleteSelect={handleAutocompleteSelect} />
+          <FiltroLateralConsultas
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            onClear={clearFilters}
+            tiposOperacao={tiposOperacao}
+            fetchClientes={fetchClientes}
+            fetchSacados={fetchSacados}
+            onAutocompleteSelect={handleAutocompleteSelect}
+          />
           <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0 overflow-x-auto">
-            {loading ? ( <p className="text-center py-10 text-gray-400">A carregar...</p> ) : 
-             error ? ( <p className="text-red-400 text-center py-10">{error}</p> ) : (
+            {loading ? (
+              <p className="text-center py-10 text-gray-400">A carregar...</p>
+            ) : error ? (
+              <p className="text-red-400 text-center py-10">{error}</p>
+            ) : (
               <>
                 <div className="flex-grow overflow-auto">
                   <table className="min-w-full divide-y divide-gray-700">
                     <thead className="bg-gray-700 sticky top-0 z-10">
                       <tr>
                         {isSelectionMode && <th className="px-4 py-2"></th>}
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort("dataOperacao")} className="flex items-center gap-1">Data Op. {getSortIcon("dataOperacao")}</button></th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort("nfCte")} className="flex items-center gap-1">NF/CT-e {getSortIcon("nfCte")}</button></th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort("empresaCedente")} className="flex items-center gap-1">Cedente {getSortIcon("empresaCedente")}</button></th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort("clienteSacado")} className="flex items-center gap-1">Sacado {getSortIcon("clienteSacado")}</button></th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort("valorBruto")} className="flex items-center gap-1 float-right">Valor Bruto {getSortIcon("valorBruto")}</button></th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort("valorJuros")} className="flex items-center gap-1 float-right">Juros {getSortIcon("valorJuros")}</button></th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"><button onClick={() => handleSort("dataVencimento")} className="flex items-center gap-1">Data Venc. {getSortIcon("dataVencimento")}</button></th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+                          <button
+                            onClick={() => handleSort("dataOperacao")}
+                            className="flex items-center gap-1"
+                          >
+                            Data Op. {getSortIcon("dataOperacao")}
+                          </button>
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+                          <button
+                            onClick={() => handleSort("nfCte")}
+                            className="flex items-center gap-1"
+                          >
+                            NF/CT-e {getSortIcon("nfCte")}
+                          </button>
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+                          <button
+                            onClick={() => handleSort("empresaCedente")}
+                            className="flex items-center gap-1"
+                          >
+                            Cedente {getSortIcon("empresaCedente")}
+                          </button>
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+                          <button
+                            onClick={() => handleSort("clienteSacado")}
+                            className="flex items-center gap-1"
+                          >
+                            Sacado {getSortIcon("clienteSacado")}
+                          </button>
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase">
+                          <button
+                            onClick={() => handleSort("valorBruto")}
+                            className="flex items-center gap-1 float-right"
+                          >
+                            Valor Bruto {getSortIcon("valorBruto")}
+                          </button>
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase">
+                          <button
+                            onClick={() => handleSort("valorJuros")}
+                            className="flex items-center gap-1 float-right"
+                          >
+                            Juros {getSortIcon("valorJuros")}
+                          </button>
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+                          <button
+                            onClick={() => handleSort("dataVencimento")}
+                            className="flex items-center gap-1"
+                          >
+                            Data Venc. {getSortIcon("dataVencimento")}
+                          </button>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
                       {currentItems.map((dup) => {
-                        const isLiquidado = dup.statusRecebimento === "Recebido";
+                        const isLiquidado =
+                          dup.statusRecebimento === "Recebido";
                         return (
-                          <tr key={dup.id} onContextMenu={(e) => handleContextMenu(e, dup)} className="group relative hover:bg-gray-700 cursor-pointer">
-                            {isSelectionMode && (<td className="px-4 py-2 align-middle"><input type="checkbox" className="h-4 w-4 rounded text-orange-500 bg-gray-600" checked={selectedItems.has(dup.id)} onChange={() => handleToggleSelectItem(dup.id)} disabled={isLiquidado} /></td>)}
-                            <td className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>{formatDate(dup.dataOperacao)}</td>
-                            <td className={`px-4 py-2 font-medium ${isLiquidado ? "text-gray-500" : "text-gray-100"}`}>{dup.nfCte}</td>
-                            <td className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>{dup.empresaCedente}</td>
-                            <td className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
-                                {dup.sacadoInfo?.matriz_id ? (
-                                    <span className="flex items-center gap-2">
-                                        {dup.clienteSacado}
-                                        <span className="text-xs font-semibold bg-gray-600 text-gray-200 px-2 py-0.5 rounded-full">
-                                            Filial - {dup.sacadoInfo.uf}
-                                        </span>
-                                    </span>
-                                ) : (
-                                    <span>{dup.clienteSacado}</span>
-                                )}
+                          <tr
+                            key={dup.id}
+                            onContextMenu={(e) => handleContextMenu(e, dup)}
+                            className="group relative hover:bg-gray-700 cursor-pointer"
+                          >
+                            {isSelectionMode && (
+                              <td className="px-4 py-2 align-middle">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded text-orange-500 bg-gray-600"
+                                  checked={selectedItems.has(dup.id)}
+                                  onChange={() =>
+                                    handleToggleSelectItem(dup.id)
+                                  }
+                                  disabled={isLiquidado}
+                                />
+                              </td>
+                            )}
+                            <td
+                              className={`px-4 py-2 text-sm ${
+                                isLiquidado ? "text-gray-500" : "text-gray-400"
+                              }`}
+                            >
+                              {formatDate(dup.dataOperacao)}
                             </td>
-                            <td className={`px-4 py-2 text-sm text-right ${isLiquidado ? "text-gray-500" : "text-gray-100"}`}>{formatBRLNumber(dup.valorBruto)}</td>
-                            <td className={`px-4 py-2 text-sm text-right ${isLiquidado ? "text-gray-500" : "text-red-400"}`}>{formatBRLNumber(dup.valorJuros)}</td>
-                            <td className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
+                            <td
+                              className={`px-4 py-2 font-medium ${
+                                isLiquidado ? "text-gray-500" : "text-gray-100"
+                              }`}
+                            >
+                              {dup.nfCte}
+                            </td>
+                            <td
+                              className={`px-4 py-2 text-sm ${
+                                isLiquidado ? "text-gray-500" : "text-gray-400"
+                              }`}
+                            >
+                              {dup.empresaCedente}
+                            </td>
+                            <td
+                              className={`px-4 py-2 text-sm ${
+                                isLiquidado ? "text-gray-500" : "text-gray-400"
+                              }`}
+                            >
+                              {dup.sacadoInfo?.matriz_id ? (
+                                <span className="flex items-center gap-2">
+                                  {dup.clienteSacado}
+                                  <span className="text-xs font-semibold bg-gray-600 text-gray-200 px-2 py-0.5 rounded-full">
+                                    Filial - {dup.sacadoInfo.uf}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span>{dup.clienteSacado}</span>
+                              )}
+                            </td>
+                            <td
+                              className={`px-4 py-2 text-sm text-right ${
+                                isLiquidado ? "text-gray-500" : "text-gray-100"
+                              }`}
+                            >
+                              {formatBRLNumber(dup.valorBruto)}
+                            </td>
+                            <td
+                              className={`px-4 py-2 text-sm text-right ${
+                                isLiquidado ? "text-gray-500" : "text-red-400"
+                              }`}
+                            >
+                              {formatBRLNumber(dup.valorJuros)}
+                            </td>
+                            <td
+                              className={`px-4 py-2 text-sm ${
+                                isLiquidado ? "text-gray-500" : "text-gray-400"
+                              }`}
+                            >
                               {formatDate(dup.dataVencimento)}
+                              {isLiquidado && dup.dataLiquidacao && (
+                                <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-900 bg-opacity-80 pointer-events-none">
+                                  {dup.contaLiquidacao ? (
+                                    <span className="bg-green-800 text-white text-xs font-bold py-1 px-4 rounded-full">
+                                      Recebido em{" "}
+                                      {formatDate(dup.dataLiquidacao)} na conta{" "}
+                                      {dup.contaLiquidacao}
+                                    </span>
+                                  ) : (
+                                    <span className="bg-gray-900 text-white text-xs font-bold py-1 px-4 rounded-full">
+                                      Baixado em{" "}
+                                      {formatDate(dup.dataLiquidacao)}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </td>
                           </tr>
                         );
@@ -393,15 +672,114 @@ export default function ConsultasPage() {
                   </table>
                 </div>
                 <div className="flex-shrink-0 pt-4">
-                  <Pagination totalItems={duplicatas.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={paginate} />
+                  <Pagination
+                    totalItems={duplicatas.length}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                    currentPage={currentPage}
+                    onPageChange={paginate}
+                  />
                 </div>
               </>
             )}
           </div>
         </div>
       </main>
-      <SelectionActionsBar selectedCount={selectedItems.size} totalValue={selectedValue} onLiquidate={handleAbrirModalLiquidacao} onGeneratePdf={handleGeneratePdf} onClear={clearSelection} />
-      {contextMenu.visible && ( <div ref={menuRef} style={{ top: contextMenu.y, left: contextMenu.x }} className="absolute z-50">{/* ... */}</div> )}
+
+      <SelectionActionsBar
+        selectedCount={selectedItems.size}
+        totalValue={selectedValue}
+        onLiquidate={handleAbrirModalLiquidacao}
+        onGeneratePdf={handleGeneratePdf}
+        onClear={clearSelection}
+      />
+
+      {contextMenu.visible && (
+        <div
+          ref={menuRef}
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="absolute origin-top-right w-48 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-50"
+        >
+          <div className="py-1" onClick={(e) => e.stopPropagation()}>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleToggleSelectionMode();
+              }}
+              className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+            >
+              {isSelectionMode ? "Sair da Seleção" : "Selecionar"}
+            </a>
+            <div className="border-t border-gray-600 my-1"></div>
+            {contextMenu.selectedItem?.statusRecebimento === "Recebido" ? (
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleEstornar();
+                }}
+                className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+              >
+                Estornar Liquidação
+              </a>
+            ) : (
+              <>
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleAbrirModalLiquidacao();
+                  }}
+                  className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                >
+                  Liquidar Duplicata
+                </a>
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleEmitirBoleto();
+                  }}
+                  className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                >
+                  Emitir Boleto
+                </a>
+              </>
+            )}
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleGeneratePdf();
+              }}
+              className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+            >
+              Gerar PDF
+            </a>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleAbrirEmailModal();
+              }}
+              className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+            >
+              Enviar por E-mail
+            </a>
+            <div className="border-t border-gray-600 my-1"></div>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleExcluir();
+              }}
+              className="block px-4 py-2 text-sm text-red-400 hover:bg-gray-600"
+            >
+              Excluir...
+            </a>
+          </div>
+        </div>
+      )}
     </>
   );
 }
