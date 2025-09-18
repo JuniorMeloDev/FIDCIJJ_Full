@@ -38,7 +38,7 @@ export async function GET(request, { params }) {
             }
             
             let sacado;
-            // LÓGICA DE FALLBACK: Tenta pelo ID, se não tiver, busca pelo nome.
+            // CORREÇÃO/REFORÇO: Lógica de fallback para garantir compatibilidade com dados antigos.
             if (duplicata.sacado_id) {
                 const { data: sacadoPorId } = await supabase.from('sacados').select('*').eq('id', duplicata.sacado_id).single();
                 sacado = sacadoPorId;

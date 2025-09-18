@@ -11,25 +11,25 @@ export async function POST(request) {
         const body = await request.json();
         const { totais } = body;
         
-        // CORREÇÃO: Mapeia as duplicatas para incluir o sacado_id
         const duplicatasParaSalvar = body.notasFiscais.flatMap(nf => {
             return nf.parcelasCalculadas.map(p => ({
                 nfCte: nf.nfCte,
-                clienteSacado: nf.clienteSacado, // Mantém o nome para exibição rápida
-                sacado_id: nf.sacadoId, // <-- NOVO CAMPO ADICIONADO
+                clienteSacado: nf.clienteSacado,
+                sacado_id: nf.sacadoId,
                 valorParcela: p.valorParcela,
                 jurosParcela: p.jurosParcela,
                 dataVencimento: p.dataVencimento,
             }));
         });
 
+        // CORREÇÃO: Adicionado o parâmetro p_valor_total_juros que estava faltando.
         const { data: operacaoId, error: rpcError } = await supabase.rpc('salvar_operacao_completa', {
             p_data_operacao: body.dataOperacao,
             p_tipo_operacao_id: body.tipoOperacaoId,
             p_cliente_id: body.clienteId,
             p_conta_bancaria_id: body.contaBancariaId,
             p_valor_total_bruto: totais.valorTotalBruto,
-            p_valor_total_juros: totais.valorTotalJuros,
+            p_valor_total_juros: totais.desagioTotal, // O deságio total é o juros total
             p_valor_total_descontos: totais.totalOutrosDescontos,
             p_duplicatas: duplicatasParaSalvar,
             p_descontos: body.descontos,
