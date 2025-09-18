@@ -401,6 +401,30 @@ export default function ConsultasPage() {
     }
   };
 
+  const handleViewBoletoJSON = async (banco = 'safra') => {
+    if (!contextMenu.selectedItem) return;
+    const duplicataId = contextMenu.selectedItem.id;
+    showNotification('Gerando JSON do boleto...', 'info');
+    try {
+        const response = await fetch(`/api/dados-boleto/${banco}/${duplicataId}`, {
+            headers: getAuthHeader()
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Falha ao gerar o JSON.');
+        }
+        const jsonData = await response.json();
+        
+        const jsonString = JSON.stringify(jsonData, null, 2);
+        const newTab = window.open();
+        newTab.document.write(`<pre>${jsonString}</pre>`);
+        newTab.document.close();
+
+    } catch (err) {
+        showNotification(err.message, 'error');
+    }
+  };
+
   const handleToggleSelectionMode = () => {
     setIsSelectionMode(!isSelectionMode);
     setSelectedItems(new Set());
@@ -743,6 +767,16 @@ export default function ConsultasPage() {
                   className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
                 >
                   Emitir Boleto
+                </a>
+                <a
+                  href="#"
+                  onClick={(e) => {
+                      e.preventDefault();
+                      handleViewBoletoJSON('safra');
+                  }}
+                  className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                >
+                  Ver JSON do Boleto (Safra)
                 </a>
               </>
             )}

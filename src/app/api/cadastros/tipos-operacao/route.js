@@ -31,6 +31,8 @@ export async function POST(request) {
             .insert([{
                 nome: body.nome,
                 taxa_juros: body.taxaJuros,
+                taxa_multa: body.taxaMulta,
+                taxa_juros_mora: body.taxaJurosMora,
                 valor_fixo: body.valorFixo,
                 despesas_bancarias: body.despesasBancarias,
                 descricao: body.descricao,
