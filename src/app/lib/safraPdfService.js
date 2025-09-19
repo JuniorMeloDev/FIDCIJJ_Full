@@ -4,6 +4,9 @@ import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
+// ... (as funções getSafraLogoBase64, modulo10, modulo11, gerarLinhaDigitavelEDAC, drawInterleaved2of5 permanecem as mesmas) ...
+
+// Função inalterada
 const getSafraLogoBase64 = () => {
     try {
         const imagePath = path.resolve(process.cwd(), 'public', 'safra.png');
@@ -15,8 +18,7 @@ const getSafraLogoBase64 = () => {
     }
 };
 
-// --- Funções de Cálculo do Boleto (Versão Final e Corrigida) ---
-
+// Função inalterada
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
     let soma = 0;
@@ -32,6 +34,7 @@ function modulo10(bloco) {
     return resto === 0 ? 0 : 10 - resto;
 }
 
+// Função inalterada
 function modulo11(bloco) {
     const multiplicadores = [2, 3, 4, 5, 6, 7, 8, 9];
     let soma = 0;
@@ -47,6 +50,7 @@ function modulo11(bloco) {
     return (dac === 0 || dac === 10 || dac === 11) ? 1 : dac;
 }
 
+// Função com a correção do fator de vencimento
 function gerarLinhaDigitavelEDAC(dados) {
     const { agencia, conta, nossoNumero, valor, vencimento } = dados;
     const banco = "422";
@@ -61,7 +65,7 @@ function gerarLinhaDigitavelEDAC(dados) {
     if (dataVenc >= new Date('2025-02-22T12:00:00Z')) {
         const novaDataBase = new Date('2025-02-21T12:00:00Z');
         const diffTime = dataVenc - novaDataBase;
-        fatorVencimento = (1000 + Math.ceil(diffTime / (1000 * 60 * 60 * 24))).toString().padStart(4, '0');
+        fatorVencimento = (1000 + Math.floor(diffTime / (1000 * 60 * 60 * 24))).toString().padStart(4, '0');
     } else {
         const diffTime = dataVenc - dataBase;
         fatorVencimento = Math.ceil(diffTime / (1000 * 60 * 60 * 24)).toString().padStart(4, '0');
@@ -95,7 +99,7 @@ function gerarLinhaDigitavelEDAC(dados) {
     return { linhaDigitavel, codigoBarras };
 }
 
-
+// Função inalterada
 function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
     const patterns = ['00110', '10001', '01001', '11000', '00101', '10100', '01100', '00011', '10010', '01010'];
     const start = '0000';
@@ -124,6 +128,7 @@ function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
     }
 }
 
+
 export function gerarPdfBoletoSafra(listaBoletos) {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
     const safraLogoBase64 = getSafraLogoBase64();
@@ -148,8 +153,11 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         });
         
         const vencimentoDate = new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z');
+        
+        // CORREÇÃO APLICADA: Nome do pagador sem ponto final
+        const nomePagador = dadosBoleto.documento.pagador.nome.replace(/\.$/, '');
 
-        // --- INÍCIO DA SEÇÃO RESTAURADA E AJUSTADA: RECIBO DO PAGADOR (Layout antigo e completo) ---
+        // --- Seção Recibo do Pagador ---
         if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 12, 25, 8);
         doc.setFont('helvetica', 'bold').setFontSize(10).text('Recibo do Pagador', 195, 15, { align: 'right' });
         doc.line(15, 20, 195, 20);
@@ -162,12 +170,11 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.line(xRecibo + 140, yRecibo, xRecibo + 140, yRecibo + 10);
         
         doc.line(xRecibo, yRecibo + 10, xRecibo + wRecibo, yRecibo + 10);
-        drawField('Pagador', `${dadosBoleto.documento.pagador.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, xRecibo, yRecibo + 10, 140, 10);
+        drawField('Pagador', `${nomePagador} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, xRecibo, yRecibo + 10, 140, 10);
         drawField('Valor', formatBRLNumber(dadosBoleto.documento.valor), xRecibo + 140, yRecibo + 10, 40, 10, 'right');
         
         doc.setFontSize(8).text('Autenticação Mecânica', 195, yRecibo + 25, { align: 'right' });
         doc.setLineDashPattern([2, 1], 0).line(15, 88, 195, 88).setLineDashPattern([], 0);
-        // --- FIM DA SEÇÃO RECIBO DO PAGADOR ---
 
 
         // --- Ficha de Compensação ---
@@ -181,9 +188,9 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         const x = 15, y = 101, w = 180;
         doc.setLineWidth(0.2);
         
-        doc.rect(x, y, w, 105); // Borda externa principal
-        doc.line(x, y, x + w, y); // Linha superior
-        doc.line(x + 130, y, x + 130, y + 65); // Linha vertical principal
+        doc.rect(x, y, w, 105);
+        doc.line(x, y, x + w, y);
+        doc.line(x + 130, y, x + 130, y + 65);
         
         drawField('Local de Pagamento', 'Pagável em qualquer banco', x, y, 130, 10);
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), x + 130, y, 50, 10, 'right', 10);
@@ -217,16 +224,15 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         drawField('(=)Valor do Documento', formatBRLNumber(dadosBoleto.documento.valor), x + 130, y + 30, 50, 10, 'right', 10);
         doc.line(x, y + 40, x + w, y + 40);
         
-        // Lógica de Instruções de Juros e Multa
+        // CORREÇÃO APLICADA: Textos das instruções alterados
         const instrucoes = [];
+        const dataJurosMulta = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
         if (dadosBoleto.documento.juros && dadosBoleto.documento.juros.tipoJuros !== 'ISENTO') {
              const valorJurosDia = (dadosBoleto.documento.valor * (dadosBoleto.documento.juros.valor / 100)) / 30;
-             const dataJuros = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
-             instrucoes.push(`APOS VENCIMENTO, JUROS DE ${formatBRLNumber(valorJurosDia)} AO DIA.`);
+             instrucoes.push(`A partir de ${dataJurosMulta}, juros de ${formatBRLNumber(valorJurosDia)} ao dia.`);
         }
         if (dadosBoleto.documento.multa && dadosBoleto.documento.multa.tipoMulta !== 'ISENTO') {
-             const dataMulta = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
-             instrucoes.push(`APOS ${dataMulta}, MULTA DE ${ (dadosBoleto.documento.multa.percentual || 0).toFixed(2).replace('.', ',') }%.`);
+             instrucoes.push(`A partir de ${dataJurosMulta}, multa de ${ (dadosBoleto.documento.multa.percentual || 0).toFixed(2).replace('.', ',') }%.`);
         }
         
         doc.setFontSize(6).setTextColor(100, 100, 100).text('Instruções', x + 1.5, y + 40 + 2.5);
@@ -246,7 +252,7 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.line(x, y + 65, x + w, y + 65);
         
         const pagadorAddressFicha = `${dadosBoleto.documento.pagador.endereco.logradouro}\n${dadosBoleto.documento.pagador.endereco.cidade} ${dadosBoleto.documento.pagador.endereco.uf} CEP: ${dadosBoleto.documento.pagador.endereco.cep}`;
-        const pagadorLinesFicha = doc.splitTextToSize(`${dadosBoleto.documento.pagador.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}\n${pagadorAddressFicha}`, 178);
+        const pagadorLinesFicha = doc.splitTextToSize(`${nomePagador} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}\n${pagadorAddressFicha}`, 178);
         drawField('Pagador', pagadorLinesFicha, x, y + 65, 180, 15, 'left', 9, 6);
         
         drawField('Beneficiário Final', '', x, y + 80, 180, 5);

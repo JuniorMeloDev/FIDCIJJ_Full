@@ -22,7 +22,6 @@ export async function GET(request, { params }) {
 
         const { id } = params;
 
-        // Busca a duplicata e a operação relacionada para pegar o tipo de operação
         const { data: duplicata, error: dupError } = await supabase
             .from('duplicatas')
             .select('*, operacao:operacoes(*, tipo_operacao:tipos_operacao(*))')
@@ -46,7 +45,6 @@ export async function GET(request, { params }) {
         const tipoOperacao = duplicata.operacao.tipo_operacao;
         const nossoNumeroUnico = duplicata.id.toString().padStart(9, '0');
         
-        // --- LÓGICA DINÂMICA DE JUROS E MULTA ---
         const jurosConfig = {};
         if (tipoOperacao.taxa_juros_mora > 0) {
             jurosConfig.tipoJuros = "TAXAMENSAL";
@@ -58,9 +56,6 @@ export async function GET(request, { params }) {
 
         const multaConfig = {};
         if (tipoOperacao.taxa_multa > 0) {
-            multaConfig.tipoMulta = "VALORFIXO"; // Ou "PERCENTUAL", se preferir
-            // Se for VALORFIXO, o Safra espera o valor em centavos. Se for PERCENTUAL, o valor da taxa.
-            // Para simplificar, vamos usar percentual, que é mais comum.
             multaConfig.tipoMulta = "PERCENTUAL";
             multaConfig.percentual = tipoOperacao.taxa_multa;
             multaConfig.data = format(addDays(new Date(duplicata.data_vencimento + 'T12:00:00Z'), 1), 'yyyy-MM-dd');
@@ -80,7 +75,8 @@ export async function GET(request, { params }) {
                 dataVencimento: formatDateToSafra(duplicata.data_vencimento),
                 valor: formatValueToSafra(duplicata.valor_bruto),
                 pagador: {
-                    nome: sacado.nome.substring(0, 40),
+                    // CORREÇÃO APLICADA: Remove o ponto final do nome do sacado
+                    nome: sacado.nome.replace(/\.$/, '').substring(0, 40),
                     tipoPessoa: (sacado.cnpj || '').length > 11 ? "J" : "F",
                     numeroDocumento: (sacado.cnpj || '').replace(/\D/g, ''),
                     endereco: {
