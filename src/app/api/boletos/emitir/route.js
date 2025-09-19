@@ -16,7 +16,6 @@ async function getDadosParaBoleto(duplicataId, banco) {
         .single();
     if (dupError || !duplicata) throw new Error(`Duplicata com ID ${duplicataId} não encontrada.`);
 
-    // LÓGICA DE BUSCA DO SACADO CORRIGIDA E MAIS SEGURA
     if (!duplicata.sacado_id) {
         throw new Error(`A duplicata ${duplicata.nf_cte} não possui um ID de sacado vinculado. A operação pode ser antiga ou ter falhado ao salvar. Cancele e refaça a operação.`);
     }
@@ -31,7 +30,6 @@ async function getDadosParaBoleto(duplicataId, banco) {
         throw new Error(`Sacado com ID ${duplicata.sacado_id} não encontrado no cadastro.`);
     }
 
-
     if (banco === 'safra') {
         const idPart = duplicata.id.toString().slice(-4).padStart(4, '0');
         const randomPart = Math.floor(10000 + Math.random() * 90000).toString().slice(0, 5);
@@ -42,12 +40,14 @@ async function getDadosParaBoleto(duplicataId, banco) {
             conta: "008554440",
             documento: {
                 numero: nossoNumeroUnico,
+                // CORREÇÃO APLICADA: Ponto mantido no numeroCliente
                 numeroCliente: duplicata.nf_cte.substring(0, 10),
                 especie: "02",
                 dataVencimento: format(new Date(duplicata.data_vencimento + 'T12:00:00Z'), 'yyyy-MM-dd'),
                 valor: parseFloat(duplicata.valor_bruto.toFixed(2)),
                 pagador: {
-                    nome: sacado.nome.substring(0, 40),
+                    // CORREÇÃO MANTIDA: Ponto final removido do nome do pagador
+                    nome: sacado.nome.replace(/\.$/, '').substring(0, 40),
                     tipoPessoa: (sacado.cnpj || '').length > 11 ? "J" : "F",
                     numeroDocumento: (sacado.cnpj || '').replace(/\D/g, ''),
                     endereco: {
@@ -93,7 +93,7 @@ async function getDadosParaBoleto(duplicataId, banco) {
     throw new Error("Banco inválido.");
 }
 
-// --- ROTA PRINCIPAL ---
+// ... (O restante da função POST permanece inalterado) ...
 export async function POST(request) {
     let tokenData;
     let dadosParaBoleto;
@@ -140,7 +140,6 @@ export async function POST(request) {
             throw new Error("Banco selecionado inválido.");
         }
         
-        // Atualiza a duplicata no nosso banco de dados
         const { error: updateError } = await supabase
             .from('duplicatas')
             .update({ 

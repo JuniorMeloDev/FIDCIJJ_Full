@@ -69,13 +69,14 @@ export async function GET(request, { params }) {
             codigoMoeda: "09",
             documento: {
                 numero: nossoNumeroUnico,
+                // CORREÇÃO APLICADA: Ponto mantido no numeroCliente
                 numeroCliente: duplicata.nf_cte.substring(0, 10),
                 especie: "DM",
                 carteira: "01",
                 dataVencimento: formatDateToSafra(duplicata.data_vencimento),
                 valor: formatValueToSafra(duplicata.valor_bruto),
                 pagador: {
-                    // CORREÇÃO APLICADA: Remove o ponto final do nome do sacado
+                    // CORREÇÃO MANTIDA: Ponto final removido do nome do pagador
                     nome: sacado.nome.replace(/\.$/, '').substring(0, 40),
                     tipoPessoa: (sacado.cnpj || '').length > 11 ? "J" : "F",
                     numeroDocumento: (sacado.cnpj || '').replace(/\D/g, ''),
