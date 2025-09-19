@@ -4,9 +4,6 @@ import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
-// ... (as funções getSafraLogoBase64, modulo10, modulo11, gerarLinhaDigitavelEDAC, drawInterleaved2of5 permanecem as mesmas) ...
-
-// Função inalterada
 const getSafraLogoBase64 = () => {
     try {
         const imagePath = path.resolve(process.cwd(), 'public', 'safra.png');
@@ -18,7 +15,6 @@ const getSafraLogoBase64 = () => {
     }
 };
 
-// Função inalterada
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
     let soma = 0;
@@ -34,7 +30,6 @@ function modulo10(bloco) {
     return resto === 0 ? 0 : 10 - resto;
 }
 
-// Função inalterada
 function modulo11(bloco) {
     const multiplicadores = [2, 3, 4, 5, 6, 7, 8, 9];
     let soma = 0;
@@ -50,7 +45,6 @@ function modulo11(bloco) {
     return (dac === 0 || dac === 10 || dac === 11) ? 1 : dac;
 }
 
-// Função com a correção do fator de vencimento
 function gerarLinhaDigitavelEDAC(dados) {
     const { agencia, conta, nossoNumero, valor, vencimento } = dados;
     const banco = "422";
@@ -61,14 +55,16 @@ function gerarLinhaDigitavelEDAC(dados) {
     const dataBase = new Date('1997-10-07T12:00:00Z');
     const dataVenc = new Date(vencimento + 'T12:00:00Z');
     
+    // CORREÇÃO FINAL: Lógica do Fator Vencimento ajustada para bater exatamente com o cálculo do banco
+    const diffTimeTotal = dataVenc - dataBase;
+    const totalDays = Math.ceil(diffTimeTotal / (1000 * 60 * 60 * 24));
+    
     let fatorVencimento;
+    // A nova regra do fator de vencimento a partir de 22/02/2025 é subtrair 9000 do total de dias.
     if (dataVenc >= new Date('2025-02-22T12:00:00Z')) {
-        const novaDataBase = new Date('2025-02-21T12:00:00Z');
-        const diffTime = dataVenc - novaDataBase;
-        fatorVencimento = (1000 + Math.floor(diffTime / (1000 * 60 * 60 * 24))).toString().padStart(4, '0');
+        fatorVencimento = (totalDays - 9000).toString().padStart(4, '0');
     } else {
-        const diffTime = dataVenc - dataBase;
-        fatorVencimento = Math.ceil(diffTime / (1000 * 60 * 60 * 24)).toString().padStart(4, '0');
+        fatorVencimento = totalDays.toString().padStart(4, '0');
     }
 
     const valorFormatado = Math.round(valor * 100).toString().padStart(10, '0');
@@ -99,7 +95,6 @@ function gerarLinhaDigitavelEDAC(dados) {
     return { linhaDigitavel, codigoBarras };
 }
 
-// Função inalterada
 function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
     const patterns = ['00110', '10001', '01001', '11000', '00101', '10100', '01100', '00011', '10010', '01010'];
     const start = '0000';
@@ -128,7 +123,6 @@ function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
     }
 }
 
-
 export function gerarPdfBoletoSafra(listaBoletos) {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
     const safraLogoBase64 = getSafraLogoBase64();
@@ -153,8 +147,6 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         });
         
         const vencimentoDate = new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z');
-        
-        // CORREÇÃO APLICADA: Nome do pagador sem ponto final
         const nomePagador = dadosBoleto.documento.pagador.nome.replace(/\.$/, '');
 
         // --- Seção Recibo do Pagador ---
@@ -175,7 +167,6 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         
         doc.setFontSize(8).text('Autenticação Mecânica', 195, yRecibo + 25, { align: 'right' });
         doc.setLineDashPattern([2, 1], 0).line(15, 88, 195, 88).setLineDashPattern([], 0);
-
 
         // --- Ficha de Compensação ---
         if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 92, 25, 8);
@@ -224,7 +215,6 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         drawField('(=)Valor do Documento', formatBRLNumber(dadosBoleto.documento.valor), x + 130, y + 30, 50, 10, 'right', 10);
         doc.line(x, y + 40, x + w, y + 40);
         
-        // CORREÇÃO APLICADA: Textos das instruções alterados
         const instrucoes = [];
         const dataJurosMulta = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
         if (dadosBoleto.documento.juros && dadosBoleto.documento.juros.tipoJuros !== 'ISENTO') {
