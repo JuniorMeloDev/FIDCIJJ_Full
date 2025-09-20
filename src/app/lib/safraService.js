@@ -11,7 +11,8 @@ export async function getSafraAccessToken() {
         throw new Error('As credenciais do Safra não estão configuradas nas variáveis de ambiente.');
     }
 
-    const tokenEndpoint = 'https://api-hml.safranegocios.com.br/gateway/v1/oauth2/token';
+    // CORREÇÃO: URL de Token atualizada para PRODUÇÃO
+    const tokenEndpoint = 'https://api.safranegocios.com.br/gateway/v1/oauth2/token';
     const postData = new URLSearchParams({
         'grant_type': 'password',
         'client_id': clientId,
@@ -59,7 +60,8 @@ export async function getSafraAccessToken() {
 // Função para registrar um boleto na API do Safra
 export async function registrarBoletoSafra(accessToken, dadosBoleto) {
     console.log("\n--- [SAFRAPAY API] Etapa 2: Registro de Boleto ---");
-    const apiEndpoint = 'https://api-hml.safranegocios.com.br/gateway/cobrancas/v1/boletos';
+    // CORREÇÃO: URL de Chamada atualizada para PRODUÇÃO
+    const apiEndpoint = 'https://api.safranegocios.com.br/gateway/cobrancas/v1/boletos';
     const correlationId = crypto.randomUUID();
     const payload = JSON.stringify(dadosBoleto);
 
@@ -87,7 +89,6 @@ export async function registrarBoletoSafra(accessToken, dadosBoleto) {
                         console.log("--- [SAFRAPAY API] Boleto registrado com sucesso. ---");
                         resolve(jsonData);
                     } else {
-                        // Extrai a mensagem de erro específica do Safra, se disponível
                         const errorMessage = jsonData.fields?.[0]?.message || jsonData.message || data;
                         reject(new Error(`Erro ${res.statusCode} ao registrar boleto: ${errorMessage}`));
                     }
@@ -105,15 +106,14 @@ export async function registrarBoletoSafra(accessToken, dadosBoleto) {
     });
 }
 
-// ... (funções getSafraAccessToken e registrarBoletoSafra permanecem as mesmas no início do arquivo) ...
-
-// ADICIONE ESTA NOVA FUNÇÃO NO FINAL DO ARQUIVO
+// Função para consultar um boleto na API do Safra
 export async function consultarBoletoSafra(accessToken, params) {
     console.log("\n--- [SAFRAPAY API] Etapa 2.1: Consulta de Boleto Existente ---");
     
     const { agencia, conta, nossoNumero, numeroCliente } = params;
     const queryString = new URLSearchParams({ agencia, conta, numero: nossoNumero, numeroCliente }).toString();
-    const apiEndpoint = `https://api-hml.safranegocios.com.br/gateway/cobrancas/v1/boletos?${queryString}`;
+    // CORREÇÃO: URL de Consulta também deve apontar para produção
+    const apiEndpoint = `https://api.safranegocios.com.br/gateway/cobrancas/v1/boletos?${queryString}`;
     const correlationId = crypto.randomUUID();
 
     const options = {

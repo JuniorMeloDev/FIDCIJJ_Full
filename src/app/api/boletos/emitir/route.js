@@ -30,24 +30,24 @@ async function getDadosParaBoleto(duplicataId, banco) {
         throw new Error(`Sacado com ID ${duplicata.sacado_id} não encontrado no cadastro.`);
     }
 
+
     if (banco === 'safra') {
         const idPart = duplicata.id.toString().slice(-4).padStart(4, '0');
         const randomPart = Math.floor(10000 + Math.random() * 90000).toString().slice(0, 5);
         const nossoNumeroUnico = `${idPart}${randomPart}`;
 
         return {
-            agencia: "12400",
-            conta: "008554440",
+            // DADOS DE PRODUÇÃO
+            agencia: "02900",
+            conta: "005860430",
             documento: {
                 numero: nossoNumeroUnico,
-                // CORREÇÃO APLICADA: Ponto mantido no numeroCliente
-                numeroCliente: duplicata.nf_cte.substring(0, 10),
+                numeroCliente: duplicata.nf_cte.substring(0, 10), // Ponto mantido conforme solicitado
                 especie: "02",
                 dataVencimento: format(new Date(duplicata.data_vencimento + 'T12:00:00Z'), 'yyyy-MM-dd'),
                 valor: parseFloat(duplicata.valor_bruto.toFixed(2)),
                 pagador: {
-                    // CORREÇÃO MANTIDA: Ponto final removido do nome do pagador
-                    nome: sacado.nome.replace(/\.$/, '').substring(0, 40),
+                    nome: sacado.nome.replace(/\.$/, '').substring(0, 40), // Ponto final removido
                     tipoPessoa: (sacado.cnpj || '').length > 11 ? "J" : "F",
                     numeroDocumento: (sacado.cnpj || '').replace(/\D/g, ''),
                     endereco: {
@@ -93,7 +93,7 @@ async function getDadosParaBoleto(duplicataId, banco) {
     throw new Error("Banco inválido.");
 }
 
-// ... (O restante da função POST permanece inalterado) ...
+// --- ROTA PRINCIPAL ---
 export async function POST(request) {
     let tokenData;
     let dadosParaBoleto;
@@ -115,7 +115,6 @@ export async function POST(request) {
             try {
                 boletoGerado = await registrarBoletoSafra(tokenData.access_token, dadosParaBoleto);
             } catch (error) {
-                // SE O ERRO FOR "JÁ REGISTRADO", TENTA CONSULTAR
                 if (error.message && error.message.includes('DUPLICADOS')) {
                     console.log(`Boleto já registrado para ${dadosParaBoleto.documento.numero}. Tentando consultar...`);
                     const consultaParams = {
@@ -126,7 +125,7 @@ export async function POST(request) {
                     };
                     boletoGerado = await consultarBoletoSafra(tokenData.access_token, consultaParams);
                 } else {
-                    throw error; // Se for outro erro, propaga
+                    throw error;
                 }
             }
             linhaDigitavel = boletoGerado.data?.documento?.codigoBarras || boletoGerado.data?.codigoBarras || 'N/A';
