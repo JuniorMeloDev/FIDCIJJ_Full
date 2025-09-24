@@ -88,6 +88,9 @@ async function getDadosParaBoleto(duplicataId, banco) {
             }
         };
     } else if (banco === 'itau') {
+        if (!process.env.ITAU_ID_BENEFICIARIO) {
+            throw new Error('A variável de ambiente ITAU_ID_BENEFICIARIO não está configurada.');
+        }
         const isCpf = (sacado.cnpj || '').replace(/\D/g, '').length === 11;
         
         return {
@@ -98,11 +101,10 @@ async function getDadosParaBoleto(duplicataId, banco) {
             seuNumero: duplicata.id.toString().padStart(1, '0'),
             especie: { codigoEspecie: "01" },
             pagador: {
-                nomePagador: sacado.nome.substring(0, 50),
+                nomePagador: sacado.nome.replace(/\.$/, '').substring(0, 50),
                 tipoPessoa: isCpf ? "Física" : "Jurídica",
                 numeroDocumento: sacado.cnpj.replace(/\D/g, ''),
                 endereco: {
-                    // CORREÇÃO FINAL: Garante que campos de endereço não sejam enviados vazios ou malformados
                     logradouro: (sacado.endereco || 'NAO INFORMADO').substring(0, 45),
                     bairro: (sacado.bairro || 'NAO INFORMADO').substring(0, 15),
                     cidade: (sacado.municipio || 'NAO INFORMADO').substring(0, 20),
