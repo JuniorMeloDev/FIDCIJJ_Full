@@ -94,10 +94,14 @@ async function getDadosParaBoleto(duplicataId, banco) {
         const isCpf = (sacado.cnpj || '').replace(/\D/g, '').length === 11;
         
         return {
-            idBeneficiario: process.env.ITAU_ID_BENEFICIARIO,
+            // CORREÇÃO 1: Estrutura do payload ajustada
+            beneficiario: {
+                idBeneficiario: process.env.ITAU_ID_BENEFICIARIO,
+            },
             codigoCarteira: "109",
             dataVencimento: format(new Date(duplicata.data_vencimento + 'T12:00:00Z'), 'yyyy-MM-dd'),
-            valor: duplicata.valor_bruto.toFixed(2),
+            // CORREÇÃO 2: Valor convertido para número
+            valor: parseFloat(duplicata.valor_bruto.toFixed(2)),
             seuNumero: duplicata.id.toString().padStart(1, '0'),
             especie: { codigoEspecie: "01" },
             pagador: {
