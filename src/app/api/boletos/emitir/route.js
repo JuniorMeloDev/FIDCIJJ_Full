@@ -6,30 +6,30 @@ import { format } from 'date-fns';
 // Serviços dos bancos
 import { getSafraAccessToken, registrarBoletoSafra, consultarBoletoSafra } from '@/app/lib/safraService';
 import { getBradescoAccessToken, registrarBoleto } from '@/app/lib/bradescoService';
+import { getItauAccessToken, registrarBoletoItau } from '@/app/lib/itauService';
 
-// --- Funções Auxiliares para Preparar os Dados ---
+
 async function getDadosParaBoleto(duplicataId, banco) {
     const { data: duplicata, error: dupError } = await supabase
         .from('duplicatas')
-        .select('*')
+        .select('*, operacao:operacoes(cliente:clientes(*), tipo_operacao:tipos_operacao(*))')
         .eq('id', duplicataId)
         .single();
     if (dupError || !duplicata) throw new Error(`Duplicata com ID ${duplicataId} não encontrada.`);
 
     if (!duplicata.sacado_id) {
-        throw new Error(`A duplicata ${duplicata.nf_cte} não possui um ID de sacado vinculado. A operação pode ser antiga ou ter falhado ao salvar. Cancele e refaça a operação.`);
+        throw new Error(`A duplicata ${duplicata.nf_cte} não possui um ID de sacado vinculado.`);
     }
-
     const { data: sacado, error: sacadoError } = await supabase
         .from('sacados')
         .select('*')
         .eq('id', duplicata.sacado_id)
         .single();
-
     if (sacadoError || !sacado) {
-        throw new Error(`Sacado com ID ${duplicata.sacado_id} não encontrado no cadastro.`);
+        throw new Error(`Sacado com ID ${duplicata.sacado_id} não encontrado.`);
     }
 
+    const { cliente: cedente, tipo_operacao: tipoOperacao } = duplicata.operacao;
 
     if (banco === 'safra') {
         const idPart = duplicata.id.toString().slice(-4).padStart(4, '0');
@@ -37,17 +37,17 @@ async function getDadosParaBoleto(duplicataId, banco) {
         const nossoNumeroUnico = `${idPart}${randomPart}`;
 
         return {
-            // DADOS DE PRODUÇÃO
+            // DADOS DE PRODUÇÃO SAFRA
             agencia: "02900",
             conta: "005860430",
             documento: {
                 numero: nossoNumeroUnico,
-                numeroCliente: duplicata.nf_cte.substring(0, 10), // Ponto mantido conforme solicitado
+                numeroCliente: duplicata.nf_cte.substring(0, 10),
                 especie: "02",
                 dataVencimento: format(new Date(duplicata.data_vencimento + 'T12:00:00Z'), 'yyyy-MM-dd'),
                 valor: parseFloat(duplicata.valor_bruto.toFixed(2)),
                 pagador: {
-                    nome: sacado.nome.replace(/\.$/, '').substring(0, 40), // Ponto final removido
+                    nome: sacado.nome.replace(/\.$/, '').substring(0, 40),
                     tipoPessoa: (sacado.cnpj || '').length > 11 ? "J" : "F",
                     numeroDocumento: (sacado.cnpj || '').replace(/\D/g, ''),
                     endereco: {
@@ -88,12 +88,42 @@ async function getDadosParaBoleto(duplicataId, banco) {
                 "percentualMulta": "0", "valorMulta": "0", "qtdeDiasMulta": "0"
             }
         };
+    } else if (banco === 'itau') {
+        const isCpf = (sacado.cnpj || '').replace(/\D/g, '').length === 11;
+        
+        return {
+            idBeneficiario: process.env.ITAU_ID_BENEFICIARIO,
+            codigoCarteira: "109",
+            dataVencimento: format(new Date(duplicata.data_vencimento + 'T12:00:00Z'), 'yyyy-MM-dd'),
+            valor: duplicata.valor_bruto.toFixed(2),
+            seuNumero: duplicata.id.toString().padStart(1, '0'),
+            especie: { codigoEspecie: "01" },
+            pagador: {
+                nomePagador: sacado.nome.substring(0, 50),
+                tipoPessoa: isCpf ? "Física" : "Jurídica",
+                numeroDocumento: sacado.cnpj.replace(/\D/g, ''),
+                endereco: {
+                    logradouro: (sacado.endereco || 'NAO INFORMADO').substring(0, 45),
+                    bairro: (sacado.bairro || 'NAO INFORMADO').substring(0, 15),
+                    cidade: (sacado.municipio || 'NAO INFORMADO').substring(0, 20),
+                    uf: sacado.uf || 'SP',
+                    cep: (sacado.cep || '00000000').replace(/\D/g, '')
+                }
+            },
+            juros: {
+                codigoTipoJuros: tipoOperacao.taxa_juros_mora > 0 ? "99" : "0",
+                percentualJuros: tipoOperacao.taxa_juros_mora > 0 ? tipoOperacao.taxa_juros_mora.toFixed(5).replace('.', ',') : "0"
+            },
+            multa: {
+                codigoTipoMulta: tipoOperacao.taxa_multa > 0 ? "02" : "0",
+                percentualMulta: tipoOperacao.taxa_multa > 0 ? tipoOperacao.taxa_multa.toFixed(2).replace('.', ',') : "0"
+            }
+        };
     }
     
     throw new Error("Banco inválido.");
 }
 
-// --- ROTA PRINCIPAL ---
 export async function POST(request) {
     let tokenData;
     let dadosParaBoleto;
@@ -135,6 +165,10 @@ export async function POST(request) {
             boletoGerado = await registrarBoleto(tokenData.access_token, dadosParaBoleto);
             linhaDigitavel = boletoGerado.linhaDigitavel || 'N/A';
         
+        } else if (banco === 'itau') {
+            tokenData = await getItauAccessToken();
+            boletoGerado = await registrarBoletoItau(tokenData.access_token, dadosParaBoleto);
+            linhaDigitavel = boletoGerado.linhaDigitavel || 'N/A';
         } else {
             throw new Error("Banco selecionado inválido.");
         }

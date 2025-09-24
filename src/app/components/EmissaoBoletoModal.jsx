@@ -48,22 +48,20 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
             throw new Error(errorData.message || "Não foi possível gerar o PDF dos boletos.");
         }
 
-        // --- LÓGICA CORRIGIDA PARA PEGAR O NOME DO ARQUIVO DINAMICAMENTE ---
         const contentDisposition = res.headers.get('content-disposition');
-        let filename = `boletos_op_${operacaoId}.pdf`; // Nome padrão de fallback
+        let filename = `boletos_op_${operacaoId}.pdf`; 
         if (contentDisposition) {
             const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
             if (filenameMatch && filenameMatch.length > 1) {
                 filename = filenameMatch[1];
             }
         }
-        // --- FIM DA CORREÇÃO ---
 
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename; // Usa o nome de arquivo extraído (ou o padrão)
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -141,8 +139,9 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                                 onChange={(e) => setBancoSelecionado(e.target.value)}
                                 className="w-full bg-gray-600 border-gray-500 rounded-md shadow-sm p-2"
                             >
-                                <option value="bradesco">Bradesco</option>
                                 <option value="safra">Safra</option>
+                                <option value="bradesco">Bradesco</option>
+                                <option value="itau">Itaú</option>
                             </select>
                         </div>
                         <div className="mt-6 flex justify-end gap-4">
