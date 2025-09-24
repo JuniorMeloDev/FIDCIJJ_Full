@@ -37,7 +37,6 @@ async function getDadosParaBoleto(duplicataId, banco) {
         const nossoNumeroUnico = `${idPart}${randomPart}`;
 
         return {
-            // DADOS DE PRODUÇÃO SAFRA
             agencia: "02900",
             conta: "005860430",
             documento: {
@@ -92,12 +91,15 @@ async function getDadosParaBoleto(duplicataId, banco) {
         const isCpf = (sacado.cnpj || '').replace(/\D/g, '').length === 11;
         
         return {
+            // CORREÇÃO 1: Adicionado o campo obrigatório idBeneficiario
             idBeneficiario: process.env.ITAU_ID_BENEFICIARIO,
             codigoCarteira: "109",
+            
             dataVencimento: format(new Date(duplicata.data_vencimento + 'T12:00:00Z'), 'yyyy-MM-dd'),
             valor: duplicata.valor_bruto.toFixed(2),
             seuNumero: duplicata.id.toString().padStart(1, '0'),
-            especie: { codigoEspecie: "01" },
+            especie: { codigoEspecie: "01" }, // 01 = Duplicata Mercantil
+            
             pagador: {
                 nomePagador: sacado.nome.substring(0, 50),
                 tipoPessoa: isCpf ? "Física" : "Jurídica",
@@ -110,13 +112,17 @@ async function getDadosParaBoleto(duplicataId, banco) {
                     cep: (sacado.cep || '00000000').replace(/\D/g, '')
                 }
             },
+            
             juros: {
-                codigoTipoJuros: tipoOperacao.taxa_juros_mora > 0 ? "99" : "0",
-                percentualJuros: tipoOperacao.taxa_juros_mora > 0 ? tipoOperacao.taxa_juros_mora.toFixed(5).replace('.', ',') : "0"
+                // CORREÇÃO 3: Lógica de código de juros ajustada
+                codigoTipoJuros: tipoOperacao.taxa_juros_mora > 0 ? "02" : "0", // 02 = Taxa Mensal, 0 = Isento
+                // CORREÇÃO 2: Formatação do percentual com ponto
+                percentualJuros: tipoOperacao.taxa_juros_mora > 0 ? tipoOperacao.taxa_juros_mora.toFixed(5) : "0"
             },
             multa: {
-                codigoTipoMulta: tipoOperacao.taxa_multa > 0 ? "02" : "0",
-                percentualMulta: tipoOperacao.taxa_multa > 0 ? tipoOperacao.taxa_multa.toFixed(2).replace('.', ',') : "0"
+                codigoTipoMulta: tipoOperacao.taxa_multa > 0 ? "02" : "0", // 02 = Percentual, 0 = Isento
+                // CORREÇÃO 2: Formatação do percentual com ponto
+                percentualMulta: tipoOperacao.taxa_multa > 0 ? tipoOperacao.taxa_multa.toFixed(2) : "0"
             }
         };
     }
@@ -146,7 +152,6 @@ export async function POST(request) {
                 boletoGerado = await registrarBoletoSafra(tokenData.access_token, dadosParaBoleto);
             } catch (error) {
                 if (error.message && error.message.includes('DUPLICADOS')) {
-                    console.log(`Boleto já registrado para ${dadosParaBoleto.documento.numero}. Tentando consultar...`);
                     const consultaParams = {
                         agencia: dadosParaBoleto.agencia,
                         conta: dadosParaBoleto.conta,
