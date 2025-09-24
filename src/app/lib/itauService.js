@@ -10,8 +10,8 @@ export async function getItauAccessToken() {
         throw new Error('As credenciais do Itaú (Client ID/Secret) não estão configuradas nas variáveis de ambiente.');
     }
 
-    // A URL de token para sandbox é diferente da de boletos
-    const tokenEndpoint = 'https://sandbox.devportal.itau.com.br/api/oauth/token'; 
+    // CORREÇÃO: URL de Token ajustada conforme a documentação do Postman
+    const tokenEndpoint = 'https://sandbox.devportal.itau.com.br/api/oauth/jwt'; 
     const postData = new URLSearchParams({
         'grant_type': 'client_credentials',
         'client_id': clientId,
