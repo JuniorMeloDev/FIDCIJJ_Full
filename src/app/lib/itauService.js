@@ -10,7 +10,6 @@ export async function getItauAccessToken() {
         throw new Error('As credenciais do Itaú (Client ID/Secret) não estão configuradas nas variáveis de ambiente.');
     }
 
-    // CORREÇÃO: URL de Token ajustada conforme a documentação do Postman
     const tokenEndpoint = 'https://sandbox.devportal.itau.com.br/api/oauth/jwt'; 
     const postData = new URLSearchParams({
         'grant_type': 'client_credentials',
@@ -22,6 +21,8 @@ export async function getItauAccessToken() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
+            // CORREÇÃO APLICADA: Adicionado o cabeçalho User-Agent para evitar o bloqueio do firewall
+            'User-Agent': 'FIDCIJJ/1.0'
         }
     };
 
@@ -73,6 +74,8 @@ export async function registrarBoletoItau(accessToken, dadosBoleto) {
             'x-itau-apikey': process.env.ITAU_CLIENT_ID,
             'x-itau-correlationID': correlationId,
             'x-itau-flowID': flowId,
+            // CORREÇÃO APLICADA: Adicionado o cabeçalho User-Agent também nesta requisição por segurança
+            'User-Agent': 'FIDCIJJ/1.0'
         },
     };
 
