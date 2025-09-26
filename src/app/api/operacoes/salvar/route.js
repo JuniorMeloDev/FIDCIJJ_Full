@@ -23,7 +23,6 @@ export async function POST(request) {
             }));
         });
 
-        // Chamada para a função RPC, agora incluindo o parâmetro p_duplicatas
         const { data: operacaoId, error: rpcError } = await supabase.rpc('salvar_operacao_completa', {
             p_data_operacao: body.dataOperacao,
             p_tipo_operacao_id: body.tipoOperacaoId,
@@ -32,10 +31,11 @@ export async function POST(request) {
             p_valor_total_bruto: totais.valorTotalBruto,
             p_valor_total_juros: totais.desagioTotal,
             p_valor_total_descontos: totais.totalOutrosDescontos,
-            p_duplicatas: duplicatasParaSalvar, // <--- PARÂMETRO ESSENCIAL QUE ESTAVA FALTANDO NA CHAMADA
+            p_duplicatas: duplicatasParaSalvar,
             p_descontos: body.descontos,
-            p_valor_debito_parcial: body.valorDebito, 
-            p_data_debito_parcial: body.dataDebito  
+            p_valor_debito_parcial: body.valorDebito,
+            p_data_debito_parcial: body.dataDebito,
+            p_valor_liquido_debito: totais.liquidoOperacao
         });
 
         if (rpcError) {
