@@ -44,11 +44,15 @@ export async function POST(request) {
             if (existingSacado.matriz_id && existingSacado.matriz_id !== sacadoData.matriz_id) {
                 return NextResponse.json({ message: 'Este CNPJ já está vinculado a outra matriz.' }, { status: 409 });
             }
-            delete sacadoData.id;
+            
+            // *** CORREÇÃO APLICADA AQUI ***
+            // Removemos propriedades aninhadas que não devem ser passadas no update.
+            const { condicoes_pagamento, filiais, ...dataToUpdate } = sacadoData;
+            delete dataToUpdate.id; // Garante que o ID não seja enviado no payload de atualização
 
             const { data: updatedSacado, error: updateError } = await supabase
                 .from('sacados')
-                .update({ ...sacadoData, cnpj: cleanCnpj })
+                .update({ ...dataToUpdate, cnpj: cleanCnpj })
                 .eq('id', existingSacado.id)
                 .select()
                 .single();
@@ -58,7 +62,6 @@ export async function POST(request) {
         }
 
         // Se não existe, cria um novo
-        // **CORREÇÃO APLICADA AQUI:** Remove o campo 'id' antes de inserir um novo registro
         delete sacadoData.id;
 
         const { data: newSacado, error: insertError } = await supabase
@@ -81,7 +84,7 @@ export async function POST(request) {
         return NextResponse.json(newSacado, { status: 201 });
 
     } catch (error) {
-        // Log detalhado do erro no servidor Vercel
+        // Log detalhado do erro no servidor
         console.error("Erro ao criar/vincular sacado:", {
             code: error.code,
             message: error.message,
