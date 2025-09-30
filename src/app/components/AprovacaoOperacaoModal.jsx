@@ -56,8 +56,9 @@ export default function AprovacaoOperacaoModal({
     }
     
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
-            <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
+            {/* CORREÇÃO IMPORTANTE ABAIXO: Adicionado o stopPropagation para o clique não "vazar" para o fundo */}
+            <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-xl font-bold mb-4 flex-shrink-0">Análise de Operação #{operacao.id}</h2>
                 
                 <div className="flex-grow overflow-y-auto pr-2">
@@ -115,10 +116,10 @@ export default function AprovacaoOperacaoModal({
                         ) : (
                             <p className="text-sm text-gray-400 italic">Nenhum desconto adicional inserido.</p>
                         )}
-                        <button onClick={(e) => { e.stopPropagation(); onAddDesconto(); }} className="text-sm text-orange-400 hover:underline mt-2">
+                        <button onClick={onAddDesconto} className="text-sm text-orange-400 hover:underline mt-2">
                             + Adicionar Desconto/Taxa
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); onRecompraClick(); }} className="text-sm text-green-400 hover:underline mt-2 ml-4">
+                        <button onClick={onRecompraClick} className="text-sm text-green-400 hover:underline mt-2 ml-4">
                             + Recompra NF/CTe
                         </button>
                     </div>

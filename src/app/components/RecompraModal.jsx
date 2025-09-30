@@ -79,7 +79,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[60] p-4"> {/* <-- CORREÇÃO AQUI: z-50 para z-[60] */}
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[60] p-4" onClick={onClose}>
             <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl text-white" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-xl font-bold mb-4">Recompra de NF/CTe</h2>
                 <div className="flex gap-2 mb-4">
