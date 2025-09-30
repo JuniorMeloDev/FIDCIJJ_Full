@@ -9,6 +9,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
     const [duplicatasEncontradas, setDuplicatasEncontradas] = useState([]);
     const [selectedParcelas, setSelectedParcelas] = useState(new Set());
     const [creditoCalculado, setCreditoCalculado] = useState(null);
+    const [principalCalculado, setPrincipalCalculado] = useState(null); // <-- NOVO STATE
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -23,6 +24,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         setDuplicatasEncontradas([]);
         setSelectedParcelas(new Set());
         setCreditoCalculado(null);
+        setPrincipalCalculado(null); // <-- NOVO: Limpar principal
         try {
             const response = await fetch(`/api/duplicatas/search-by-nf/${nfCte}`, { headers: getAuthHeader() });
             if (!response.ok) throw new Error('Nenhuma duplicata em aberto encontrada com este número.');
@@ -41,6 +43,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         else newSelection.add(id);
         setSelectedParcelas(newSelection);
         setCreditoCalculado(null);
+        setPrincipalCalculado(null); // <-- NOVO: Limpar principal
     };
 
     const handleCalculate = () => {
@@ -51,9 +54,10 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
             return;
         }
 
+        // --- LÓGICA DE CÁLCULO ATUALIZADA ---
         const totalJurosOriginais = parcelasSelecionadas.reduce((sum, p) => sum + p.valor_juros, 0);
+        const totalPrincipal = parcelasSelecionadas.reduce((sum, p) => sum + p.valor_bruto, 0); // <-- NOVO
         const dataOperacaoOriginal = new Date(parcelasSelecionadas[0].data_operacao + 'T12:00:00Z');
-        
         const diasCorridos = differenceInDays(new Date(dataNovaOperacao + 'T12:00:00Z'), dataOperacaoOriginal);
         
         let jurosProporcionais = 0;
@@ -67,13 +71,16 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         
         const creditoFinal = totalJurosOriginais - jurosProporcionais;
         setCreditoCalculado(creditoFinal > 0 ? creditoFinal : 0);
+        setPrincipalCalculado(totalPrincipal); // <-- NOVO
     };
     
     const handleConfirm = () => {
+        // --- ALTERADO: Envia objeto completo ---
         onConfirm({
             credito: creditoCalculado,
+            principal: principalCalculado, 
             duplicataIds: Array.from(selectedParcelas),
-            descricao: `Crédito Recompra NF/CTe ${nfCte}`
+            descricao: `Recompra NF/CTe ${nfCte}`
         });
         onClose();
     };
@@ -121,10 +128,17 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
                     </div>
                 )}
 
+                {/* --- ALTERADO: Exibe ambos os valores --- */}
                 {creditoCalculado !== null && (
-                    <div className="mt-4 p-4 bg-gray-700 rounded-md">
-                        <h3 className="font-semibold">Crédito a ser devolvido ao cliente:</h3>
-                        <p className="text-2xl font-bold text-green-400">{formatBRLNumber(creditoCalculado)}</p>
+                    <div className="mt-4 p-4 bg-gray-700 rounded-md grid grid-cols-2 gap-4">
+                        <div>
+                            <h3 className="font-semibold text-sm text-gray-300">Débito (Valor Principal):</h3>
+                            <p className="text-2xl font-bold text-red-400">{formatBRLNumber(principalCalculado)}</p>
+                        </div>
+                        <div>
+                             <h3 className="font-semibold text-sm text-gray-300">Crédito (Juros a Estornar):</h3>
+                             <p className="text-2xl font-bold text-green-400">{formatBRLNumber(creditoCalculado)}</p>
+                        </div>
                     </div>
                 )}
 

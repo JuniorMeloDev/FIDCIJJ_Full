@@ -8,7 +8,7 @@ import AprovacaoOperacaoModal from '@/app/components/AprovacaoOperacaoModal';
 import EmailModal from '@/app/components/EmailModal';
 import DescontoModal from '@/app/components/DescontoModal';
 import PartialDebitModal from '@/app/components/PartialDebitModal';
-import RecompraModal from '@/app/components/RecompraModal'; // <-- VERIFIQUE AQUI: Certifique-se que o import está correto
+import RecompraModal from '@/app/components/RecompraModal';
 
 export default function AnalisePage() {
     const [operacoes, setOperacoes] = useState([]);
@@ -31,8 +31,7 @@ export default function AnalisePage() {
     const [isPartialDebitModalOpen, setIsPartialDebitModalOpen] = useState(false);
     const [approvalPayload, setApprovalPayload] = useState(null);
 
-    // Novos states para recompra
-    const [isRecompraModalOpen, setIsRecompraModalOpen] = useState(false); // <-- VERIFIQUE AQUI: State que controla o modal de recompra
+    const [isRecompraModalOpen, setIsRecompraModalOpen] = useState(false);
     const [recompraData, setRecompraData] = useState(null);
 
     const getAuthHeader = () => {
@@ -73,26 +72,33 @@ export default function AnalisePage() {
     const handleAnalisarClick = (operacao) => {
         setOperacaoSelecionada(operacao);
         setDescontosAdicionais([]);
-        setRecompraData(null); 
+        setRecompraData(null);
         setIsModalOpen(true);
     };
     
+    // --- FUNÇÃO ATUALIZADA ---
     const handleConfirmRecompra = (data) => {
-        if (data && data.credito > 0) {
+        if (data && data.credito !== null && data.principal !== null) {
             setRecompraData({ 
                 ids: data.duplicataIds, 
                 dataLiquidacao: operacaoSelecionada.data_operacao 
             });
 
+            // Adiciona as duas linhas (crédito de juros e débito do principal)
             setDescontosAdicionais(prev => [
                 ...prev,
                 {
-                    id: `recompra-${Date.now()}`,
-                    descricao: data.descricao,
-                    valor: -Math.abs(data.credito) 
+                    id: `recompra-debito-${Date.now()}`,
+                    descricao: `Débito Recompra NF ${data.descricao.split(' ').pop()}`,
+                    valor: Math.abs(data.principal) // Valor POSITIVO para abater
+                },
+                {
+                    id: `recompra-credito-${Date.now()}`,
+                    descricao: `Crédito Juros Recompra NF ${data.descricao.split(' ').pop()}`,
+                    valor: -Math.abs(data.credito) // Valor NEGATIVO para somar
                 }
             ]);
-            showNotification("Crédito de recompra adicionado à operação.", "success");
+            showNotification("Itens de recompra adicionados à operação.", "success");
         }
     };
     
@@ -209,7 +215,7 @@ export default function AnalisePage() {
                 operacao={operacaoSelecionada}
                 contasBancarias={contasMaster}
                 onAddDesconto={() => setIsDescontoModalOpen(true)}
-                onRecompraClick={() => setIsRecompraModalOpen(true)} // <-- VERIFIQUE AQUI: A função para abrir o modal está sendo passada aqui
+                onRecompraClick={() => setIsRecompraModalOpen(true)}
                 descontosAdicionais={descontosAdicionais}
                 setDescontosAdicionais={setDescontosAdicionais}
             />
@@ -254,7 +260,7 @@ export default function AnalisePage() {
 
             <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md overflow-auto">
                 {loading ? <p className="text-center py-10">Carregando...</p> : 
-                 error ? <p className="text-red-500 text-center py-10">{error}</p> :
+                 error ? <p className="text-red-400 text-center py-10">{error}</p> :
                  operacoes.length === 0 ? <p className="text-center py-10 text-gray-400">Nenhuma operação pendente de análise.</p> :
                 (
                     <table className="min-w-full divide-y divide-gray-700">
