@@ -8,7 +8,7 @@ import AprovacaoOperacaoModal from '@/app/components/AprovacaoOperacaoModal';
 import EmailModal from '@/app/components/EmailModal';
 import DescontoModal from '@/app/components/DescontoModal';
 import PartialDebitModal from '@/app/components/PartialDebitModal';
-import RecompraModal from '@/app/components/RecompraModal'; // <-- Importação do novo modal
+import RecompraModal from '@/app/components/RecompraModal'; // <-- VERIFIQUE AQUI: Certifique-se que o import está correto
 
 export default function AnalisePage() {
     const [operacoes, setOperacoes] = useState([]);
@@ -32,7 +32,7 @@ export default function AnalisePage() {
     const [approvalPayload, setApprovalPayload] = useState(null);
 
     // Novos states para recompra
-    const [isRecompraModalOpen, setIsRecompraModalOpen] = useState(false);
+    const [isRecompraModalOpen, setIsRecompraModalOpen] = useState(false); // <-- VERIFIQUE AQUI: State que controla o modal de recompra
     const [recompraData, setRecompraData] = useState(null);
 
     const getAuthHeader = () => {
@@ -73,11 +73,10 @@ export default function AnalisePage() {
     const handleAnalisarClick = (operacao) => {
         setOperacaoSelecionada(operacao);
         setDescontosAdicionais([]);
-        setRecompraData(null); // Limpa dados de recompra anteriores
+        setRecompraData(null); 
         setIsModalOpen(true);
     };
     
-    // Função para receber e processar os dados do RecompraModal
     const handleConfirmRecompra = (data) => {
         if (data && data.credito > 0) {
             setRecompraData({ 
@@ -85,7 +84,6 @@ export default function AnalisePage() {
                 dataLiquidacao: operacaoSelecionada.data_operacao 
             });
 
-            // Adiciona o crédito como um desconto com valor NEGATIVO
             setDescontosAdicionais(prev => [
                 ...prev,
                 {
@@ -118,7 +116,6 @@ export default function AnalisePage() {
                  throw new Error(errorData.message || "Falha ao atualizar operação.");
             }
 
-            // Se houver recompra, faz a baixa das duplicatas originais
             if (recompraData && recompraData.ids.length > 0) {
                 const recompraResponse = await fetch(`/api/duplicatas/liquidar-recompra`, {
                     method: 'POST',
@@ -150,7 +147,7 @@ export default function AnalisePage() {
             showNotification(err.message, "error");
         } finally {
             setIsSaving(false);
-            setRecompraData(null); // Limpa os dados da recompra
+            setRecompraData(null);
         }
     };
 
@@ -197,7 +194,6 @@ export default function AnalisePage() {
         <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
             
-            {/* Modal de Recompra adicionado */}
             <RecompraModal 
                 isOpen={isRecompraModalOpen}
                 onClose={() => setIsRecompraModalOpen(false)}
@@ -213,7 +209,7 @@ export default function AnalisePage() {
                 operacao={operacaoSelecionada}
                 contasBancarias={contasMaster}
                 onAddDesconto={() => setIsDescontoModalOpen(true)}
-                onRecompraClick={() => setIsRecompraModalOpen(true)} // Passa a função para abrir o modal de recompra
+                onRecompraClick={() => setIsRecompraModalOpen(true)} // <-- VERIFIQUE AQUI: A função para abrir o modal está sendo passada aqui
                 descontosAdicionais={descontosAdicionais}
                 setDescontosAdicionais={setDescontosAdicionais}
             />
