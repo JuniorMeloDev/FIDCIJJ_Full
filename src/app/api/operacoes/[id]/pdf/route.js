@@ -44,7 +44,6 @@ export async function GET(request, { params }) {
 
         const operacao = { ...operacaoData, cliente: clienteData, tipo_operacao: tipoOpData, duplicatas: duplicatasData || [], descontos: descontosData || [] };
 
-        // --- ALTERAÇÃO AQUI: LÓGICA PARA O NOME DINÂMICO DO FICHEIRO ---
         const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
         const rawFilename = `Borderô ${tipoDocumento} ${numeros}.pdf`;
@@ -75,7 +74,14 @@ export async function GET(request, { params }) {
         const totaisBody = [
             ['Valor total dos Títulos:', { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right' } }],
             [`Deságio (${operacao.tipo_operacao.nome}):`, { content: `-${formatBRLNumber(operacao.valor_total_juros)}`, styles: { halign: 'right' } }],
-            ...operacao.descontos.map(d => [ `${d.descricao}:`, { content: `-${formatBRLNumber(d.valor)}`, styles: { halign: 'right' } } ]),
+            
+            // --- CORREÇÃO APLICADA AQUI ---
+            ...operacao.descontos.map(d => [ 
+                `${d.descricao}:`, 
+                { content: d.valor < 0 ? `+${formatBRLNumber(Math.abs(d.valor))}` : `-${formatBRLNumber(d.valor)}`, styles: { halign: 'right' } }
+            ]),
+            // --- FIM DA CORREÇÃO ---
+
             [{ content: 'Líquido da Operação:', styles: { fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_liquido), styles: { halign: 'right', fontStyle: 'bold' } }]
         ];
         autoTable(doc, {

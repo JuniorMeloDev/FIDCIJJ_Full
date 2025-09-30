@@ -1,4 +1,4 @@
-    import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
     import { supabase } from '@/app/utils/supabaseClient';
     import jwt from 'jsonwebtoken';
     import nodemailer from 'nodemailer';
@@ -50,7 +50,14 @@
         const totaisBody = [
             ['Valor total dos Títulos:', { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right' } }],
             [`Deságio (${operacao.tipo_operacao.nome}):`, { content: `-${formatBRLNumber(operacao.valor_total_juros)}`, styles: { halign: 'right' } }],
-            ...operacao.descontos.map(d => [ `${d.descricao}:`, { content: `-${formatBRLNumber(d.valor)}`, styles: { halign: 'right' } } ]),
+            
+            // --- CORREÇÃO APLICADA AQUI ---
+            ...operacao.descontos.map(d => [ 
+                `${d.descricao}:`, 
+                { content: d.valor < 0 ? `+${formatBRLNumber(Math.abs(d.valor))}` : `-${formatBRLNumber(d.valor)}`, styles: { halign: 'right' } }
+            ]),
+            // --- FIM DA CORREÇÃO ---
+
             [{ content: 'Líquido da Operação:', styles: { fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_liquido), styles: { halign: 'right', fontStyle: 'bold' } }]
         ];
 
