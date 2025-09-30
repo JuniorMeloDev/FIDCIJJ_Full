@@ -40,7 +40,6 @@ export async function GET(request) {
     const dataLimite = new Date();
     dataLimite.setDate(hoje.getDate() + diasVencimento);
 
-    // Vencimentos próximos
     let vencimentosQuery = supabase
       .from('duplicatas')
       .select(`
@@ -56,6 +55,20 @@ export async function GET(request) {
     if (tipoOperacaoId) vencimentosQuery = vencimentosQuery.eq('operacao.tipo_operacao_id', tipoOperacaoId);
     if (clienteId) vencimentosQuery = vencimentosQuery.eq('operacao.cliente_id', clienteId);
     if (sacadoNome) vencimentosQuery = vencimentosQuery.ilike('cliente_sacado', `%${sacadoNome}%`);
+    
+    // --- INÍCIO DA ALTERAÇÃO ---
+
+    // 1. Busca os créditos de recompra separadamente
+    let recompraQuery = supabase
+      .from('descontos')
+      .select('valor, operacao:operacoes!inner(data_operacao, tipo_operacao_id, cliente_id)')
+      .like('descricao', 'Crédito Recompra%');
+
+    // Aplica os mesmos filtros de data, tipo de operação e cliente à busca de recompras
+    if (dataInicio) recompraQuery = recompraQuery.gte('operacao.data_operacao', dataInicio);
+    if (dataFim) recompraQuery = recompraQuery.lte('operacao.data_operacao', dataFim);
+    if (tipoOperacaoId) recompraQuery = recompraQuery.eq('operacao.tipo_operacao_id', tipoOperacaoId);
+    if (clienteId) recompraQuery = recompraQuery.eq('operacao.cliente_id', clienteId);
 
     const [
       valorOperadoRes,
@@ -63,12 +76,14 @@ export async function GET(request) {
       topSacadosRes,
       totaisFinanceirosRes,
       vencimentosProximosRes,
+      recompraCreditsRes, // Adiciona a nova query à Promise
     ] = await Promise.all([
       supabase.rpc('get_valor_operado', rpcParams),
       supabase.rpc('get_top_clientes', topNParams),
       supabase.rpc('get_top_sacados', topNParams),
       supabase.rpc('get_totais_financeiros', rpcParams),
       vencimentosQuery,
+      recompraQuery, // Executa a query de recompra
     ]);
 
     const errors = [
@@ -77,6 +92,7 @@ export async function GET(request) {
       topSacadosRes.error,
       totaisFinanceirosRes.error,
       vencimentosProximosRes.error,
+      recompraCreditsRes.error,
     ].filter(Boolean);
 
     if (errors.length > 0) {
@@ -84,13 +100,18 @@ export async function GET(request) {
       throw new Error('Uma ou mais consultas de métricas falharam.');
     }
 
+    // 2. Calcula o total de juros estornados
+    const totalCreditosRecompra = recompraCreditsRes.data?.reduce((sum, item) => sum + item.valor, 0) || 0;
+
+    // 3. Ajusta o total de juros e o lucro líquido
     const totais = totaisFinanceirosRes.data?.[0] || { total_juros: 0, total_despesas: 0 };
-
-    // A lógica de ajuste de juros pós-fixados foi removida daqui.
-    // O valor de juros agora vem diretamente da função 'get_totais_financeiros'.
-
     const totalJurosBruto = totais.total_juros || 0;
-    const lucroLiquido = totalJurosBruto - (totais.total_despesas || 0);
+    
+    // Como o crédito é um valor negativo, somá-lo ao total já faz a subtração
+    const totalJurosAjustado = totalJurosBruto + totalCreditosRecompra;
+    const lucroLiquido = totalJurosAjustado - (totais.total_despesas || 0);
+
+    // --- FIM DA ALTERAÇÃO ---
 
     const metrics = {
       valorOperadoNoMes: valorOperadoRes.data || 0,
@@ -105,9 +126,10 @@ export async function GET(request) {
         clienteSacado: v.cliente_sacado,
         operacao: v.operacao
       })),
-      totalJuros: totalJurosBruto,
+      // Usa os valores ajustados
+      totalJuros: totalJurosAjustado,
       totalDespesas: totais.total_despesas || 0,
-      lucroLiquido
+      lucroLiquido: lucroLiquido
     };
 
     return NextResponse.json(metrics, { status: 200 });
