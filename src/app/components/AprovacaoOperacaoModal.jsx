@@ -11,6 +11,7 @@ export default function AprovacaoOperacaoModal({
     operacao, 
     contasBancarias,
     onAddDesconto,
+    onRecompraClick, // <-- Nova prop adicionada
     descontosAdicionais,
     setDescontosAdicionais
 }) {
@@ -100,10 +101,12 @@ export default function AprovacaoOperacaoModal({
                         {descontosAdicionais.length > 0 ? (
                             <ul className="space-y-2">
                                 {descontosAdicionais.map(d => (
-                                    <li key={d.id} className="flex justify-between items-center bg-gray-700 p-2 rounded-md text-sm">
+                                    <li key={d.id} className={`flex justify-between items-center p-2 rounded-md text-sm ${d.valor < 0 ? 'bg-green-900/50' : 'bg-gray-700'}`}>
                                         <span>{d.descricao}</span>
                                         <div className="flex items-center gap-3">
-                                            <span className="font-medium text-red-400">-{formatBRLNumber(d.valor)}</span>
+                                            <span className={`font-medium ${d.valor < 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                {d.valor < 0 ? `+${formatBRLNumber(Math.abs(d.valor))}` : `-${formatBRLNumber(d.valor)}`}
+                                            </span>
                                             <button onClick={() => handleRemoveDesconto(d.id)} className="text-gray-500 hover:text-red-400">&times;</button>
                                         </div>
                                     </li>
@@ -114,6 +117,10 @@ export default function AprovacaoOperacaoModal({
                         )}
                         <button onClick={onAddDesconto} className="text-sm text-orange-400 hover:underline mt-2">
                             + Adicionar Desconto/Taxa
+                        </button>
+                        {/* BOTÃO DE RECOMPRA ADICIONADO AQUI */}
+                        <button onClick={onRecompraClick} className="text-sm text-green-400 hover:underline mt-2 ml-4">
+                            + Recompra NF/CTe
                         </button>
                     </div>
                 </div>
