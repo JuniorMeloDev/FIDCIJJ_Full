@@ -11,7 +11,7 @@ export default function AprovacaoOperacaoModal({
     operacao, 
     contasBancarias,
     onAddDesconto,
-    onRecompraClick, // <-- Nova prop adicionada
+    onRecompraClick,
     descontosAdicionais,
     setDescontosAdicionais
 }) {
@@ -115,11 +115,10 @@ export default function AprovacaoOperacaoModal({
                         ) : (
                             <p className="text-sm text-gray-400 italic">Nenhum desconto adicional inserido.</p>
                         )}
-                        <button onClick={onAddDesconto} className="text-sm text-orange-400 hover:underline mt-2">
+                        <button onClick={(e) => { e.stopPropagation(); onAddDesconto(); }} className="text-sm text-orange-400 hover:underline mt-2">
                             + Adicionar Desconto/Taxa
                         </button>
-                        {/* BOTÃO DE RECOMPRA ADICIONADO AQUI */}
-                        <button onClick={onRecompraClick} className="text-sm text-green-400 hover:underline mt-2 ml-4">
+                        <button onClick={(e) => { e.stopPropagation(); onRecompraClick(); }} className="text-sm text-green-400 hover:underline mt-2 ml-4">
                             + Recompra NF/CTe
                         </button>
                     </div>

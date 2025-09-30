@@ -1,4 +1,3 @@
-// src/app/components/RecompraModal.jsx
 'use client';
 
 import { useState } from 'react';
@@ -25,9 +24,8 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         setSelectedParcelas(new Set());
         setCreditoCalculado(null);
         try {
-            // Usaremos um endpoint que ainda vamos criar
             const response = await fetch(`/api/duplicatas/search-by-nf/${nfCte}`, { headers: getAuthHeader() });
-            if (!response.ok) throw new Error('Nenhuma duplicata encontrada com este número.');
+            if (!response.ok) throw new Error('Nenhuma duplicata em aberto encontrada com este número.');
             const data = await response.json();
             setDuplicatasEncontradas(data);
         } catch (err) {
@@ -42,7 +40,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         if (newSelection.has(id)) newSelection.delete(id);
         else newSelection.add(id);
         setSelectedParcelas(newSelection);
-        setCreditoCalculado(null); // Reseta o cálculo ao mudar a seleção
+        setCreditoCalculado(null);
     };
 
     const handleCalculate = () => {
@@ -55,8 +53,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
 
         const totalJurosOriginais = parcelasSelecionadas.reduce((sum, p) => sum + p.valor_juros, 0);
         const dataOperacaoOriginal = new Date(parcelasSelecionadas[0].data_operacao + 'T12:00:00Z');
-
-        // Calcula o juros proporcional aos dias que a duplicata ficou na carteira
+        
         const diasCorridos = differenceInDays(new Date(dataNovaOperacao + 'T12:00:00Z'), dataOperacaoOriginal);
         
         let jurosProporcionais = 0;
@@ -82,8 +79,8 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
-            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl text-white">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[60] p-4"> {/* <-- CORREÇÃO AQUI: z-50 para z-[60] */}
+            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl text-white" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-xl font-bold mb-4">Recompra de NF/CTe</h2>
                 <div className="flex gap-2 mb-4">
                     <input
