@@ -10,24 +10,31 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // 1. FAZ UMA CONSULTA MAIS SIMPLES E ABRANGENTE
-        let { data: duplicatas, error } = await supabase
+        // 1. A consulta agora busca apenas operações APROVADAS
+        let query = supabase
             .from('duplicatas')
             .select(`
                 *,
-                operacao:operacoes (
+                operacao:operacoes!inner(
+                    status,
                     cliente_id,
                     tipo_operacao_id,
                     cliente:clientes ( nome ),
                     tipo_operacao:tipos_operacao ( nome )
                 )
             `)
-            // --- ALTERAÇÃO AQUI: Adicionada ordenação pela data da operação ---
-            .order('data_operacao', { ascending: true });
+            .eq('operacao.status', 'Aprovada'); // <-- PONTO 1: Filtro de operações aprovadas
+
+        // 2. A ordenação agora é por data e depois por NF/CT-e para agrupar as parcelas
+        query = query
+            .order('data_operacao', { ascending: true })
+            .order('nf_cte', { ascending: true }); // <-- PONTO 2: Ordenação corrigida
+
+        const { data: duplicatas, error } = await query;
 
         if (error) throw error;
 
-        // 2. APLICA OS FILTROS EM JAVASCRIPT
+        // Filtros em JavaScript
         const sacadoFilter = searchParams.get('sacado');
         const statusFilter = searchParams.get('status');
         const dataInicio = searchParams.get('dataInicio');
@@ -46,34 +53,26 @@ export async function GET(request) {
             return true;
         });
 
-        // 3. FORMATA OS DADOS PARA O RELATÓRIO
+        // Formata os dados para o relatório
         let formattedData = filteredData.map(d => ({
             id: d.id,
-            operacao_id: d.operacao_id,
-            cliente_id: d.operacao?.cliente_id,
             data_operacao: d.data_operacao,
             nf_cte: d.nf_cte,
             empresa_cedente: d.operacao?.cliente?.nome,
-            valor_bruto: d.valor_bruto,
-            valor_juros: d.valor_juros,
             cliente_sacado: d.cliente_sacado,
             data_vencimento: d.data_vencimento,
-            tipo_operacao_nome: d.operacao?.tipo_operacao?.nome,
             status_recebimento: d.status_recebimento,
+            valor_juros: d.valor_juros || 0,
+            juros_mora: d.juros_mora || 0, // <-- PONTO 5: Garantindo que juros de mora sejam incluídos
+            valor_bruto: d.valor_bruto,
+            // PONTO 3: Identifica uma recompra (liquidada sem entrar em uma conta)
+            is_recompra: d.status_recebimento === 'Recebido' && !d.conta_liquidacao,
         }));
 
-        // 4. LÓGICA DE DEDUPLICAÇÃO FINAL
-        const uniqueData = Array.from(new Map(formattedData.map(item => [
-            `${item.data_operacao}-${item.nf_cte}-${item.valor_bruto}`, item
-        ])).values());
-
-        return NextResponse.json(uniqueData, { status: 200 });
+        return NextResponse.json(formattedData, { status: 200 });
 
     } catch (error) {
         console.error('Erro ao gerar relatório de duplicatas:', error);
-        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-            return NextResponse.json({ message: 'Token inválido ou expirado' }, { status: 403 });
-        }
         return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
     }
 }

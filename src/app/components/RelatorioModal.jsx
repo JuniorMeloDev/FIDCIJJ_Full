@@ -35,7 +35,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
     const initialState = {
         dataInicio: "", dataFim: "", tipoOperacaoId: "", clienteId: "", clienteNome: "", sacado: "", conta: "", status: "Todos", categoria: "Todos", tipoValor: "Todos"
     };
-    const [reportType, setReportType] = useState('fluxoCaixa');
+    const [reportType, setReportType] = useState('duplicatas');
     const [filters, setFilters] = useState(initialState);
     const [isGenerating, setIsGenerating] = useState(false);
     const [contas, setContas] = useState([]);
@@ -150,8 +150,14 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             doc.addImage(logoBase64, 'PNG', 14, 10, logoWidth, logoHeight);
         }
         const pageWidth = doc.internal.pageSize.getWidth();
+        const reportTitle = {
+            fluxoCaixa: 'Relatório de Fluxo de Caixa',
+            duplicatas: 'Relatório de Duplicatas',
+            totalOperado: 'Relatório de Análise ABC'
+        }[type];
+        
         doc.setFontSize(18);
-        doc.text(`Relatório de ${type === 'totalOperado' ? 'Análise ABC' : type.replace(/([A-Z])/g, ' $1').trim()}`, pageWidth - 14, 22, { align: 'right' });
+        doc.text(reportTitle, pageWidth - 14, 22, { align: 'right' });
         
         let filterText = 'Filtros: ';
         if (currentFilters.dataInicio || currentFilters.dataFim) {
@@ -164,30 +170,23 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
 
         let head, body;
         switch (type) {
-            // --- ALTERAÇÃO PRINCIPAL AQUI ---
             case 'fluxoCaixa':
                 head = [['Data', 'Descrição', 'Conta', 'Categoria', 'Valor']];
                 body = data.map(row => [formatDate(row.data_movimento), row.descricao, row.conta_bancaria, row.categoria, formatBRLNumber(row.valor)]);
-                autoTable(doc, { startY: 35, head, body });
+                autoTable(doc, { startY: 35, head, body, styles: { fontSize: 8 } });
 
-                // Calcula os totais por categoria
                 const totaisPorCategoria = data.reduce((acc, row) => {
-                    const { categoria, valor } = row;
-                    if (!acc[categoria]) {
-                        acc[categoria] = 0;
-                    }
-                    acc[categoria] += valor;
+                    acc[row.categoria] = (acc[row.categoria] || 0) + row.valor;
                     return acc;
                 }, {});
 
-                // Adiciona os cards de resumo no final
                 let finalY = doc.lastAutoTable.finalY + 15;
                 doc.setFontSize(12);
                 doc.text('Resumo por Categoria', 14, finalY);
                 
                 let cardX = 14;
                 const cardWidth = 65;
-                const cardHeight = 25;
+                const cardHeight = 20;
                 const cardMargin = 5;
 
                 Object.entries(totaisPorCategoria).forEach(([categoria, total]) => {
@@ -196,69 +195,63 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                         finalY += cardHeight + cardMargin;
                     }
                     
-                    doc.setFillColor(241, 241, 241); // Cor de fundo do card
+                    doc.setFillColor(241, 241, 241);
                     doc.roundedRect(cardX, finalY + 5, cardWidth, cardHeight, 3, 3, 'F');
                     doc.setTextColor(50, 50, 50);
-                    doc.setFontSize(10);
-                    doc.text(categoria, cardX + 4, finalY + 12);
-                    doc.setFontSize(14);
+                    doc.setFontSize(9);
+                    doc.text(categoria, cardX + 4, finalY + 11);
+                    doc.setFontSize(12);
                     doc.setFont('helvetica', 'bold');
-                    doc.text(formatBRLNumber(total), cardX + 4, finalY + 20);
-
+                    doc.text(formatBRLNumber(total), cardX + 4, finalY + 19);
                     cardX += cardWidth + cardMargin;
                 });
                 break;
-            // --- FIM DA ALTERAÇÃO ---
             case 'duplicatas':
                 head = [['Data Op.', 'NF/CT-e', 'Cedente', 'Sacado', 'Venc.', 'Status', 'Juros Op.', 'Juros Mora', 'Valor Bruto']];
                 body = data.map(row => [
                     formatDate(row.data_operacao), row.nf_cte, row.empresa_cedente, 
-                    row.cliente_sacado, formatDate(row.data_vencimento), row.status_recebimento,
-                    formatBRLNumber(row.valor_juros || 0), formatBRLNumber(row.juros_mora || 0), formatBRLNumber(row.valor_bruto)
+                    row.cliente_sacado, formatDate(row.data_vencimento), `${row.status_recebimento}${row.is_recompra ? ' (REC)' : ''}`,
+                    { content: formatBRLNumber(row.valor_juros), styles: { halign: 'right' } },
+                    { content: formatBRLNumber(row.juros_mora), styles: { halign: 'right' } },
+                    { content: formatBRLNumber(row.valor_bruto), styles: { halign: 'right' } },
                 ]);
 
-                const totalBruto = data.reduce((sum, row) => sum + (row.valor_bruto || 0), 0);
-                const totalJurosOp = data.reduce((sum, row) => sum + (row.valor_juros || 0), 0);
-                const totalJurosMora = data.reduce((sum, row) => sum + (row.juros_mora || 0), 0);
-                const totalJuros = totalJurosOp + totalJurosMora;
+                const totalBruto = data.reduce((sum, row) => sum + row.valor_bruto, 0);
+                const totalJurosOp = data.reduce((sum, row) => sum + row.valor_juros, 0);
+                const totalJurosMora = data.reduce((sum, row) => {
+                    const dataLiquidacao = row.data_liquidacao ? new Date(row.data_liquidacao) : null;
+                    const dataInicioFiltro = currentFilters.dataInicio ? new Date(currentFilters.dataInicio) : null;
+                    const dataFimFiltro = currentFilters.dataFim ? new Date(currentFilters.dataFim) : null;
+                    if (dataLiquidacao && (!dataInicioFiltro || dataLiquidacao >= dataInicioFiltro) && (!dataFimFiltro || dataLiquidacao <= dataFimFiltro)) {
+                        return sum + row.juros_mora;
+                    }
+                    return sum;
+                }, 0);
+                const totalRecompra = data.reduce((sum, row) => (row.is_recompra ? sum + row.valor_bruto : sum), 0);
 
                 autoTable(doc, {
-                    startY: 35,
-                    head: head,
-                    body: body,
+                    startY: 35, head, body, theme: 'grid', headStyles: { fillColor: [31, 41, 55] }, styles: { fontSize: 8 },
                 });
 
+                let summaryY = doc.lastAutoTable.finalY + 10;
+                doc.setFontSize(12).text('Resumo do Relatório', 14, summaryY);
+                summaryY += 5;
+
+                const summaryData = [
+                    ['Valor Total das Duplicatas:', formatBRLNumber(totalBruto)],
+                    ['Total Juros da Operação:', formatBRLNumber(totalJurosOp)],
+                    ['Total Juros de Mora (Recebido no período):', formatBRLNumber(totalJurosMora)],
+                ];
+                if (totalRecompra > 0) {
+                    summaryData.push(['Total Recomprado (Principal):', formatBRLNumber(totalRecompra)]);
+                }
                 autoTable(doc, {
-                    startY: doc.lastAutoTable.finalY,
-                    body: [
-                        ['', '', '', '', '', 'TOTAIS:', formatBRLNumber(totalJurosOp), formatBRLNumber(totalJurosMora), formatBRLNumber(totalBruto)]
-                    ],
-                    theme: 'grid',
-                    bodyStyles: { fontStyle: 'bold', fillColor: [41, 128, 185], textColor: 255 }
+                    startY: summaryY, body: summaryData, theme: 'plain', styles: { fontSize: 10 },
+                    columnStyles: { 0: { fontStyle: 'bold' }, 1: { halign: 'right' } }
                 });
 
-                const finalYCards = doc.lastAutoTable.finalY + 15;
-                doc.setFontSize(12);
-                doc.text('Resumo do Relatório', 14, finalYCards);
-
-                doc.setFillColor(241, 241, 241);
-                doc.roundedRect(14, finalYCards + 5, 90, 25, 3, 3, 'F');
-                doc.setTextColor(50, 50, 50);
-                doc.setFontSize(10);
-                doc.text('Valor Total das Duplicatas', 18, finalYCards + 12);
-                doc.setFontSize(14);
-                doc.setFont('helvetica', 'bold');
-                doc.text(formatBRLNumber(totalBruto), 18, finalYCards + 20);
-
-                doc.setFillColor(241, 241, 241);
-                doc.roundedRect(110, finalYCards + 5, 90, 25, 3, 3, 'F');
-                doc.setTextColor(50, 50, 50);
-                doc.setFontSize(10);
-                doc.setFont('helvetica', 'normal');
-                doc.text('Valor Total dos Juros (Op. + Mora)', 114, finalYCards + 12);
-                doc.setFontSize(14);
-                doc.setFont('helvetica', 'bold');
-                doc.text(formatBRLNumber(totalJuros), 114, finalYCards + 20);
+                let legendY = doc.lastAutoTable.finalY + 10;
+                doc.setFontSize(8).text('Legenda: (REC) = Duplicata Recomprada e baixada sem movimentação de caixa.', 14, legendY);
                 break;
             case 'totalOperado':
                 const processedCedentes = processAbcData(data.clientes);
@@ -305,7 +298,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                     'Cedente': row.empresa_cedente, 
                     'Sacado': row.cliente_sacado,
                     'Vencimento': formatDate(row.data_vencimento), 
-                    'Status': row.status_recebimento, 
+                    'Status': `${row.status_recebimento}${row.is_recompra ? ' (REC)' : ''}`, 
                     'Juros Op.': row.valor_juros || 0,
                     'Juros Mora': row.juros_mora || 0,
                     'Valor Bruto': row.valor_bruto 
