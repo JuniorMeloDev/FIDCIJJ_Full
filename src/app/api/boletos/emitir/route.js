@@ -92,40 +92,63 @@ async function getDadosParaBoleto(duplicataId, banco) {
             throw new Error('A variável de ambiente ITAU_ID_BENEFICIARIO não está configurada.');
         }
         const isCpf = (sacado.cnpj || '').replace(/\D/g, '').length === 11;
-        
+
+        // Formata o valor para uma string de 15 dígitos com zeros à esquerda
+        const valorFormatado = Math.round(duplicata.valor_bruto * 100).toString().padStart(15, '0');
+
         return {
-            // CORREÇÃO FINAL: Adicionado o campo obrigatório para o ambiente de teste
-            etapa_processo_boleto: "Validacao",
-            beneficiario: {
-                idBeneficiario: process.env.ITAU_ID_BENEFICIARIO,
-            },
-            codigoCarteira: "109",
-            dataEmissao: format(new Date(duplicata.data_operacao + 'T12:00:00Z'), 'yyyy-MM-dd'),
-            dataVencimento: format(new Date(duplicata.data_vencimento + 'T12:00:00Z'), 'yyyy-MM-dd'),
-            valor: duplicata.valor_bruto.toFixed(2),
-            seuNumero: duplicata.id.toString().padStart(1, '0'),
-            especie: { codigoEspecie: "01" },
-            pagador: {
-                nomePagador: sacado.nome.replace(/\.$/, '').substring(0, 50),
-                tipoPessoa: isCpf ? "Física" : "Jurídica",
-                numeroDocumento: sacado.cnpj.replace(/\D/g, ''),
-                endereco: {
-                    logradouro: (sacado.endereco || 'NAO INFORMADO').substring(0, 45),
-                    bairro: (sacado.bairro || 'NAO INFORMADO').substring(0, 15),
-                    cidade: (sacado.municipio || 'NAO INFORMADO').substring(0, 20),
-                    uf: sacado.uf || 'SP',
-                    cep: (sacado.cep || '00000000').replace(/\D/g, '')
+            "data": {
+                "etapa_processo_boleto": "Validacao", // Mudar para "Efetivacao" para registrar boletos reais
+                "codigo_canal_operacao": "API",
+                "beneficiario": {
+                    "id_beneficiario": process.env.ITAU_ID_BENEFICIARIO
+                },
+                "dado_boleto": {
+                    "descricao_instrumento_cobranca": "boleto",
+                    "tipo_boleto": "a vista",
+                    "codigo_carteira": "109",
+                    "codigo_especie": "01",
+                    "valor_total_titulo": valorFormatado,
+                    "data_emissao": format(new Date(duplicata.data_operacao + 'T12:00:00Z'), 'yyyy-MM-dd'),
+                    "pagador": {
+                        "pessoa": {
+                            "nome_pessoa": sacado.nome.substring(0, 50),
+                            "tipo_pessoa": {
+                                "codigo_tipo_pessoa": isCpf ? "F" : "J",
+                                [isCpf ? "numero_cadastro_pessoa_fisica" : "numero_cadastro_nacional_pessoa_juridica"]: sacado.cnpj.replace(/\D/g, '')
+                            }
+                        },
+                        "endereco": {
+                            "nome_logradouro": (sacado.endereco || 'NAO INFORMADO').substring(0, 45),
+                            "nome_bairro": (sacado.bairro || 'NAO INFORMADO').substring(0, 15),
+                            "nome_cidade": (sacado.municipio || 'NAO INFORMADO').substring(0, 20),
+                            "sigla_UF": sacado.uf || 'SP',
+                            "numero_CEP": (sacado.cep || '00000000').replace(/\D/g, '')
+                        }
+                    },
+                    "dados_individuais_boleto": [
+                        {
+                            "numero_nosso_numero": duplicata.id.toString().padStart(8, '0'),
+                            "data_vencimento": format(new Date(duplicata.data_vencimento + 'T12:00:00Z'), 'yyyy-MM-dd'),
+                            "valor_titulo": valorFormatado,
+                            "texto_seu_numero": duplicata.id.toString()
+                        }
+                    ],
+                    "multa": {
+                        "codigo_tipo_multa": tipoOperacao.taxa_multa > 0 ? "02" : "0", // 02=Percentual, 0=Isento
+                        "percentual_multa": tipoOperacao.taxa_multa > 0 ? tipoOperacao.taxa_multa.toFixed(5).padStart(12, '0') : "0"
+                    },
+                    "juros": {
+                        "codigo_tipo_juros": tipoOperacao.taxa_juros_mora > 0 ? "90" : "0", // 90=Taxa Mensal, 0=Isento
+                        "percentual_juros": tipoOperacao.taxa_juros_mora > 0 ? tipoOperacao.taxa_juros_mora.toFixed(5).padStart(12, '0') : "0"
+                    },
+                    "recebimento_divergente": {
+                        "codigo_tipo_autorizacao": "03" // Não aceitar recebimento divergente
+                    },
+                    "desconto_expresso": false
                 }
-            },
-            juros: {
-                codigoTipoJuros: tipoOperacao.taxa_juros_mora > 0 ? "02" : "0",
-                percentualJuros: tipoOperacao.taxa_juros_mora > 0 ? tipoOperacao.taxa_juros_mora.toFixed(5) : "0"
-            },
-            multa: {
-                codigoTipoMulta: tipoOperacao.taxa_multa > 0 ? "02" : "0",
-                percentualMulta: tipoOperacao.taxa_multa > 0 ? tipoOperacao.taxa_multa.toFixed(2) : "0"
             }
-        };
+        }
     }
     
     throw new Error("Banco inválido.");
@@ -174,7 +197,8 @@ export async function POST(request) {
         } else if (banco === 'itau') {
             tokenData = await getItauAccessToken();
             boletoGerado = await registrarBoletoItau(tokenData.access_token, dadosParaBoleto);
-            linhaDigitavel = boletoGerado.linhaDigitavel || 'N/A';
+            // A API v2 retorna a linha digitável dentro do array de boletos individuais
+            linhaDigitavel = boletoGerado?.data?.dado_boleto?.dados_individuais_boleto[0]?.linha_digitavel || 'N/A';
         } else {
             throw new Error("Banco selecionado inválido.");
         }
