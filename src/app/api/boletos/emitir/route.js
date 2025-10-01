@@ -94,7 +94,7 @@ async function getDadosParaBoleto(duplicataId, banco) {
         const isCpf = (sacado.cnpj || '').replace(/\D/g, '').length === 11;
         
         return {
-            // CORREÇÃO FINAL: Adicionado o campo etapa_processo_boleto
+            // CORREÇÃO FINAL: Adicionado o campo obrigatório para o ambiente de teste
             etapa_processo_boleto: "Validacao",
             beneficiario: {
                 idBeneficiario: process.env.ITAU_ID_BENEFICIARIO,
