@@ -101,7 +101,7 @@ async function getDadosParaBoleto(duplicataId, banco) {
 
         return {
             "data": {
-                "etapa_processo_boleto": "Efetivacao",
+                "etapa_processo_boleto": "Validacao",
                 "codigo_canal_operacao": "API",
                 "beneficiario": {
                     "id_beneficiario": process.env.ITAU_ID_BENEFICIARIO
