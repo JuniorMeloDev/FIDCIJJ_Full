@@ -92,10 +92,7 @@ async function getDadosParaBoleto(duplicataId, banco) {
             throw new Error('A variável de ambiente ITAU_ID_BENEFICIARIO não está configurada.');
         }
         const isCpf = (sacado.cnpj || '').replace(/\D/g, '').length === 11;
-
         const valorFormatado = Math.round(duplicata.valor_bruto * 100).toString().padStart(15, '0');
-        
-        // --- ALTERADO: Formatação dos percentuais sem o ponto decimal ---
         const formatPercent = (value, decimalPlaces = 5, totalLength = 11) => {
             if (!value || value <= 0) return "0".padStart(totalLength, '0');
             const multiplier = Math.pow(10, decimalPlaces);
@@ -104,7 +101,7 @@ async function getDadosParaBoleto(duplicataId, banco) {
 
         return {
             "data": {
-                "etapa_processo_boleto": "Validacao", 
+                "etapa_processo_boleto": "Efetivacao",
                 "codigo_canal_operacao": "API",
                 "beneficiario": {
                     "id_beneficiario": process.env.ITAU_ID_BENEFICIARIO
@@ -174,7 +171,8 @@ export async function POST(request) {
         dadosParaBoleto = await getDadosParaBoleto(duplicataId, banco);
 
         let boletoGerado;
-        let linhaDigitavel;
+        let linhaDigitavelParaRetorno; // O que será mostrado na tela
+        let dadosParaSalvar; // O que será salvo no banco de dados
 
         if (banco === 'safra') {
             tokenData = await getSafraAccessToken();
@@ -193,18 +191,21 @@ export async function POST(request) {
                     throw error;
                 }
             }
-            linhaDigitavel = boletoGerado.data?.documento?.codigoBarras || boletoGerado.data?.codigoBarras || 'N/A';
+            linhaDigitavelParaRetorno = boletoGerado.data?.documento?.linhaDigitavel || boletoGerado.data?.linhaDigitavel || 'N/A';
+            dadosParaSalvar = boletoGerado.data?.documento?.codigoBarras || boletoGerado.data?.codigoBarras || linhaDigitavelParaRetorno;
         
         } else if (banco === 'bradesco') {
             tokenData = await getBradescoAccessToken();
             boletoGerado = await registrarBoleto(tokenData.access_token, dadosParaBoleto);
-            linhaDigitavel = boletoGerado.linhaDigitavel || 'N/A';
+            linhaDigitavelParaRetorno = boletoGerado.linhaDigitavel || 'N/A';
+            dadosParaSalvar = boletoGerado.codigoBarras || linhaDigitavelParaRetorno;
         
         } else if (banco === 'itau') {
             tokenData = await getItauAccessToken();
             boletoGerado = await registrarBoletoItau(tokenData.access_token, dadosParaBoleto);
-            // A API v2 retorna a linha digitável dentro do array de boletos individuais
-            linhaDigitavel = boletoGerado?.data?.dado_boleto?.dados_individuais_boleto[0]?.linha_digitavel || 'N/A';
+            const dadosIndividuais = boletoGerado?.data?.dado_boleto?.dados_individuais_boleto[0];
+            linhaDigitavelParaRetorno = dadosIndividuais?.linha_digitavel || 'N/A';
+            dadosParaSalvar = dadosIndividuais?.codigo_barras || linhaDigitavelParaRetorno; // Prioriza o código de barras numérico
         } else {
             throw new Error("Banco selecionado inválido.");
         }
@@ -212,17 +213,17 @@ export async function POST(request) {
         const { error: updateError } = await supabase
             .from('duplicatas')
             .update({ 
-                linha_digitavel: linhaDigitavel,
+                linha_digitavel: dadosParaSalvar,
                 banco_emissor_boleto: banco 
             })
             .eq('id', duplicataId);
 
         if (updateError) {
-            console.error("Erro ao salvar linha digitável no DB:", updateError);
-            return NextResponse.json({ success: true, linhaDigitavel, warning: "Boleto emitido, mas falha ao salvar no banco de dados local." });
+            console.error("Erro ao salvar dados do boleto no DB:", updateError);
+            return NextResponse.json({ success: true, linhaDigitavel: linhaDigitavelParaRetorno, warning: "Boleto emitido, mas falha ao salvar no banco de dados local." });
         }
 
-        return NextResponse.json({ success: true, linhaDigitavel });
+        return NextResponse.json({ success: true, linhaDigitavel: linhaDigitavelParaRetorno });
 
     } catch (error) {
         console.error(`Erro na API de emissão de boleto: ${error.message}`);

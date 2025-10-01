@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 
 export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNotification, onSucesso }) {
-    const [bancoSelecionado, setBancoSelecionado] = useState('safra');
+    const [bancoSelecionado, setBancoSelecionado] = useState('itau');
     const [isLoading, setIsLoading] = useState(false);
     const [resultados, setResultados] = useState([]);
     const [jaEmitido, setJaEmitido] = useState(false);
@@ -14,7 +14,7 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
     useEffect(() => {
         if (isOpen && duplicatas.length > 0) {
             setResultados([]);
-            const todosEmitidos = duplicatas.every(d => d.linha_digitavel);
+            const todosEmitidos = duplicatas.every(d => d.linha_digitavel && d.linha_digitavel !== 'N/A');
             setJaEmitido(todosEmitidos);
             if(todosEmitidos) {
                 setResultados(duplicatas.map(d => ({
@@ -36,40 +36,49 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
     };
 
     const handleImprimirTodos = async () => {
-    if (!operacaoId) {
-        showNotification('ID da operação não encontrado.', 'error');
-        return;
-    }
-    showNotification(`Gerando PDF para a operação #${operacaoId}...`, 'info');
-    try {
-        const res = await fetch(`/api/safra/boleto-pdf/${operacaoId}`, { headers: getAuthHeader() });
-        if (!res.ok) {
-            const errorData = await res.json();
-            throw new Error(errorData.message || "Não foi possível gerar o PDF dos boletos.");
+        if (!operacaoId) {
+            showNotification('ID da operação não encontrado.', 'error');
+            return;
         }
 
-        const contentDisposition = res.headers.get('content-disposition');
-        let filename = `boletos_op_${operacaoId}.pdf`; 
-        if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-            if (filenameMatch && filenameMatch.length > 1) {
-                filename = filenameMatch[1];
+        const bancoEmissor = resultados[0]?.banco || duplicatas[0]?.banco_emissor_boleto || bancoSelecionado;
+        if (!bancoEmissor) {
+            showNotification('Não foi possível identificar o banco emissor.', 'error');
+            return;
+        }
+
+        const endpoint = `/api/${bancoEmissor}/boleto-pdf/${operacaoId}`;
+        showNotification(`Gerando PDF do ${bancoEmissor.charAt(0).toUpperCase() + bancoEmissor.slice(1)}...`, 'info');
+        
+        try {
+            const res = await fetch(endpoint, { headers: getAuthHeader() });
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.message || "Não foi possível gerar o PDF dos boletos.");
             }
-        }
 
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-    } catch (err) {
-        showNotification(err.message, 'error');
-    }
-};
+            const contentDisposition = res.headers.get('content-disposition');
+            let filename = `boletos_op_${operacaoId}.pdf`; 
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+                if (filenameMatch && filenameMatch.length > 1) {
+                    filename = filenameMatch[1];
+                }
+            }
+
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            showNotification(err.message, 'error');
+        }
+    };
     
     const handleEmitirBoletos = async () => {
         setIsLoading(true);
@@ -84,7 +93,7 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                     body: JSON.stringify({ duplicataId: duplicata.id, banco: bancoSelecionado }),
                 });
                 const resultado = await response.json();
-                if (!response.ok) {
+                if (!response.ok || !resultado.success) {
                     throw new Error(resultado.message || `Falha ao registrar boleto para a duplicata ${duplicata.nfCte}.`);
                 }
                 resultadosEmissao.push({
@@ -139,9 +148,9 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                                 onChange={(e) => setBancoSelecionado(e.target.value)}
                                 className="w-full bg-gray-600 border-gray-500 rounded-md shadow-sm p-2"
                             >
+                                <option value="itau">Itaú</option>
                                 <option value="safra">Safra</option>
                                 <option value="bradesco">Bradesco</option>
-                                <option value="itau">Itaú</option>
                             </select>
                         </div>
                         <div className="mt-6 flex justify-end gap-4">
