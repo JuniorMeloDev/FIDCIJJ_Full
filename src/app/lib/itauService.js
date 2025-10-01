@@ -11,7 +11,7 @@ export async function getItauAccessToken() {
     }
 
     // URL DE PRODUÇÃO PARA TOKEN
-    const tokenEndpoint = 'https://api.itau.com.br/oauth/token'; 
+    const tokenEndpoint = 'https://sts.itau.com.br/api/oauth/token'; 
     const postData = new URLSearchParams({
         'grant_type': 'client_credentials',
         'client_id': clientId,
