@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
@@ -103,6 +104,7 @@ const parseXmlAndSimulate = async (xmlText, clienteCnpj, tipoOperacaoId) => {
         dataNf: dataEmissao,
         valorNf: valorTotal,
         clienteSacado: sacadoData.nome,
+        sacadoId: sacadoData.id, // <-- ADICIONE ESTA LINHA
         jurosCalculado: totalJuros,
         valorLiquidoCalculado: valorTotal - totalJuros,
         parcelasCalculadas,

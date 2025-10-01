@@ -101,6 +101,7 @@ export async function POST(request) {
                 data_operacao: body.dataOperacao,
                 nf_cte: `${notaFiscal.nfCte}.${p.numeroParcela}`,
                 cliente_sacado: notaFiscal.clienteSacado,
+                sacado_id: notaFiscal.sacadoId, // <-- ADICIONE ESTA LINHA
                 valor_bruto: p.valorParcela,
                 valor_juros: p.jurosParcela,
                 data_vencimento: p.dataVencimento,
