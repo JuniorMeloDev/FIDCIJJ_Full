@@ -93,12 +93,18 @@ async function getDadosParaBoleto(duplicataId, banco) {
         }
         const isCpf = (sacado.cnpj || '').replace(/\D/g, '').length === 11;
 
-        // Formata o valor para uma string de 15 dígitos com zeros à esquerda
         const valorFormatado = Math.round(duplicata.valor_bruto * 100).toString().padStart(15, '0');
+        
+        // --- ALTERADO: Formatação dos percentuais sem o ponto decimal ---
+        const formatPercent = (value, decimalPlaces = 5, totalLength = 11) => {
+            if (!value || value <= 0) return "0".padStart(totalLength, '0');
+            const multiplier = Math.pow(10, decimalPlaces);
+            return Math.round(value * multiplier).toString().padStart(totalLength, '0');
+        };
 
         return {
             "data": {
-                "etapa_processo_boleto": "Validacao", // Mudar para "Efetivacao" para registrar boletos reais
+                "etapa_processo_boleto": "Validacao", 
                 "codigo_canal_operacao": "API",
                 "beneficiario": {
                     "id_beneficiario": process.env.ITAU_ID_BENEFICIARIO
@@ -135,15 +141,15 @@ async function getDadosParaBoleto(duplicataId, banco) {
                         }
                     ],
                     "multa": {
-                        "codigo_tipo_multa": tipoOperacao.taxa_multa > 0 ? "02" : "0", // 02=Percentual, 0=Isento
-                        "percentual_multa": tipoOperacao.taxa_multa > 0 ? tipoOperacao.taxa_multa.toFixed(5).padStart(12, '0') : "0"
+                        "codigo_tipo_multa": tipoOperacao.taxa_multa > 0 ? "02" : "0",
+                        "percentual_multa": formatPercent(tipoOperacao.taxa_multa)
                     },
                     "juros": {
-                        "codigo_tipo_juros": tipoOperacao.taxa_juros_mora > 0 ? "90" : "0", // 90=Taxa Mensal, 0=Isento
-                        "percentual_juros": tipoOperacao.taxa_juros_mora > 0 ? tipoOperacao.taxa_juros_mora.toFixed(5).padStart(12, '0') : "0"
+                        "codigo_tipo_juros": tipoOperacao.taxa_juros_mora > 0 ? "90" : "0",
+                        "percentual_juros": formatPercent(tipoOperacao.taxa_juros_mora)
                     },
                     "recebimento_divergente": {
-                        "codigo_tipo_autorizacao": "03" // Não aceitar recebimento divergente
+                        "codigo_tipo_autorizacao": "03"
                     },
                     "desconto_expresso": false
                 }
