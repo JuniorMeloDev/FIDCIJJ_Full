@@ -2,7 +2,7 @@ import https from 'https';
 
 // Função para obter o token de acesso da API do Itaú
 export async function getItauAccessToken() {
-    console.log("\n--- [ITAÚ API] Etapa 1: Obtenção de Token ---");
+    console.log("\n--- [ITAÚ API] Etapa 1: Obtenção de Token (PRODUÇÃO) ---");
     const clientId = process.env.ITAU_CLIENT_ID;
     const clientSecret = process.env.ITAU_CLIENT_SECRET;
 
@@ -10,7 +10,8 @@ export async function getItauAccessToken() {
         throw new Error('As credenciais do Itaú (Client ID/Secret) não estão configuradas nas variáveis de ambiente.');
     }
 
-    const tokenEndpoint = 'https://sandbox.devportal.itau.com.br/api/oauth/jwt'; 
+    // URL DE PRODUÇÃO PARA TOKEN
+    const tokenEndpoint = 'https://api.itau.com.br/oauth/token'; 
     const postData = new URLSearchParams({
         'grant_type': 'client_credentials',
         'client_id': clientId,
@@ -21,7 +22,6 @@ export async function getItauAccessToken() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            // CORREÇÃO APLICADA: Adicionado o cabeçalho User-Agent para evitar o bloqueio do firewall
             'User-Agent': 'FIDCIJJ/1.0'
         }
     };
@@ -59,8 +59,9 @@ export async function getItauAccessToken() {
 
 // Função para registrar um boleto na API do Itaú
 export async function registrarBoletoItau(accessToken, dadosBoleto) {
-    console.log("\n--- [ITAÚ API] Etapa 2: Registro de Boleto ---");
-    const apiEndpoint = 'https://sandbox.devportal.itau.com.br/itau-ep9-api-boleto-v1-externo/v0/boletos';
+    console.log("\n--- [ITAÚ API] Etapa 2: Registro de Boleto (PRODUÇÃO) ---");
+    // URL DE PRODUÇÃO PARA REGISTRO DE BOLETOS
+    const apiEndpoint = 'https://api.itau.com.br/cash_management/v2/boletos';
     const correlationId = crypto.randomUUID();
     const flowId = crypto.randomUUID(); 
 
@@ -74,7 +75,6 @@ export async function registrarBoletoItau(accessToken, dadosBoleto) {
             'x-itau-apikey': process.env.ITAU_CLIENT_ID,
             'x-itau-correlationID': correlationId,
             'x-itau-flowID': flowId,
-            // CORREÇÃO APLICADA: Adicionado o cabeçalho User-Agent também nesta requisição por segurança
             'User-Agent': 'FIDCIJJ/1.0'
         },
     };
