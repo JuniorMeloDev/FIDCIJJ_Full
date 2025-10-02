@@ -1,12 +1,11 @@
 import { jsPDF } from 'jspdf';
-import { format, addDays, differenceInDays } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
-// --- NOVAS FUNÇÕES AUXILIARES PARA CÁLCULO ---
+// --- FUNÇÕES AUXILIARES PARA CÁLCULO ---
 
-// Módulo 10 - Padrão Febraban
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
     let soma = 0;
@@ -21,7 +20,6 @@ function modulo10(bloco) {
     return resto === 0 ? 0 : 10 - resto;
 }
 
-// Módulo 11 - Padrão Febraban
 function modulo11(bloco) {
     const multiplicadores = [2, 3, 4, 5, 6, 7, 8, 9];
     let soma = 0;
@@ -33,24 +31,19 @@ function modulo11(bloco) {
     return (dac === 0 || dac === 10 || dac === 11) ? 1 : dac;
 }
 
-// Calcula o DAC (dígito verificador) para Agência/Conta no padrão Itaú
 const getAgenciaContaDAC = (agencia, conta) => {
     return modulo10(`${agencia}${conta}`);
 };
 
-// Calcula o DAC (dígito verificador) para Carteira/NossoNúmero no padrão Itaú
 const getNossoNumeroDAC = (agencia, conta, carteira, nossoNumero) => {
     return modulo10(`${agencia}${conta}${carteira}${nossoNumero}`);
 };
 
-
-// Gera a linha digitável e o código de barras numérico
 function gerarLinhaDigitavelECodigoBarras(dados) {
     const { agencia, conta, carteira, nossoNumero, valor, vencimento } = dados;
     const banco = "341";
     const moeda = "9";
     
-    // Fator de Vencimento
     const dataBase = new Date('1997-10-07T00:00:00-03:00');
     const dataVenc = new Date(vencimento + 'T00:00:00-03:00');
     const fatorVencimento = differenceInDays(dataVenc, dataBase).toString().padStart(4, '0');
@@ -61,7 +54,6 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
     const dacNossoNumero = getNossoNumeroDAC(agencia, conta.padStart(5, '0'), carteira, nossoNumeroSemDac);
     const dacAgenciaConta = getAgenciaContaDAC(agencia, conta.padStart(5, '0'));
 
-    // Campo Livre (25 posições) - Específico do Itaú para Carteira 109
     const campoLivre = `${carteira}${nossoNumeroSemDac}${dacNossoNumero}${agencia}${conta.padStart(5, '0')}${dacAgenciaConta}000`;
 
     const blocoParaDAC = `${banco}${moeda}${fatorVencimento}${valorFormatado}${campoLivre}`;
@@ -69,7 +61,6 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
     
     const codigoBarras = `${banco}${moeda}${dacGeral}${fatorVencimento}${valorFormatado}${campoLivre}`;
     
-    // Montagem da Linha Digitável
     const campo1 = `${banco}${moeda}${campoLivre.substring(0, 5)}`;
     const dv1 = modulo10(campo1);
 
@@ -90,7 +81,6 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
 
     return { linhaDigitavel, codigoBarras };
 }
-
 
 // --- RESTANTE DO CÓDIGO (COM AJUSTES DE LAYOUT) ---
 
@@ -133,6 +123,7 @@ function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
   }
 }
 
+// *** FUNÇÃO CORRIGIDA PARA SER MAIS ROBUSTA ***
 const drawField = (doc, label, value, x, y, width, height, valueAlign = 'left', valueSize = 9, labelSize = 6) => {
   doc.setFontSize(labelSize).setTextColor(100,100,100);
   doc.text(label, x + 1, y + 2.5);
@@ -140,11 +131,15 @@ const drawField = (doc, label, value, x, y, width, height, valueAlign = 'left', 
   const textX = valueAlign === 'right' ? x + width - 1 : x + 1;
   const textY = label ? y + height - 2 : y + (height / 2) + 1.5;
 
-  const valueToPrint = Array.isArray(value) ? value : [value || ''];
+  // Filtra valores nulos ou indefinidos do array antes de imprimir
+  const valueToPrint = (Array.isArray(value) ? value : [value || '']).filter(v => v !== null && v !== undefined);
+
   valueToPrint.forEach((line, index) => {
+      // Garante que a linha seja uma string antes de desenhar
       doc.text(String(line), textX, textY + (index * 3.5), { align: valueAlign });
   });
 };
+
 
 export function gerarPdfBoletoItau(listaBoletos) {
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
@@ -153,10 +148,9 @@ export function gerarPdfBoletoItau(listaBoletos) {
   listaBoletos.forEach((dadosBoleto, index) => {
     if (index > 0) doc.addPage();
 
-    // ALTERADO: Gera a linha e o código de barras corretos
     const { linhaDigitavel, codigoBarras } = gerarLinhaDigitavelECodigoBarras({
         agencia: dadosBoleto.agencia,
-        conta: dadosBoleto.conta.replace('-', ''), // Remove o dígito da conta
+        conta: dadosBoleto.conta.replace('-', ''),
         carteira: dadosBoleto.carteira,
         nossoNumero: dadosBoleto.nosso_numero,
         valor: dadosBoleto.valor_bruto,
@@ -167,7 +161,6 @@ export function gerarPdfBoletoItau(listaBoletos) {
     
     const drawSection = (yOffset) => {
         doc.setLineWidth(0.2);
-        // Header
         if (itauLogoBase64) doc.addImage(itauLogoBase64, 'PNG', 15, yOffset + 1, 30, 8);
         doc.setLineWidth(0.5).line(48, yOffset, 48, yOffset + 10);
         doc.setFont('helvetica', 'bold').setFontSize(14).text('341-7', 55.5, yOffset + 7, { align: 'center' });
@@ -176,19 +169,16 @@ export function gerarPdfBoletoItau(listaBoletos) {
         doc.line(15, yOffset, 195, yOffset);
         doc.line(15, yOffset + 10, 195, yOffset + 10);
 
-        // Bloco 1
         const y1 = yOffset + 10;
         drawField(doc, 'Local de pagamento', 'Pague pelo aplicativo, internet ou em agências e correspondentes.', 15, y1, 140, 10, 'left', 8);
         drawField(doc, 'Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), 155, y1, 40, 10, 'right', 9);
         doc.line(155, y1, 155, y1 + 20);
 
-        // Bloco 2
         const y2 = y1 + 10;
         drawField(doc, 'Beneficiário', [dadosBoleto.cedente.nome, `CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`], 15, y2, 140, 10, 'left', 8);
         drawField(doc, 'Agência/Código Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, 155, y2, 40, 10, 'right');
         doc.line(15, y2, 195, y2);
         
-        // Bloco 3
         const y3 = y2 + 10;
         drawField(doc, 'Data do documento', format(new Date(dadosBoleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), 15, y3, 30, 10, 'left', 8);
         drawField(doc, 'Núm. do documento', dadosBoleto.nf_cte.split('.')[0], 45, y3, 30, 10, 'left', 8);
@@ -198,7 +188,6 @@ export function gerarPdfBoletoItau(listaBoletos) {
         drawField(doc, 'Nosso Número', `${dadosBoleto.carteira}/${dadosBoleto.nosso_numero}`, 155, y3, 40, 10, 'right');
         doc.line(15, y3, 195, y3);
 
-        // Bloco 4
         const y4 = y3 + 10;
         drawField(doc, 'Uso do Banco', '', 15, y4, 25, 10);
         drawField(doc, 'Carteira', dadosBoleto.carteira, 40, y4, 15, 10);
@@ -207,12 +196,10 @@ export function gerarPdfBoletoItau(listaBoletos) {
         drawField(doc, 'Valor', '', 100, y4, 55, 10);
         doc.line(15, y4, 195, y4);
 
-        // Caixa Direita (Valores)
         drawField(doc, '(=) Valor do Documento', formatBRLNumber(dadosBoleto.valor_bruto), 155, y4, 40, 10, 'right', 9);
         doc.line(155, y4, 155, y4 + 40);
         doc.line(15, y4 + 10, 195, y4 + 10);
         
-        // Bloco 5
         const y5 = y4 + 10;
         const tipoOp = dadosBoleto.operacao.tipo_operacao;
         const instrucoes = [
@@ -230,7 +217,6 @@ export function gerarPdfBoletoItau(listaBoletos) {
         drawField(doc, '(=) Valor Cobrado', '', 155, y5 + 20, 10, 'right');
         doc.line(15, y5 + 30, 195, y5 + 30);
         
-        // Pagador
         const y6 = y5 + 30;
         const pagadorLines = [
             `${dadosBoleto.sacado.nome}`,
@@ -240,23 +226,19 @@ export function gerarPdfBoletoItau(listaBoletos) {
         drawField(doc, 'Pagador', pagadorLines, 15, y6, 180, 15, 'left', 8);
         doc.setFontSize(8).text(`CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.sacado.cnpj)}`, 15.5, y6 + 13);
         
-        // Barcode
         const yBarcode = y6 + 15;
         doc.line(15, yBarcode, 195, yBarcode);
         drawInterleaved2of5(doc, 15, yBarcode + 2, codigoBarras, 103, 13);
         doc.setFontSize(8).text('Autenticação mecânica', 195, yBarcode + 18, {align: 'right'});
     };
 
-    // --- Seção 1: Recibo do Pagador ---
     drawSection(15);
     doc.setFont('helvetica', 'bold').setFontSize(9).text('RECIBO DO PAGADOR', 15, 12);
     doc.setLineDashPattern([2, 1], 0).line(15, 148, 195, 148).setLineDashPattern([], 0);
     
-    // --- Seção 2: Ficha de Compensação ---
     drawSection(155);
     doc.setFont('helvetica', 'bold').setFontSize(9).text('Ficha de Compensação', 15, 152);
 
-    // Rodapé
     doc.setFontSize(6).setTextColor(100,100,100);
     const footerText = 'Em caso de dúvidas, de posse do comprovante, contate seu gerente ou a Central no 4004 1685 (capitais e regiões metropolitanas) ou 0800 770 1685 (demais localidades). Reclamações, informações e cancelamentos: SAC 0800 728 0728, 24 horas por dia. Fale Conosco: www.itau.com.br/empresas. Se não ficar satisfeito com a solução, contate a Ouvidoria: 0800 570 0011, em dias úteis, das 9h às 18h. Deficiente auditivo/fala: 0800 722 1722.';
     doc.text(footerText, 15, 288, { maxWidth: 180, align: 'justify' });
