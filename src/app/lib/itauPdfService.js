@@ -225,4 +225,3 @@ export function gerarPdfBoletoItau(listaBoletos) {
 }
 
 
-        drawField(doc, 'Núm. do documento', (dadosBoleto.nf_cte || '').split('.')[0], 45, y3, 30, 10, 'left', 8);
