@@ -82,7 +82,7 @@ export function gerarPdfBoletoItau(listaBoletos) {
     const vencimentoDate = new Date(dadosBoleto.data_vencimento + 'T12:00:00Z');
     
     // =================================================================
-    // RECIBO DO PAGADOR (FINALIZADO - NÃO MEXER)
+    // RECIBO DO PAGADOR (FINALIZADO)
     // =================================================================
     const yRecibo = 10;
     if (itauLogoBase64) doc.addImage(itauLogoBase64, 'PNG', 15, yRecibo + 2, 25, 8);
@@ -103,7 +103,7 @@ export function gerarPdfBoletoItau(listaBoletos) {
     doc.setLineDashPattern([2,1],0).line(15, yRecibo + 68, 195, yRecibo + 68).setLineDashPattern([],0);
 
     // =================================================================
-    // FICHA DE COMPENSAÇÃO (COM AJUSTES FINAIS)
+    // FICHA DE COMPENSAÇÃO (COM CORREÇÃO DO ERRO)
     // =================================================================
     const y = 80;
     if (itauLogoBase64) doc.addImage(itauLogoBase64, 'PNG', 15, y, 25, 8);
@@ -120,7 +120,6 @@ export function gerarPdfBoletoItau(listaBoletos) {
     drawField(doc, 'Local de pagamento', localPgto, 15, y + 10, 130, 10, 'left', 9);
     drawField(doc, 'Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), 145, y + 10, 50, 10, 'right');
     
-    // NOVO AJUSTE: Aumentada a altura da caixa do beneficiário (de y+30 para y+35) e do campo (de 10 para 15)
     doc.line(15, y + 35, 195, y + 35);
     const beneficiarioLines = [
         dadosBoleto.cedente.nome,
@@ -128,9 +127,10 @@ export function gerarPdfBoletoItau(listaBoletos) {
         `${dadosBoleto.cedente.municipio} - ${dadosBoleto.cedente.uf}`
     ];
     drawField(doc, 'Beneficiário', beneficiarioLines, 15, y + 20, 130, 15, 'left', 8);
-    drawField(doc, 'Agência/Código Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, 145, y + 20, 15, 'right');
     
-    // NOVO AJUSTE: Todos os campos abaixo foram deslocados 5mm para baixo
+    // ERRO CORRIGIDO AQUI: A ordem e os valores dos parâmetros 'width' e 'height' foram corrigidos.
+    drawField(doc, 'Agência/Código Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, 145, y + 20, 50, 15, 'right');
+    
     const yShift = 5; 
     doc.line(15, y + 40 + yShift, 195, y + 40 + yShift);
     doc.line(45, y + 35, 45, y + 40 + yShift);
@@ -161,7 +161,6 @@ export function gerarPdfBoletoItau(listaBoletos) {
     drawField(doc, '(+) Juros/Multa', '', 145, y + 65, 50, 10);
     drawField(doc, '(=) Valor Cobrado', '', 145, y + 75, 50, 10, 'right');
 
-    // NOVO AJUSTE: Texto de instruções quebrado em duas linhas e espaçamento corrigido.
     const instrucoesHeader = [
         "Instruções de responsabilidade do BENEFICIARIO.",
         "Qualquer dúvida sobre este boleto contate o BENEFICIÁRIO."
@@ -175,7 +174,6 @@ export function gerarPdfBoletoItau(listaBoletos) {
     ].filter(Boolean);
     drawField(doc, '', instrucoesLines, 15, y + 65, 130, 15, 'left', 8);
 
-    // NOVO AJUSTE: Linha adicionada para criar um contorno/caixa para o pagador.
     doc.line(15, y + 80 + yShift, 145, y + 80 + yShift);
     drawField(doc, 'Pagador', [
       dadosBoleto.sacado.nome,
