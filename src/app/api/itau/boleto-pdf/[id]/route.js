@@ -49,7 +49,7 @@ export async function GET(request, { params }) {
         
         const tipoDocumento = duplicatas[0]?.operacao?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const numerosDocumento = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join('_');
-        const filename = `Boletos_Itau_${tipoDocumento}_${numerosDocumento}.pdf`;
+        const filename = `Boletos ${tipoDocumento} ${numerosDocumento}.pdf`;
         
         const headers = new Headers();
         headers.append('Content-Type', 'application/pdf');

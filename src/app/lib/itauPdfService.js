@@ -4,7 +4,7 @@ import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
-// --- FUNÇÕES DE CÁLCULO (sem alterações) ---
+// --- FUNÇÕES DE CÁLCULO (COM CORREÇÕES) ---
 
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
@@ -39,19 +39,39 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
     const banco = "341";
     const moeda = "9";
     
-    const dataBase = new Date('1997-10-07T00:00:00-03:00');
-    const dataVenc = new Date(vencimento + 'T00:00:00-03:00');
-    const fatorVencimento = differenceInDays(dataVenc, dataBase).toString().padStart(4, '0');
+    // CORREÇÃO 1: Lógica do Fator de Vencimento ajustada para a regra pós-2025
+    const dataBase = new Date('1997-10-07T12:00:00Z');
+    const dataVenc = new Date(vencimento + 'T12:00:00Z');
+    
+    // A Febraban instituiu uma nova regra de cálculo a partir de 9000 dias da data base.
+    const diasCorridos = Math.ceil((dataVenc - dataBase) / (1000 * 60 * 60 * 24));
+    let fatorVencimento;
+
+    if (diasCorridos > 9999) {
+        fatorVencimento = (diasCorridos - 9000).toString().padStart(4, '0');
+    } else {
+        fatorVencimento = diasCorridos.toString().padStart(4, '0');
+    }
 
     const valorFormatado = Math.round(valor * 100).toString().padStart(10, '0');
     
     const nossoNumeroSemDac = nossoNumero.padStart(8, '0');
-    const dacNossoNumero = getNossoNumeroDAC(agencia, conta.padStart(5, '0'), carteira, nossoNumeroSemDac);
-    const dacAgenciaConta = getAgenciaContaDAC(agencia, conta.padStart(5, '0'));
+    
+    // CORREÇÃO 2: Usa apenas o número da conta (sem o dígito) para os cálculos
+    const contaSemDac = (conta || '').split('-')[0].padStart(5, '0');
 
-    const campoLivre = `${carteira}${nossoNumeroSemDac}${dacNossoNumero}${agencia}${conta.padStart(5, '0')}${dacAgenciaConta}000`;
+    const dacNossoNumero = getNossoNumeroDAC(agencia, contaSemDac, carteira, nossoNumeroSemDac);
+    const dacAgenciaConta = getAgenciaContaDAC(agencia, contaSemDac);
+
+    const campoLivre = `${carteira}${nossoNumeroSemDac}${dacNossoNumero}${agencia}${contaSemDac}${dacAgenciaConta}000`;
+    
     const blocoParaDAC = `${banco}${moeda}${fatorVencimento}${valorFormatado}${campoLivre}`;
     const dacGeral = modulo11(blocoParaDAC);
+    
+    if (dacGeral === 0) { // O DAC Geral não pode ser zero
+      throw new Error("O cálculo do DAC geral resultou em zero, o que é inválido. Verifique os dados de entrada.");
+    }
+    
     const codigoBarras = `${banco}${moeda}${dacGeral}${fatorVencimento}${valorFormatado}${campoLivre}`;
     
     const campo1 = `${banco}${moeda}${campoLivre.substring(0, 5)}`;
@@ -223,5 +243,3 @@ export function gerarPdfBoletoItau(listaBoletos) {
 
   return doc.output('arraybuffer');
 }
-
-
