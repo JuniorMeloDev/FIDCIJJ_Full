@@ -141,16 +141,20 @@ export function gerarPdfBoletoItau(listaBoletos) {
         doc.setLineWidth(0.5).line(48, yOffset, 48, yOffset + 10);
         doc.setFont('helvetica', 'bold').setFontSize(14).text('341-7', 55.5, yOffset + 7, { align: 'center' });
         doc.setLineWidth(0.5).line(63, yOffset, 63, yOffset + 10);
-        doc.setFont('helvetica', 'bold').setFontSize(10).text(linhaDigitavel, 65, yOffset + 7, { charSpace: 0.5 }); // AJUSTADO
+        doc.setFont('helvetica', 'bold').setFontSize(10.5).text(linhaDigitavel, 65, yOffset + 7, { charSpace: 0.75 });
 
         const y1 = yOffset + 10;
         drawField(doc, 'Local de pagamento', 'Pague pelo aplicativo, internet ou em agências e correspondentes.', 15, y1, 140, 10, 'left', 8);
         drawField(doc, 'Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), 155, y1, 40, 10, 'right', 9);
-
+        
         const y2 = y1 + 10;
-        const beneficiarioLine1 = `${dadosBoleto.cedente?.nome || ''}    CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente?.cnpj)}`;
-        const beneficiarioLine2 = dadosBoleto.cedente?.endereco;
-        drawField(doc, 'Beneficiário', [beneficiarioLine1, beneficiarioLine2], 15, y2, 140, 15, 'left', 8);
+        doc.setFontSize(6.5).text('Beneficiário', 16, y2 + 2.5);
+        doc.setFont('helvetica', 'bold').setFontSize(8).text(dadosBoleto.cedente?.nome || '', 16, y2 + 6);
+        doc.setFont('helvetica', 'normal').setFontSize(8);
+        const cnpjTextWidth = doc.getTextWidth(`CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente?.cnpj)}`);
+        doc.text(`CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente?.cnpj)}`, 154 - cnpjTextWidth, y2 + 6);
+        const addressLine = [dadosBoleto.cedente?.endereco, dadosBoleto.cedente?.cep, dadosBoleto.cedente?.municipio, dadosBoleto.cedente?.uf].filter(Boolean).join(' - ');
+        doc.text(addressLine, 16, y2 + 10);
         drawField(doc, 'Agência/Código Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, 155, y2, 40, 15, 'right');
 
         const y3 = y2 + 15;
@@ -177,7 +181,7 @@ export function gerarPdfBoletoItau(listaBoletos) {
             `REFERENTE A NF ${(dadosBoleto.nf_cte || '').split('.')[0]}`
         ];
         doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(0,0,0);
-        doc.text(instrucoes.filter(Boolean), 16, y5 + 3, { lineHeightFactor: 1.15, maxWidth: 135 }); // AJUSTADO
+        doc.text(instrucoes.filter(Boolean), 16, y5 + 3.5, { lineHeightFactor: 1.15, maxWidth: 138 });
 
         drawField(doc, '(=) Valor do Documento', formatBRLNumber(dadosBoleto.valor_bruto), 155, y4, 40, 10, 'right', 9);
         drawField(doc, '(-) Descontos/Abatimento', '', 155, y5, 40, 10);
@@ -189,24 +193,30 @@ export function gerarPdfBoletoItau(listaBoletos) {
         const pagadorLine1 = `${sacado.nome || ''}    CNPJ/CPF: ${formatCnpjCpf(sacado.cnpj)}`;
         const pagadorLine2 = `${sacado.endereco || ''}, ${sacado.bairro || ''}`;
         const pagadorLine3 = `${sacado.cep || ''} ${sacado.municipio || ''} - ${sacado.uf || ''}`;
-        drawField(doc, 'Pagador', null, 15, y6, 180, 20);
+        
+        drawField(doc, 'Pagador', null, 15, y6, 180, 25);
         doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(0,0,0);
-        doc.text([pagadorLine1, pagadorLine2, pagadorLine3], 16, y6 + 5, { lineHeightFactor: 1.15 }); // Y AJUSTADO
+        
+        doc.text(pagadorLine1, 16, y6 + 7);
+        doc.text(pagadorLine2, 16, y6 + 11);
+        doc.text(pagadorLine3, 16, y6 + 15);
+        doc.setFontSize(6.5).text('Beneficiário final:', 16, y6 + 20);
+        doc.setFont('helvetica', 'bold').setFontSize(8).text('CNPJ/CPF:', 35, y6 + 20);
 
-        const y7 = y6 + 20;
-        drawInterleaved2of5(doc, 15, y7 + 2, codigoBarras, 103, 13);
+        const y7 = y6 + 25;
+        drawInterleaved2of5(doc, 15, y7, codigoBarras, 103, 13);
         doc.setFontSize(8).text('Autenticação mecânica', 195, y7 + 18, {align: 'right'});
 
         doc.setLineWidth(0.2);
-        const allY = [yOffset, y1, y2, y3, y4, y5, y6, y7];
+        const allY = [yOffset, y1, y2, y3, y4, y5, y6];
         allY.forEach(yPos => doc.line(15, yPos, 195, yPos)); 
-        doc.line(15, yOffset, 15, y7);
-        doc.line(195, yOffset, 195, y7);
+        doc.line(15, yOffset, 15, y6);
+        doc.line(195, yOffset, 195, y6);
         doc.line(155, y1, 155, y6);
         doc.line(45, y3, 45, y4); doc.line(75, y3, 75, y4); doc.line(95, y3, 95, y4); doc.line(110, y3, 110, y4);
         doc.line(40, y4, 40, y5); doc.line(55, y4, 55, y5); doc.line(70, y4, 70, y5); doc.line(100, y4, 100, y5);
-        doc.line(155, y5 + 10, 195, y5 + 10); // LINHAS ADICIONADAS
-        doc.line(155, y5 + 20, 195, y5 + 20); // LINHAS ADICIONADAS
+        doc.line(155, y5 + 10, 195, y5 + 10);
+        doc.line(155, y5 + 20, 195, y5 + 20);
     };
 
     drawSection(15);
@@ -223,3 +233,5 @@ export function gerarPdfBoletoItau(listaBoletos) {
 
   return doc.output('arraybuffer');
 }
+
+
