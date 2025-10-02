@@ -72,7 +72,7 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
     return { linhaDigitavel, codigoBarras };
 }
 
-// --- FUNÇÕES DE DESENHO (COM LAYOUT REFINADO) ---
+// --- FUNÇÕES DE DESENHO (COM LAYOUT FINAL) ---
 
 const getItauLogoBase64 = () => {
   try {
@@ -108,15 +108,12 @@ function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
 const drawField = (doc, label, value, x, y, width, height, valueAlign = 'left', valueSize = 9, labelSize = 6.5) => {
     doc.setFontSize(labelSize).setTextColor(0,0,0);
     doc.text(label || '', x + 1, y + 2.5);
-
     doc.setFont('helvetica', 'normal').setFontSize(valueSize).setTextColor(0,0,0);
     const textX = valueAlign === 'right' ? x + width - 1 : (valueAlign === 'center' ? x + width / 2 : x + 1);
     const textY = label ? y + 6.5 : y + height / 2 + 1.5;
-
     const lines = (Array.isArray(value) ? value : [value])
         .filter(line => line !== null && line !== undefined && String(line).trim() !== '')
         .map(line => String(line));
-
     if (lines.length > 0) {
         doc.text(lines, textX, textY, { align: valueAlign, lineHeightFactor: 1.15 });
     }
@@ -128,7 +125,6 @@ export function gerarPdfBoletoItau(listaBoletos) {
 
   listaBoletos.forEach((dadosBoleto, index) => {
     if (index > 0) doc.addPage();
-
     const { linhaDigitavel, codigoBarras } = gerarLinhaDigitavelECodigoBarras({
         agencia: dadosBoleto.agencia,
         conta: (dadosBoleto.conta || '').replace('-', ''),
@@ -137,31 +133,26 @@ export function gerarPdfBoletoItau(listaBoletos) {
         valor: dadosBoleto.valor_bruto,
         vencimento: dadosBoleto.data_vencimento
     });
-
     const vencimentoDate = new Date(dadosBoleto.data_vencimento + 'T12:00:00Z');
     
     const drawSection = (yOffset) => {
         doc.setLineWidth(0.2);
-        // Header
         if (itauLogoBase64) doc.addImage(itauLogoBase64, 'PNG', 15, yOffset + 1, 30, 8);
         doc.setLineWidth(0.5).line(48, yOffset, 48, yOffset + 10);
         doc.setFont('helvetica', 'bold').setFontSize(14).text('341-7', 55.5, yOffset + 7, { align: 'center' });
         doc.setLineWidth(0.5).line(63, yOffset, 63, yOffset + 10);
-        doc.setFont('helvetica', 'normal', 'bold').setFontSize(11).text(linhaDigitavel, 195, yOffset + 7, { align: 'right', charSpace: 0.8 });
+        doc.setFont('helvetica', 'normal', 'bold').setFontSize(11).text(linhaDigitavel, 65, yOffset + 7, { charSpace: 0.8 }); // AJUSTADO
 
-        // Bloco 1
         const y1 = yOffset + 10;
-        drawField(doc, 'Local de pagamento', 'Pague pelo aplicativo, internet ou em agências e correspondentes.', 15, y1, 140, 10);
+        drawField(doc, 'Local de pagamento', 'Pague pelo aplicativo, internet ou em agências e correspondentes.', 15, y1, 140, 10, 'left', 8);
         drawField(doc, 'Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), 155, y1, 40, 10, 'right', 9);
 
-        // Bloco 2 - Beneficiário (Layout Ajustado)
         const y2 = y1 + 10;
         const beneficiarioLine1 = `${dadosBoleto.cedente?.nome || ''}    CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente?.cnpj)}`;
-        const beneficiarioLine2 = `${dadosBoleto.cedente?.endereco || ''}, ${dadosBoleto.cedente?.municipio || ''} - ${dadosBoleto.cedente?.uf || ''}`;
-        drawField(doc, 'Beneficiário', [beneficiarioLine1, beneficiarioLine2], 15, y2, 140, 15, 'left', 8);
+        const beneficiarioLine2 = dadosBoleto.cedente?.endereco;
+        drawField(doc, 'Beneficiário', [beneficiarioLine1, beneficiarioLine2], 15, y2, 140, 15, 'left', 8); // Aumentado height
         drawField(doc, 'Agência/Código Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, 155, y2, 40, 15, 'right');
 
-        // Bloco 3 - Documento (Layout Ajustado)
         const y3 = y2 + 15;
         drawField(doc, 'Data do documento', format(new Date(dadosBoleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), 15, y3, 30, 10, 'left', 8);
         drawField(doc, 'Núm. do documento', (dadosBoleto.nf_cte || '').split('.')[0], 45, y3, 30, 10, 'left', 8);
@@ -170,15 +161,13 @@ export function gerarPdfBoletoItau(listaBoletos) {
         drawField(doc, 'Data Processamento', format(new Date(), 'dd/MM/yyyy'), 110, y3, 45, 10, 'left', 8);
         drawField(doc, 'Nosso Número', `${dadosBoleto.carteira}/${dadosBoleto.nosso_numero}`, 155, y3, 40, 10, 'right');
 
-        // Bloco 4 - Carteira, etc (Layout Ajustado)
         const y4 = y3 + 10;
         drawField(doc, 'Uso do Banco', '', 15, y4, 25, 10);
-        drawField(doc, 'Carteira', dadosBoleto.carteira, 40, y4, 15, 10, 'center'); // AJUSTADO
-        drawField(doc, 'Espécie', 'R$', 55, y4, 15, 10, 'center'); // AJUSTADO
+        drawField(doc, 'Carteira', dadosBoleto.carteira, 40, y4, 15, 10, 'center');
+        drawField(doc, 'Espécie', 'R$', 55, y4, 15, 10, 'center');
         drawField(doc, 'Quantidade', '', 70, y4, 30, 10);
         drawField(doc, 'Valor', '', 100, y4, 55, 10);
         
-        // Bloco 5 - Instruções e Valores (Layout Ajustado)
         const y5 = y4 + 10;
         const tipoOp = dadosBoleto.operacao?.tipo_operacao;
         const instrucoes = [
@@ -187,49 +176,37 @@ export function gerarPdfBoletoItau(listaBoletos) {
             tipoOp?.taxa_multa > 0 ? `APÓS 1 DIA(S) CORRIDO(S) DO VENCIMENTO COBRAR MULTA DE ${tipoOp.taxa_multa.toFixed(2).replace('.',',')}%` : null,
             `REFERENTE A NF ${(dadosBoleto.nf_cte || '').split('.')[0]}`
         ];
-        drawField(doc, '', instrucoes, 15, y5, 140, 35, 'left', 8); // Aumentado altura da caixa
+        drawField(doc, '', instrucoes, 16, y5 + 2, 140, 35, 'left', 8); // Y AJUSTADO
 
         drawField(doc, '(=) Valor do Documento', formatBRLNumber(dadosBoleto.valor_bruto), 155, y4, 40, 10, 'right', 9);
         drawField(doc, '(-) Descontos/Abatimento', '', 155, y5, 40, 10);
         drawField(doc, '(+) Juros/Multa', '', 155, y5 + 10, 40, 10);
         drawField(doc, '(=) Valor Cobrado', '', 155, y5 + 20, 40, 10);
         
-        // Bloco 6 - Pagador (Layout Ajustado)
-        const y6 = y5 + 35;
+        const y6 = y5 + 30;
         const sacado = dadosBoleto.sacado || {};
-        const pagadorLines = [
-            sacado.nome,
-            `${sacado.endereco || ''}, ${sacado.bairro || ''}`,
-            `${sacado.cep || ''} ${sacado.municipio || ''} - ${sacado.uf || ''}`
-        ];
-        drawField(doc, 'Pagador', null, 15, y6, 180, 20); // Caixa do Pagador
+        const pagadorLines = [sacado.nome, `${sacado.endereco || ''}, ${sacado.bairro || ''}`, `${sacado.cep || ''} ${sacado.municipio || ''} - ${sacado.uf || ''}`];
+        drawField(doc, 'Pagador', null, 15, y6, 180, 20);
         doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(0,0,0);
-        doc.text(pagadorLines, 16, y6 + 4, { lineHeightFactor: 1.15 });
-        doc.text(`CNPJ/CPF: ${formatCnpjCpf(sacado.cnpj)}`, 16, y6 + 15);
+        doc.text(pagadorLines, 16, y6 + 5, { lineHeightFactor: 1.15 }); // Y AJUSTADO
+        doc.text(`CNPJ/CPF: ${formatCnpjCpf(sacado.cnpj)}`, 16, y6 + 16); // Y AJUSTADO
 
-        // Bloco 7 - Barcode (Layout Ajustado)
         const y7 = y6 + 20;
-        drawInterleaved2of5(doc, 15, y7 + 2, codigoBarras, 103, 13); // Baixou o código de barras
+        drawInterleaved2of5(doc, 15, y7 + 4, codigoBarras, 103, 13); // Y AJUSTADO
         doc.setFontSize(8).text('Autenticação mecânica', 195, y7 + 18, {align: 'right'});
 
-        // Desenho de todas as linhas
         doc.setLineWidth(0.2);
-        const allY = [yOffset, y1, y2, y3, y4, y5, y6, y7, y7 + 20];
-        allY.forEach(yPos => doc.line(15, yPos, 195, yPos)); // Horizontais
-        doc.line(15, yOffset, 15, y7 + 20); // Esquerda
-        doc.line(195, yOffset, 195, y7 + 20); // Direita
-        doc.line(155, y1, 155, y6); // Vertical principal direita
-        doc.line(45, y3, 45, y4);
-        doc.line(75, y3, 75, y4);
-        doc.line(95, y3, 95, y4);
-        doc.line(110, y3, 110, y4);
-        doc.line(40, y4, 40, y5);
-        doc.line(55, y4, 55, y5);
-        doc.line(70, y4, 70, y5);
-        doc.line(100, y4, 100, y5);
+        const allY = [yOffset, y1, y2, y3, y4, y5, y6, y7];
+        allY.forEach(yPos => doc.line(15, yPos, 195, yPos)); 
+        doc.line(15, yOffset, 15, y7);
+        doc.line(195, yOffset, 195, y7);
+        doc.line(155, y1, 155, y6);
+        doc.line(45, y3, 45, y4); doc.line(75, y3, 75, y4); doc.line(95, y3, 95, y4); doc.line(110, y3, 110, y4);
+        doc.line(40, y4, 40, y5); doc.line(55, y4, 55, y5); doc.line(70, y4, 70, y5); doc.line(100, y4, 100, y5);
+        doc.line(155, y5 + 10, 195, y5 + 10); // LINHAS ADICIONADAS
+        doc.line(155, y5 + 20, 195, y5 + 20); // LINHAS ADICIONADAS
     };
 
-    // --- Seções ---
     drawSection(15);
     doc.setFont('helvetica', 'bold').setFontSize(9).text('RECIBO DO PAGADOR', 15, 12);
     doc.setLineDashPattern([2, 1], 0).line(15, 148, 195, 148).setLineDashPattern([], 0);
@@ -244,5 +221,4 @@ export function gerarPdfBoletoItau(listaBoletos) {
 
   return doc.output('arraybuffer');
 }
-
 
