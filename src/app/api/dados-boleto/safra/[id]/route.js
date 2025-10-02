@@ -64,8 +64,8 @@ export async function GET(request, { params }) {
         }
 
         const payload = {
-            agencia: "12400",
-            conta: "008554440",
+            agencia: "02900",
+            conta: "005860430",
             codigoMoeda: "09",
             documento: {
                 numero: nossoNumeroUnico,

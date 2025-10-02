@@ -70,8 +70,8 @@ export async function GET(request, { params }) {
             // --- FIM DA LÓGICA ---
 
             listaBoletos.push({
-                agencia: "12400",
-                conta: "008554440",
+                agencia: "02900",
+                conta: "005860430",
                 cedente: duplicata.operacao.cliente,
                 documento: {
                     numero: duplicata.id.toString().padStart(9, '0'),
