@@ -14,6 +14,7 @@ export async function GET(request, { params }) {
             return NextResponse.json({ message: 'ID da Operação é obrigatório.' }, { status: 400 });
         }
         
+        // ALTERADO: A consulta agora busca a operação completa para obter as regras de juros/multa
         const { data: duplicatas, error: dupError } = await supabase
             .from('duplicatas')
             .select('*, operacao:operacoes!inner(cliente:clientes!inner(*), tipo_operacao:tipos_operacao(*))')
@@ -29,18 +30,16 @@ export async function GET(request, { params }) {
             const { data: sacado } = await supabase.from('sacados').select('*').eq('id', duplicata.sacado_id).single();
             if (!sacado) continue;
 
+            // ALTERADO: Simplificado para passar apenas os dados brutos. O `boletoInfo` foi removido.
             listaBoletos.push({
-                ...duplicata,
+                ...duplicata, // Contém valor_bruto, data_vencimento, etc.
                 cedente: duplicata.operacao.cliente,
                 sacado: sacado,
                 agencia: '0550', 
                 conta: '99359-6', 
                 carteira: '109', 
                 nosso_numero: duplicata.id.toString().padStart(8, '0'),
-                boletoInfo: {
-                    linha_digitavel: duplicata.linha_digitavel,
-                    codigo_barras: duplicata.linha_digitavel // Usamos a mesma coluna
-                }
+                operacao: duplicata.operacao // Passa o objeto completo da operação
             });
         }
         
