@@ -4,7 +4,7 @@ import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
-// --- FUNÇÕES AUXILIARES PARA CÁLCULO ---
+// --- FUNÇÕES DE CÁLCULO (sem alterações) ---
 
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
@@ -31,13 +31,8 @@ function modulo11(bloco) {
     return (dac === 0 || dac === 10 || dac === 11) ? 1 : dac;
 }
 
-const getAgenciaContaDAC = (agencia, conta) => {
-    return modulo10(`${agencia}${conta}`);
-};
-
-const getNossoNumeroDAC = (agencia, conta, carteira, nossoNumero) => {
-    return modulo10(`${agencia}${conta}${carteira}${nossoNumero}`);
-};
+const getAgenciaContaDAC = (agencia, conta) => modulo10(`${agencia}${conta}`);
+const getNossoNumeroDAC = (agencia, conta, carteira, nossoNumero) => modulo10(`${agencia}${conta}${carteira}${nossoNumero}`);
 
 function gerarLinhaDigitavelECodigoBarras(dados) {
     const { agencia, conta, carteira, nossoNumero, valor, vencimento } = dados;
@@ -55,21 +50,16 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
     const dacAgenciaConta = getAgenciaContaDAC(agencia, conta.padStart(5, '0'));
 
     const campoLivre = `${carteira}${nossoNumeroSemDac}${dacNossoNumero}${agencia}${conta.padStart(5, '0')}${dacAgenciaConta}000`;
-
     const blocoParaDAC = `${banco}${moeda}${fatorVencimento}${valorFormatado}${campoLivre}`;
     const dacGeral = modulo11(blocoParaDAC);
-    
     const codigoBarras = `${banco}${moeda}${dacGeral}${fatorVencimento}${valorFormatado}${campoLivre}`;
     
     const campo1 = `${banco}${moeda}${campoLivre.substring(0, 5)}`;
     const dv1 = modulo10(campo1);
-
     const campo2 = campoLivre.substring(5, 15);
     const dv2 = modulo10(campo2);
-    
     const campo3 = campoLivre.substring(15, 25);
     const dv3 = modulo10(campo3);
-
     const campo4 = dacGeral;
     const campo5 = `${fatorVencimento}${valorFormatado}`;
     
@@ -82,62 +72,62 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
     return { linhaDigitavel, codigoBarras };
 }
 
-// --- RESTANTE DO CÓDIGO (COM AJUSTES DE LAYOUT) ---
-
 const getItauLogoBase64 = () => {
   try {
     const imagePath = path.resolve(process.cwd(), 'public', 'itau.png');
-    const imageBuffer = fs.readFileSync(imagePath);
-    return `data:image/png;base64,${imageBuffer.toString('base64')}`;
-  } catch {
-    return null;
-  }
+    return `data:image/png;base64,${fs.readFileSync(imagePath).toString('base64')}`;
+  } catch { return null; }
 };
 
 function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
   if (!code || !/^\d+$/.test(code)) return;
   const patterns = ['00110','10001','01001','11000','00101','10100','01100','00011','10010','01010'];
-  const start = '0000';
-  const stop = '100';
-  if (code.length % 2 !== 0) code = '0' + code;
+  const start = '0000', stop = '100';
   let binaryCode = start;
+  if (code.length % 2 !== 0) code = '0' + code;
   for (let i = 0; i < code.length; i += 2) {
-    const p1 = patterns[parseInt(code[i], 10)];
-    const p2 = patterns[parseInt(code[i + 1], 10)];
+    const p1 = patterns[parseInt(code[i], 10)], p2 = patterns[parseInt(code[i+1], 10)];
     for (let j = 0; j < 5; j++) binaryCode += p1[j] + p2[j];
   }
   binaryCode += stop;
   const ratio = 3;
-  const numNarrow = (binaryCode.match(/0/g) || []).length;
-  const numWide = (binaryCode.match(/1/g) || []).length;
-  const totalUnits = numNarrow + numWide * ratio;
-  const narrowWidth = width / totalUnits;
-  const wideWidth = narrowWidth * ratio;
+  const numNarrow = (binaryCode.match(/0/g) || []).length, numWide = (binaryCode.match(/1/g) || []).length;
+  const narrowWidth = width / (numNarrow + numWide * ratio);
   let currentX = x;
   doc.setFillColor(0,0,0);
   for (let i = 0; i < binaryCode.length; i++) {
     const isBar = i % 2 === 0;
-    const barWidth = binaryCode[i] === '1' ? wideWidth : narrowWidth;
+    const barWidth = binaryCode[i] === '1' ? narrowWidth * ratio : narrowWidth;
     if (isBar) doc.rect(currentX, y, barWidth, height, 'F');
     currentX += barWidth;
   }
 }
 
-// *** FUNÇÃO CORRIGIDA PARA SER MAIS ROBUSTA ***
+// *** FUNÇÃO drawField TOTALMENTE REFEITA PARA MÁXIMA SEGURANÇA ***
 const drawField = (doc, label, value, x, y, width, height, valueAlign = 'left', valueSize = 9, labelSize = 6) => {
-  doc.setFontSize(labelSize).setTextColor(100,100,100);
-  doc.text(label, x + 1, y + 2.5);
-  doc.setFont('helvetica', 'normal').setFontSize(valueSize).setTextColor(0,0,0);
-  const textX = valueAlign === 'right' ? x + width - 1 : x + 1;
-  const textY = label ? y + height - 2 : y + (height / 2) + 1.5;
+    // Desenha o label
+    doc.setFontSize(labelSize).setTextColor(100, 100, 100);
+    doc.text(label || '', x + 1, y + 2.5);
 
-  // Filtra valores nulos ou indefinidos do array antes de imprimir
-  const valueToPrint = (Array.isArray(value) ? value : [value || '']).filter(v => v !== null && v !== undefined);
+    // Prepara o valor para ser desenhado
+    doc.setFont('helvetica', 'normal').setFontSize(valueSize).setTextColor(0, 0, 0);
+    const textX = valueAlign === 'right' ? x + width - 1 : x + 1;
+    const textY = label ? y + 6.5 : y + height / 2 + 1.5;
 
-  valueToPrint.forEach((line, index) => {
-      // Garante que a linha seja uma string antes de desenhar
-      doc.text(String(line), textX, textY + (index * 3.5), { align: valueAlign });
-  });
+    // 1. Garante que `value` seja um array.
+    const potentialLines = Array.isArray(value) ? value : [value];
+
+    // 2. Filtra qualquer item que seja null, undefined ou uma string vazia.
+    // 3. Converte cada item restante para uma string para garantir.
+    const lines = potentialLines
+        .filter(line => line !== null && line !== undefined && String(line).trim() !== '')
+        .map(line => String(line));
+
+    // 4. Só tenta desenhar se houver linhas válidas.
+    if (lines.length > 0) {
+        // A função `text` do jsPDF pode receber um array e cuida do espaçamento das linhas.
+        doc.text(lines, textX, textY, { align: valueAlign, lineHeightFactor: 1.15 });
+    }
 };
 
 
@@ -150,7 +140,7 @@ export function gerarPdfBoletoItau(listaBoletos) {
 
     const { linhaDigitavel, codigoBarras } = gerarLinhaDigitavelECodigoBarras({
         agencia: dadosBoleto.agencia,
-        conta: dadosBoleto.conta.replace('-', ''),
+        conta: (dadosBoleto.conta || '').replace('-', ''),
         carteira: dadosBoleto.carteira,
         nossoNumero: dadosBoleto.nosso_numero,
         valor: dadosBoleto.valor_bruto,
@@ -175,13 +165,13 @@ export function gerarPdfBoletoItau(listaBoletos) {
         doc.line(155, y1, 155, y1 + 20);
 
         const y2 = y1 + 10;
-        drawField(doc, 'Beneficiário', [dadosBoleto.cedente.nome, `CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`], 15, y2, 140, 10, 'left', 8);
+        drawField(doc, 'Beneficiário', [dadosBoleto.cedente?.nome, `CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente?.cnpj)}`], 15, y2, 140, 10, 'left', 8);
         drawField(doc, 'Agência/Código Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, 155, y2, 40, 10, 'right');
         doc.line(15, y2, 195, y2);
         
         const y3 = y2 + 10;
         drawField(doc, 'Data do documento', format(new Date(dadosBoleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), 15, y3, 30, 10, 'left', 8);
-        drawField(doc, 'Núm. do documento', dadosBoleto.nf_cte.split('.')[0], 45, y3, 30, 10, 'left', 8);
+        drawField(doc, 'Núm. do documento', (dadosBoleto.nf_cte || '').split('.')[0], 45, y3, 30, 10, 'left', 8);
         drawField(doc, 'Espécie Doc.', 'DM', 75, y3, 20, 10, 'left', 8);
         drawField(doc, 'Aceite', 'N', 95, y3, 15, 10, 'left', 8);
         drawField(doc, 'Data Processamento', format(new Date(), 'dd/MM/yyyy'), 110, y3, 45, 10, 'left', 8);
@@ -201,13 +191,13 @@ export function gerarPdfBoletoItau(listaBoletos) {
         doc.line(15, y4 + 10, 195, y4 + 10);
         
         const y5 = y4 + 10;
-        const tipoOp = dadosBoleto.operacao.tipo_operacao;
+        const tipoOp = dadosBoleto.operacao?.tipo_operacao;
         const instrucoes = [
             'Instruções de responsabilidade do BENEFICIÁRIO. Qualquer dúvida sobre este boleto contate o BENEFICIÁRIO.',
-            tipoOp?.taxa_juros_mora > 0 ? `APÓS 1 DIA(S) CORRIDO(S) DO VENCIMENTO COBRAR JUROS DE ${tipoOp.taxa_juros_mora.toFixed(2).replace('.',',')}% AO MÊS` : '',
-            tipoOp?.taxa_multa > 0 ? `APÓS 1 DIA(S) CORRIDO(S) DO VENCIMENTO COBRAR MULTA DE ${tipoOp.taxa_multa.toFixed(2).replace('.',',')}%` : '',
-            `REFERENTE A NF ${dadosBoleto.nf_cte.split('.')[0]}`
-        ].filter(Boolean);
+            tipoOp?.taxa_juros_mora > 0 ? `APÓS 1 DIA(S) CORRIDO(S) DO VENCIMENTO COBRAR JUROS DE ${tipoOp.taxa_juros_mora.toFixed(2).replace('.',',')}% AO MÊS` : null,
+            tipoOp?.taxa_multa > 0 ? `APÓS 1 DIA(S) CORRIDO(S) DO VENCIMENTO COBRAR MULTA DE ${tipoOp.taxa_multa.toFixed(2).replace('.',',')}%` : null,
+            `REFERENTE A NF ${(dadosBoleto.nf_cte || '').split('.')[0]}`
+        ];
         drawField(doc, '', instrucoes, 15, y5, 140, 30, 'left', 8);
 
         drawField(doc, '(-) Descontos/Abatimento', '', 155, y5, 40, 10);
@@ -218,13 +208,14 @@ export function gerarPdfBoletoItau(listaBoletos) {
         doc.line(15, y5 + 30, 195, y5 + 30);
         
         const y6 = y5 + 30;
+        const sacado = dadosBoleto.sacado || {};
         const pagadorLines = [
-            `${dadosBoleto.sacado.nome}`,
-            `${dadosBoleto.sacado.endereco || ''}, ${dadosBoleto.sacado.bairro || ''}`,
-            `${dadosBoleto.sacado.cep || ''} ${dadosBoleto.sacado.municipio || ''} ${dadosBoleto.sacado.uf || ''}`
+            sacado.nome,
+            [sacado.endereco, sacado.bairro].filter(Boolean).join(', '),
+            [sacado.cep, sacado.municipio, sacado.uf].filter(Boolean).join(' - ')
         ];
         drawField(doc, 'Pagador', pagadorLines, 15, y6, 180, 15, 'left', 8);
-        doc.setFontSize(8).text(`CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.sacado.cnpj)}`, 15.5, y6 + 13);
+        doc.setFontSize(8).text(`CNPJ/CPF: ${formatCnpjCpf(sacado.cnpj)}`, 15.5, y6 + 13);
         
         const yBarcode = y6 + 15;
         doc.line(15, yBarcode, 195, yBarcode);
