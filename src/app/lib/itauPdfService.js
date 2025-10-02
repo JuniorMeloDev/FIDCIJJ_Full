@@ -69,94 +69,122 @@ export function gerarPdfBoletoItau(listaBoletos) {
 
     const { linha_digitavel, codigo_barras } = dadosBoleto.boletoInfo || {};
     const vencimentoDate = new Date(dadosBoleto.data_vencimento + 'T12:00:00Z');
+    
+    // =================================================================
+    // RECIBO DO PAGADOR
+    // =================================================================
+    const yRecibo = 10;
+    if (itauLogoBase64) doc.addImage(itauLogoBase64, 'PNG', 15, yRecibo + 2, 25, 8);
+    doc.setFont('helvetica','normal').setFontSize(10).text('341-7', 45, yRecibo + 6); // ALTERADO: Adicionado código do banco
+    doc.setFont('helvetica','bold').setFontSize(10).text('RECIBO DO PAGADOR', 195, yRecibo + 5, { align: 'right' });
 
-    // ---------- RECIBO ----------
-    if (itauLogoBase64) doc.addImage(itauLogoBase64, 'PNG', 15, 12, 25, 8);
-    doc.setFont('helvetica','bold').setFontSize(10).text('RECIBO DO PAGADOR', 195, 15, { align: 'right' });
-    doc.line(15, 20, 195, 20);
+    // --- Campos do Recibo ---
+    const yCamposRecibo = yRecibo + 10;
+    // Linha 1
+    drawField(doc, 'Beneficiário', [dadosBoleto.cedente.nome, dadosBoleto.cedente.endereco, `CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`], 15, yCamposRecibo, 100, 10, 'left', 8); // ALTERADO: Adicionado endereço
+    drawField(doc, 'Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), 155, yCamposRecibo, 40, 10, 'right');
+    doc.line(155, yCamposRecibo, 155, yCamposRecibo + 30); // Linha vertical
+    
+    // Linha 2
+    drawField(doc, 'Pagador - POLI-NUTRI ALIMENTOS S.A.', [dadosBoleto.sacado.nome, dadosBoleto.sacado.endereco, `CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.sacado.cnpj)}`], 15, yCamposRecibo + 10, 140, 10, 'left', 8);
+    // ALTERADO: Label para "() Valor do Documento"
+    drawField(doc, '() Valor do Documento', formatBRLNumber(dadosBoleto.valor_bruto), 155, yCamposRecibo + 10, 40, 10, 'right');
+    
+    // Linha 3
+    drawField(doc, 'Agência/Código Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, 115, yCamposRecibo, 40, 10, 'right');
+    drawField(doc, 'Nosso Número', `${dadosBoleto.carteira}/${dadosBoleto.nosso_numero}`, 155, yCamposRecibo + 20, 40, 10, 'right');
+    
+    // Linha de instruções e valores inferiores
+    const instrucoesRecibo = `Instruções de responsabilidade do BENEFICIARIO. Qualquer dúvida sobre este boleto contate o BENEFICIÁRIO.`;
+    doc.setFontSize(7).setTextColor(0,0,0).text(instrucoesRecibo, 16.5, yCamposRecibo + 23);
+    
+    // Caixa de valores
+    doc.rect(15, yCamposRecibo + 30, 180, 10);
+    drawField(doc, 'Data do documento', format(new Date(dadosBoleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), 15, yCamposRecibo + 30, 30, 10);
+    drawField(doc, 'Núm. do documento', dadosBoleto.nf_cte, 45, yCamposRecibo + 30, 30, 10);
+    drawField(doc, 'Espécie Doc.', 'DM', 75, yCamposRecibo + 30, 20, 10);
+    drawField(doc, 'Aceite', 'N', 95, yCamposRecibo + 30, 20, 10);
+    drawField(doc, 'Data Processamento', format(new Date(), 'dd/MM/yyyy'), 115, yCamposRecibo + 30, 30, 10);
+    drawField(doc, '(=) Valor Cobrado', '', 145, yCamposRecibo + 30, 50, 10);
 
-    // Caixa principal do recibo
-    doc.rect(15, 22, 180, 30);
-    doc.line(15, 32, 195, 32);
-    doc.line(15, 42, 195, 42);
+    doc.setFontSize(8).text('Autenticação mecânica', 195, yCamposRecibo + 48, { align: 'right' });
+    doc.setLineDashPattern([2,1],0).line(15, yRecibo + 68, 195, yRecibo + 68).setLineDashPattern([],0);
 
-    drawField(doc, 'Beneficiário', `${dadosBoleto.cedente.nome} - CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, 15, 22, 100, 10);
-    drawField(doc, 'Agência/Código Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, 115, 22, 40, 10, 'right');
-    drawField(doc, 'Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), 155, 22, 40, 10, 'right');
-    drawField(doc, 'Pagador', dadosBoleto.sacado.nome, 15, 32, 140, 10);
-    drawField(doc, 'Valor do Documento', formatBRLNumber(dadosBoleto.valor_bruto), 155, 32, 40, 10, 'right');
-
-    // Linha carteira/espécie/quantidade/valor
-    drawField(doc, 'Carteira', dadosBoleto.carteira, 15, 42, 30, 10);
-    drawField(doc, 'Espécie', 'R$', 45, 42, 20, 10);
-    drawField(doc, 'Quantidade', '-', 65, 42, 40, 10);
-    drawField(doc, 'Valor', formatBRLNumber(dadosBoleto.valor_bruto), 105, 42, 90, 10, 'right');
-
-    doc.setFontSize(8).text('Autenticação mecânica', 195, 53, { align: 'right' });
-
-    // Separador tracejado
-    doc.setLineDashPattern([2,1],0).line(15, 58, 195, 58).setLineDashPattern([],0);
-
-    // ---------- FICHA ----------
-    const y = 65;
+    // =================================================================
+    // FICHA DE COMPENSAÇÃO
+    // =================================================================
+    const y = 80;
     if (itauLogoBase64) doc.addImage(itauLogoBase64, 'PNG', 15, y, 25, 8);
     doc.setFont('helvetica','bold').setFontSize(12).text('341-7', 47.5, y + 5, { align: 'center' });
+    doc.line(42, y, 42, y + 10); // Linha vertical separando logo e código
+    doc.line(53, y, 53, y + 10);
     doc.setFontSize(11).setFont('courier','bold').text(linha_digitavel, 125, y + 5, { align: 'center' });
 
     // Caixa principal
     doc.rect(15, y + 10, 180, 105);
-    doc.line(145, y + 10, 145, y + 115); // divide esquerda/direita
+    doc.line(145, y + 10, 145, y + 115);
 
     // Linha: Local de pagamento
     doc.line(15, y + 20, 195, y + 20);
-    drawField(doc, 'Local de Pagamento', 'PAGÁVEL PREFERENCIALMENTE NO BANCO ITAÚ', 15, y + 10, 130, 10);
+    // ALTERADO: Texto do local de pagamento
+    const localPgto = "Pague pelo aplicativo, internet ou em agências e correspondentes.";
+    drawField(doc, 'Local de pagamento', localPgto, 15, y + 10, 130, 10, 'left', 9);
     drawField(doc, 'Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), 145, y + 10, 50, 10, 'right');
 
     // Linha: Beneficiário
     doc.line(15, y + 30, 195, y + 30);
-    drawField(doc, 'Beneficiário', `${dadosBoleto.cedente.nome} - CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, 15, y + 20, 130, 10);
+    // ALTERADO: Adicionado endereço do beneficiário
+    const beneficiarioLines = [
+        dadosBoleto.cedente.nome,
+        `${dadosBoleto.cedente.endereco}, ${dadosBoleto.cedente.bairro}`,
+        `${dadosBoleto.cedente.municipio} - ${dadosBoleto.cedente.uf}`
+    ];
+    drawField(doc, 'Beneficiário', beneficiarioLines, 15, y + 20, 130, 10, 'left', 8);
     drawField(doc, 'Agência/Código Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, 145, y + 20, 50, 10, 'right');
-
+    
     // Linha: Documento
     doc.line(15, y + 40, 195, y + 40);
-    doc.line(40, y + 30, 40, y + 40);
+    doc.line(45, y + 30, 45, y + 40); // Divisórias verticais
     doc.line(75, y + 30, 75, y + 40);
-    doc.line(95, y + 30, 95, y + 40);
-    doc.line(115, y + 30, 115, y + 40);
-    drawField(doc, 'Data do Documento', format(new Date(dadosBoleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), 15, y + 30, 25, 10);
-    drawField(doc, 'Nº Doc.', dadosBoleto.nf_cte, 40, y + 30, 35, 10);
-    drawField(doc, 'Espécie Doc.', 'DM', 75, y + 30, 20, 10);
-    drawField(doc, 'Aceite', 'N', 95, y + 30, 20, 10);
-    drawField(doc, 'Data Process.', format(new Date(), 'dd/MM/yyyy'), 115, y + 30, 30, 10);
-    drawField(doc, 'Nosso Número', `${dadosBoleto.carteira} / ${dadosBoleto.nosso_numero}`, 145, y + 30, 50, 10, 'right');
+    doc.line(90, y + 30, 90, y + 40);
+    doc.line(110, y + 30, 110, y + 40);
+    drawField(doc, 'Data do documento', format(new Date(dadosBoleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), 15, y + 30, 30, 10);
+    drawField(doc, 'Núm. do documento', dadosBoleto.nf_cte, 45, y + 30, 30, 10);
+    drawField(doc, 'Espécie Doc.', 'DM', 75, y + 30, 15, 10);
+    drawField(doc, 'Aceite', 'N', 90, y + 30, 20, 10);
+    drawField(doc, 'Data Processamento', format(new Date(), 'dd/MM/yyyy'), 110, y + 30, 35, 10);
+    drawField(doc, 'Nosso Número', `${dadosBoleto.carteira}/${dadosBoleto.nosso_numero}`, 145, y + 30, 50, 10, 'right');
 
     // Linha: Carteira
-    doc.line(15, y + 50, 195, y + 50);
-    doc.line(35, y + 40, 35, y + 50);
+    doc.line(15, y + 50, 145, y + 50); // Linha apenas na esquerda
+    doc.line(35, y + 40, 35, y + 50); // Divisórias verticais
     doc.line(55, y + 40, 55, y + 50);
-    doc.line(95, y + 40, 95, y + 50);
+    doc.line(80, y + 40, 80, y + 50);
     drawField(doc, 'Carteira', dadosBoleto.carteira, 15, y + 40, 20, 10);
     drawField(doc, 'Espécie', 'R$', 35, y + 40, 20, 10);
-    drawField(doc, 'Quantidade', '-', 55, y + 40, 40, 10);
-    drawField(doc, 'Valor', '-', 95, y + 40, 50, 10);
-    drawField(doc, '(=) Valor Documento', formatBRLNumber(dadosBoleto.valor_bruto), 145, y + 40, 50, 10, 'right');
+    drawField(doc, 'Quantidade', '', 55, y + 40, 25, 10);
+    drawField(doc, 'Uso do Banco', '', 80, y + 40, 65, 10); // ALTERADO: Adicionado "Uso do Banco"
+    drawField(doc, '(=) Valor do Documento', formatBRLNumber(dadosBoleto.valor_bruto), 145, y + 40, 50, 10, 'right'); // ALTERADO: Label "Valor do Documento"
 
     // Caixa direita: descontos/juros/valor cobrado
     doc.line(145, y + 60, 195, y + 60);
     doc.line(145, y + 70, 195, y + 70);
     doc.line(145, y + 80, 195, y + 80);
-    drawField(doc, '(-) Desconto/Abatimento', '', 145, y + 50, 50, 10);
+    drawField(doc, '(-) Descontos/Abatimento', '', 145, y + 50, 50, 10);
     drawField(doc, '(+) Juros/Multa', '', 145, y + 60, 50, 10);
-    drawField(doc, '(=) Valor Cobrado', formatBRLNumber(dadosBoleto.valor_bruto), 145, y + 70, 50, 10, 'right');
+    drawField(doc, '(=) Valor Cobrado', '', 145, y + 70, 50, 10, 'right'); // ALTERADO: Valor cobrado em branco
 
-    // Instruções (sem cabeçalho fixo)
-    const dataVencida = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
-    const instrucoes = [
-      dadosBoleto.operacao?.tipo_operacao?.taxa_juros_mora ? `A partir de ${dataVencida}, COBRAR JUROS DE ${dadosBoleto.operacao.tipo_operacao.taxa_juros_mora}% AO MÊS` : '',
-      dadosBoleto.operacao?.tipo_operacao?.taxa_multa ? `A partir de ${dataVencida}, COBRAR MULTA DE ${dadosBoleto.operacao.tipo_operacao.taxa_multa}%` : '',
-      `REFERENTE A NF ${dadosBoleto.nf_cte}`
+    // Instruções
+    const instrucoesHeader = "Instruções de responsabilidade do BENEFICIARIO. Qualquer dúvida sobre este boleto contate o BENEFICIÁRIO.";
+    doc.setFontSize(7).setTextColor(0,0,0).text(instrucoesHeader, 16.5, y + 53); // ALTERADO: Adicionado cabeçalho das instruções
+    
+    // ALTERADO: Formato do texto de juros e multa
+    const instrucoesLines = [
+        dadosBoleto.operacao?.tipo_operacao?.taxa_juros_mora ? `APÓS 1 DIA(S) CORRIDO(S) DO VENCIMENTO COBRAR JUROS DE ${dadosBoleto.operacao.tipo_operacao.taxa_juros_mora.toFixed(2).replace('.',',')}% AO MES` : '',
+        dadosBoleto.operacao?.tipo_operacao?.taxa_multa ? `APOS 1 DIA(S) CORRIDO(S) DO VENCIMENTO COBRAR MULTA DE ${dadosBoleto.operacao.tipo_operacao.taxa_multa.toFixed(2).replace('.',',')}%` : '',
+        `REFERENTE A NF ${dadosBoleto.nf_cte}`
     ].filter(Boolean);
-    drawField(doc, '', instrucoes, 15, y + 50, 130, 30, 'left', 8);
+    drawField(doc, '', instrucoesLines, 15, y + 55, 130, 25, 'left', 8);
 
     // Pagador
     drawField(doc, 'Pagador', [
@@ -166,12 +194,11 @@ export function gerarPdfBoletoItau(listaBoletos) {
       `CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.sacado.cnpj)}`
     ], 15, y + 80, 130, 25, 'left', 9);
 
-    // Linha digitável antes do código de barras
-    doc.setFont('courier','bold').setFontSize(12).text(linha_digitavel || '', 105, y + 115, { align: 'center' });
-
-    // Código de barras (embaixo, bem posicionado)
+    // ALTERADO: Adicionado campo "Beneficiário final"
+    drawField(doc, 'Beneficiário final', 'CNPJ/CPF:', 15, y + 105, 130, 10, 'left', 8);
+    
+    // Código de barras
     drawInterleaved2of5(doc, 20, y + 120, codigo_barras, 160, 15);
-
     doc.setFontSize(8).text('Autenticação Mecânica - Ficha de Compensação', 195, y + 140, { align: 'right' });
   });
 
