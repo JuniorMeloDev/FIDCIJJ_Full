@@ -141,7 +141,7 @@ export function gerarPdfBoletoItau(listaBoletos) {
         doc.setLineWidth(0.5).line(48, yOffset, 48, yOffset + 10);
         doc.setFont('helvetica', 'bold').setFontSize(14).text('341-7', 55.5, yOffset + 7, { align: 'center' });
         doc.setLineWidth(0.5).line(63, yOffset, 63, yOffset + 10);
-        doc.setFont('helvetica', 'normal', 'bold').setFontSize(11).text(linhaDigitavel, 65, yOffset + 7, { charSpace: 0.8 }); // AJUSTADO
+        doc.setFont('helvetica', 'bold').setFontSize(10).text(linhaDigitavel, 65, yOffset + 7, { charSpace: 0.5 }); // AJUSTADO
 
         const y1 = yOffset + 10;
         drawField(doc, 'Local de pagamento', 'Pague pelo aplicativo, internet ou em agências e correspondentes.', 15, y1, 140, 10, 'left', 8);
@@ -150,7 +150,7 @@ export function gerarPdfBoletoItau(listaBoletos) {
         const y2 = y1 + 10;
         const beneficiarioLine1 = `${dadosBoleto.cedente?.nome || ''}    CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente?.cnpj)}`;
         const beneficiarioLine2 = dadosBoleto.cedente?.endereco;
-        drawField(doc, 'Beneficiário', [beneficiarioLine1, beneficiarioLine2], 15, y2, 140, 15, 'left', 8); // Aumentado height
+        drawField(doc, 'Beneficiário', [beneficiarioLine1, beneficiarioLine2], 15, y2, 140, 15, 'left', 8);
         drawField(doc, 'Agência/Código Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, 155, y2, 40, 15, 'right');
 
         const y3 = y2 + 15;
@@ -176,7 +176,8 @@ export function gerarPdfBoletoItau(listaBoletos) {
             tipoOp?.taxa_multa > 0 ? `APÓS 1 DIA(S) CORRIDO(S) DO VENCIMENTO COBRAR MULTA DE ${tipoOp.taxa_multa.toFixed(2).replace('.',',')}%` : null,
             `REFERENTE A NF ${(dadosBoleto.nf_cte || '').split('.')[0]}`
         ];
-        drawField(doc, '', instrucoes, 16, y5 + 2, 140, 35, 'left', 8); // Y AJUSTADO
+        doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(0,0,0);
+        doc.text(instrucoes.filter(Boolean), 16, y5 + 3, { lineHeightFactor: 1.15, maxWidth: 135 }); // AJUSTADO
 
         drawField(doc, '(=) Valor do Documento', formatBRLNumber(dadosBoleto.valor_bruto), 155, y4, 40, 10, 'right', 9);
         drawField(doc, '(-) Descontos/Abatimento', '', 155, y5, 40, 10);
@@ -185,14 +186,15 @@ export function gerarPdfBoletoItau(listaBoletos) {
         
         const y6 = y5 + 30;
         const sacado = dadosBoleto.sacado || {};
-        const pagadorLines = [sacado.nome, `${sacado.endereco || ''}, ${sacado.bairro || ''}`, `${sacado.cep || ''} ${sacado.municipio || ''} - ${sacado.uf || ''}`];
+        const pagadorLine1 = `${sacado.nome || ''}    CNPJ/CPF: ${formatCnpjCpf(sacado.cnpj)}`;
+        const pagadorLine2 = `${sacado.endereco || ''}, ${sacado.bairro || ''}`;
+        const pagadorLine3 = `${sacado.cep || ''} ${sacado.municipio || ''} - ${sacado.uf || ''}`;
         drawField(doc, 'Pagador', null, 15, y6, 180, 20);
         doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(0,0,0);
-        doc.text(pagadorLines, 16, y6 + 5, { lineHeightFactor: 1.15 }); // Y AJUSTADO
-        doc.text(`CNPJ/CPF: ${formatCnpjCpf(sacado.cnpj)}`, 16, y6 + 16); // Y AJUSTADO
+        doc.text([pagadorLine1, pagadorLine2, pagadorLine3], 16, y6 + 5, { lineHeightFactor: 1.15 }); // Y AJUSTADO
 
         const y7 = y6 + 20;
-        drawInterleaved2of5(doc, 15, y7 + 4, codigoBarras, 103, 13); // Y AJUSTADO
+        drawInterleaved2of5(doc, 15, y7 + 2, codigoBarras, 103, 13);
         doc.setFontSize(8).text('Autenticação mecânica', 195, y7 + 18, {align: 'right'});
 
         doc.setLineWidth(0.2);
@@ -221,4 +223,3 @@ export function gerarPdfBoletoItau(listaBoletos) {
 
   return doc.output('arraybuffer');
 }
-
