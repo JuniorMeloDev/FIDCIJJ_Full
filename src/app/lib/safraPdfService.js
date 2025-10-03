@@ -15,6 +15,7 @@ const getSafraLogoBase64 = () => {
     }
 };
 
+// Função para calcular o dígito verificador (módulo 10), necessária para formatar a linha digitável
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
     let soma = 0;
@@ -30,51 +31,19 @@ function modulo10(bloco) {
     return resto === 0 ? 0 : 10 - resto;
 }
 
-function modulo11(bloco) {
-    const multiplicadores = [2, 3, 4, 5, 6, 7, 8, 9];
-    let soma = 0;
-    let i = bloco.length - 1;
-    let m = 0;
-    while (i >= 0) {
-        soma += parseInt(bloco.charAt(i), 10) * multiplicadores[m % 8];
-        i--;
-        m++;
-    }
-    const resto = soma % 11;
-    const dac = 11 - resto;
-    return (dac === 0 || dac === 10 || dac === 11) ? 1 : dac;
-}
-
-function gerarLinhaDigitavelEDAC(dados) {
-    const { agencia, conta, nossoNumero, valor, vencimento } = dados;
-    const banco = "422";
-    const moeda = "9";
-    const tipoCobranca = "2";
-    const sistema = "7";
-
-    const dataBase = new Date('1997-10-07T12:00:00Z');
-    const dataVenc = new Date(vencimento + 'T12:00:00Z');
-    
-    // CORREÇÃO FINAL: Lógica do Fator Vencimento ajustada para bater exatamente com o cálculo do banco
-    const diffTimeTotal = dataVenc - dataBase;
-    const totalDays = Math.ceil(diffTimeTotal / (1000 * 60 * 60 * 24));
-    
-    let fatorVencimento;
-    // A nova regra do fator de vencimento a partir de 22/02/2025 é subtrair 9000 do total de dias.
-    if (dataVenc >= new Date('2025-02-22T12:00:00Z')) {
-        fatorVencimento = (totalDays - 9000).toString().padStart(4, '0');
-    } else {
-        fatorVencimento = totalDays.toString().padStart(4, '0');
+// Função para decodificar o código de barras salvo e extrair as informações necessárias
+function decodificarCodigoDeBarras(codigoBarras) {
+    if (!codigoBarras || codigoBarras.length !== 44) {
+        return { linhaDigitavel: 'Código de barras inválido', codigoBarras: '', nossoNumero: '' };
     }
 
-    const valorFormatado = Math.round(valor * 100).toString().padStart(10, '0');
-    const campoLivre = `${sistema}${agencia}${conta}${nossoNumero}${tipoCobranca}`;
-    
-    const blocoParaDAC = `${banco}${moeda}${fatorVencimento}${valorFormatado}${campoLivre}`;
-    const dac = modulo11(blocoParaDAC);
-    
-    const codigoBarras = `${banco}${moeda}${dac}${fatorVencimento}${valorFormatado}${campoLivre}`;
-    
+    const banco = codigoBarras.substring(0, 3);
+    const moeda = codigoBarras.substring(3, 4);
+    const dacGeral = codigoBarras.substring(4, 5);
+    const fatorVencimento = codigoBarras.substring(5, 9);
+    const valor = codigoBarras.substring(9, 19);
+    const campoLivre = codigoBarras.substring(19, 44);
+
     const campo1 = `${banco}${moeda}${campoLivre.substring(0, 5)}`;
     const dv1 = modulo10(campo1);
     const campo1Formatado = `${campo1.substring(0, 5)}.${campo1.substring(5)}${dv1}`;
@@ -87,19 +56,23 @@ function gerarLinhaDigitavelEDAC(dados) {
     const dv3 = modulo10(campo3);
     const campo3Formatado = `${campo3.substring(0, 5)}.${campo3.substring(5)}${dv3}`;
 
-    const campo4 = dac.toString();
-    const campo5 = `${fatorVencimento}${valorFormatado}`;
+    const campo4 = dacGeral;
+    const campo5 = `${fatorVencimento}${valor}`;
 
     const linhaDigitavel = `${campo1Formatado}  ${campo2Formatado}  ${campo3Formatado}  ${campo4}  ${campo5}`;
+    
+    // Extrai o "Nosso Número" do Campo Livre para ser exibido no corpo do boleto
+    const nossoNumero = campoLivre.substring(14, 23);
 
-    return { linhaDigitavel, codigoBarras };
+    return { linhaDigitavel, codigoBarras, nossoNumero };
 }
+
 
 function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
     const patterns = ['00110', '10001', '01001', '11000', '00101', '10100', '01100', '00011', '10010', '01010'];
     const start = '0000';
     const stop = '100';
-    if (code.length % 2 !== 0) { code = '0' + code; }
+    if (!code || code.length % 2 !== 0) { return; }
     let binaryCode = start;
     for (let i = 0; i < code.length; i += 2) {
         const pattern1 = patterns[parseInt(code[i], 10)];
@@ -138,16 +111,14 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         });
     };
 
-    listaBoletos.forEach((dadosBoleto, index) => {
+    listaBoletos.forEach((boleto, index) => {
         if (index > 0) doc.addPage();
         
-        const { linhaDigitavel, codigoBarras } = gerarLinhaDigitavelEDAC({
-            agencia: dadosBoleto.agencia, conta: dadosBoleto.conta, nossoNumero: dadosBoleto.documento.numero,
-            valor: dadosBoleto.documento.valor, vencimento: dadosBoleto.documento.dataVencimento
-        });
+        // Decodifica o código de barras que foi salvo no banco de dados.
+        const { linhaDigitavel, codigoBarras, nossoNumero } = decodificarCodigoDeBarras(boleto.linha_digitavel);
         
-        const vencimentoDate = new Date(dadosBoleto.documento.dataVencimento + 'T12:00:00Z');
-        const nomePagador = dadosBoleto.documento.pagador.nome.replace(/\.$/, '');
+        const vencimentoDate = new Date(boleto.data_vencimento + 'T12:00:00Z');
+        const nomePagador = boleto.sacado.nome.replace(/\.$/, '');
 
         // --- Seção Recibo do Pagador ---
         if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 12, 25, 8);
@@ -155,15 +126,15 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         doc.line(15, 20, 195, 20);
         
         const xRecibo = 15, yRecibo = 22, wRecibo = 180;
-        drawField('Beneficiário', dadosBoleto.cedente.nome, xRecibo, yRecibo, 100, 10);
-        drawField('Nosso Número', dadosBoleto.documento.numero, xRecibo + 100, yRecibo, 40, 10);
+        drawField('Beneficiário', boleto.cedente.nome, xRecibo, yRecibo, 100, 10);
+        drawField('Nosso Número', nossoNumero, xRecibo + 100, yRecibo, 40, 10);
         doc.line(xRecibo + 100, yRecibo, xRecibo + 100, yRecibo + 10);
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), xRecibo + 140, yRecibo, 40, 10, 'right');
         doc.line(xRecibo + 140, yRecibo, xRecibo + 140, yRecibo + 10);
         
         doc.line(xRecibo, yRecibo + 10, xRecibo + wRecibo, yRecibo + 10);
-        drawField('Pagador', `${nomePagador} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}`, xRecibo, yRecibo + 10, 140, 10);
-        drawField('Valor', formatBRLNumber(dadosBoleto.documento.valor), xRecibo + 140, yRecibo + 10, 40, 10, 'right');
+        drawField('Pagador', `${nomePagador} CNPJ/CPF: ${formatCnpjCpf(boleto.sacado.cnpj)}`, xRecibo, yRecibo + 10, 140, 10);
+        drawField('Valor', formatBRLNumber(boleto.valor_bruto), xRecibo + 140, yRecibo + 10, 40, 10, 'right');
         
         doc.setFontSize(8).text('Autenticação Mecânica', 195, yRecibo + 25, { align: 'right' });
         doc.setLineDashPattern([2, 1], 0).line(15, 88, 195, 88).setLineDashPattern([], 0);
@@ -187,23 +158,23 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), x + 130, y, 50, 10, 'right', 10);
         doc.line(x, y + 10, x + w, y + 10);
         
-        drawField('Beneficiário', `${dadosBoleto.cedente.nome} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente.cnpj)}`, x, y + 10, 130, 10);
-        drawField('Agência/Cód. Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, x + 130, y + 10, 50, 10, 'right');
+        drawField('Beneficiário', `${boleto.cedente.nome} CNPJ/CPF: ${formatCnpjCpf(boleto.cedente.cnpj)}`, x, y + 10, 130, 10);
+        drawField('Agência/Cód. Beneficiário', `02900/005860430`, x + 130, y + 10, 50, 10, 'right');
         doc.line(x, y + 20, x + w, y + 20);
         
-        drawField('Data do Doc.', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), x, y + 20, 25, 10);
+        drawField('Data do Doc.', format(new Date(boleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), x, y + 20, 25, 10);
         doc.line(x + 25, y + 20, x + 25, y + 30);
-        drawField('Nº do Doc.', dadosBoleto.documento.numeroCliente, x + 25, y + 20, 35, 10);
+        drawField('Nº do Doc.', boleto.nf_cte, x + 25, y + 20, 35, 10);
         doc.line(x + 60, y + 20, x + 60, y + 30);
         drawField('Esp. Doc.', 'DM', x + 60, y + 20, 15, 10);
         doc.line(x + 75, y + 20, x + 75, y + 30);
         drawField('Aceite', 'Não', x + 75, y + 20, 15, 10);
         doc.line(x + 90, y + 20, x + 90, y + 30);
-        drawField('Data do Movto', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), x + 90, y + 20, 40, 10);
-        drawField('Nosso Número', dadosBoleto.documento.numero, x + 130, y + 20, 50, 10, 'right');
+        drawField('Data do Movto', format(new Date(boleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), x + 90, y + 20, 40, 10);
+        drawField('Nosso Número', nossoNumero, x + 130, y + 20, 50, 10, 'right');
         doc.line(x, y + 30, x + w, y + 30);
         
-        drawField('Data do Oper.', format(new Date(dadosBoleto.documento.dataEmissao + 'T12:00:00Z'), 'dd/MM/yyyy'), x, y+30, 25, 10);
+        drawField('Data do Oper.', format(new Date(boleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), x, y+30, 25, 10);
         doc.line(x + 25, y + 30, x + 25, y + 40);
         drawField('Carteira', '01', x + 25, y + 30, 20, 10);
         doc.line(x + 45, y + 30, x + 45, y + 40);
@@ -212,17 +183,20 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         drawField('Quantidade', '', x + 65, y + 30, 30, 10);
         doc.line(x + 95, y + 30, x + 95, y + 40);
         drawField('Valor', '', x + 95, y + 30, 35, 10);
-        drawField('(=)Valor do Documento', formatBRLNumber(dadosBoleto.documento.valor), x + 130, y + 30, 50, 10, 'right', 10);
+        drawField('(=)Valor do Documento', formatBRLNumber(boleto.valor_bruto), x + 130, y + 30, 50, 10, 'right', 10);
         doc.line(x, y + 40, x + w, y + 40);
         
         const instrucoes = [];
-        const dataJurosMulta = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
-        if (dadosBoleto.documento.juros && dadosBoleto.documento.juros.tipoJuros !== 'ISENTO') {
-             const valorJurosDia = (dadosBoleto.documento.valor * (dadosBoleto.documento.juros.valor / 100)) / 30;
-             instrucoes.push(`A partir de ${dataJurosMulta}, juros de ${formatBRLNumber(valorJurosDia)} ao dia.`);
-        }
-        if (dadosBoleto.documento.multa && dadosBoleto.documento.multa.tipoMulta !== 'ISENTO') {
-             instrucoes.push(`A partir de ${dataJurosMulta}, multa de ${ (dadosBoleto.documento.multa.percentual || 0).toFixed(2).replace('.', ',') }%.`);
+        const tipoOp = boleto.operacao?.tipo_operacao;
+        if (tipoOp) {
+            const dataJurosMulta = format(addDays(vencimentoDate, 1), 'dd/MM/yyyy');
+            if (tipoOp.taxa_juros_mora > 0) {
+                 const valorJurosDia = (boleto.valor_bruto * (tipoOp.taxa_juros_mora / 100)) / 30;
+                 instrucoes.push(`A partir de ${dataJurosMulta}, juros de ${formatBRLNumber(valorJurosDia)} ao dia.`);
+            }
+            if (tipoOp.taxa_multa > 0) {
+                 instrucoes.push(`A partir de ${dataJurosMulta}, multa de ${ (tipoOp.taxa_multa || 0).toFixed(2).replace('.', ',') }%.`);
+            }
         }
         
         doc.setFontSize(6).setTextColor(100, 100, 100).text('Instruções', x + 1.5, y + 40 + 2.5);
@@ -241,8 +215,8 @@ export function gerarPdfBoletoSafra(listaBoletos) {
 
         doc.line(x, y + 65, x + w, y + 65);
         
-        const pagadorAddressFicha = `${dadosBoleto.documento.pagador.endereco.logradouro}\n${dadosBoleto.documento.pagador.endereco.cidade} ${dadosBoleto.documento.pagador.endereco.uf} CEP: ${dadosBoleto.documento.pagador.endereco.cep}`;
-        const pagadorLinesFicha = doc.splitTextToSize(`${nomePagador} CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.documento.pagador.numeroDocumento)}\n${pagadorAddressFicha}`, 178);
+        const pagadorAddressFicha = `${boleto.sacado.endereco}\n${boleto.sacado.municipio} ${boleto.sacado.uf} CEP: ${boleto.sacado.cep}`;
+        const pagadorLinesFicha = doc.splitTextToSize(`${nomePagador} CNPJ/CPF: ${formatCnpjCpf(boleto.sacado.cnpj)}\n${pagadorAddressFicha}`, 178);
         drawField('Pagador', pagadorLinesFicha, x, y + 65, 180, 15, 'left', 9, 6);
         
         drawField('Beneficiário Final', '', x, y + 80, 180, 5);

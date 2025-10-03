@@ -44,10 +44,11 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
 
   if (banco === "safra") {
     const valorFinal = duplicata.valor_bruto - (abatimento || 0);
-    
-    // --- CORREÇÃO APLICADA AQUI ---
-    // Padroniza a geração do Nosso Número para ser igual à da geração do PDF.
-    const nossoNumeroUnico = duplicata.id.toString().padStart(9, '0');
+    const idPart = duplicata.id.toString().slice(-4).padStart(4, "0");
+    const randomPart = Math.floor(10000 + Math.random() * 90000)
+      .toString()
+      .slice(0, 5);
+    const nossoNumeroUnico = `${idPart}${randomPart}`;
 
     return {
       agencia: "02900",
