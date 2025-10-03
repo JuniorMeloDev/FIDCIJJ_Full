@@ -19,7 +19,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
   const { data: duplicata, error: dupError } = await supabase
     .from("duplicatas")
     .select(
-      "*, operacao:operacoes(cliente:clientes(*), tipo_operacao:tipos_operacao(*))"
+      "*, operacao:operacoes(id, cliente:clientes(*), tipo_operacao:tipos_operacao(*))" // Adicionado 'id' da operação
     )
     .eq("id", duplicataId)
     .single();
@@ -44,11 +44,9 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
 
   if (banco === "safra") {
     const valorFinal = duplicata.valor_bruto - (abatimento || 0);
-    const idPart = duplicata.id.toString().slice(-4).padStart(4, "0");
-    const randomPart = Math.floor(10000 + Math.random() * 90000)
-      .toString()
-      .slice(0, 5);
-    const nossoNumeroUnico = `${idPart}${randomPart}`;
+    
+    // --- LÓGICA PADRONIZADA PARA O NOSSO NÚMERO ---
+    const nossoNumeroUnico = `${duplicata.operacao.id}${duplicata.id}`.slice(-9).padStart(9, '0');
 
     return {
       agencia: "02900",
@@ -56,12 +54,14 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
       documento: {
         numero: nossoNumeroUnico,
         numeroCliente: duplicata.nf_cte.substring(0, 10),
-        especie: "02",
+        especie: "02", // 02 = Duplicata Mercantil
         dataVencimento: format(
           new Date(duplicata.data_vencimento + "T12:00:00Z"),
           "yyyy-MM-dd"
         ),
         valor: parseFloat(valorFinal.toFixed(2)),
+        quantidadeDiasProtesto: 5, // <-- INCLUÍDO PROTESTO
+        valorAbatimento: parseFloat((abatimento || 0).toFixed(2)), // <-- INCLUÍDO ABATIMENTO
         pagador: {
           nome: sacado.nome.replace(/\.$/, "").substring(0, 40),
           tipoPessoa: (sacado.cnpj || "").length > 11 ? "J" : "F",
@@ -293,7 +293,7 @@ export async function POST(request) {
       .update({
         linha_digitavel: dadosParaSalvar,
         banco_emissor_boleto: banco,
-        valor_abatimento: abatimento || 0, // Salva o valor do abatimento
+        valor_abatimento: abatimento || 0,
       })
       .eq("id", duplicataId);
 

@@ -79,7 +79,6 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
     const [resultados, setResultados] = useState([]);
     const [jaEmitido, setJaEmitido] = useState(false);
 
-    // Estados para o fluxo de abatimento
     const [showAbatimentoQuestion, setShowAbatimentoQuestion] = useState(false);
     const [showAbatimentoInput, setShowAbatimentoInput] = useState(false);
     const [showAbatimentoConfirmation, setShowAbatimentoConfirmation] = useState(false);
@@ -143,11 +142,9 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
         }
     };
     
-    // Função final que realmente chama a API
     const handleEmitirBoletos = async (valorAbatimento = 0) => {
         setIsLoading(true);
         setResultados([]);
-        // Fecha todos os modais de abatimento
         setShowAbatimentoQuestion(false);
         setShowAbatimentoInput(false);
         setShowAbatimentoConfirmation(false);
@@ -162,7 +159,7 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                     body: JSON.stringify({ 
                         duplicataId: duplicata.id, 
                         banco: bancoSelecionado,
-                        abatimento: valorAbatimento // Envia o valor do abatimento
+                        abatimento: valorAbatimento
                     }),
                 });
                 const resultado = await response.json();
@@ -191,12 +188,13 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
         onSucesso();
     };
 
-    // Função que inicia o fluxo
     const startEmissaoProcess = () => {
-        if (bancoSelecionado === 'itau') {
+        // --- CORREÇÃO APLICADA AQUI ---
+        // Ativa o fluxo de abatimento para Itaú e Safra
+        if (['itau', 'safra'].includes(bancoSelecionado)) {
             setShowAbatimentoQuestion(true);
         } else {
-            handleEmitirBoletos(0); // Para outros bancos, o abatimento é 0
+            handleEmitirBoletos(0);
         }
     };
 
@@ -205,7 +203,6 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
 
     return (
         <>
-            {/* Modais de Abatimento */}
             <AbatimentoQuestionModal
                 isOpen={showAbatimentoQuestion}
                 onClose={() => setShowAbatimentoQuestion(false)}
@@ -221,7 +218,6 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                         setShowAbatimentoInput(false);
                         setShowAbatimentoConfirmation(true);
                     } else {
-                        // Se o valor for zero, considera como "Não"
                         handleEmitirBoletos(0);
                     }
                 }}
@@ -235,7 +231,6 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                 isLoading={isLoading}
             />
 
-            {/* Modal Principal */}
             <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
                 <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl text-white">
                     <h2 className="text-2xl font-bold mb-4">Emissão de Boletos - Operação #{operacaoId}</h2>
