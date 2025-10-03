@@ -12,8 +12,9 @@ export async function PUT(request, { params }) {
         const { id } = params;
         const body = await request.json();
         
-        // Garante que ambas as propriedades de condição de pagamento sejam removidas antes do update
-        const { condicoesPagamento, condicoes_pagamento, ...sacadoData } = body;
+        // --- CORREÇÃO APLICADA AQUI ---
+        // Remove a propriedade 'filiais' e outras de relacionamento antes de fazer o update.
+        const { condicoesPagamento, condicoes_pagamento, filiais, ...sacadoData } = body;
 
         // 1. Atualiza os dados principais do sacado
         const { error: sacadoError } = await supabase
