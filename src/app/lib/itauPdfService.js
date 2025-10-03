@@ -4,7 +4,7 @@ import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
-// --- FUNÇÕES DE CÁLCULO (COM CORREÇÕES) ---
+// --- FUNÇÕES DE CÁLCULO (sem alterações) ---
 
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
@@ -39,7 +39,6 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
     const banco = "341";
     const moeda = "9";
     
-    // Lógica do Fator de Vencimento ajustada para a regra pós-2025
     const dataBase = new Date('1997-10-07T12:00:00Z');
     const dataVenc = new Date(vencimento + 'T12:00:00Z');
     
@@ -56,7 +55,6 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
     
     const nossoNumeroSemDac = nossoNumero.padStart(8, '0');
     
-    // CORREÇÃO: Garante que estamos usando a conta SEM o dígito verificador para os cálculos.
     const contaSemDac = (conta || '').split('-')[0].padStart(5, '0');
 
     const dacNossoNumero = getNossoNumeroDAC(agencia, contaSemDac, carteira, nossoNumeroSemDac);
@@ -68,7 +66,7 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
     const dacGeral = modulo11(blocoParaDAC);
     
     if (dacGeral === 0) {
-      throw new Error("O cálculo do DAC geral resultou em zero, o que é inválido.");
+      throw new Error("O cálculo do DAC geral resultou em zero, o que é inválido. Verifique os dados de entrada.");
     }
     
     const codigoBarras = `${banco}${moeda}${dacGeral}${fatorVencimento}${valorFormatado}${campoLivre}`;
@@ -91,7 +89,7 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
     return { linhaDigitavel, codigoBarras };
 }
 
-// --- FUNÇÕES DE DESENHO ---
+// --- FUNÇÕES DE DESENHO (COM LAYOUT FINAL E INSTRUÇÕES ADICIONAIS) ---
 
 const getItauLogoBase64 = () => {
   try {
@@ -144,18 +142,18 @@ export function gerarPdfBoletoItau(listaBoletos) {
 
   listaBoletos.forEach((dadosBoleto, index) => {
     if (index > 0) doc.addPage();
+
+    // O valor com abatimento já vem calculado da API, então usamos ele aqui
+    const valorFinalBoleto = dadosBoleto.valor_bruto - (dadosBoleto.abatimento || 0);
     
-    // CORREÇÃO: Passando o objeto 'dadosBoleto' diretamente para a função,
-    // que agora sabe como tratar o campo 'conta' ("99359-6").
     const { linhaDigitavel, codigoBarras } = gerarLinhaDigitavelECodigoBarras({
         agencia: dadosBoleto.agencia,
-        conta: dadosBoleto.conta, // Passando "99359-6"
+        conta: dadosBoleto.conta,
         carteira: dadosBoleto.carteira,
         nossoNumero: dadosBoleto.nosso_numero,
-        valor: dadosBoleto.valor_bruto,
+        valor: valorFinalBoleto, // Usa o valor já com abatimento para gerar o código de barras
         vencimento: dadosBoleto.data_vencimento
     });
-
     const vencimentoDate = new Date(dadosBoleto.data_vencimento + 'T12:00:00Z');
     
     const drawSection = (yOffset) => {
@@ -193,8 +191,12 @@ export function gerarPdfBoletoItau(listaBoletos) {
         
         const y5 = y4 + 10;
         const tipoOp = dadosBoleto.operacao?.tipo_operacao;
+        
+        // *** INSTRUÇÕES ATUALIZADAS AQUI ***
         const instrucoes = [
             'Instruções de responsabilidade do BENEFICIÁRIO. Qualquer dúvida sobre este boleto contate o BENEFICIÁRIO.',
+            'PROTESTAR APÓS 5 DIAS DO VENCIMENTO',
+            dadosBoleto.abatimento > 0 ? `CONCEDER ABATIMENTO DE ${formatBRLNumber(dadosBoleto.abatimento)}` : null,
             tipoOp?.taxa_juros_mora > 0 ? `APÓS 1 DIA(S) CORRIDO(S) DO VENCIMENTO COBRAR JUROS DE ${tipoOp.taxa_juros_mora.toFixed(2).replace('.',',')}% AO MÊS` : null,
             tipoOp?.taxa_multa > 0 ? `APÓS 1 DIA(S) CORRIDO(S) DO VENCIMENTO COBRAR MULTA DE ${tipoOp.taxa_multa.toFixed(2).replace('.',',')}%` : null,
             `REFERENTE A NF ${(dadosBoleto.nf_cte || '').split('.')[0]}`
@@ -202,7 +204,7 @@ export function gerarPdfBoletoItau(listaBoletos) {
         doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(0,0,0);
         doc.text(instrucoes.filter(Boolean), 16, y5 + 3, { lineHeightFactor: 1.15, maxWidth: 135 });
 
-        drawField(doc, '(=) Valor do Documento', formatBRLNumber(dadosBoleto.valor_bruto), 155, y4, 40, 10, 'right', 9);
+        drawField(doc, '(=) Valor do Documento', formatBRLNumber(valorFinalBoleto), 155, y4, 40, 10, 'right', 9);
         drawField(doc, '(-) Descontos/Abatimento', '', 155, y5, 40, 10);
         drawField(doc, '(+) Juros/Multa', '', 155, y5 + 10, 40, 10);
         drawField(doc, '(=) Valor Cobrado', '', 155, y5 + 20, 40, 10);

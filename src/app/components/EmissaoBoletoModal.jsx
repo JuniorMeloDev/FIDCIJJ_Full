@@ -1,19 +1,96 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
+import { useState, useEffect, useMemo } from 'react';
+import { formatBRLNumber, formatDate, formatBRLInput, parseBRL } from '@/app/utils/formatters';
+
+// Componente para o primeiro modal de pergunta
+const AbatimentoQuestionModal = ({ isOpen, onClose, onConfirmYes, onConfirmNo }) => {
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-[60]">
+            <div className="bg-gray-700 p-6 rounded-lg shadow-xl w-full max-w-sm text-white">
+                <h3 className="text-lg font-semibold mb-4 text-center">Aplicar Abatimento?</h3>
+                <p className="text-sm text-gray-300 mb-6 text-center">Deseja inserir um valor de abatimento que será subtraído de cada boleto?</p>
+                <div className="flex justify-center gap-4">
+                    <button onClick={onConfirmNo} className="bg-gray-600 font-semibold py-2 px-6 rounded-md hover:bg-gray-500 transition">Não</button>
+                    <button onClick={onConfirmYes} className="bg-orange-500 font-semibold py-2 px-6 rounded-md hover:bg-orange-600 transition">Sim</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Componente para o modal de inserção de valor
+const AbatimentoInputModal = ({ isOpen, onClose, onConfirm }) => {
+    if (!isOpen) return null;
+    const [valor, setValor] = useState('');
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-[60]">
+            <div className="bg-gray-700 p-6 rounded-lg shadow-xl w-full max-w-sm text-white">
+                <h3 className="text-lg font-semibold mb-4">Valor do Abatimento</h3>
+                <p className="text-sm text-gray-300 mb-4">Digite o valor a ser abatido de CADA parcela.</p>
+                <input
+                    type="text"
+                    value={valor}
+                    onChange={(e) => setValor(formatBRLInput(e.target.value))}
+                    placeholder="R$ 0,00"
+                    className="w-full bg-gray-600 border-gray-500 rounded-md shadow-sm p-2 text-lg text-center"
+                />
+                <div className="mt-6 flex justify-end gap-4">
+                    <button onClick={onClose} className="bg-gray-500 font-semibold py-2 px-4 rounded-md hover:bg-gray-400 transition">Cancelar</button>
+                    <button onClick={() => onConfirm(parseBRL(valor))} className="bg-orange-500 font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition">Confirmar Valor</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Componente para o modal de confirmação final
+const AbatimentoConfirmationModal = ({ isOpen, onClose, onConfirm, duplicatas, abatimento, isLoading }) => {
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-[60]">
+            <div className="bg-gray-700 p-6 rounded-lg shadow-xl w-full max-w-md text-white">
+                <h3 className="text-lg font-semibold mb-2">Confirme os Novos Valores</h3>
+                <p className="text-sm text-gray-300 mb-4">O valor de abatimento de <span className="font-bold text-orange-400">{formatBRLNumber(abatimento)}</span> será aplicado a cada parcela, resultando nos valores abaixo.</p>
+                <div className="space-y-2 max-h-48 overflow-y-auto bg-gray-800 p-3 rounded">
+                    {duplicatas.map(dup => (
+                        <div key={dup.id} className="flex justify-between text-sm border-b border-gray-600 pb-1">
+                            <span>{dup.nfCte}: <span className="line-through text-gray-400">{formatBRLNumber(dup.valorBruto)}</span></span>
+                            <span className="font-bold text-green-400">{formatBRLNumber(dup.valorBruto - abatimento)}</span>
+                        </div>
+                    ))}
+                </div>
+                <div className="mt-6 flex justify-end gap-4">
+                    <button onClick={onClose} disabled={isLoading} className="bg-gray-500 font-semibold py-2 px-4 rounded-md hover:bg-gray-400 transition disabled:opacity-50">Cancelar</button>
+                    <button onClick={onConfirm} disabled={isLoading} className="bg-green-600 font-semibold py-2 px-4 rounded-md hover:bg-green-700 transition disabled:opacity-50">
+                        {isLoading ? 'Emitindo...' : 'Emitir com Abatimento'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNotification, onSucesso }) {
     const [bancoSelecionado, setBancoSelecionado] = useState('itau');
     const [isLoading, setIsLoading] = useState(false);
     const [resultados, setResultados] = useState([]);
     const [jaEmitido, setJaEmitido] = useState(false);
+
+    // Estados para o fluxo de abatimento
+    const [showAbatimentoQuestion, setShowAbatimentoQuestion] = useState(false);
+    const [showAbatimentoInput, setShowAbatimentoInput] = useState(false);
+    const [showAbatimentoConfirmation, setShowAbatimentoConfirmation] = useState(false);
+    const [abatimento, setAbatimento] = useState(0);
     
     const operacaoId = duplicatas[0]?.operacaoId;
 
     useEffect(() => {
         if (isOpen && duplicatas.length > 0) {
             setResultados([]);
+            setAbatimento(0);
             const todosEmitidos = duplicatas.every(d => d.linha_digitavel && d.linha_digitavel !== 'N/A');
             setJaEmitido(todosEmitidos);
             if(todosEmitidos) {
@@ -36,36 +113,22 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
     };
 
     const handleImprimirTodos = async () => {
-        if (!operacaoId) {
-            showNotification('ID da operação não encontrado.', 'error');
-            return;
-        }
-
+        if (!operacaoId) return showNotification('ID da operação não encontrado.', 'error');
         const bancoEmissor = resultados[0]?.banco || duplicatas[0]?.banco_emissor_boleto || bancoSelecionado;
-        if (!bancoEmissor) {
-            showNotification('Não foi possível identificar o banco emissor.', 'error');
-            return;
-        }
+        if (!bancoEmissor) return showNotification('Não foi possível identificar o banco emissor.', 'error');
 
         const endpoint = `/api/${bancoEmissor}/boleto-pdf/${operacaoId}`;
         showNotification(`Gerando PDF do ${bancoEmissor.charAt(0).toUpperCase() + bancoEmissor.slice(1)}...`, 'info');
         
         try {
             const res = await fetch(endpoint, { headers: getAuthHeader() });
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.message || "Não foi possível gerar o PDF dos boletos.");
-            }
-
+            if (!res.ok) throw new Error((await res.json()).message || "Não foi possível gerar o PDF.");
             const contentDisposition = res.headers.get('content-disposition');
             let filename = `boletos_op_${operacaoId}.pdf`; 
             if (contentDisposition) {
                 const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-                if (filenameMatch && filenameMatch.length > 1) {
-                    filename = filenameMatch[1];
-                }
+                if (filenameMatch?.[1]) filename = filenameMatch[1];
             }
-
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -80,9 +143,15 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
         }
     };
     
-    const handleEmitirBoletos = async () => {
+    // Função final que realmente chama a API
+    const handleEmitirBoletos = async (valorAbatimento = 0) => {
         setIsLoading(true);
         setResultados([]);
+        // Fecha todos os modais de abatimento
+        setShowAbatimentoQuestion(false);
+        setShowAbatimentoInput(false);
+        setShowAbatimentoConfirmation(false);
+
         showNotification(`Iniciando emissão de ${duplicatas.length} boleto(s)...`, 'info');
         const resultadosEmissao = [];
         for (const duplicata of duplicatas) {
@@ -90,7 +159,11 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                 const response = await fetch('/api/boletos/emitir', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-                    body: JSON.stringify({ duplicataId: duplicata.id, banco: bancoSelecionado }),
+                    body: JSON.stringify({ 
+                        duplicataId: duplicata.id, 
+                        banco: bancoSelecionado,
+                        abatimento: valorAbatimento // Envia o valor do abatimento
+                    }),
                 });
                 const resultado = await response.json();
                 if (!response.ok || !resultado.success) {
@@ -118,76 +191,118 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
         onSucesso();
     };
 
+    // Função que inicia o fluxo
+    const startEmissaoProcess = () => {
+        if (bancoSelecionado === 'itau') {
+            setShowAbatimentoQuestion(true);
+        } else {
+            handleEmitirBoletos(0); // Para outros bancos, o abatimento é 0
+        }
+    };
+
     const cedente = duplicatas[0]?.empresaCedente;
     const sacado = duplicatas[0]?.clienteSacado;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
-            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl text-white">
-                <h2 className="text-2xl font-bold mb-4">Emissão de Boletos - Operação #{operacaoId}</h2>
-                
-                {resultados.length === 0 && !jaEmitido ? (
-                    <>
-                        <div className="bg-gray-700 p-4 rounded-md space-y-3 mb-6">
-                            <p><strong>Cedente:</strong> {cedente}</p>
-                            <p><strong>Sacado:</strong> {sacado}</p>
-                            <p><strong>Boletos a serem emitidos:</strong> {duplicatas.length}</p>
-                             <ul className="list-disc list-inside pl-4 text-sm text-gray-300">
-                                {duplicatas.map(dup => (
-                                    <li key={dup.id}>
-                                        {dup.nfCte} - Venc: {formatDate(dup.dataVencimento)} - Valor: {formatBRLNumber(dup.valorBruto)}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
+        <>
+            {/* Modais de Abatimento */}
+            <AbatimentoQuestionModal
+                isOpen={showAbatimentoQuestion}
+                onClose={() => setShowAbatimentoQuestion(false)}
+                onConfirmYes={() => { setShowAbatimentoQuestion(false); setShowAbatimentoInput(true); }}
+                onConfirmNo={() => handleEmitirBoletos(0)}
+            />
+            <AbatimentoInputModal
+                isOpen={showAbatimentoInput}
+                onClose={() => setShowAbatimentoInput(false)}
+                onConfirm={(valor) => {
+                    if(valor > 0) {
+                        setAbatimento(valor);
+                        setShowAbatimentoInput(false);
+                        setShowAbatimentoConfirmation(true);
+                    } else {
+                        // Se o valor for zero, considera como "Não"
+                        handleEmitirBoletos(0);
+                    }
+                }}
+            />
+            <AbatimentoConfirmationModal
+                isOpen={showAbatimentoConfirmation}
+                onClose={() => setShowAbatimentoConfirmation(false)}
+                onConfirm={() => handleEmitirBoletos(abatimento)}
+                duplicatas={duplicatas}
+                abatimento={abatimento}
+                isLoading={isLoading}
+            />
+
+            {/* Modal Principal */}
+            <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
+                <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl text-white">
+                    <h2 className="text-2xl font-bold mb-4">Emissão de Boletos - Operação #{operacaoId}</h2>
+                    
+                    {resultados.length === 0 && !jaEmitido ? (
+                        <>
+                            <div className="bg-gray-700 p-4 rounded-md space-y-3 mb-6">
+                                <p><strong>Cedente:</strong> {cedente}</p>
+                                <p><strong>Sacado:</strong> {sacado}</p>
+                                <p><strong>Boletos a serem emitidos:</strong> {duplicatas.length}</p>
+                                <ul className="list-disc list-inside pl-4 text-sm text-gray-300">
+                                    {duplicatas.map(dup => (
+                                        <li key={dup.id}>
+                                            {dup.nfCte} - Venc: {formatDate(dup.dataVencimento)} - Valor: {formatBRLNumber(dup.valorBruto)}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                            <div>
+                                <label htmlFor="banco" className="block text-sm font-medium text-gray-300 mb-2">Selecione o banco para a emissão:</label>
+                                <select
+                                    id="banco"
+                                    value={bancoSelecionado}
+                                    onChange={(e) => setBancoSelecionado(e.target.value)}
+                                    className="w-full bg-gray-600 border-gray-500 rounded-md shadow-sm p-2"
+                                >
+                                    <option value="itau">Itaú</option>
+                                    <option value="safra">Safra</option>
+                                    <option value="bradesco">Bradesco</option>
+                                </select>
+                            </div>
+                            <div className="mt-6 flex justify-end gap-4">
+                                <button onClick={onClose} disabled={isLoading} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition disabled:opacity-50">
+                                    Cancelar
+                                </button>
+                                <button onClick={startEmissaoProcess} disabled={isLoading} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition disabled:opacity-50">
+                                    {isLoading ? `Aguarde...` : 'Confirmar Emissão'}
+                                </button>
+                            </div>
+                        </>
+                    ) : (
                         <div>
-                            <label htmlFor="banco" className="block text-sm font-medium text-gray-300 mb-2">Selecione o banco para a emissão:</label>
-                            <select
-                                id="banco"
-                                value={bancoSelecionado}
-                                onChange={(e) => setBancoSelecionado(e.target.value)}
-                                className="w-full bg-gray-600 border-gray-500 rounded-md shadow-sm p-2"
-                            >
-                                <option value="itau">Itaú</option>
-                                <option value="safra">Safra</option>
-                                <option value="bradesco">Bradesco</option>
-                            </select>
+                            <h3 className="text-lg font-semibold mb-4">{jaEmitido ? 'Boletos Já Emitidos:' : 'Resultados da Emissão:'}</h3>
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                                {resultados.map((res, index) => (
+                                    <div key={index} className={`p-2 rounded-md ${res.success ? 'bg-green-900/50' : 'bg-red-900/50'}`}>
+                                        <p className="font-bold">{res.nfCte}</p>
+                                        {res.success ? (
+                                            <p className="text-sm text-green-300">Sucesso! Linha Digitável: {res.linhaDigitavel}</p>
+                                        ) : (
+                                            <p className="text-sm text-red-300">Erro: {res.error}</p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-6 flex justify-between cursor-pointer">
+                                <button onClick={handleImprimirTodos} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition">
+                                    Imprimir Todos
+                                </button>
+                                <button onClick={onClose} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition">
+                                    Fechar
+                                </button>
+                            </div>
                         </div>
-                        <div className="mt-6 flex justify-end gap-4">
-                            <button onClick={onClose} disabled={isLoading} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition disabled:opacity-50">
-                                Cancelar
-                            </button>
-                            <button onClick={handleEmitirBoletos} disabled={isLoading} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition disabled:opacity-50">
-                                {isLoading ? `Emitindo ${duplicatas.length} boleto(s)...` : 'Confirmar Emissão'}
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <div>
-                        <h3 className="text-lg font-semibold mb-4">{jaEmitido ? 'Boletos Já Emitidos:' : 'Resultados da Emissão:'}</h3>
-                        <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                            {resultados.map((res, index) => (
-                                <div key={index} className={`p-2 rounded-md ${res.success ? 'bg-green-900/50' : 'bg-red-900/50'}`}>
-                                    <p className="font-bold">{res.nfCte}</p>
-                                    {res.success ? (
-                                        <p className="text-sm text-green-300">Sucesso! Linha Digitável: {res.linhaDigitavel}</p>
-                                    ) : (
-                                        <p className="text-sm text-red-300">Erro: {res.error}</p>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                        <div className="mt-6 flex justify-between cursor-pointer">
-                             <button onClick={handleImprimirTodos} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition">
-                                Imprimir Todos
-                            </button>
-                            <button onClick={onClose} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition">
-                                Fechar
-                            </button>
-                        </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
-        </div>
+        </>
     );
 }

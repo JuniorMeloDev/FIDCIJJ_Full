@@ -9,7 +9,7 @@ import { getBradescoAccessToken, registrarBoleto } from '@/app/lib/bradescoServi
 import { getItauAccessToken, registrarBoletoItau } from '@/app/lib/itauService';
 
 
-async function getDadosParaBoleto(duplicataId, banco) {
+async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) { // Recebe o abatimento
     const { data: duplicata, error: dupError } = await supabase
         .from('duplicatas')
         .select('*, operacao:operacoes(cliente:clientes(*), tipo_operacao:tipos_operacao(*))')
@@ -29,9 +29,12 @@ async function getDadosParaBoleto(duplicataId, banco) {
         throw new Error(`Sacado com ID ${duplicata.sacado_id} não encontrado.`);
     }
 
-    const { cliente: cedente, tipo_operacao: tipoOperacao } = duplicata.operacao;
+    const { tipo_operacao: tipoOperacao } = duplicata.operacao;
 
     if (banco === 'safra') {
+        // Lógica do Safra (sem abatimento por enquanto)
+        const valorFinal = duplicata.valor_bruto; // Mantém o valor original
+        // ... resto da lógica do Safra
         const idPart = duplicata.id.toString().slice(-4).padStart(4, '0');
         const randomPart = Math.floor(10000 + Math.random() * 90000).toString().slice(0, 5);
         const nossoNumeroUnico = `${idPart}${randomPart}`;
@@ -44,7 +47,7 @@ async function getDadosParaBoleto(duplicataId, banco) {
                 numeroCliente: duplicata.nf_cte.substring(0, 10),
                 especie: "02",
                 dataVencimento: format(new Date(duplicata.data_vencimento + 'T12:00:00Z'), 'yyyy-MM-dd'),
-                valor: parseFloat(duplicata.valor_bruto.toFixed(2)),
+                valor: parseFloat(valorFinal.toFixed(2)),
                 pagador: {
                     nome: sacado.nome.replace(/\.$/, '').substring(0, 40),
                     tipoPessoa: (sacado.cnpj || '').length > 11 ? "J" : "F",
@@ -59,7 +62,10 @@ async function getDadosParaBoleto(duplicataId, banco) {
                 }
             }
         };
+
     } else if (banco === 'bradesco') {
+        // Lógica do Bradesco (sem abatimento por enquanto)
+        const valorFinal = duplicata.valor_bruto; // Mantém o valor original
          return {
             "filialCPFCNPJ": process.env.BRADESCO_FILIAL_CNPJ,
             "ctrlCPFCNPJ": process.env.BRADESCO_CTRL_CNPJ,
@@ -71,7 +77,7 @@ async function getDadosParaBoleto(duplicataId, banco) {
                 "nossoNumero": duplicata.id.toString().padStart(11, '0'),
                 "dtEmissaoTitulo": new Date(duplicata.data_operacao + 'T12:00:00Z').toISOString().slice(0, 10).replace(/-/g, ''),
                 "dtVencimentoTitulo": new Date(duplicata.data_vencimento + 'T12:00:00Z').toISOString().slice(0, 10).replace(/-/g, ''),
-                "valorNominalTitulo": Math.round(duplicata.valor_bruto * 100),
+                "valorNominalTitulo": Math.round(valorFinal * 100),
                 "pagador": {
                     "nuCPFCNPJ": (sacado.cnpj || '').replace(/\D/g, ''),
                     "nome": sacado.nome.substring(0, 40),
@@ -87,12 +93,22 @@ async function getDadosParaBoleto(duplicataId, banco) {
                 "percentualMulta": "0", "valorMulta": "0", "qtdeDiasMulta": "0"
             }
         };
+
     } else if (banco === 'itau') {
         if (!process.env.ITAU_ID_BENEFICIARIO) {
             throw new Error('A variável de ambiente ITAU_ID_BENEFICIARIO não está configurada.');
         }
+
+        // *** LÓGICA DO ABATIMENTO APLICADA AQUI ***
+        const valorComAbatimento = duplicata.valor_bruto - (abatimento || 0);
+        if (valorComAbatimento <= 0) {
+            throw new Error('O valor do abatimento não pode ser maior ou igual ao valor da duplicata.');
+        }
+        
         const isCpf = (sacado.cnpj || '').replace(/\D/g, '').length === 11;
-        const valorFormatado = Math.round(duplicata.valor_bruto * 100).toString().padStart(15, '0');
+        // Usa o valor já com o abatimento para formatar
+        const valorFormatado = Math.round(valorComAbatimento * 100).toString().padStart(15, '0');
+        
         const formatPercent = (value, decimalPlaces = 5, totalLength = 11) => {
             if (!value || value <= 0) return "0".padStart(totalLength, '0');
             const multiplier = Math.pow(10, decimalPlaces);
@@ -101,7 +117,7 @@ async function getDadosParaBoleto(duplicataId, banco) {
 
         return {
             "data": {
-                "etapa_processo_boleto": "Validacao",
+                "etapa_processo_boleto": "Efetivacao",
                 "codigo_canal_operacao": "API",
                 "beneficiario": {
                     "id_beneficiario": process.env.ITAU_ID_BENEFICIARIO
@@ -112,6 +128,7 @@ async function getDadosParaBoleto(duplicataId, banco) {
                     "codigo_carteira": "109",
                     "codigo_especie": "01",
                     "valor_total_titulo": valorFormatado,
+                    "valor_abatimento": "0", // O valor já foi abatido, então aqui vai 0
                     "data_emissao": format(new Date(duplicata.data_operacao + 'T12:00:00Z'), 'yyyy-MM-dd'),
                     "pagador": {
                         "pessoa": {
@@ -145,6 +162,10 @@ async function getDadosParaBoleto(duplicataId, banco) {
                         "codigo_tipo_juros": tipoOperacao.taxa_juros_mora > 0 ? "90" : "0",
                         "percentual_juros": formatPercent(tipoOperacao.taxa_juros_mora)
                     },
+                     "protesto": {
+                        "codigo_tipo_protesto": "1",
+                        "quantidade_dias_protesto": "5"
+                    },
                     "recebimento_divergente": {
                         "codigo_tipo_autorizacao": "03"
                     },
@@ -158,25 +179,23 @@ async function getDadosParaBoleto(duplicataId, banco) {
 }
 
 export async function POST(request) {
-    let tokenData;
-    let dadosParaBoleto;
-
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { duplicataId, banco } = await request.json();
+        const { duplicataId, banco, abatimento } = await request.json(); // Recebe o abatimento
 
-        dadosParaBoleto = await getDadosParaBoleto(duplicataId, banco);
+        const dadosParaBoleto = await getDadosParaBoleto(duplicataId, banco, abatimento); // Passa o abatimento
 
         let boletoGerado;
-        let linhaDigitavelParaRetorno; // O que será mostrado na tela
-        let dadosParaSalvar; // O que será salvo no banco de dados
+        let linhaDigitavelParaRetorno;
+        let dadosParaSalvar;
 
         if (banco === 'safra') {
-            tokenData = await getSafraAccessToken();
-            try {
+            const tokenData = await getSafraAccessToken();
+            // ... (lógica de emissão/consulta do Safra) ...
+             try {
                 boletoGerado = await registrarBoletoSafra(tokenData.access_token, dadosParaBoleto);
             } catch (error) {
                 if (error.message && error.message.includes('DUPLICADOS')) {
@@ -193,19 +212,19 @@ export async function POST(request) {
             }
             linhaDigitavelParaRetorno = boletoGerado.data?.documento?.linhaDigitavel || boletoGerado.data?.linhaDigitavel || 'N/A';
             dadosParaSalvar = boletoGerado.data?.documento?.codigoBarras || boletoGerado.data?.codigoBarras || linhaDigitavelParaRetorno;
-        
+
         } else if (banco === 'bradesco') {
-            tokenData = await getBradescoAccessToken();
+            const tokenData = await getBradescoAccessToken();
             boletoGerado = await registrarBoleto(tokenData.access_token, dadosParaBoleto);
             linhaDigitavelParaRetorno = boletoGerado.linhaDigitavel || 'N/A';
             dadosParaSalvar = boletoGerado.codigoBarras || linhaDigitavelParaRetorno;
         
         } else if (banco === 'itau') {
-            tokenData = await getItauAccessToken();
+            const tokenData = await getItauAccessToken();
             boletoGerado = await registrarBoletoItau(tokenData.access_token, dadosParaBoleto);
             const dadosIndividuais = boletoGerado?.data?.dado_boleto?.dados_individuais_boleto[0];
             linhaDigitavelParaRetorno = dadosIndividuais?.linha_digitavel || 'N/A';
-            dadosParaSalvar = dadosIndividuais?.codigo_barras || linhaDigitavelParaRetorno; // Prioriza o código de barras numérico
+            dadosParaSalvar = dadosIndividuais?.codigo_barras || linhaDigitavelParaRetorno;
         } else {
             throw new Error("Banco selecionado inválido.");
         }
@@ -219,8 +238,7 @@ export async function POST(request) {
             .eq('id', duplicataId);
 
         if (updateError) {
-            console.error("Erro ao salvar dados do boleto no DB:", updateError);
-            return NextResponse.json({ success: true, linhaDigitavel: linhaDigitavelParaRetorno, warning: "Boleto emitido, mas falha ao salvar no banco de dados local." });
+            return NextResponse.json({ success: true, linhaDigitavel: linhaDigitavelParaRetorno, warning: "Boleto emitido, mas falha ao salvar no banco." });
         }
 
         return NextResponse.json({ success: true, linhaDigitavel: linhaDigitavelParaRetorno });
