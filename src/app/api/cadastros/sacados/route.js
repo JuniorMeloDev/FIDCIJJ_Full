@@ -9,8 +9,8 @@ export async function GET(request) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        // --- CORREÇÃO APLICADA AQUI ---
-        // Trocamos o select('*') por uma lista explícita de colunas para evitar o erro do schema cache.
+        // --- CORREÇÃO APLICADA ---
+        // A relação "condicoes_pagamento(*)" foi removida temporariamente para diagnosticar e contornar o erro de schema cache.
         const { data, error } = await supabase
             .from('sacados')
             .select(`
@@ -25,19 +25,22 @@ export async function GET(request) {
                 municipio,
                 uf,
                 fone,
-                matriz_id,
-                condicoes_pagamento (*)
+                matriz_id
             `)
             .order('nome', { ascending: true });
 
-        if (error) throw error;
+        if (error) {
+            console.error("Erro no GET /api/cadastros/sacados:", error);
+            throw error;
+        }
         return NextResponse.json(data, { status: 200 });
     } catch (error) {
+        console.error("Catch block: Erro no GET /api/cadastros/sacados:", error);
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
 }
 
-// POST: Lida com a criação de novos sacados e a vinculação de existentes como filiais
+// POST (sem alterações, mas incluído para facilitar a substituição do arquivo)
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -48,14 +51,12 @@ export async function POST(request) {
         const { condicoesPagamento, ...sacadoData } = body;
         const cleanCnpj = sacadoData.cnpj?.replace(/\D/g, '');
 
-        // Verifica se já existe um sacado com este CNPJ
         const { data: existingSacado } = await supabase
             .from('sacados')
             .select('id, matriz_id')
             .eq('cnpj', cleanCnpj)
             .single();
 
-        // Se o sacado já existe, ATUALIZA (vincula como filial)
         if (existingSacado) {
             if (existingSacado.matriz_id && existingSacado.matriz_id !== sacadoData.matriz_id) {
                 return NextResponse.json({ message: 'Este CNPJ já está vinculado a outra matriz.' }, { status: 409 });
@@ -75,7 +76,6 @@ export async function POST(request) {
             return NextResponse.json(updatedSacado, { status: 200 });
         }
 
-        // Se não existe, cria um novo
         delete sacadoData.id;
 
         const { data: newSacado, error: insertError } = await supabase
