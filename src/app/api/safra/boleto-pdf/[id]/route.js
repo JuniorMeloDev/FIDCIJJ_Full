@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
         
         console.log(`[LOG PDF] Iniciando geração de PDF para Operação ID: ${operacaoId}`);
 
-        // --- CORREÇÃO AQUI: BUSCA A OPERAÇÃO COMPLETA PARA OBTER AS REGRAS DE JUROS/MULTA ---
+        // Busca a operação completa, incluindo a linha_digitavel e as regras de juros/multa.
         const { data: duplicatas, error: dupError } = await supabase
             .from('duplicatas')
             .select('*, operacao:operacoes!inner(cliente:clientes!inner(*), tipo_operacao:tipos_operacao(*))')
@@ -33,8 +33,9 @@ export async function GET(request, { params }) {
 
         const listaBoletos = [];
         for (const duplicata of duplicatas) {
-            if (!duplicata.operacao || !duplicata.operacao.cliente || !duplicata.operacao.tipo_operacao) {
-                console.warn(`[AVISO PDF] Duplicata ${duplicata.id} com dados de operação incompletos. Será pulada.`);
+            // Valida se os dados essenciais para o PDF existem.
+            if (!duplicata.operacao || !duplicata.operacao.cliente || !duplicata.operacao.tipo_operacao || !duplicata.linha_digitavel) {
+                console.warn(`[AVISO PDF] Duplicata ${duplicata.id} com dados incompletos ou sem código de barras. Será pulada.`);
                 continue;
             }
             
@@ -49,57 +50,16 @@ export async function GET(request, { params }) {
                 continue;
             }
 
-            const tipoOperacao = duplicata.operacao.tipo_operacao;
-
-            // --- LÓGICA DE JUROS E MULTA REPLICADA AQUI ---
-            const jurosConfig = {};
-            if (tipoOperacao.taxa_juros_mora > 0) {
-                jurosConfig.tipoJuros = "TAXAMENSAL";
-                jurosConfig.valor = tipoOperacao.taxa_juros_mora;
-            } else {
-                jurosConfig.tipoJuros = "ISENTO";
-            }
-
-            const multaConfig = {};
-            if (tipoOperacao.taxa_multa > 0) {
-                multaConfig.tipoMulta = "PERCENTUAL";
-                multaConfig.percentual = tipoOperacao.taxa_multa;
-            } else {
-                multaConfig.tipoMulta = "ISENTO";
-            }
-            // --- FIM DA LÓGICA ---
-
+            // Monta o objeto completo para a geração do PDF, incluindo a duplicata inteira.
             listaBoletos.push({
-                agencia: "02900",
-                conta: "005860430",
+                ...duplicata,
                 cedente: duplicata.operacao.cliente,
-                documento: {
-                    numero: duplicata.id.toString().padStart(9, '0'),
-                    numeroCliente: duplicata.nf_cte,
-                    dataVencimento: duplicata.data_vencimento,
-                    dataEmissao: duplicata.data_operacao,
-                    valor: duplicata.valor_bruto,
-                    especie: 'DM',
-                    pagador: {
-                        nome: sacado.nome,
-                        numeroDocumento: sacado.cnpj,
-                        endereco: {
-                            logradouro: sacado.endereco,
-                            bairro: sacado.bairro,
-                            cidade: sacado.municipio,
-                            uf: sacado.uf,
-                            cep: sacado.cep,
-                        }
-                    },
-                    // --- Adiciona os objetos de juros e multa no payload ---
-                    juros: jurosConfig,
-                    multa: multaConfig
-                }
+                sacado: sacado,
             });
         }
         
         if (listaBoletos.length === 0) {
-            throw new Error("Não foi possível montar os dados para nenhum boleto da operação.");
+            throw new Error("Não foi possível montar os dados para nenhum boleto da operação (verifique se já foram registrados).");
         }
 
         const pdfBuffer = gerarPdfBoletoSafra(listaBoletos);
