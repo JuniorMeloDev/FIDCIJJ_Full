@@ -10,12 +10,11 @@ export async function GET(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         // --- CORREÇÃO APLICADA ---
-        // A relação "condicoes_pagamento(*)" foi removida temporariamente para diagnosticar e contornar o erro de schema cache.
+        // A coluna "created_at" foi removida da seleção para corrigir o erro.
         const { data, error } = await supabase
             .from('sacados')
             .select(`
                 id,
-                created_at,
                 nome,
                 cnpj,
                 ie,
