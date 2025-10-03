@@ -2,16 +2,32 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// GET (sem alterações)
+// GET: Busca todos os sacados com uma consulta explícita para evitar erros de cache
 export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
+        // --- CORREÇÃO APLICADA AQUI ---
+        // Trocamos o select('*') por uma lista explícita de colunas para evitar o erro do schema cache.
         const { data, error } = await supabase
             .from('sacados')
-            .select('*, condicoes_pagamento(*)')
+            .select(`
+                id,
+                created_at,
+                nome,
+                cnpj,
+                ie,
+                cep,
+                endereco,
+                bairro,
+                municipio,
+                uf,
+                fone,
+                matriz_id,
+                condicoes_pagamento (*)
+            `)
             .order('nome', { ascending: true });
 
         if (error) throw error;
@@ -45,10 +61,8 @@ export async function POST(request) {
                 return NextResponse.json({ message: 'Este CNPJ já está vinculado a outra matriz.' }, { status: 409 });
             }
             
-            // *** CORREÇÃO APLICADA AQUI ***
-            // Removemos propriedades aninhadas que não devem ser passadas no update.
             const { condicoes_pagamento, filiais, ...dataToUpdate } = sacadoData;
-            delete dataToUpdate.id; // Garante que o ID não seja enviado no payload de atualização
+            delete dataToUpdate.id;
 
             const { data: updatedSacado, error: updateError } = await supabase
                 .from('sacados')
@@ -84,7 +98,6 @@ export async function POST(request) {
         return NextResponse.json(newSacado, { status: 201 });
 
     } catch (error) {
-        // Log detalhado do erro no servidor
         console.error("Erro ao criar/vincular sacado:", {
             code: error.code,
             message: error.message,
@@ -92,7 +105,6 @@ export async function POST(request) {
         });
 
         if (error.code === '23505') { 
-            // Constraint de CNPJ único
             return NextResponse.json({ message: 'Já existe um sacado com este CNPJ.' }, { status: 409 });
         }
         return NextResponse.json({ message: error.message || 'Erro interno no servidor.' }, { status: 500 });
