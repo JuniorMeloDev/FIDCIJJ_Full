@@ -11,7 +11,7 @@ export async function POST(request) {
         const body = await request.json();
         const { totais, notasFiscais } = body;
         
-        // Prepara as duplicatas para serem enviadas para a função SQL
+        /// Prepara as duplicatas para serem enviadas para a função SQL
         const duplicatasParaSalvar = body.notasFiscais.flatMap(nf => {
             return nf.parcelasCalculadas.map(p => ({
                 nfCte: `${nf.nfCte}.${p.numeroParcela}`, // Garante que a parcela seja salva
