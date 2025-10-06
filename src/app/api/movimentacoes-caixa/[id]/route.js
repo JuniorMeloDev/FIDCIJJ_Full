@@ -44,6 +44,25 @@ export async function DELETE(request, { params }) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const { id } = params;
+
+        // --- CORREÇÃO APLICADA AQUI ---
+        // 1. Busca o lançamento para verificar a categoria antes de excluir.
+        const { data: lancamento, error: fetchError } = await supabase
+            .from('movimentacoes_caixa')
+            .select('categoria')
+            .eq('id', id)
+            .single();
+        
+        if (fetchError) throw new Error("Lançamento não encontrado.");
+
+        // 2. Define uma lista de categorias protegidas que não podem ser excluídas manualmente.
+        const categoriasProtegidas = ['Pagamento de Borderô', 'Recebimento', 'Transferencia Enviada', 'Transferencia Recebida'];
+        if (categoriasProtegidas.includes(lancamento.categoria)) {
+            return NextResponse.json({ message: 'Este lançamento foi gerado automaticamente e não pode ser excluído manualmente.' }, { status: 403 });
+        }
+        // --- FIM DA CORREÇÃO ---
+
+        // 3. Se não for protegido, prossegue com a exclusão.
         const { error } = await supabase.from('movimentacoes_caixa').delete().eq('id', id);
 
         if (error) throw error;

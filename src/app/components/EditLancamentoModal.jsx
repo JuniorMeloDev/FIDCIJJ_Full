@@ -17,7 +17,6 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
                 valor: formatBRLInput(String(Math.abs(lancamento.valor) * 100)),
                 conta_bancaria: lancamento.contaBancaria || ''
             });
-            // Define o estado inicial do checkbox com base na categoria atual
             setIsDespesa(lancamento.categoria === 'Despesa Avulsa');
         }
     }, [isOpen, lancamento]);
@@ -47,7 +46,6 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
             descricao: formData.descricao,
             valor: valorFinal,
             conta_bancaria: formData.conta_bancaria,
-            // Altera a categoria com base no checkbox, apenas se for um débito
             categoria: lancamento.valor < 0 
                 ? (isDespesa ? 'Despesa Avulsa' : 'Movimentação Avulsa') 
                 : lancamento.categoria
@@ -62,7 +60,7 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
         setIsSaving(false);
     };
 
-    // Não permite edição de lançamentos automáticos do sistema
+    // --- LÓGICA DE BLOQUEIO CORRIGIDA ---
     const isReadOnly = ['Pagamento de Borderô', 'Recebimento', 'Transferencia Enviada', 'Transferencia Recebida'].includes(lancamento.categoria);
 
     return (
@@ -103,7 +101,6 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
                            </select>
                         </div>
 
-                        {/* Checkbox de Despesa que aparece apenas para Débitos */}
                         {lancamento.valor < 0 && (
                             <div className="pt-2">
                                 <label className="flex items-center cursor-pointer">
