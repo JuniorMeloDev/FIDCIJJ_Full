@@ -17,20 +17,16 @@ export async function GET(request) {
         }
 
         // --- CORREÇÃO APLICADA ---
-        // A relação "condicoes_pagamento(*)" foi removida para evitar o erro de schema cache.
+        // Readicionado a busca da relação "condicoes_pagamento(*)" para carregar os dados no autocomplete.
         const { data, error } = await supabase
             .from('sacados')
-            .select('*') // O '*' aqui é menos problemático, mas para garantir vamos ser explícitos.
-            // A query abaixo é ainda mais segura:
-            // .select('id, nome, cnpj, municipio, uf, fone, matriz_id, ie, cep, endereco, bairro, condicoes_pagamento(*)')
+            .select('*, condicoes_pagamento(*)')
             .ilike('nome', `%${nome}%`)
             .limit(10);
 
         if (error) throw error;
-        // Adiciona um array vazio para a propriedade que foi removida, para não quebrar o frontend
-        const dataWithEmptyRelations = data.map(item => ({...item, condicoes_pagamento: []}));
-
-        return NextResponse.json(dataWithEmptyRelations, { status: 200 });
+        
+        return NextResponse.json(data, { status: 200 });
     } catch (error) {
         return NextResponse.json({ message: error.message }, { status: 500 });
     }

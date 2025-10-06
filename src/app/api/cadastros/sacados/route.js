@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// GET: Busca todos os sacados com uma consulta explícita para evitar erros de cache
+// GET: Busca todos os sacados
 export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -10,21 +10,13 @@ export async function GET(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         // --- CORREÇÃO APLICADA ---
-        // A coluna "created_at" foi removida da seleção para corrigir o erro.
+        // Readicionada a busca pela tabela relacionada "condicoes_pagamento(*)"
+        // para carregar os dados das condições de pagamento de cada sacado.
         const { data, error } = await supabase
             .from('sacados')
             .select(`
-                id,
-                nome,
-                cnpj,
-                ie,
-                cep,
-                endereco,
-                bairro,
-                municipio,
-                uf,
-                fone,
-                matriz_id
+                *,
+                condicoes_pagamento(*)
             `)
             .order('nome', { ascending: true });
 
