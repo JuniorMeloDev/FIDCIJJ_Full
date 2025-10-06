@@ -113,30 +113,33 @@ export default function SacadosPage() {
     const handleOpenAddModal = () => { setEditingSacado(null); setIsModalOpen(true); };
     
     const handleOpenEditModal = (sacado) => {
-    // Se o item clicado for uma filial, encontramos sua matriz para editar
-    const itemParaEditarId = sacado.matriz_id || sacado.id;
-
-    // Encontra o registro da matriz na lista original de sacados
-    const matriz = sacados.find(s => s.id === itemParaEditarId);
-
-    // Encontra todas as filiais que pertencem a esta matriz
-    const filiaisDaMatriz = sacados.filter(s => s.matriz_id === itemParaEditarId);
-
-    // Monta o objeto completo para o modal
-    const dadosCompletosParaModal = {
-        ...matriz,
-        filiais: filiaisDaMatriz
+        // Esta função é para cliques na tabela principal, sempre abrirá a matriz.
+        const itemParaEditarId = sacado.matriz_id || sacado.id;
+        const matriz = sacados.find(s => s.id === itemParaEditarId);
+        const filiaisDaMatriz = sacados.filter(s => s.matriz_id === itemParaEditarId);
+        const dadosCompletosParaModal = {
+            ...matriz,
+            filiais: filiaisDaMatriz
+        };
+        
+        setEditingSacado(dadosCompletosParaModal);
+        setIsModalOpen(true);
     };
-    
-    setEditingSacado(dadosCompletosParaModal);
-    setIsModalOpen(true);
-};
 
+    // --- FUNÇÃO CORRIGIDA ---
     const handleEditFilial = (filial) => {
+        // Fecha o modal atual (da matriz)
         setIsModalOpen(false);
+        // Garante que temos o objeto mais completo da filial
         const filialCompleta = sacados.find(s => s.id === filial.id);
         if (filialCompleta) {
-            setTimeout(() => handleOpenEditModal(filialCompleta), 50);
+            // Usa um timeout para garantir que o modal anterior fechou antes de abrir o novo
+            setTimeout(() => {
+                // Define a filial completa para edição e abre o modal
+                // Desta vez, o modal receberá os dados da filial, não da matriz
+                setEditingSacado(filialCompleta);
+                setIsModalOpen(true);
+            }, 50);
         }
     };
     
