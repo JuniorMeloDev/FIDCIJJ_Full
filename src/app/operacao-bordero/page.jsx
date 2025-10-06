@@ -140,12 +140,14 @@ export default function OperacaoBorderoPage() {
     }
   };
 
+  // --- FUNÇÃO CORRIGIDA ---
   const preencherFormularioComXml = (data) => {
     const prazosArray = data.parcelas
       ? data.parcelas.map((p) => {
           const d1 = new Date(data.dataEmissao);
           const d2 = new Date(p.dataVencimento);
-          return Math.ceil(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24));
+          // Adiciona 1 para corrigir a contagem de dias
+          return Math.ceil(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24)) +1;
         })
       : [];
     const prazosString = prazosArray.join("/");
@@ -153,11 +155,16 @@ export default function OperacaoBorderoPage() {
       ? formatBRLInput(String(data.valorTotal * 100))
       : "";
 
+    // Constrói o nome de exibição para o sacado (matriz/filial)
+    const nomeExibicaoSacado = data.sacado.matriz_id
+      ? `${data.sacado.nome} [Filial - ${data.sacado.uf}]`
+      : data.sacado.nome;
+
     setNovaNf({
       nfCte: data.numeroNf || data.numeroCte || "",
       dataNf: data.dataEmissao ? data.dataEmissao.split("T")[0] : "",
       valorNf: valorFormatado,
-      clienteSacado: data.sacado.nome || "",
+      clienteSacado: nomeExibicaoSacado, // Usa o nome de exibição
       parcelas:
         data.parcelas && data.parcelas.length > 0
           ? String(data.parcelas.length)
@@ -165,12 +172,30 @@ export default function OperacaoBorderoPage() {
       prazos: prazosString,
       peso: "",
     });
+
     setEmpresaCedente(data.emitente.nome || "");
     setEmpresaCedenteId(data.emitente.id || null);
     setCedenteRamo(data.emitente.ramo_de_atividade || "");
-    showNotification("Dados do ficheiro preenchidos com sucesso!", "success");
+    
+    // Seta o objeto completo do sacado para uso posterior
+    setSacadoSelecionado(data.sacado); 
+    
+    // Atualiza as condições de pagamento com base nos dados do sacado que vieram da API
+    const condicoes = data.sacado.condicoes_pagamento || [];
+    setCondicoesSacado(condicoes);
+    if (condicoes.length > 0 && !prazosString) {
+        const condicaoPadrao = condicoes[0];
+        setNovaNf(prev => ({
+            ...prev,
+            prazos: condicaoPadrao.prazos,
+            parcelas: String(condicaoPadrao.parcelas),
+        }));
+    }
+
+    showNotification("Dados do XML preenchidos com sucesso!", "success");
     setXmlDataPendente(null);
   };
+  // --- FIM DA CORREÇÃO ---
 
   const handleSaveNovoCliente = async (id, data) => {
     try {
@@ -252,12 +277,11 @@ export default function OperacaoBorderoPage() {
   };
 
   const handleSelectSacado = (sacado) => {
-    setSacadoSelecionado(sacado); // Guarda o objeto completo do sacado
+    setSacadoSelecionado(sacado); 
     const condicoes =
       sacado.condicoes_pagamento || sacado.condicoesPagamento || [];
     setCondicoesSacado(condicoes);
 
-    // O valor exibido no input agora inclui a diferenciação
     const nomeExibicao = sacado.matriz_id
       ? `${sacado.nome} [Filial - ${sacado.uf}]`
       : sacado.nome;
@@ -327,8 +351,8 @@ export default function OperacaoBorderoPage() {
         {
           id: Date.now(),
           ...novaNf,
-          clienteSacado: sacadoSelecionado.nome, // Salva o nome limpo
-          sacadoId: sacadoSelecionado.id, // Salva o ID para o backend
+          clienteSacado: sacadoSelecionado.nome, 
+          sacadoId: sacadoSelecionado.id, 
           valorNf: valorNfFloat,
           parcelas: parseInt(novaNf.parcelas) || 1,
           jurosCalculado: calculoResult.totalJuros,
@@ -345,7 +369,7 @@ export default function OperacaoBorderoPage() {
         prazos: "",
         peso: "",
       });
-      setSacadoSelecionado(null); // Limpa o sacado selecionado
+      setSacadoSelecionado(null);
     } catch (error) {
       showNotification(error.message, "error");
     } finally {

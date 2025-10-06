@@ -31,6 +31,7 @@ export default function ConsultasPage() {
     dataVencInicio: "",
     dataVencFim: "",
     sacado: "",
+    sacadoId: "", // <-- NOVO: Guarda o ID do sacado para filtro preciso
     nfCte: "",
     status: "Todos",
     clienteId: "",
@@ -142,6 +143,7 @@ export default function ConsultasPage() {
   const fetchSacados = (query) =>
     fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
 
+  // --- FUNÇÃO CORRIGIDA ---
   const handleFilterChange = (e) => {
     setCurrentPage(1);
     const { name, value } = e.target;
@@ -149,21 +151,43 @@ export default function ConsultasPage() {
       ...prev,
       [name]: value,
       ...(name === "clienteNome" && value === "" && { clienteId: "" }),
+      // Se o usuário apaga ou muda o texto do sacado, o ID é limpo para voltar à busca por texto
+      ...(name === "sacado" && { sacadoId: "" }),
     }));
   };
 
+  // --- FUNÇÃO CORRIGIDA ---
   const handleAutocompleteSelect = (name, item) => {
     setCurrentPage(1);
-    if (name === "cliente")
+    if (name === "cliente") {
       setFilters((prev) => ({
         ...prev,
         clienteId: item?.id || "",
         clienteNome: item?.nome || "",
       }));
-    else if (name === "sacado")
-      setFilters((prev) => ({ ...prev, sacado: item?.nome || "" }));
+    } else if (name === "sacado") {
+      if (item) {
+        // Constrói o nome de exibição (ex: "Empresa [Filial - PE]")
+        const displayName = item.matriz_id
+          ? `${item.nome} [Filial - ${item.uf}]`
+          : item.nome;
+        setFilters((prev) => ({
+          ...prev,
+          sacadoId: item.id, // Seta o ID para o filtro exato
+          sacado: displayName, // Seta o nome completo para exibição no input
+        }));
+      } else {
+        // Limpa os filtros se o item for nulo
+        setFilters((prev) => ({
+          ...prev,
+          sacadoId: "",
+          sacado: "",
+        }));
+      }
+    }
   };
 
+  // --- FUNÇÃO CORRIGIDA ---
   const clearFilters = () => {
     setFilters({
       dataOpInicio: "",
@@ -171,6 +195,7 @@ export default function ConsultasPage() {
       dataVencInicio: "",
       dataVencFim: "",
       sacado: "",
+      sacadoId: "", // Limpa o ID do sacado
       nfCte: "",
       status: "Todos",
       clienteId: "",

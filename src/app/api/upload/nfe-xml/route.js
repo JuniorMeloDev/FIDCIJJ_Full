@@ -23,7 +23,7 @@ export async function POST(request) {
     const xmlText = await file.text();
     const parsedXml = await parseStringPromise(xmlText, {
       explicitArray: true,
-      ignoreAttrs: false, // Alterado para false para ler atributos como o 'Id'
+      ignoreAttrs: false,
       tagNameProcessors: [name => name.replace(/^.*:/, '')]
     });
 
@@ -71,7 +71,6 @@ export async function POST(request) {
         throw new Error("Não foi possível extrair a Chave de Acesso do documento XML.");
     }
     
-    // --- VALIDAÇÃO DE DUPLICIDADE ---
     const { data: existingOperation, error: checkError } = await supabase
         .from('operacoes')
         .select('id, status')
@@ -84,7 +83,6 @@ export async function POST(request) {
         throw new Error(`Este documento já foi processado (Operação #${existingOperation.id}, Status: ${existingOperation.status}).`);
     }
 
-    // --- Emitente e Sacado ---
     const emitCnpj = getVal(emitNode, 'CNPJ');
     const sacadoCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
 
@@ -94,9 +92,11 @@ export async function POST(request) {
       .eq('cnpj', emitCnpj)
       .single();
 
+    // --- LÓGICA CORRIGIDA ---
+    // Busca todos os dados do sacado, incluindo matriz_id, uf e condições de pagamento
     const { data: sacadoData } = await supabase
       .from('sacados')
-      .select('id, nome')
+      .select('*, condicoes_pagamento(*)')
       .eq('cnpj', sacadoCnpjCpf)
       .single();
 
@@ -114,8 +114,22 @@ export async function POST(request) {
         ramo_de_atividade: emitenteData?.ramo_de_atividade
       },
       emitenteExiste: !!emitenteData,
-      sacado: {
-        id: sacadoData?.id || null,
+      // Se o sacado existe no banco, usa os dados do banco. Senão, usa os dados do XML.
+      sacado: sacadoData ? {
+        id: sacadoData.id,
+        nome: sacadoData.nome,
+        cnpj: sacadoData.cnpj,
+        ie: sacadoData.ie,
+        endereco: sacadoData.endereco,
+        bairro: sacadoData.bairro,
+        municipio: sacadoData.municipio,
+        uf: sacadoData.uf,
+        cep: sacadoData.cep,
+        fone: sacadoData.fone,
+        matriz_id: sacadoData.matriz_id,
+        condicoes_pagamento: sacadoData.condicoes_pagamento,
+      } : {
+        id: null,
         nome: getVal(sacadoNode, 'xNome'),
         cnpj: sacadoCnpjCpf,
         ie: getVal(sacadoNode, 'IE'),
@@ -125,9 +139,12 @@ export async function POST(request) {
         uf: getVal(enderSacado, 'UF'),
         cep: getVal(enderSacado, 'CEP'),
         fone: getVal(enderSacado, 'fone'),
+        matriz_id: null,
+        condicoes_pagamento: [],
       },
       sacadoExiste: !!sacadoData
     };
+    // --- FIM DA CORREÇÃO ---
 
     return NextResponse.json(responseData, { status: 200 });
 

@@ -25,6 +25,7 @@ export async function GET(request) {
         if (error) throw error;
 
         const sacadoFilter = searchParams.get('sacado');
+        const sacadoIdFilter = searchParams.get('sacadoId'); // <-- NOVO: Pega o ID do sacado
         const statusFilter = searchParams.get('status');
         const dataOpInicio = searchParams.get('dataOpInicio');
         const dataOpFim = searchParams.get('dataOpFim');
@@ -36,7 +37,16 @@ export async function GET(request) {
 
         const filteredData = duplicatas.filter(dup => {
             if (!dup.operacao) return false;
-            if (sacadoFilter && !dup.cliente_sacado.toLowerCase().includes(sacadoFilter.toLowerCase())) return false;
+            
+            // --- LÓGICA DE FILTRO CORRIGIDA ---
+            // Prioriza o filtro por ID exato. Se não houver ID, usa o filtro por texto.
+            if (sacadoIdFilter) {
+                if (String(dup.sacado_id) !== sacadoIdFilter) return false;
+            } else if (sacadoFilter) {
+                if (!dup.cliente_sacado.toLowerCase().includes(sacadoFilter.toLowerCase())) return false;
+            }
+            // --- FIM DA CORREÇÃO ---
+
             if (statusFilter && statusFilter !== 'Todos' && dup.status_recebimento !== statusFilter) return false;
             if (dataOpInicio && dup.data_operacao < dataOpInicio) return false;
             if (dataOpFim && dup.data_operacao > dataOpFim) return false;
@@ -55,7 +65,6 @@ export async function GET(request) {
             dataOperacao: d.data_operacao,
             nfCte: d.nf_cte,
             empresaCedente: d.operacao?.cliente?.nome || 'N/A',
-            // --- ADICIONADO CAMPO COM O RAMO DE ATIVIDADE ---
             cedenteRamoAtividade: d.operacao?.cliente?.ramo_de_atividade || 'Outro',
             valorBruto: d.valor_bruto,
             valorJuros: d.valor_juros,
@@ -64,6 +73,7 @@ export async function GET(request) {
             statusRecebimento: d.status_recebimento,
             dataLiquidacao: d.data_liquidacao,
             contaLiquidacao: d.conta_liquidacao,
+            sacado_id: d.sacado_id, // Exporta o ID para o frontend
             sacadoInfo: d.sacado,
             operacao: d.operacao
         }));
