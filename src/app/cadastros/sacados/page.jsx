@@ -112,31 +112,31 @@ export default function SacadosPage() {
 
     const handleOpenAddModal = () => { setEditingSacado(null); setIsModalOpen(true); };
     
+    // --- FUNÇÃO CORRIGIDA ---
     const handleOpenEditModal = (sacado) => {
-        // Esta função é para cliques na tabela principal, sempre abrirá a matriz.
-        const itemParaEditarId = sacado.matriz_id || sacado.id;
-        const matriz = sacados.find(s => s.id === itemParaEditarId);
-        const filiaisDaMatriz = sacados.filter(s => s.matriz_id === itemParaEditarId);
-        const dadosCompletosParaModal = {
-            ...matriz,
-            filiais: filiaisDaMatriz
-        };
-        
-        setEditingSacado(dadosCompletosParaModal);
-        setIsModalOpen(true);
+        // Se o sacado clicado tem um 'matriz_id', ele é uma filial.
+        if (sacado.matriz_id) {
+            // Abre o modal diretamente com os dados da filial.
+            setEditingSacado(sacado);
+            setIsModalOpen(true);
+        } else {
+            // Se não tem 'matriz_id', é uma matriz.
+            // A lógica original de buscar as filiais é mantida.
+            const filiaisDaMatriz = sacados.filter(s => s.matriz_id === sacado.id);
+            const dadosCompletosParaModal = {
+                ...sacado,
+                filiais: filiaisDaMatriz
+            };
+            setEditingSacado(dadosCompletosParaModal);
+            setIsModalOpen(true);
+        }
     };
 
-    // --- FUNÇÃO CORRIGIDA ---
     const handleEditFilial = (filial) => {
-        // Fecha o modal atual (da matriz)
         setIsModalOpen(false);
-        // Garante que temos o objeto mais completo da filial
         const filialCompleta = sacados.find(s => s.id === filial.id);
         if (filialCompleta) {
-            // Usa um timeout para garantir que o modal anterior fechou antes de abrir o novo
             setTimeout(() => {
-                // Define a filial completa para edição e abre o modal
-                // Desta vez, o modal receberá os dados da filial, não da matriz
                 setEditingSacado(filialCompleta);
                 setIsModalOpen(true);
             }, 50);
@@ -164,7 +164,7 @@ export default function SacadosPage() {
             }
 
             setIsModalOpen(false);
-            await fetchData(); // Atualiza a lista completa
+            await fetchData();
             showNotification(`Sacado ${isUpdating ? 'atualizado' : 'criado/vinculado'} com sucesso!`, 'success');
             clearFilters(); 
             setCurrentPage(1);
