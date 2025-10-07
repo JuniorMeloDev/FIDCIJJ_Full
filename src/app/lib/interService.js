@@ -3,7 +3,6 @@ import https from 'https';
 
 /**
  * Cria um agente HTTPS com os certificados mTLS do Inter para autenticação mútua.
- * As credenciais são lidas das variáveis de ambiente.
  */
 const createInterAgent = () => {
     const certificate = process.env.INTER_CERTIFICATE;
@@ -14,8 +13,8 @@ const createInterAgent = () => {
     }
 
     return new https.Agent({
-        cert: certificate.replace(/\\n/g, '\n'), // Garante a formatação correta do certificado
-        key: privateKey.replace(/\\n/g, '\n'),   // Garante a formatação correta da chave
+        cert: certificate.replace(/\\n/g, '\n'),
+        key: privateKey.replace(/\\n/g, '\n'),
     });
 };
 
@@ -23,33 +22,26 @@ const createInterAgent = () => {
  * Obtém o token de acesso (access_token) da API de produção do Banco Inter.
  */
 export async function getInterAccessToken() {
+    // ... (esta função permanece a mesma, sem alterações)
     console.log("\n--- [INTER API] Etapa 1: Obtenção de Token de PRODUÇÃO ---");
-
     const clientId = process.env.INTER_CLIENT_ID;
     const clientSecret = process.env.INTER_CLIENT_SECRET;
-
     if (!clientId || !clientSecret) {
         throw new Error('As credenciais de produção (INTER_CLIENT_ID, INTER_CLIENT_SECRET) do Inter não estão configuradas.');
     }
-
     const tokenEndpoint = 'https://cdpj.partners.bancointer.com.br/oauth/v2/token';
-    
-    // Escopos necessários para Banking API
     const postData = new URLSearchParams({
         'grant_type': 'client_credentials',
         'client_id': clientId,
         'client_secret': clientSecret,
         'scope': 'extrato.read pagamento-pix.write pagamento-pix.read'
     }).toString();
-
     const options = {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         agent: createInterAgent(),
     };
-
     console.log("[LOG INTER] Enviando requisição de token para PRODUÇÃO.");
-
     return new Promise((resolve, reject) => {
         const req = https.request(tokenEndpoint, options, (res) => {
             let data = '';
@@ -75,18 +67,19 @@ export async function getInterAccessToken() {
 
 /**
  * Consulta o saldo da conta corrente na data atual.
- * @param {string} accessToken - O token de acesso obtido.
- * @param {string} contaCorrente - O número da conta corrente para a consulta.
  */
 export async function consultarSaldoInter(accessToken, contaCorrente) {
     console.log("\n--- [INTER API] Etapa 2: Consulta de Saldo ---");
-    const apiEndpoint = 'https://cdpj.partners.bancointer.com.br/banking/v2/saldo';
+    const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/saldo`;
+    
+    // CORREÇÃO: Remove caracteres não numéricos da conta
+    const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
 
     const options = {
         method: 'GET',
         headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'x-conta-corrente': contaCorrente
+            'x-conta-corrente': cleanContaCorrente // Usa a conta limpa
         },
         agent: createInterAgent(),
     };
@@ -114,20 +107,19 @@ export async function consultarSaldoInter(accessToken, contaCorrente) {
 
 /**
  * Consulta o extrato da conta em um período.
- * @param {string} accessToken - O token de acesso.
- * @param {string} contaCorrente - O número da conta.
- * @param {string} dataInicio - Data de início no formato AAAA-MM-DD.
- * @param {string} dataFim - Data de fim no formato AAAA-MM-DD.
  */
 export async function consultarExtratoInter(accessToken, contaCorrente, dataInicio, dataFim) {
     console.log("\n--- [INTER API] Etapa 3: Consulta de Extrato ---");
     const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/extrato?dataInicio=${dataInicio}&dataFim=${dataFim}`;
     
+    // CORREÇÃO: Remove caracteres não numéricos da conta
+    const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
+    
     const options = {
         method: 'GET',
         headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'x-conta-corrente': contaCorrente
+            'x-conta-corrente': cleanContaCorrente // Usa a conta limpa
         },
         agent: createInterAgent(),
     };
@@ -155,21 +147,21 @@ export async function consultarExtratoInter(accessToken, contaCorrente, dataInic
 
 /**
  * Envia um pagamento PIX.
- * @param {string} accessToken - O token de acesso.
- * @param {object} dadosPix - O objeto com os dados do pagamento PIX.
- * @param {string} contaCorrente - O número da conta corrente para a operação.
  */
 export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
     console.log("\n--- [INTER API] Etapa 4: Envio de PIX ---");
     const apiEndpoint = 'https://cdpj.partners.bancointer.com.br/banking/v2/pix';
     const payload = JSON.stringify(dadosPix);
+    
+    // CORREÇÃO: Remove caracteres não numéricos da conta
+    const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
 
     const options = {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`,
-            'x-conta-corrente': contaCorrente
+            'x-conta-corrente': cleanContaCorrente // Usa a conta limpa
         },
         agent: createInterAgent(),
     };
