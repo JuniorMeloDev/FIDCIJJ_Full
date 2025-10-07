@@ -17,6 +17,7 @@ import { format as formatDateFns } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const ITEMS_PER_PAGE = 8;
+const INTER_ITEMS_PER_PAGE = 5; // NOVO: Itens por página para o extrato do Inter
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -28,6 +29,7 @@ export default function FluxoDeCaixaPage() {
   const [operacaoParaEmail, setOperacaoParaEmail] = useState(null);
   const [itemParaExcluir, setItemParaExcluir] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [interCurrentPage, setInterCurrentPage] = useState(1); // NOVO: Estado para a página do extrato do Inter
   const [contasMaster, setContasMaster] = useState([]);
   const [clienteMasterNome, setClienteMasterNome] = useState("");
   const [filters, setFilters] = useState({
@@ -36,7 +38,7 @@ export default function FluxoDeCaixaPage() {
     descricao: "",
     contaBancaria: "",
     categoria: "Todos",
-    contaExterna: "", // Novo filtro para a conta do Inter
+    contaExterna: "", 
   });
   const [sortConfig, setSortConfig] = useState({
     key: "data_movimento",
@@ -58,7 +60,6 @@ export default function FluxoDeCaixaPage() {
     useState(null);
   const [estornoInfo, setEstornoInfo] = useState(null);
 
-  // States para os dados da API do Inter
   const [interSaldo, setInterSaldo] = useState(null);
   const [interExtrato, setInterExtrato] = useState(null);
 
@@ -203,7 +204,7 @@ export default function FluxoDeCaixaPage() {
         );
       } else {
         setLoading(false);
-        setMovimentacoes([]); // Limpa a tabela se as datas não estiverem preenchidas
+        setMovimentacoes([]); 
       }
     } else {
       fetchMovimentacoes(filters, sortConfig);
@@ -277,6 +278,7 @@ export default function FluxoDeCaixaPage() {
 
   const handleFilterChange = (e) => {
     setCurrentPage(1);
+    setInterCurrentPage(1); // NOVO: Reseta a página do Inter ao mudar o filtro
     setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
@@ -497,6 +499,11 @@ export default function FluxoDeCaixaPage() {
       ? "Resultado do Período"
       : "Saldos Atuais";
 
+  // NOVO: Lógica de paginação para o extrato do Inter
+  const interIndexOfLastItem = interCurrentPage * INTER_ITEMS_PER_PAGE;
+  const interIndexOfFirstItem = interIndexOfLastItem - INTER_ITEMS_PER_PAGE;
+  const currentInterItems = interExtratoProcessado.slice(interIndexOfFirstItem, interIndexOfLastItem);
+
   return (
     <>
       <Notification
@@ -569,7 +576,7 @@ export default function FluxoDeCaixaPage() {
         </div>
 
         <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
-          {/* LAYOUT LATERAL CORRIGIDO COM ROLAGEM */}
+          {/* ALTERAÇÃO 2: Barra Lateral com rolagem única */}
           <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4 lg:overflow-y-auto lg:max-h-[calc(100vh-160px)] pr-2">
             <motion.div
               initial={{ opacity: 0 }}
@@ -579,7 +586,8 @@ export default function FluxoDeCaixaPage() {
               <h2 className="text-lg font-semibold text-gray-100 mb-2">
                 {saldosTitle}
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 max-h-48 overflow-y-auto pr-2">
+              {/* ATENÇÃO: As classes 'max-h-48' e 'overflow-y-auto' foram removidas da div abaixo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 pr-2">
                 {saldos.map((saldo, index) => (
                   <div
                     key={index}
@@ -607,6 +615,7 @@ export default function FluxoDeCaixaPage() {
               onClear={clearFilters}
             />
           </div>
+          {/* FIM DA ALTERAÇÃO 2 */}
 
           <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
             {error && <p className="text-red-400 text-center py-10">{error}</p>}
@@ -617,65 +626,77 @@ export default function FluxoDeCaixaPage() {
             {!loading && !error && (
               <>
                 {filters.contaExterna ? (
-                  <div className="flex-grow overflow-y-auto">
-                    {interExtratoProcessado.length > 0 ? (
-                      <div className="space-y-4">
-                        {interExtratoProcessado.map((group) => (
-                          <div key={group.date}>
-                            <div className="flex justify-between items-center bg-gray-600 p-2 rounded-t-md sticky top-0 z-10">
-                              <h3 className="font-semibold text-sm capitalize">
-                                {formatHeaderDate(group.date)}
-                              </h3>
-                              <span className="text-sm text-gray-300">
-                                Saldo do dia:{" "}
-                                <span className="font-bold text-white">
-                                  {formatBRLNumber(group.dailyBalance)}
+                  <>
+                    <div className="flex-grow overflow-y-auto">
+                      {currentInterItems.length > 0 ? (
+                        <div className="space-y-4">
+                        {/* ALTERAÇÃO 1: Mapeia os dados paginados do extrato do Inter */}
+                          {currentInterItems.map((group) => (
+                            <div key={group.date}>
+                              <div className="flex justify-between items-center bg-gray-600 p-2 rounded-t-md sticky top-0 z-10">
+                                <h3 className="font-semibold text-sm capitalize">
+                                  {formatHeaderDate(group.date)}
+                                </h3>
+                                <span className="text-sm text-gray-300">
+                                  Saldo do dia:{" "}
+                                  <span className="font-bold text-white">
+                                    {formatBRLNumber(group.dailyBalance)}
+                                  </span>
                                 </span>
-                              </span>
-                            </div>
-                            <ul className="divide-y divide-gray-700 bg-gray-700/50 p-2 rounded-b-md">
-                              {group.transactions.map((t, index) => (
-                                <li
-                                  key={t.idTransacao || index}
-                                  className="py-2 flex justify-between items-center text-sm"
-                                >
-                                  <div>
-                                    <p
-                                      className={`font-semibold ${
+                              </div>
+                              <ul className="divide-y divide-gray-700 bg-gray-700/50 p-2 rounded-b-md">
+                                {group.transactions.map((t, index) => (
+                                  <li
+                                    key={t.idTransacao || index}
+                                    className="py-2 flex justify-between items-center text-sm"
+                                  >
+                                    <div>
+                                      <p
+                                        className={`font-semibold ${
+                                          t.tipoOperacao === "C"
+                                            ? "text-green-400"
+                                            : "text-red-400"
+                                        }`}
+                                      >
+                                        {t.descricao}
+                                      </p>
+                                      <p className="text-gray-400 text-xs">
+                                        {t.titulo}
+                                      </p>
+                                    </div>
+                                    <span
+                                      className={`font-bold ${
                                         t.tipoOperacao === "C"
                                           ? "text-green-400"
                                           : "text-red-400"
                                       }`}
                                     >
-                                      {t.descricao}
-                                    </p>
-                                    <p className="text-gray-400 text-xs">
-                                      {t.titulo}
-                                    </p>
-                                  </div>
-                                  <span
-                                    className={`font-bold ${
-                                      t.tipoOperacao === "C"
-                                        ? "text-green-400"
-                                        : "text-red-400"
-                                    }`}
-                                  >
-                                    {t.tipoOperacao === "D" ? "-" : "+"}
-                                    {formatBRLNumber(parseFloat(t.valor))}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-center py-10 text-gray-400">
-                        Nenhuma transação encontrada para o período e conta
-                        selecionada.
-                      </p>
-                    )}
-                  </div>
+                                      {t.tipoOperacao === "D" ? "-" : "+"}
+                                      {formatBRLNumber(parseFloat(t.valor))}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-center py-10 text-gray-400">
+                          Nenhuma transação encontrada para o período e conta
+                          selecionada.
+                        </p>
+                      )}
+                    </div>
+                    {/* NOVO: Adiciona o componente de paginação para o extrato do Inter */}
+                    <div className="flex-shrink-0 pt-4">
+                        <Pagination
+                            totalItems={interExtratoProcessado.length}
+                            itemsPerPage={INTER_ITEMS_PER_PAGE}
+                            currentPage={interCurrentPage}
+                            onPageChange={(page) => setInterCurrentPage(page)}
+                        />
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div className="flex-grow overflow-auto">
