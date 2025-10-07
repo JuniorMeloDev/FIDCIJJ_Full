@@ -54,21 +54,26 @@ export default function InterTestPage() {
     };
 
     const handleConsultarExtrato = async () => {
-        if (!contaSelecionada) return;
-        setLoading(true);
-        setError('');
-        setExtrato(null);
-        try {
-            const response = await fetch(`/api/inter/extrato?contaCorrente=${contaSelecionada}&dataInicio=${dataInicio}&dataFim=${dataFim}`);
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.message || 'Erro ao buscar extrato.');
-            setExtrato(data);
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
+    if (!contaSelecionada) return;
+    setLoading(true);
+    setError('');
+    setExtrato(null);
+    try {
+        const response = await fetch(`/api/inter/extrato?contaCorrente=${contaSelecionada}&dataInicio=${dataInicio}&dataFim=${dataFim}`);
+        const data = await response.json();
+
+        // ===================================================
+        console.log('Resposta completa do extrato:', data); // <--- ADICIONE ESTA LINHA
+        // ===================================================
+
+        if (!response.ok) throw new Error(data.message || 'Erro ao buscar extrato.');
+        setExtrato(data);
+    } catch (err) {
+        setError(err.message);
+    } finally {
+        setLoading(false);
+    }
+};
 
     return (
         <main className="h-full p-6 bg-gray-900 text-white">
