@@ -54,26 +54,21 @@ export default function InterTestPage() {
     };
 
     const handleConsultarExtrato = async () => {
-    if (!contaSelecionada) return;
-    setLoading(true);
-    setError('');
-    setExtrato(null);
-    try {
-        const response = await fetch(`/api/inter/extrato?contaCorrente=${contaSelecionada}&dataInicio=${dataInicio}&dataFim=${dataFim}`);
-        const data = await response.json();
-
-        // ===================================================
-        console.log('Resposta completa do extrato:', data); // <--- ADICIONE ESTA LINHA
-        // ===================================================
-
-        if (!response.ok) throw new Error(data.message || 'Erro ao buscar extrato.');
-        setExtrato(data);
-    } catch (err) {
-        setError(err.message);
-    } finally {
-        setLoading(false);
-    }
-};
+        if (!contaSelecionada) return;
+        setLoading(true);
+        setError('');
+        setExtrato(null);
+        try {
+            const response = await fetch(`/api/inter/extrato?contaCorrente=${contaSelecionada}&dataInicio=${dataInicio}&dataFim=${dataFim}`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || 'Erro ao buscar extrato.');
+            setExtrato(data);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <main className="h-full p-6 bg-gray-900 text-white">
@@ -127,14 +122,14 @@ export default function InterTestPage() {
                     <div className="mt-6 p-4 bg-gray-700 rounded-lg max-h-96 overflow-y-auto">
                         <h2 className="font-bold text-lg mb-2">Extrato ({extrato.transacoes?.length || 0} transações)</h2>
                         <ul className="divide-y divide-gray-600">
-                            {extrato.transacoes.map(t => (
-                                <li key={t.idTransacao} className="py-2 flex justify-between items-center text-sm">
+                            {extrato.transacoes.map((t, index) => (
+                                <li key={t.idTransacao || index} className="py-2 flex justify-between items-center text-sm">
                                     <div>
-                                        <p className={`font-semibold ${t.tipo === 'C' ? 'text-green-400' : 'text-red-400'}`}>{t.descricao}</p>
+                                        <p className={`font-semibold ${t.tipoOperacao === 'C' ? 'text-green-400' : 'text-red-400'}`}>{t.descricao}</p>
                                         <p className="text-gray-400 text-xs">{formatDate(t.dataEntrada)} - {t.titulo}</p>
                                     </div>
-                                    <span className={`font-bold ${t.tipo === 'C' ? 'text-green-400' : 'text-red-400'}`}>
-                                        {t.tipo === 'D' ? '-' : '+'}{formatBRLNumber(t.valor)}
+                                    <span className={`font-bold ${t.tipoOperacao === 'C' ? 'text-green-400' : 'text-red-400'}`}>
+                                        {t.tipoOperacao === 'D' ? '-' : '+'}{formatBRLNumber(parseFloat(t.valor))}
                                     </span>
                                 </li>
                             ))}
