@@ -2,8 +2,11 @@
 
 export default function FiltroLateral({ filters, onFilterChange, onClear, saldos }) {
     
-    const contas = Array.isArray(saldos) ? saldos : [];
-    
+    // Filtra apenas as contas do Inter para o novo seletor
+    const contasInter = Array.isArray(saldos) 
+        ? saldos.filter(c => c.contaBancaria.toLowerCase().includes('inter')) 
+        : [];
+
     return (
         <div className="w-full lg:w-72 flex-shrink-0 bg-gray-800 rounded-lg shadow-md flex flex-col overflow-hidden">
             
@@ -13,16 +16,38 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
             
             <div className="flex-grow p-4 overflow-y-auto">
                 <div className="space-y-4">
+                    {/* NOVO SELETOR PARA EXTRATO BANCÁRIO EXTERNO */}
                     <div>
-                        <label className="block text-sm font-semibold text-gray-300 mb-1">Conta</label>
+                        <label className="block text-sm font-semibold text-gray-300 mb-1">Consultar Extrato Bancário</label>
+                        <select 
+                            name="contaExterna" 
+                            value={filters.contaExterna || ''} 
+                            onChange={onFilterChange}
+                            className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
+                        >
+                            <option value="">-- Nenhuma --</option>
+                            {contasInter.map(conta => (
+                                <option key={conta.contaBancaria} value={conta.contaBancaria}>{conta.contaBancaria}</option>
+                            ))}
+                        </select>
+                         <p className="text-xs text-gray-400 mt-1">Selecionar uma conta aqui irá buscar o extrato via API do banco.</p>
+                    </div>
+
+                    <div className="border-t border-gray-600 my-4"></div>
+
+                    <p className="text-sm font-semibold text-gray-300">Filtros Internos</p>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-300 mb-1">Conta (Interno)</label>
                         <select 
                             name="contaBancaria" 
                             value={filters.contaBancaria} 
                             onChange={onFilterChange}
                             className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
+                            disabled={!!filters.contaExterna} // Desabilita se uma conta externa for selecionada
                         >
                             <option value="">Todas as Contas</option>
-                            {contas.map(conta => (
+                            {Array.isArray(saldos) && saldos.map(conta => (
                                 <option key={conta.contaBancaria} value={conta.contaBancaria}>{conta.contaBancaria}</option>
                             ))}
                         </select>
@@ -37,8 +62,8 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
                     </div>
 
                     <div>
-                        <label htmlFor="descricao" className="block text-sm font-semibold text-gray-300">Descrição</label>
-                        <input id="descricao" type="text" name="descricao" placeholder="Parte da descrição..." value={filters.descricao} onChange={onFilterChange} className="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"/>
+                        <label htmlFor="descricao" className="block text-sm font-semibold text-gray-300">Descrição (Interno)</label>
+                        <input id="descricao" type="text" name="descricao" placeholder="Parte da descrição..." value={filters.descricao} onChange={onFilterChange} className="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white" disabled={!!filters.contaExterna} />
                     </div>
                 </div>
             </div>
