@@ -16,7 +16,7 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
             <div className="flex-grow p-4 overflow-y-auto">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-semibold text-gray-300 mb-1">Consultar Extrato Bancário</label>
+                        <label className="block text-sm font-semibold text-gray-300 mb-1">Extrato Bancário API</label>
                         <select 
                             name="contaExterna" 
                             value={filters.contaExterna || ''} 
@@ -31,7 +31,6 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
                                 </option>
                             ))}
                         </select>
-                         <p className="text-xs text-gray-400 mt-1">Selecionar uma conta aqui irá buscar o extrato via API do banco.</p>
                     </div>
 
                     <div className="border-t border-gray-600 my-4"></div>

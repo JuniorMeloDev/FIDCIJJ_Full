@@ -17,7 +17,7 @@ import { format as formatDateFns } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const ITEMS_PER_PAGE = 8;
-const INTER_ITEMS_PER_PAGE = 5; // NOVO: Itens por página para o extrato do Inter
+const INTER_ITEMS_PER_PAGE = 2; // NOVO: Itens por página para o extrato do Inter
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
