@@ -1,10 +1,12 @@
 // src/app/lib/interService.js
 import https from 'https';
+import { format } from 'date-fns';
 
 /**
  * Cria um agente HTTPS com os certificados mTLS do Inter para autenticação mútua.
  */
 const createInterAgent = () => {
+    // ... (esta função não muda)
     const certificate = process.env.INTER_CERTIFICATE;
     const privateKey = process.env.INTER_PRIVATE_KEY;
 
@@ -22,7 +24,7 @@ const createInterAgent = () => {
  * Obtém o token de acesso (access_token) da API de produção do Banco Inter.
  */
 export async function getInterAccessToken() {
-    // ... (esta função permanece a mesma, sem alterações)
+    // ... (esta função não muda)
     console.log("\n--- [INTER API] Etapa 1: Obtenção de Token de PRODUÇÃO ---");
     const clientId = process.env.INTER_CLIENT_ID;
     const clientSecret = process.env.INTER_CLIENT_SECRET;
@@ -70,16 +72,19 @@ export async function getInterAccessToken() {
  */
 export async function consultarSaldoInter(accessToken, contaCorrente) {
     console.log("\n--- [INTER API] Etapa 2: Consulta de Saldo ---");
-    const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/saldo`;
     
-    // CORREÇÃO: Remove caracteres não numéricos da conta
+    // ================== INÍCIO DA CORREÇÃO ==================
+    const hoje = format(new Date(), 'yyyy-MM-dd');
+    const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/saldo?dataSaldo=${hoje}`;
+    // =================== FIM DA CORREÇÃO ====================
+    
     const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
 
     const options = {
         method: 'GET',
         headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'x-conta-corrente': cleanContaCorrente // Usa a conta limpa
+            'x-conta-corrente': cleanContaCorrente
         },
         agent: createInterAgent(),
     };
@@ -109,21 +114,18 @@ export async function consultarSaldoInter(accessToken, contaCorrente) {
  * Consulta o extrato da conta em um período.
  */
 export async function consultarExtratoInter(accessToken, contaCorrente, dataInicio, dataFim) {
+    // ... (esta função não muda)
     console.log("\n--- [INTER API] Etapa 3: Consulta de Extrato ---");
     const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/extrato?dataInicio=${dataInicio}&dataFim=${dataFim}`;
-    
-    // CORREÇÃO: Remove caracteres não numéricos da conta
     const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
-    
     const options = {
         method: 'GET',
         headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'x-conta-corrente': cleanContaCorrente // Usa a conta limpa
+            'x-conta-corrente': cleanContaCorrente
         },
         agent: createInterAgent(),
     };
-
      return new Promise((resolve, reject) => {
         const req = https.request(apiEndpoint, options, (res) => {
             let data = '';
@@ -149,23 +151,20 @@ export async function consultarExtratoInter(accessToken, contaCorrente, dataInic
  * Envia um pagamento PIX.
  */
 export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
+    // ... (esta função não muda)
     console.log("\n--- [INTER API] Etapa 4: Envio de PIX ---");
     const apiEndpoint = 'https://cdpj.partners.bancointer.com.br/banking/v2/pix';
     const payload = JSON.stringify(dadosPix);
-    
-    // CORREÇÃO: Remove caracteres não numéricos da conta
     const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
-
     const options = {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`,
-            'x-conta-corrente': cleanContaCorrente // Usa a conta limpa
+            'x-conta-corrente': cleanContaCorrente
         },
         agent: createInterAgent(),
     };
-
     return new Promise((resolve, reject) => {
         const req = https.request(apiEndpoint, options, (res) => {
             let data = '';
@@ -188,4 +187,3 @@ export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
         req.end();
     });
 }
-//
