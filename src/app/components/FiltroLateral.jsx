@@ -8,15 +8,13 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
         : [];
 
     return (
-        <div className="w-full lg:w-72 flex-shrink-0 bg-gray-800 rounded-lg shadow-md flex flex-col overflow-hidden">
-            
+        <div className="w-full bg-gray-800 rounded-lg shadow-md flex flex-col">
             <div className="p-4 border-b border-gray-700 flex-shrink-0">
                 <h2 className="text-lg font-semibold text-gray-100">Filtros</h2>
             </div>
             
             <div className="flex-grow p-4 overflow-y-auto">
                 <div className="space-y-4">
-                    {/* NOVO SELETOR PARA EXTRATO BANCÁRIO EXTERNO */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-300 mb-1">Consultar Extrato Bancário</label>
                         <select 
@@ -25,9 +23,9 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
                             onChange={onFilterChange}
                             className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
                         >
-                            <option value="">-- Nenhuma --</option>
+                            <option value="">-- Nenhum --</option>
                             {contasInter.map(conta => (
-                                <option key={conta.contaBancaria} value={conta.contaBancaria}>{conta.contaBancaria}</option>
+                                <option key={conta.contaBancaria} value={conta.contaBancaria.split(' - ')[1].split('/')[1]}>{conta.contaBancaria}</option>
                             ))}
                         </select>
                          <p className="text-xs text-gray-400 mt-1">Selecionar uma conta aqui irá buscar o extrato via API do banco.</p>
@@ -38,22 +36,6 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
                     <p className="text-sm font-semibold text-gray-300">Filtros Internos</p>
 
                     <div>
-                        <label className="block text-sm font-semibold text-gray-300 mb-1">Conta (Interno)</label>
-                        <select 
-                            name="contaBancaria" 
-                            value={filters.contaBancaria} 
-                            onChange={onFilterChange}
-                            className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
-                            disabled={!!filters.contaExterna} // Desabilita se uma conta externa for selecionada
-                        >
-                            <option value="">Todas as Contas</option>
-                            {Array.isArray(saldos) && saldos.map(conta => (
-                                <option key={conta.contaBancaria} value={conta.contaBancaria}>{conta.contaBancaria}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
                         <label className="block text-sm font-semibold text-gray-300">Período</label>
                         <div className="mt-1 space-y-2">
                             <input type="date" name="dataInicio" value={filters.dataInicio} onChange={onFilterChange} className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"/>
@@ -62,7 +44,7 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
                     </div>
 
                     <div>
-                        <label htmlFor="descricao" className="block text-sm font-semibold text-gray-300">Descrição (Interno)</label>
+                        <label htmlFor="descricao" className="block text-sm font-semibold text-gray-300">Descrição</label>
                         <input id="descricao" type="text" name="descricao" placeholder="Parte da descrição..." value={filters.descricao} onChange={onFilterChange} className="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white" disabled={!!filters.contaExterna} />
                     </div>
                 </div>

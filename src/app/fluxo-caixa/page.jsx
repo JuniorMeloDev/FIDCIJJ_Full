@@ -16,7 +16,7 @@ import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal";
 import { format as formatDateFns } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 10;
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -30,17 +30,14 @@ export default function FluxoDeCaixaPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [contasMaster, setContasMaster] = useState([]);
   const [clienteMasterNome, setClienteMasterNome] = useState("");
-
-  // Filtro antigo mantido, e um novo para conta externa adicionado
   const [filters, setFilters] = useState({
     dataInicio: "",
     dataFim: "",
     descricao: "",
     contaBancaria: "",
     categoria: "Todos",
-    contaExterna: "", // Novo filtro para a conta do Inter
+    contaExterna: "", // Novo filtro
   });
-
   const [sortConfig, setSortConfig] = useState({
     key: "data_movimento",
     direction: "DESC",
@@ -61,7 +58,7 @@ export default function FluxoDeCaixaPage() {
     useState(null);
   const [estornoInfo, setEstornoInfo] = useState(null);
 
-  // NOVO: States para os dados da API do Inter
+  // States para dados do Inter
   const [interSaldo, setInterSaldo] = useState(null);
   const [interExtrato, setInterExtrato] = useState(null);
 
@@ -78,7 +75,8 @@ export default function FluxoDeCaixaPage() {
   const fetchMovimentacoes = async (currentFilters, currentSortConfig) => {
     setLoading(true);
     setError(null);
-    setInterExtrato(null); // Limpa o extrato externo ao buscar o interno
+    setInterExtrato(null);
+    setInterSaldo(null);
     const params = new URLSearchParams();
     if (currentFilters.dataInicio)
       params.append("dataInicio", currentFilters.dataInicio);
@@ -88,9 +86,8 @@ export default function FluxoDeCaixaPage() {
       params.append("descricao", currentFilters.descricao);
     if (currentFilters.contaBancaria)
       params.append("conta", currentFilters.contaBancaria);
-    if (currentFilters.categoria && currentFilters.categoria !== "Todos") {
+    if (currentFilters.categoria && currentFilters.categoria !== "Todos")
       params.append("categoria", currentFilters.categoria);
-    }
     params.append("sort", currentSortConfig.key);
     params.append("direction", currentSortConfig.direction);
 
@@ -100,15 +97,13 @@ export default function FluxoDeCaixaPage() {
         { headers: getAuthHeader() }
       );
       if (!response.ok) throw new Error("Falha ao carregar movimentações.");
-      const data = await response.json();
-      setMovimentacoes(data);
+      setMovimentacoes(await response.json());
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
-
 
   const fetchSaldos = async (currentFilters) => {
     const params = new URLSearchParams();
@@ -120,18 +115,16 @@ export default function FluxoDeCaixaPage() {
     try {
       const saldosResponse = await fetch(url, { headers: getAuthHeader() });
       if (!saldosResponse.ok) throw new Error("Falha ao carregar saldos.");
-      const saldosData = await saldosResponse.json();
-      setSaldos(saldosData);
+      setSaldos(await saldosResponse.json());
     } catch (err) {
       showNotification(err.message, "error");
     }
   };
 
-  // NOVA FUNÇÃO para buscar dados do Inter
   const fetchExtratoInter = async (conta, dataInicio, dataFim) => {
     setLoading(true);
     setError("");
-    setMovimentacoes([]); // Limpa movimentações internas
+    setMovimentacoes([]);
     setInterExtrato(null);
     setInterSaldo(null);
     try {
@@ -144,12 +137,23 @@ export default function FluxoDeCaixaPage() {
           { headers: getAuthHeader() }
         ),
       ]);
+
       const saldoData = await saldoRes.json();
-      const extratoData = await extratoRes.json();
       if (!saldoRes.ok)
-        throw new Error(saldoData.message || "Erro ao buscar saldo.");
+        throw new Error(
+          `Erro ${saldoRes.status} ao consultar saldo: ${
+            saldoData.detail || saldoData.message
+          }`
+        );
+
+      const extratoData = await extratoRes.json();
       if (!extratoRes.ok)
-        throw new Error(extratoData.message || "Erro ao buscar extrato.");
+        throw new Error(
+          `Erro ${extratoRes.status} ao consultar extrato: ${
+            extratoData.detail || extratoData.message
+          }`
+        );
+
       setInterSaldo(saldoData);
       setInterExtrato(extratoData);
     } catch (err) {
@@ -161,16 +165,31 @@ export default function FluxoDeCaixaPage() {
 
   useEffect(() => {
     const fetchStaticData = async () => {
-      // ... (seu código para buscar contasMaster e clienteMasterNome)
+      try {
+        const headers = getAuthHeader();
+        const [masterContasResponse, clientesResponse] = await Promise.all([
+          fetch(`/api/cadastros/contas/master`, { headers }),
+          fetch(`/api/cadastros/clientes`, { headers }),
+        ]);
+        if (!masterContasResponse.ok || !clientesResponse.ok)
+          throw new Error("Falha ao carregar dados para o modal.");
+        const masterContasData = await masterContasResponse.json();
+        const clientesData = await clientesResponse.json();
+        const masterContasFormatadas = masterContasData.map((c) => ({
+          id: c.id,
+          contaBancaria: `${c.banco} - ${c.agencia}/${c.conta_corrente}`,
+        }));
+        setContasMaster(masterContasFormatadas);
+        if (clientesData.length > 0) setClienteMasterNome(clientesData[0].nome);
+      } catch (err) {
+        console.error(err.message);
+      }
     };
     fetchStaticData();
   }, []);
 
-  // UseEffect principal agora decide o que buscar
   useEffect(() => {
-    // A busca de saldos agora é chamada independentemente da fonte do extrato principal
     fetchSaldos(filters);
-
     if (filters.contaExterna) {
       if (filters.dataInicio && filters.dataFim) {
         fetchExtratoInter(
@@ -178,12 +197,9 @@ export default function FluxoDeCaixaPage() {
           filters.dataInicio,
           filters.dataFim
         );
-      } else if (!loading) {
-        showNotification(
-          "Por favor, defina um período (Data Início e Fim) para consultar o extrato externo.",
-          "error"
-        );
+      } else {
         setLoading(false);
+        setMovimentacoes([]);
       }
     } else {
       fetchMovimentacoes(filters, sortConfig);
@@ -197,34 +213,28 @@ export default function FluxoDeCaixaPage() {
     return () => document.removeEventListener("click", handleClick);
   }, [contextMenu]);
 
-  // ... O restante do seu código original (handleSort, getSortIcon, handleSaveLancamento, etc.)
-  // permanece exatamente como estava. Cole-o aqui.
-
   const handleSort = (key) => {
     let direction = "ASC";
-    if (sortConfig.key === key && sortConfig.direction === "ASC") {
+    if (sortConfig.key === key && sortConfig.direction === "ASC")
       direction = "DESC";
-    }
     setCurrentPage(1);
     setSortConfig({ key, direction });
   };
 
   const getSortIcon = (key) => {
     if (sortConfig.key !== key) return <FaSort className="text-gray-400" />;
-    if (sortConfig.direction === "ASC") return <FaSortUp />;
-    return <FaSortDown />;
+    return sortConfig.direction === "ASC" ? <FaSortUp /> : <FaSortDown />;
   };
 
   const clearFilters = () => {
-    const cleared = {
+    setFilters({
       dataInicio: "",
       dataFim: "",
       descricao: "",
       contaBancaria: "",
       categoria: "Todos",
       contaExterna: "",
-    };
-    setFilters(cleared);
+    });
     setCurrentPage(1);
   };
 
@@ -240,10 +250,10 @@ export default function FluxoDeCaixaPage() {
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify(payload),
       });
-      if (!response.ok) {
-        const errorText = await response.json();
-        throw new Error(errorText.message || "Falha ao salvar lançamento.");
-      }
+      if (!response.ok)
+        throw new Error(
+          (await response.json()).message || "Falha ao salvar lançamento."
+        );
       showNotification("Lançamento salvo com sucesso!", "success");
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
@@ -261,10 +271,10 @@ export default function FluxoDeCaixaPage() {
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify(payload),
       });
-      if (!response.ok) {
-        const errorText = await response.json();
-        throw new Error(errorText.message || "Falha ao atualizar lançamento.");
-      }
+      if (!response.ok)
+        throw new Error(
+          (await response.json()).message || "Falha ao atualizar lançamento."
+        );
       showNotification("Lançamento atualizado com sucesso!", "success");
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
@@ -291,10 +301,7 @@ export default function FluxoDeCaixaPage() {
     try {
       const response = await fetch(
         `/api/movimentacoes-caixa/${itemParaExcluir}`,
-        {
-          method: "DELETE",
-          headers: getAuthHeader(),
-        }
+        { method: "DELETE", headers: getAuthHeader() }
       );
       if (!response.ok) throw new Error("Falha ao excluir lançamento.");
       showNotification("Lançamento excluído com sucesso!", "success");
@@ -313,31 +320,23 @@ export default function FluxoDeCaixaPage() {
   };
 
   const confirmarEstorno = async () => {
-    if (!estornoInfo) return;
-
-    const duplicataParaEstornar = estornoInfo.duplicata;
-
-    if (!duplicataParaEstornar?.id) {
+    if (!estornoInfo || !estornoInfo.duplicata?.id) {
       showNotification(
-        "Erro: Lançamento de recebimento não está vinculado a uma duplicata específica para estornar.",
+        "Erro: Lançamento não vinculado a uma duplicata para estornar.",
         "error"
       );
       setEstornoInfo(null);
       return;
     }
-
     try {
       const response = await fetch(
-        `/api/duplicatas/${duplicataParaEstornar.id}/estornar`,
-        {
-          method: "POST",
-          headers: getAuthHeader(),
-        }
+        `/api/duplicatas/${estornoInfo.duplicata.id}/estornar`,
+        { method: "POST", headers: getAuthHeader() }
       );
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Falha ao estornar a liquidação.");
-      }
+      if (!response.ok)
+        throw new Error(
+          (await response.json()).message || "Falha ao estornar a liquidação."
+        );
       showNotification("Liquidação estornada com sucesso!", "success");
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
@@ -347,6 +346,7 @@ export default function FluxoDeCaixaPage() {
       setEstornoInfo(null);
     }
   };
+
   const handleAbrirEmailModal = () => {
     if (!contextMenu.selectedItem) return;
     setOperacaoParaEmail({
@@ -368,10 +368,10 @@ export default function FluxoDeCaixaPage() {
           body: JSON.stringify({ destinatarios }),
         }
       );
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Falha ao enviar o e-mail.");
-      }
+      if (!response.ok)
+        throw new Error(
+          (await response.json()).message || "Falha ao enviar o e-mail."
+        );
       showNotification("E-mail(s) enviado(s) com sucesso!", "success");
     } catch (err) {
       showNotification(err.message, "error");
@@ -382,30 +382,25 @@ export default function FluxoDeCaixaPage() {
   };
 
   const handleGeneratePdf = async () => {
-    if (!contextMenu.selectedItem) return;
-    const operacaoId = contextMenu.selectedItem.operacaoId;
-    if (!operacaoId) {
+    if (!contextMenu.selectedItem?.operacaoId) {
       alert("Este lançamento não está associado a um borderô para gerar PDF.");
       return;
     }
     try {
-      const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, {
-        headers: getAuthHeader(),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Não foi possível gerar o PDF.");
-      }
-
+      const response = await fetch(
+        `/api/operacoes/${contextMenu.selectedItem.operacaoId}/pdf`,
+        { headers: getAuthHeader() }
+      );
+      if (!response.ok)
+        throw new Error(
+          (await response.json()).message || "Não foi possível gerar o PDF."
+        );
       const contentDisposition = response.headers.get("content-disposition");
-      let filename = `bordero-${operacaoId}.pdf`;
+      let filename = `bordero-${contextMenu.selectedItem.operacaoId}.pdf`;
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-        if (filenameMatch && filenameMatch.length > 1) {
-          filename = filenameMatch[1];
-        }
+        if (filenameMatch?.[1]) filename = filenameMatch[1];
       }
-
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -435,6 +430,7 @@ export default function FluxoDeCaixaPage() {
     setLancamentoParaComplemento(contextMenu.selectedItem);
     setIsComplementModalOpen(true);
   };
+
   const handleSaveComplemento = async (payload) => {
     try {
       const response = await fetch(`/api/operacoes/complemento`, {
@@ -442,11 +438,10 @@ export default function FluxoDeCaixaPage() {
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify(payload),
       });
-
-      if (!response.ok) {
-        const errorText = await response.json();
-        throw new Error(errorText.message || "Falha ao salvar complemento.");
-      }
+      if (!response.ok)
+        throw new Error(
+          (await response.json()).message || "Falha ao salvar complemento."
+        );
       showNotification("Complemento do borderô salvo com sucesso!", "success");
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
@@ -457,15 +452,6 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
-  const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
-  const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-  const currentItems = movimentacoes.slice(indexOfFirstItem, indexOfLastItem);
-  const saldosTitle =
-    filters.dataInicio && filters.dataFim
-      ? "Resultado do Período"
-      : "Saldos Atuais";
-
-  // NOVA LÓGICA (igual à da página de teste)
   const interExtratoProcessado = useMemo(() => {
     if (!interExtrato?.transacoes || !interSaldo) return [];
     const groupedByDate = interExtrato.transacoes.reduce((acc, t) => {
@@ -490,10 +476,20 @@ export default function FluxoDeCaixaPage() {
     });
   }, [interExtrato, interSaldo]);
 
-  const formatHeaderDate = (dateString) => {
-    const date = new Date(dateString + "T12:00:00Z");
-    return formatDateFns(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
-  };
+  const formatHeaderDate = (dateString) =>
+    formatDateFns(
+      new Date(dateString + "T12:00:00Z"),
+      "EEEE, d 'de' MMMM 'de' yyyy",
+      { locale: ptBR }
+    );
+
+  const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
+  const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
+  const currentItems = movimentacoes.slice(indexOfFirstItem, indexOfLastItem);
+  const saldosTitle =
+    filters.dataInicio && filters.dataFim
+      ? "Resultado do Período"
+      : "Saldos Atuais";
 
   return (
     <>
@@ -502,7 +498,6 @@ export default function FluxoDeCaixaPage() {
         type={notification.type}
         onClose={() => setNotification({ message: "", type: "" })}
       />
-      {/* ... (todos os seus modais) ... */}
       <LancamentoModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -567,47 +562,45 @@ export default function FluxoDeCaixaPage() {
           </motion.header>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 flex-grow min-h-0">
-          <div className="w-full lg:w-72 flex-shrink-0">
-            <div className="flex flex-col gap-4">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2 }}
-              >
-                <h2 className="text-lg font-semibold text-gray-100 mb-2">
-                  {saldosTitle}
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
-                  {saldos.map((saldo, index) => (
-                    <div
-                      key={index}
-                      className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
+        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
+          <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4 lg:overflow-y-auto lg:max-h-[calc(100vh-160px)] pr-2">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              <h2 className="text-lg font-semibold text-gray-100 mb-2">
+                {saldosTitle}
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
+                {saldos.map((saldo, index) => (
+                  <div
+                    key={index}
+                    className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
+                  >
+                    <p className="text-sm text-gray-400 truncate">
+                      {saldo.contaBancaria}
+                    </p>
+                    <p
+                      className={`text-xl font-bold ${
+                        saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
+                      }`}
                     >
-                      <p className="text-sm text-gray-400 truncate">
-                        {saldo.contaBancaria}
-                      </p>
-                      <p
-                        className={`text-xl font-bold ${
-                          saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
-                        }`}
-                      >
-                        {formatBRLNumber(saldo.saldo)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-              <FiltroLateral
-                filters={filters}
-                saldos={saldos}
-                onFilterChange={handleFilterChange}
-                onClear={clearFilters}
-              />
-            </div>
+                      {formatBRLNumber(saldo.saldo)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+            <FiltroLateral
+              filters={filters}
+              saldos={saldos}
+              onFilterChange={handleFilterChange}
+              onClear={clearFilters}
+            />
           </div>
 
-          <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-h-0">
+          <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
             {error && <p className="text-red-400 text-center py-10">{error}</p>}
             {loading && (
               <p className="text-center py-10 text-gray-400">A carregar...</p>
@@ -774,7 +767,7 @@ export default function FluxoDeCaixaPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="py-1">
-              {/* ... (código do menu de contexto) ... */}
+              {/* ... (seu menu de contexto original) ... */}
             </div>
           </div>
         )}
