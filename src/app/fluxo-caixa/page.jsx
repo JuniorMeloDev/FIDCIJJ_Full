@@ -16,7 +16,7 @@ import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal";
 import { format as formatDateFns } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 8;
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -36,7 +36,7 @@ export default function FluxoDeCaixaPage() {
     descricao: "",
     contaBancaria: "",
     categoria: "Todos",
-    contaExterna: "", // Novo filtro
+    contaExterna: "", // Novo filtro para a conta do Inter
   });
   const [sortConfig, setSortConfig] = useState({
     key: "data_movimento",
@@ -58,7 +58,7 @@ export default function FluxoDeCaixaPage() {
     useState(null);
   const [estornoInfo, setEstornoInfo] = useState(null);
 
-  // States para dados do Inter
+  // States para os dados da API do Inter
   const [interSaldo, setInterSaldo] = useState(null);
   const [interExtrato, setInterExtrato] = useState(null);
 
@@ -111,9 +111,11 @@ export default function FluxoDeCaixaPage() {
       params.append("dataInicio", currentFilters.dataInicio);
     if (currentFilters.dataFim)
       params.append("dataFim", currentFilters.dataFim);
-    const url = `/api/dashboard/saldos?${params.toString()}`;
     try {
-      const saldosResponse = await fetch(url, { headers: getAuthHeader() });
+      const saldosResponse = await fetch(
+        `/api/dashboard/saldos?${params.toString()}`,
+        { headers: getAuthHeader() }
+      );
       if (!saldosResponse.ok) throw new Error("Falha ao carregar saldos.");
       setSaldos(await saldosResponse.json());
     } catch (err) {
@@ -177,6 +179,8 @@ export default function FluxoDeCaixaPage() {
         const clientesData = await clientesResponse.json();
         const masterContasFormatadas = masterContasData.map((c) => ({
           id: c.id,
+          banco: c.banco,
+          contaCorrente: c.conta_corrente,
           contaBancaria: `${c.banco} - ${c.agencia}/${c.conta_corrente}`,
         }));
         setContasMaster(masterContasFormatadas);
@@ -199,7 +203,7 @@ export default function FluxoDeCaixaPage() {
         );
       } else {
         setLoading(false);
-        setMovimentacoes([]);
+        setMovimentacoes([]); // Limpa a tabela se as datas não estiverem preenchidas
       }
     } else {
       fetchMovimentacoes(filters, sortConfig);
@@ -208,22 +212,55 @@ export default function FluxoDeCaixaPage() {
 
   useEffect(() => {
     const handleClick = () =>
-      setContextMenu({ ...contextMenu, visible: false });
+      setContextMenu((prev) => ({ ...prev, visible: false }));
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
-  }, [contextMenu]);
+  }, []);
+
+  const interExtratoProcessado = useMemo(() => {
+    if (!interExtrato?.transacoes || !interSaldo) return [];
+    const groupedByDate = interExtrato.transacoes.reduce((acc, t) => {
+      const date = t.dataEntrada;
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(t);
+      return acc;
+    }, {});
+    const sortedDates = Object.keys(groupedByDate).sort(
+      (a, b) => new Date(b) - new Date(a)
+    );
+    let runningBalance = interSaldo.disponivel;
+    return sortedDates.map((date) => {
+      const transactions = groupedByDate[date];
+      const dailyBalance = runningBalance;
+      const netChange = transactions.reduce((sum, t) => {
+        const value = parseFloat(t.valor);
+        return t.tipoOperacao === "C" ? sum + value : sum - value;
+      }, 0);
+      runningBalance -= netChange;
+      return { date, transactions, dailyBalance };
+    });
+  }, [interExtrato, interSaldo]);
+
+  const formatHeaderDate = (dateString) =>
+    formatDateFns(
+      new Date(dateString + "T12:00:00Z"),
+      "EEEE, d 'de' MMMM 'de' yyyy",
+      { locale: ptBR }
+    );
 
   const handleSort = (key) => {
     let direction = "ASC";
-    if (sortConfig.key === key && sortConfig.direction === "ASC")
+    if (sortConfig.key === key && sortConfig.direction === "ASC") {
       direction = "DESC";
+    }
     setCurrentPage(1);
     setSortConfig({ key, direction });
   };
 
   const getSortIcon = (key) => {
     if (sortConfig.key !== key) return <FaSort className="text-gray-400" />;
-    return sortConfig.direction === "ASC" ? <FaSortUp /> : <FaSortDown />;
+    if (sortConfig.direction === "ASC") return <FaSortUp />;
+    return <FaSortDown />;
   };
 
   const clearFilters = () => {
@@ -452,37 +489,6 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
-  const interExtratoProcessado = useMemo(() => {
-    if (!interExtrato?.transacoes || !interSaldo) return [];
-    const groupedByDate = interExtrato.transacoes.reduce((acc, t) => {
-      const date = t.dataEntrada;
-      if (!acc[date]) acc[date] = [];
-      acc[date].push(t);
-      return acc;
-    }, {});
-    const sortedDates = Object.keys(groupedByDate).sort(
-      (a, b) => new Date(b) - new Date(a)
-    );
-    let runningBalance = interSaldo.disponivel;
-    return sortedDates.map((date) => {
-      const transactions = groupedByDate[date];
-      const dailyBalance = runningBalance;
-      const netChange = transactions.reduce((sum, t) => {
-        const value = parseFloat(t.valor);
-        return t.tipoOperacao === "C" ? sum + value : sum - value;
-      }, 0);
-      runningBalance -= netChange;
-      return { date, transactions, dailyBalance };
-    });
-  }, [interExtrato, interSaldo]);
-
-  const formatHeaderDate = (dateString) =>
-    formatDateFns(
-      new Date(dateString + "T12:00:00Z"),
-      "EEEE, d 'de' MMMM 'de' yyyy",
-      { locale: ptBR }
-    );
-
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
   const currentItems = movimentacoes.slice(indexOfFirstItem, indexOfLastItem);
@@ -563,6 +569,7 @@ export default function FluxoDeCaixaPage() {
         </div>
 
         <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
+          {/* LAYOUT LATERAL CORRIGIDO COM ROLAGEM */}
           <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4 lg:overflow-y-auto lg:max-h-[calc(100vh-160px)] pr-2">
             <motion.div
               initial={{ opacity: 0 }}
@@ -572,7 +579,7 @@ export default function FluxoDeCaixaPage() {
               <h2 className="text-lg font-semibold text-gray-100 mb-2">
                 {saldosTitle}
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 max-h-48 overflow-y-auto pr-2">
                 {saldos.map((saldo, index) => (
                   <div
                     key={index}
@@ -595,6 +602,7 @@ export default function FluxoDeCaixaPage() {
             <FiltroLateral
               filters={filters}
               saldos={saldos}
+              contasMaster={contasMaster}
               onFilterChange={handleFilterChange}
               onClear={clearFilters}
             />
@@ -767,7 +775,7 @@ export default function FluxoDeCaixaPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="py-1">
-              {/* ... (seu menu de contexto original) ... */}
+              {/* ...código original do menu de contexto... */}
             </div>
           </div>
         )}
