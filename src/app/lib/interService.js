@@ -1,6 +1,7 @@
 // src/app/lib/interService.js
 import https from 'https';
 import { format } from 'date-fns';
+import { randomUUID } from 'crypto';
 
 /**
  * Cria um agente HTTPS com os certificados mTLS do Inter para autenticação mútua.
@@ -157,17 +158,6 @@ export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
     const apiEndpoint = 'https://cdpj.partners.bancointer.com.br/banking/v2/pix';
     const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
 
-    // Garante campos obrigatórios e formato correto
-    const body = {
-        valor: Number(dadosPix.valor),
-        descricao: dadosPix.descricao || 'Pagamento via API',
-        dataPagamento: dadosPix.dataPagamento || format(new Date(), 'yyyy-MM-dd'),
-        destinatario: {
-            tipo: dadosPix.destinatario?.tipo || 'CHAVE',
-            chave: dadosPix.destinatario?.chave
-        }
-    };
-
     // Gera UUID para idempotência (evita duplicidade de pagamento)
     const idIdempotente = randomUUID();
 
@@ -181,8 +171,9 @@ export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
         },
         agent: createInterAgent()
     };
-
-    const payload = JSON.stringify(body);
+    
+    // Usa diretamente o objeto 'dadosPix' que já está correto
+    const payload = JSON.stringify(dadosPix);
 
     return new Promise((resolve, reject) => {
         const req = https.request(apiEndpoint, options, (res) => {
