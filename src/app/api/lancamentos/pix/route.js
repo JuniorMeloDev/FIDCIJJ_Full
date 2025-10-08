@@ -16,10 +16,25 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Todos os campos são obrigatórios para o PIX.' }, { status: 400 });
         }
 
+        // --- INÍCIO DA CORREÇÃO ---
+        // Garante que a chave PIX do tipo telefone esteja no formato internacional (+55)
+        let chaveFinal = pix.chave;
+        if (pix.tipo === 'Telefone') {
+            const numeros = pix.chave.replace(/\D/g, '');
+            if (numeros.length >= 10 && !numeros.startsWith('55')) {
+                chaveFinal = `+55${numeros}`;
+            } else if (numeros.length >= 10) {
+                 chaveFinal = `+${numeros}`;
+            }
+        }
+        // --- FIM DA CORREÇÃO ---
+
         // 1. Efetuar o pagamento PIX via API do Inter
         const dadosPix = {
             valor: valor.toFixed(2),
-            destinatario: { chave: pix.chave },
+            destinatario: {
+                chave: chaveFinal // Usa a chave formatada
+            },
             infoPagador: descricao,
         };
         const tokenInter = await getInterAccessToken();
@@ -35,7 +50,7 @@ export async function POST(request) {
             conta_bancaria: contaOrigem, 
             categoria: 'Pagamento PIX',
             empresa_associada: empresaAssociada,
-            transaction_id: resultadoPix.endToEndId, 
+            transaction_id: resultadoPix.endToEndId,
         });
 
         if (insertError) {
@@ -43,7 +58,7 @@ export async function POST(request) {
             return NextResponse.json({ 
                 message: `PIX enviado com sucesso (ID: ${resultadoPix.endToEndId}), mas falhou ao registrar a movimentação no sistema. Por favor, registre manualmente.`,
                 pixResult: resultadoPix 
-            }, { status: 207 }); // 207 Multi-Status
+            }, { status: 207 });
         }
 
         return NextResponse.json({ success: true, pixResult: resultadoPix }, { status: 201 });
