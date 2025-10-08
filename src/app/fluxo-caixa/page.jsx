@@ -242,9 +242,6 @@ export default function FluxoDeCaixaPage() {
         }
     };
 
-  const fetchSacados = (query) =>
-    fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
-
   const handleConciliarTransacao = (transacao) => {
     setTransacaoParaConciliar({
       id: transacao.idTransacao,
@@ -597,8 +594,7 @@ export default function FluxoDeCaixaPage() {
         onClose={() => setIsConciliacaoModalOpen(false)}
         onConfirm={handleConfirmarConciliacao}
         transacao={transacaoParaConciliar}
-        fetchSacados={fetchSacados}
-        fetchDuplicatasBySacado={fetchDuplicatasBySacado}
+        searchDuplicatas={searchDuplicatasParaConciliacao}
       />
       <EditLancamentoModal
         isOpen={isEditModalOpen}
