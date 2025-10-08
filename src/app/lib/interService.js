@@ -13,10 +13,13 @@ const createInterAgent = () => {
         throw new Error('O certificado (.crt) ou a chave privada (.key) do Inter não foram encontrados nas variáveis de ambiente.');
     }
 
+    // ================== INÍCIO DA CORREÇÃO ==================
+    // Usar Buffer.from para garantir a integridade dos certificados no ambiente de produção.
     return new https.Agent({
-        cert: certificate.replace(/\\n/g, '\n'),
-        key: privateKey.replace(/\\n/g, '\n'),
+        cert: Buffer.from(certificate.replace(/\\n/g, '\n'), 'utf-8'),
+        key: Buffer.from(privateKey.replace(/\\n/g, '\n'), 'utf-8'),
     });
+    // =================== FIM DA CORREÇÃO ====================
 };
 
 /**
@@ -30,9 +33,7 @@ export async function getInterAccessToken() {
         throw new Error('As credenciais de produção (INTER_CLIENT_ID, INTER_CLIENT_SECRET) do Inter não estão configuradas.');
     }
     const tokenEndpoint = 'https://cdpj.partners.bancointer.com.br/oauth/v2/token';
-
-    // ================== INÍCIO DA CORREÇÃO ==================
-    // Adicionado o escopo completo para garantir todas as permissões necessárias.
+    
     const fullScope = 'extrato.read pagamento-pix.write pagamento-pix.read cob.write cob.read cobv.write cobv.read lotecobv.write lotecobv.read pix.write pix.read webhook.write webhook.read payloadlocation.write payloadlocation.read boleto-cobranca.read boleto-cobranca.write pagamento-boleto.read pagamento-boleto.write pagamento-darf.write pagamento-lote.write pagamento-lote.read webhook-banking.read webhook-banking.write';
 
     const postData = new URLSearchParams({
@@ -41,7 +42,6 @@ export async function getInterAccessToken() {
         'client_secret': clientSecret,
         'scope': fullScope
     }).toString();
-    // =================== FIM DA CORREÇÃO ====================
 
     const options = {
         method: 'POST',
