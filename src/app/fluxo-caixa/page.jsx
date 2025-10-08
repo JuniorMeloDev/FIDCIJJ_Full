@@ -594,7 +594,7 @@ export default function FluxoDeCaixaPage() {
         onClose={() => setIsConciliacaoModalOpen(false)}
         onConfirm={handleConfirmarConciliacao}
         transacao={transacaoParaConciliar}
-        searchDuplicatas={searchDuplicatasParaConciliacao}
+        searchDuplicatas={searchDuplicatasParaConciliacao} 
       />
       <EditLancamentoModal
         isOpen={isEditModalOpen}
