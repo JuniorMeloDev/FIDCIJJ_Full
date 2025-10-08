@@ -19,6 +19,14 @@ export default function ConciliacaoModal({
     const [error, setError] = useState('');
     const [sacadoBusca, setSacadoBusca] = useState('');
 
+    // HOOKS MOVEM-SE PARA CIMA
+    const totalSelecionado = useMemo(() => {
+        if (!duplicatas) return 0;
+        return duplicatas
+            .filter(d => selectedDuplicatas.has(d.id))
+            .reduce((sum, d) => sum + d.valorBruto, 0);
+    }, [selectedDuplicatas, duplicatas]);
+
     useEffect(() => {
         if (!isOpen) {
             setDuplicatas([]);
@@ -28,7 +36,10 @@ export default function ConciliacaoModal({
         }
     }, [isOpen]);
 
+    // O RETORNO ANTECIPADO AGORA ESTÁ DEPOIS DE TODOS OS HOOKS
     if (!isOpen || !transacao) return null;
+
+    const saldoRestante = transacao.valor - totalSelecionado;
 
     const handleSelectSacado = async (sacado) => {
         setSacadoBusca(sacado ? sacado.nome : '');
@@ -51,14 +62,6 @@ export default function ConciliacaoModal({
         }
         setSelectedDuplicatas(newSelection);
     };
-
-    const totalSelecionado = useMemo(() => {
-        return duplicatas
-            .filter(d => selectedDuplicatas.has(d.id))
-            .reduce((sum, d) => sum + d.valorBruto, 0);
-    }, [selectedDuplicatas, duplicatas]);
-
-    const saldoRestante = transacao.valor - totalSelecionado;
 
     const handleConfirmar = () => {
         if (totalSelecionado > transacao.valor) {
