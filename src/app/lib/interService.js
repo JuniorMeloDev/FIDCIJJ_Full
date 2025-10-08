@@ -74,7 +74,6 @@ export async function consultarSaldoInter(accessToken, contaCorrente) {
     const hoje = format(new Date(), 'yyyy-MM-dd');
     const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/saldo?dataSaldo=${hoje}`;
     
-    // Remove o dígito verificador da conta corrente
     const cleanContaCorrente = (contaCorrente || '').split('-')[0];
 
     const options = {
@@ -164,11 +163,15 @@ export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
         },
         agent: createInterAgent(),
     };
+
+    console.log("[LOG INTER] Enviando Payload PIX:", payload);
+
     return new Promise((resolve, reject) => {
         const req = https.request(apiEndpoint, options, (res) => {
             let data = '';
             res.on('data', (chunk) => (data += chunk));
             res.on('end', () => {
+                console.log(`[LOG INTER] Resposta PIX (Status: ${res.statusCode}):`, data);
                 try {
                     const jsonData = JSON.parse(data);
                     if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -178,6 +181,7 @@ export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
                         reject(new Error(`Erro ${res.statusCode}: ${errorMessage}`));
                     }
                 } catch(e) {
+                    // Se a resposta não for JSON (pode acontecer em alguns erros), rejeita com o texto puro
                     reject(new Error(`Falha ao processar resposta do PIX: ${data}`));
                 }
             });

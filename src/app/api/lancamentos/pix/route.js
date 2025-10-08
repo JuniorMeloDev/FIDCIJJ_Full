@@ -16,27 +16,27 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Todos os campos são obrigatórios para o PIX.' }, { status: 400 });
         }
 
-        // --- INÍCIO DA CORREÇÃO ---
-        // Garante que a chave PIX do tipo telefone esteja no formato internacional (+55)
         let chaveFinal = pix.chave;
         if (pix.tipo === 'Telefone') {
             const numeros = pix.chave.replace(/\D/g, '');
+            // Garante que o número tenha o código do país (+55)
             if (numeros.length >= 10 && !numeros.startsWith('55')) {
                 chaveFinal = `+55${numeros}`;
-            } else if (numeros.length >= 10) {
+            } else if (numeros.length >= 10 && !numeros.startsWith('+')) {
                  chaveFinal = `+${numeros}`;
             }
         }
-        // --- FIM DA CORREÇÃO ---
 
-        // 1. Efetuar o pagamento PIX via API do Inter
+        // 1. Monta o payload para a API do Inter
         const dadosPix = {
             valor: valor.toFixed(2),
+            descricao: descricao, // 'infoPagador' é usado em outra API, aqui é 'descricao'
             destinatario: {
-                chave: chaveFinal // Usa a chave formatada
-            },
-            infoPagador: descricao,
+                tipo: "CHAVE", // Campo obrigatório que estava faltando
+                chave: chaveFinal
+            }
         };
+
         const tokenInter = await getInterAccessToken();
         const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, contaOrigem);
 
