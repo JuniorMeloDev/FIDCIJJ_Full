@@ -19,7 +19,6 @@ export async function POST(request) {
         let chaveFinal = pix.chave;
         if (pix.tipo === 'Telefone') {
             const numeros = pix.chave.replace(/\D/g, '');
-            // Garante que o número tenha o código do país (+55)
             if (numeros.length >= 10 && !numeros.startsWith('55')) {
                 chaveFinal = `+55${numeros}`;
             } else if (numeros.length >= 10 && !numeros.startsWith('+')) {
@@ -27,20 +26,21 @@ export async function POST(request) {
             }
         }
 
-        // 1. Monta o payload para a API do Inter
+        // ================== INÍCIO DA CORREÇÃO ==================
+        // O nome do campo para a descrição do pagamento é 'infoPagador', e não 'descricao'.
         const dadosPix = {
             valor: valor.toFixed(2),
-            descricao: descricao, // 'infoPagador' é usado em outra API, aqui é 'descricao'
+            infoPagador: descricao, // Corrigido de 'descricao' para 'infoPagador'
             destinatario: {
-                tipo: "CHAVE", // Campo obrigatório que estava faltando
+                tipo: "CHAVE",
                 chave: chaveFinal
             }
         };
+        // =================== FIM DA CORREÇÃO ====================
 
         const tokenInter = await getInterAccessToken();
         const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, contaOrigem);
 
-        // 2. Se o PIX foi bem-sucedido, registrar a movimentação de caixa
         const descricaoLancamento = `PIX Enviado - ${descricao}`;
         
         const { error: insertError } = await supabase.from('movimentacoes_caixa').insert({

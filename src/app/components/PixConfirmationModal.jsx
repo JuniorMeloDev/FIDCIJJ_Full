@@ -9,14 +9,17 @@ export default function PixConfirmationModal({ isOpen, onClose, onConfirm, data,
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[60]" onClick={onClose}>
             <div className="bg-gray-700 p-6 rounded-lg shadow-xl w-full max-w-md text-white" onClick={e => e.stopPropagation()}>
                 <h2 className="text-xl font-bold mb-4">Confirme os Dados do PIX</h2>
+                <p className="text-xs text-yellow-300 bg-yellow-900/50 p-2 rounded-md mb-4">
+                    Atenção: A API do banco não permite validar os dados do recebedor antes do envio. Verifique com atenção se a chave PIX digitada está correta.
+                </p>
                 
                 <div className="space-y-3 text-sm bg-gray-800 p-4 rounded-md">
                     <div className="flex justify-between">
-                        <span className="text-gray-400">Valor:</span>
-                        <span className="font-semibold">{formatBRLNumber(data.valor)}</span>
+                        <span className="text-gray-400">Valor a ser enviado:</span>
+                        <span className="font-semibold text-lg text-orange-400">{formatBRLNumber(data.valor)}</span>
                     </div>
                     <div className="flex justify-between">
-                        <span className="text-gray-400">Destinatário (Chave):</span>
+                        <span className="text-gray-400">Para a Chave PIX:</span>
                         <span className="font-semibold break-all text-right">{data.pix.chave}</span>
                     </div>
                     <div className="flex justify-between">
@@ -24,11 +27,11 @@ export default function PixConfirmationModal({ isOpen, onClose, onConfirm, data,
                         <span className="font-semibold">{data.pix.tipo}</span>
                     </div>
                     <div className="flex justify-between">
-                        <span className="text-gray-400">Descrição:</span>
+                        <span className="text-gray-400">Descrição na Transação:</span>
                         <span className="font-semibold">{data.descricao}</span>
                     </div>
                      <div className="flex justify-between">
-                        <span className="text-gray-400">Conta de Origem:</span>
+                        <span className="text-gray-400">Debitar da Conta:</span>
                         <span className="font-semibold">{data.contaOrigem}</span>
                     </div>
                 </div>
