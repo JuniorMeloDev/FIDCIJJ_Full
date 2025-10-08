@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { getInterAccessToken, enviarPixInter } from '@/app/lib/interService';
+import { format } from 'date-fns';
 
 export async function POST(request) {
     try {
@@ -26,17 +27,19 @@ export async function POST(request) {
             }
         }
 
-        // ================== INÍCIO DA CORREÇÃO ==================
-        // O nome do campo para a descrição do pagamento é 'infoPagador', e não 'descricao'.
+        // ================== INÍCIO DA CORREÇÃO DEFINITIVA ==================
+        // Ajusta o payload para corresponder exatamente à documentação do Inter,
+        // incluindo dataPagamento e o nome correto do campo 'descricao'.
         const dadosPix = {
-            valor: valor.toFixed(2),
-            infoPagador: descricao, // Corrigido de 'descricao' para 'infoPagador'
+            valor: parseFloat(valor.toFixed(2)),
+            dataPagamento: format(new Date(), 'yyyy-MM-dd'), // A API exige a data do pagamento
+            descricao: descricao, // O nome correto do campo é 'descricao'
             destinatario: {
                 tipo: "CHAVE",
                 chave: chaveFinal
             }
         };
-        // =================== FIM DA CORREÇÃO ====================
+        // =================== FIM DA CORREÇÃO DEFINITIVA ====================
 
         const tokenInter = await getInterAccessToken();
         const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, contaOrigem);
@@ -47,7 +50,9 @@ export async function POST(request) {
             data_movimento: new Date().toISOString().split('T')[0],
             descricao: descricaoLancamento,
             valor: -Math.abs(valor),
-            conta_bancaria: contaOrigem, 
+            // ATENÇÃO: A conta de origem no lançamento é o NOME COMPLETO, não apenas o número.
+            // Precisamos buscar o nome completo da conta a partir do número.
+            conta_bancaria: contaOrigem, // Assumindo que contaOrigem já vem no formato 'BANCO - AG/CC'
             categoria: 'Pagamento PIX',
             empresa_associada: empresaAssociada,
             transaction_id: resultadoPix.endToEndId,
@@ -55,8 +60,12 @@ export async function POST(request) {
 
         if (insertError) {
             console.error("ERRO CRÍTICO: PIX enviado mas falhou ao registrar no banco de dados.", insertError);
+            // Busca a conta completa para exibir na mensagem de erro
+            const { data: contaInfo } = await supabase.from('contas_bancarias').select('banco, agencia, conta_corrente').eq('conta_corrente', contaOrigem.split('-')[0]).single();
+            const contaCompleta = contaInfo ? `${contaInfo.banco} - ${contaInfo.agencia}/${contaInfo.conta_corrente}` : contaOrigem;
+
             return NextResponse.json({ 
-                message: `PIX enviado com sucesso (ID: ${resultadoPix.endToEndId}), mas falhou ao registrar a movimentação no sistema. Por favor, registre manualmente.`,
+                message: `PIX enviado com sucesso (ID: ${resultadoPix.endToEndId}), mas falhou ao registrar a movimentação. Por favor, registre manualmente um débito de ${valor.toFixed(2)} na conta ${contaCompleta}.`,
                 pixResult: resultadoPix 
             }, { status: 207 });
         }
