@@ -5,8 +5,8 @@ import {
   formatCnpjCpf,
   formatTelefone,
   formatCep,
-  formatBRLInput, // Importar
-  parseBRL, // Importar
+  formatBRLInput,
+  parseBRL,
 } from "@/app/utils/formatters";
 import AutocompleteInput from "./AutocompleteInput";
 
@@ -45,7 +45,7 @@ export default function EditClienteModal({
     contasBancarias: [],
     ramoDeAtividade: "",
     emails: [],
-    limite_credito: "", // Novo campo
+    limite_credito: "",
   };
   const [formData, setFormData] = useState(initialState);
   const [isFetchingCnpj, setIsFetchingCnpj] = useState(false);
@@ -197,7 +197,7 @@ export default function EditClienteModal({
       ...prev,
       contasBancarias: [
         ...prev.contasBancarias,
-        { banco: "", agencia: "", contaCorrente: "" },
+        { banco: "", agencia: "", contaCorrente: "", tipo_chave_pix: "", chave_pix: "" },
       ],
     }));
   const removeConta = (index) => {
@@ -527,53 +527,78 @@ export default function EditClienteModal({
                   + Adicionar
                 </button>
               </div>
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-2 border border-gray-700 rounded-md p-2">
+              <div className="space-y-4 max-h-60 overflow-y-auto pr-2 border border-gray-700 rounded-md p-2">
                 {formData.contasBancarias?.length > 0 ? (
                   formData.contasBancarias.map((conta, index) => (
                     <div
                       key={index}
-                      className="grid grid-cols-4 gap-2 items-center"
+                      className="p-2 border-t border-gray-700 first:border-t-0"
                     >
-                      <div className="col-span-2">
-                        <AutocompleteInput
-                          value={conta.banco}
-                          onChange={(value) =>
-                            handleContaChange(index, "banco", value)
-                          }
-                        />
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+                        <div className="md:col-span-2">
+                          <label className="text-xs font-bold text-gray-400">Banco</label>
+                          <AutocompleteInput
+                            value={conta.banco}
+                            onChange={(value) =>
+                              handleContaChange(index, "banco", value)
+                            }
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-gray-400">Agência</label>
+                          <input
+                            type="text"
+                            name="agencia"
+                            placeholder="Agência"
+                            value={conta.agencia || ""}
+                            onChange={(e) =>
+                              handleContaChange(index, "agencia", e.target.value)
+                            }
+                            className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm w-full"
+                          />
+                        </div>
+                        <div className="flex items-end gap-1">
+                          <div className="flex-grow">
+                            <label className="text-xs font-bold text-gray-400">Conta</label>
+                            <input
+                              type="text"
+                              name="contaCorrente"
+                              placeholder="Conta"
+                              value={conta.contaCorrente || ""}
+                              onChange={(e) =>
+                                handleContaChange(
+                                  index,
+                                  "contaCorrente",
+                                  e.target.value
+                                )
+                              }
+                              className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm w-full"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeConta(index)}
+                            className="text-red-400 hover:text-red-500 font-bold mb-1"
+                          >
+                            &times;
+                          </button>
+                        </div>
                       </div>
-                      <input
-                        type="text"
-                        name="agencia"
-                        placeholder="Agência"
-                        value={conta.agencia || ""}
-                        onChange={(e) =>
-                          handleContaChange(index, "agencia", e.target.value)
-                        }
-                        className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"
-                      />
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="text"
-                          name="contaCorrente"
-                          placeholder="Conta"
-                          value={conta.contaCorrente || ""}
-                          onChange={(e) =>
-                            handleContaChange(
-                              index,
-                              "contaCorrente",
-                              e.target.value
-                            )
-                          }
-                          className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm w-full"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeConta(index)}
-                          className="text-red-400 hover:text-red-500 font-bold"
-                        >
-                          &times;
-                        </button>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                        <div>
+                           <label className="text-xs font-bold text-gray-400">Tipo Chave PIX</label>
+                           <select name="tipo_chave_pix" value={conta.tipo_chave_pix || ''} onChange={(e) => handleContaChange(index, 'tipo_chave_pix', e.target.value)} className="w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
+                             <option value="">Nenhum</option>
+                             <option value="CPF/CNPJ">CPF/CNPJ</option>
+                             <option value="Email">Email</option>
+                             <option value="Telefone">Telefone</option>
+                             <option value="Aleatória">Aleatória</option>
+                           </select>
+                        </div>
+                        <div>
+                           <label className="text-xs font-bold text-gray-400">Chave PIX</label>
+                           <input type="text" name="chave_pix" placeholder="Chave PIX" value={conta.chave_pix || ''} onChange={(e) => handleContaChange(index, 'chave_pix', e.target.value)} className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm w-full"/>
+                        </div>
                       </div>
                     </div>
                   ))

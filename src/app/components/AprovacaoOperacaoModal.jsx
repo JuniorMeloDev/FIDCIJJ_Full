@@ -19,6 +19,7 @@ export default function AprovacaoOperacaoModal({
     const [contaBancariaId, setContaBancariaId] = useState('');
     const [error, setError] = useState('');
     const [isPartialDebit, setIsPartialDebit] = useState(false);
+    const [efetuarPix, setEfetuarPix] = useState(false);
 
     const valorLiquidoFinal = useMemo(() => {
         if (!operacao) return 0;
@@ -32,6 +33,7 @@ export default function AprovacaoOperacaoModal({
             setContaBancariaId('');
             setIsPartialDebit(false);
             setError('');
+            setEfetuarPix(false);
         }
     }, [isOpen, operacao]);
 
@@ -48,6 +50,7 @@ export default function AprovacaoOperacaoModal({
             status,
             conta_bancaria_id: status === 'Aprovada' ? parseInt(contaBancariaId, 10) : null,
             isPartialDebit: status === 'Aprovada' ? isPartialDebit : false,
+            efetuar_pix: efetuarPix, // NOVO
         });
     };
 
@@ -148,7 +151,7 @@ export default function AprovacaoOperacaoModal({
                     </div>
                     
                     {status === 'Aprovada' && (
-                        <div className="pt-4">
+                        <div className="pt-4 space-y-2">
                             <label className="flex items-center cursor-pointer">
                                 <input
                                     type="checkbox"
@@ -158,6 +161,19 @@ export default function AprovacaoOperacaoModal({
                                 />
                                 <span className="ml-2 text-sm text-gray-200">Debitar Valor Parcial</span>
                             </label>
+
+                            {/* NOVO CHECKBOX PIX */}
+                            {contaSelecionada?.banco.toLowerCase().includes('inter') && (
+                                <label className="flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={efetuarPix}
+                                        onChange={(e) => setEfetuarPix(e.target.checked)}
+                                        className="h-4 w-4 rounded text-green-500 bg-gray-600 border-gray-500 focus:ring-green-500"
+                                    />
+                                    <span className="ml-2 text-sm text-green-300 font-semibold">Pagar com PIX (requer chave cadastrada no cliente)</span>
+                                </label>
+                            )}
                         </div>
                     )}
 

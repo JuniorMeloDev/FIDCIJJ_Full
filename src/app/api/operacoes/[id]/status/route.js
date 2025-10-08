@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/utils/supabaseClient";
 import jwt from "jsonwebtoken";
 import { sendOperationStatusEmail } from "@/app/lib/emailService";
+import { getInterAccessToken, enviarPixInter } from "@/app/lib/interService";
 
 export async function PUT(request, { params }) {
   try {
@@ -16,7 +17,7 @@ export async function PUT(request, { params }) {
     }
 
     const { id } = params;
-    const { status, conta_bancaria_id, descontos, valor_debito_parcial, data_debito_parcial } = await request.json();
+    const { status, conta_bancaria_id, descontos, valor_debito_parcial, data_debito_parcial, efetuar_pix } = await request.json();
 
     const { data: operacao, error: fetchError } = await supabase
       .from("operacoes")
@@ -55,9 +56,32 @@ export async function PUT(request, { params }) {
 
       const { data: conta } = await supabase
         .from("contas_bancarias")
-        .select("banco, agencia, conta_corrente")
+        .select("*")
         .eq("id", conta_bancaria_id)
         .single();
+      
+      let pixEndToEndId = null;
+      if (efetuar_pix && conta.banco.toLowerCase().includes('inter')) {
+          const { data: contasCliente } = await supabase.from('contas_bancarias').select('*').eq('cliente_id', operacao.cliente.id);
+          const contaDestino = contasCliente.find(c => c.chave_pix);
+
+          if (!contaDestino || !contaDestino.chave_pix) {
+              throw new Error(`Cliente ${operacao.cliente.nome} não possui chave PIX cadastrada para recebimento.`);
+          }
+
+          const dadosPix = {
+              valor: valorDebitado.toFixed(2),
+              destinatario: {
+                  chave: contaDestino.chave_pix
+              },
+              infoPagador: `Pagamento Borderô #${id}`
+          };
+          
+          const tokenInter = await getInterAccessToken();
+          const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, conta.conta_corrente);
+          pixEndToEndId = resultadoPix.endToEndId;
+      }
+
       const { data: clientes } = await supabase
         .from("clientes")
         .select("nome")
@@ -78,6 +102,10 @@ export async function PUT(request, { params }) {
         ].join(", ");
         descricaoLancamento = `Borderô ${docType} ${numerosDoc}`;
       }
+      
+      if(pixEndToEndId) {
+          descricaoLancamento = `PIX Enviado - ${descricaoLancamento} (E2E: ${pixEndToEndId.substring(0, 10)}...)`;
+      }
 
       await supabase.from("movimentacoes_caixa").insert({
         operacao_id: id,
@@ -96,11 +124,10 @@ export async function PUT(request, { params }) {
             conta_bancaria_id,
             valor_liquido: novoValorLiquido,
             valor_total_descontos: operacao.valor_total_descontos + totalDescontosAdicionais
-            // A linha incorreta de 'limite_utilizado' foi removida daqui
         })
         .eq("id", id);
 
-    } else { // Rejeitada
+    } else {
       await supabase.from("duplicatas").delete().eq("operacao_id", id);
       await supabase.from("operacoes").update({ status: status }).eq("id", id);
     }

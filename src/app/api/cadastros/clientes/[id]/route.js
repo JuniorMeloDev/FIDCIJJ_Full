@@ -22,7 +22,6 @@ export async function PUT(request, { params }) {
             ramoDeAtividade,
             tiposOperacao,
             sendWelcomeEmail: sendWelcomeFlag,
-            // Propriedades de relacionamento que não devem ser passadas no update
             contas_bancarias,
             cliente_emails,
             cliente_tipos_operacao,
@@ -47,6 +46,8 @@ export async function PUT(request, { params }) {
                 banco: c.banco,
                 agencia: c.agencia,
                 conta_corrente: c.contaCorrente,
+                tipo_chave_pix: c.tipo_chave_pix, // NOVO
+                chave_pix: c.chave_pix,           // NOVO
                 cliente_id: id 
             }));
             await supabase.from('contas_bancarias').insert(contasToInsert);
@@ -98,16 +99,12 @@ export async function PUT(request, { params }) {
             if (sendWelcomeFlag) {
                 const recipientEmail = clienteData.email || (emails && emails.length > 0 ? emails[0] : null);
                 if (recipientEmail) {
-                    console.log("📧 Enviando e-mail de boas-vindas para:", recipientEmail);
                     await sendWelcomeEmail({
                         clienteNome: clienteData.nome,
                         username: acesso.username,
                         tempPassword: tempPassword,
                         recipientEmail: recipientEmail
                     });
-                    console.log("✅ E-mail enviado com sucesso!");
-                } else {
-                    console.warn("⚠ Nenhum e-mail encontrado para envio de boas-vindas.");
                 }
             }
         }

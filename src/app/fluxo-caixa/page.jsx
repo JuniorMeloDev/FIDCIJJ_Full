@@ -283,6 +283,14 @@ export default function FluxoDeCaixaPage() {
   };
 
   const handleSaveLancamento = async (payload) => {
+    // Se o payload não for fornecido, apenas recarregue os dados (usado após sucesso do PIX).
+    if (!payload) {
+        showNotification("PIX enviado e lançamento registrado!", "success");
+        fetchMovimentacoes(filters, sortConfig);
+        fetchSaldos(filters);
+        return true;
+    }
+
     try {
       const response = await fetch(`/api/lancamentos`, {
         method: "POST",
