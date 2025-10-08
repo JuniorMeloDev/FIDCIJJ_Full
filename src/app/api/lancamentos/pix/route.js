@@ -32,8 +32,8 @@ export async function POST(request) {
         // incluindo dataPagamento e o nome correto do campo 'descricao'.
         const dadosPix = {
             valor: parseFloat(valor.toFixed(2)), // Garante que é NÚMERO
-            dataPagamento: format(new Date(), 'yyyy-MM-dd'), // Incluindo a data novamente
-            descricao: descricao, // O nome do campo é 'descricao'
+            dataPagamento: format(new Date(), 'yyyy-MM-dd'), // Inclui a data
+            descricao: descricao,
             destinatario: {
                 tipo: "CHAVE",
                 chave: chaveFinal
