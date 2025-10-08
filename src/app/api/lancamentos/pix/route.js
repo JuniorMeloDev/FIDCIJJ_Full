@@ -32,7 +32,6 @@ export async function POST(request) {
         // incluindo dataPagamento e o nome correto do campo 'descricao'.
         const dadosPix = {
             valor: valor.toFixed(2),
-            dataPagamento: format(new Date(), 'yyyy-MM-dd'), // A API exige a data do pagamento
             descricao: descricao, // O nome correto do campo é 'descricao'
             destinatario: {
                 tipo: "CHAVE",
