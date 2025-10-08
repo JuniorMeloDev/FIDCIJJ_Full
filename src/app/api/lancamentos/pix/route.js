@@ -32,7 +32,7 @@ export async function POST(request) {
         // incluindo dataPagamento e o nome correto do campo 'descricao'.
         const dadosPix = {
             valor: valor.toFixed(2),
-            descricao: descricao, // O nome correto do campo é 'descricao'
+            infoPagador: descricao, // O nome correto do campo é 'descricao'
             destinatario: {
                 tipo: "CHAVE",
                 chave: chaveFinal
