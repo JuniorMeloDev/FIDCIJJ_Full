@@ -14,10 +14,11 @@ const createInterAgent = () => {
     }
 
     // ================== INÍCIO DA CORREÇÃO ==================
-    // Usar Buffer.from para garantir a integridade dos certificados no ambiente de produção.
+    // Simplificando a criação do agente para alinhar com outras integrações
+    // que já funcionam. O .replace() é a parte mais importante para o ambiente Vercel.
     return new https.Agent({
-        cert: Buffer.from(certificate.replace(/\\n/g, '\n'), 'utf-8'),
-        key: Buffer.from(privateKey.replace(/\\n/g, '\n'), 'utf-8'),
+        cert: certificate.replace(/\\n/g, '\n'),
+        key: privateKey.replace(/\\n/g, '\n'),
     });
     // =================== FIM DA CORREÇÃO ====================
 };
@@ -57,16 +58,22 @@ export async function getInterAccessToken() {
                 try {
                     const jsonData = JSON.parse(data);
                     if (res.statusCode >= 200 && res.statusCode < 300) {
+                        console.log("[LOG INTER] Token obtido com sucesso.");
                         resolve(jsonData);
                     } else {
+                        console.error(`[ERRO INTER] Falha ao obter token (Status: ${res.statusCode}):`, data);
                         reject(new Error(`Erro ${res.statusCode} ao obter token: ${jsonData.error_description || data}`));
                     }
                 } catch (e) {
+                    console.error("[ERRO INTER] Falha ao processar resposta do token:", data);
                     reject(new Error(`Falha ao processar resposta do token: ${data}`));
                 }
             });
         });
-        req.on('error', (e) => reject(new Error(`Erro de rede na requisição de token: ${e.message}`)));
+        req.on('error', (e) => {
+            console.error("[ERRO INTER] Erro de rede na requisição de token:", e);
+            reject(new Error(`Erro de rede na requisição de token: ${e.message}`));
+        });
         req.write(postData);
         req.end();
     });
@@ -98,10 +105,11 @@ export async function consultarSaldoInter(accessToken, contaCorrente) {
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
                 try {
+                    const jsonData = JSON.parse(data);
                     if (res.statusCode >= 200 && res.statusCode < 300) {
-                        resolve(JSON.parse(data));
+                        resolve(jsonData);
                     } else {
-                        reject(new Error(`Erro ${res.statusCode} ao consultar saldo: ${data}`));
+                        reject(new Error(`Erro ${res.statusCode} ao consultar saldo: ${jsonData.detail || jsonData.title || data}`));
                     }
                 } catch(e) {
                      reject(new Error(`Falha ao processar resposta do saldo: ${data}`));
@@ -136,10 +144,11 @@ export async function consultarExtratoInter(accessToken, contaCorrente, dataInic
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
                 try {
+                     const jsonData = JSON.parse(data);
                      if (res.statusCode >= 200 && res.statusCode < 300) {
-                        resolve(JSON.parse(data));
+                        resolve(jsonData);
                     } else {
-                        reject(new Error(`Erro ${res.statusCode} ao consultar extrato: ${data}`));
+                        reject(new Error(`Erro ${res.statusCode} ao consultar extrato: ${jsonData.detail || jsonData.title || data}`));
                     }
                 } catch(e) {
                      reject(new Error(`Falha ao processar resposta do extrato: ${data}`));
