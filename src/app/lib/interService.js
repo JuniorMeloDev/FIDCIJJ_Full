@@ -30,18 +30,25 @@ export async function getInterAccessToken() {
         throw new Error('As credenciais de produção (INTER_CLIENT_ID, INTER_CLIENT_SECRET) do Inter não estão configuradas.');
     }
     const tokenEndpoint = 'https://cdpj.partners.bancointer.com.br/oauth/v2/token';
+
+    // ================== INÍCIO DA CORREÇÃO ==================
+    // Adicionado o escopo completo para garantir todas as permissões necessárias.
+    const fullScope = 'extrato.read pagamento-pix.write pagamento-pix.read cob.write cob.read cobv.write cobv.read lotecobv.write lotecobv.read pix.write pix.read webhook.write webhook.read payloadlocation.write payloadlocation.read boleto-cobranca.read boleto-cobranca.write pagamento-boleto.read pagamento-boleto.write pagamento-darf.write pagamento-lote.write pagamento-lote.read webhook-banking.read webhook-banking.write';
+
     const postData = new URLSearchParams({
         'grant_type': 'client_credentials',
         'client_id': clientId,
         'client_secret': clientSecret,
-        'scope': 'extrato.read pagamento-pix.write pagamento-pix.read'
+        'scope': fullScope
     }).toString();
+    // =================== FIM DA CORREÇÃO ====================
+
     const options = {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         agent: createInterAgent(),
     };
-    console.log("[LOG INTER] Enviando requisição de token para PRODUÇÃO.");
+    console.log("[LOG INTER] Enviando requisição de token para PRODUÇÃO com escopo completo.");
     return new Promise((resolve, reject) => {
         const req = https.request(tokenEndpoint, options, (res) => {
             let data = '';
@@ -181,7 +188,6 @@ export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
                         reject(new Error(`Erro ${res.statusCode}: ${errorMessage}`));
                     }
                 } catch(e) {
-                    // Se a resposta não for JSON (pode acontecer em alguns erros), rejeita com o texto puro
                     reject(new Error(`Falha ao processar resposta do PIX: ${data}`));
                 }
             });
