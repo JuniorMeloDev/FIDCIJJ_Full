@@ -1,3 +1,4 @@
+// src/app/api/lancamentos/pix/route.js
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
@@ -17,42 +18,46 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Todos os campos são obrigatórios para o PIX.' }, { status: 400 });
         }
 
+        // 1. Busca a conta bancária completa para usar o nome padronizado
+        const { data: contaInfo, error: contaError } = await supabase
+            .from('contas_bancarias')
+            .select('banco, agencia, conta_corrente')
+            .eq('conta_corrente', contaOrigem)
+            .single();
+
+        if (contaError || !contaInfo) {
+            throw new Error(`Conta de origem (${contaOrigem}) não encontrada no cadastro de contas.`);
+        }
+        
+        const nomeContaCompleto = `${contaInfo.banco} - ${contaInfo.agencia}/${contaInfo.conta_corrente}`;
+
         let chaveFinal = pix.chave;
         if (pix.tipo === 'Telefone') {
             const numeros = pix.chave.replace(/\D/g, '');
-            if (numeros.length >= 10 && !numeros.startsWith('55')) {
-                chaveFinal = `+55${numeros}`;
-            } else if (numeros.length >= 10 && !numeros.startsWith('+')) {
-                 chaveFinal = `+${numeros}`;
-            }
+            chaveFinal = numeros.length >= 10 && !numeros.startsWith('+55') ? `+55${numeros}` : numeros;
         }
 
-        // ================== INÍCIO DA CORREÇÃO DEFINITIVA ==================
-        // Ajusta o payload para corresponder exatamente à documentação do Inter,
-        // incluindo dataPagamento e o nome correto do campo 'descricao'.
         const dadosPix = {
-            valor: parseFloat(valor.toFixed(2)), // Garante que é NÚMERO
-            dataPagamento: format(new Date(), 'yyyy-MM-dd'), // Inclui a data
+            valor: parseFloat(valor.toFixed(2)),
+            dataPagamento: format(new Date(), 'yyyy-MM-dd'),
             descricao: descricao,
             destinatario: {
                 tipo: "CHAVE",
                 chave: chaveFinal
             }
         };
-        // =================== FIM DA CORREÇÃO DEFINITIVA ====================
 
         const tokenInter = await getInterAccessToken();
         const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, contaOrigem);
 
         const descricaoLancamento = `PIX Enviado - ${descricao}`;
         
+        // 2. Insere o lançamento usando o nome completo e correto da conta
         const { error: insertError } = await supabase.from('movimentacoes_caixa').insert({
             data_movimento: new Date().toISOString().split('T')[0],
             descricao: descricaoLancamento,
             valor: -Math.abs(valor),
-            // ATENÇÃO: A conta de origem no lançamento é o NOME COMPLETO, não apenas o número.
-            // Precisamos buscar o nome completo da conta a partir do número.
-            conta_bancaria: contaOrigem, // Assumindo que contaOrigem já vem no formato 'BANCO - AG/CC'
+            conta_bancaria: nomeContaCompleto, // <-- CORREÇÃO APLICADA AQUI
             categoria: 'Pagamento PIX',
             empresa_associada: empresaAssociada,
             transaction_id: resultadoPix.endToEndId,
@@ -60,12 +65,8 @@ export async function POST(request) {
 
         if (insertError) {
             console.error("ERRO CRÍTICO: PIX enviado mas falhou ao registrar no banco de dados.", insertError);
-            // Busca a conta completa para exibir na mensagem de erro
-            const { data: contaInfo } = await supabase.from('contas_bancarias').select('banco, agencia, conta_corrente').eq('conta_corrente', contaOrigem.split('-')[0]).single();
-            const contaCompleta = contaInfo ? `${contaInfo.banco} - ${contaInfo.agencia}/${contaInfo.conta_corrente}` : contaOrigem;
-
             return NextResponse.json({ 
-                message: `PIX enviado com sucesso (ID: ${resultadoPix.endToEndId}), mas falhou ao registrar a movimentação. Por favor, registre manualmente um débito de ${valor.toFixed(2)} na conta ${contaCompleta}.`,
+                message: `PIX enviado com sucesso (ID: ${resultadoPix.endToEndId}), mas falhou ao registrar a movimentação. Por favor, registre manualmente um débito de ${valor.toFixed(2)} na conta ${nomeContaCompleto}.`,
                 pixResult: resultadoPix 
             }, { status: 207 });
         }

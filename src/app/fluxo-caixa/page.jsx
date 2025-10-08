@@ -1,3 +1,4 @@
+// src/app/fluxo-caixa/page.jsx
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -15,9 +16,10 @@ import ComplementModal from "@/app/components/ComplementModal";
 import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal";
 import { format as formatDateFns } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import ConciliacaoModal from "@/app/components/ConciliacaoModal";
 
 const ITEMS_PER_PAGE = 8;
-const INTER_ITEMS_PER_PAGE = 2; // NOVO: Itens por página para o extrato do Inter
+const INTER_ITEMS_PER_PAGE = 10;
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -29,7 +31,7 @@ export default function FluxoDeCaixaPage() {
   const [operacaoParaEmail, setOperacaoParaEmail] = useState(null);
   const [itemParaExcluir, setItemParaExcluir] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [interCurrentPage, setInterCurrentPage] = useState(1); // NOVO: Estado para a página do extrato do Inter
+  const [interCurrentPage, setInterCurrentPage] = useState(1);
   const [contasMaster, setContasMaster] = useState([]);
   const [clienteMasterNome, setClienteMasterNome] = useState("");
   const [filters, setFilters] = useState({
@@ -38,7 +40,7 @@ export default function FluxoDeCaixaPage() {
     descricao: "",
     contaBancaria: "",
     categoria: "Todos",
-    contaExterna: "", 
+    contaExterna: "",
   });
   const [sortConfig, setSortConfig] = useState({
     key: "data_movimento",
@@ -59,13 +61,23 @@ export default function FluxoDeCaixaPage() {
   const [lancamentoParaComplemento, setLancamentoParaComplemento] =
     useState(null);
   const [estornoInfo, setEstornoInfo] = useState(null);
-
   const [interSaldo, setInterSaldo] = useState(null);
   const [interExtrato, setInterExtrato] = useState(null);
+  const [isConciliacaoModalOpen, setIsConciliacaoModalOpen] = useState(false);
+  const [transacaoParaConciliar, setTransacaoParaConciliar] = useState(null);
 
   const getAuthHeader = () => {
     const token = sessionStorage.getItem("authToken");
     return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+    const fetchApiData = async (url) => {
+    try {
+      const res = await fetch(url, { headers: getAuthHeader() });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
+    }
   };
 
   const showNotification = (message, type) => {
@@ -218,6 +230,62 @@ export default function FluxoDeCaixaPage() {
     return () => document.removeEventListener("click", handleClick);
   }, []);
 
+  const fetchDuplicatasBySacado = async (sacadoId) => {
+    if (!sacadoId) return [];
+    try {
+      const response = await fetch(
+        `/api/duplicatas?sacadoId=${sacadoId}&status=Pendente`,
+        { headers: getAuthHeader() }
+      );
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (err) {
+      showNotification("Erro ao buscar duplicatas do sacado.", "error");
+      return [];
+    }
+  };
+
+  const fetchSacados = (query) =>
+    fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
+
+  const handleConciliarTransacao = (transacao) => {
+    setTransacaoParaConciliar({
+      id: transacao.idTransacao,
+      data: transacao.dataEntrada,
+      descricao: transacao.descricao,
+      valor: parseFloat(transacao.valor),
+    });
+    setIsConciliacaoModalOpen(true);
+  };
+
+  const handleConfirmarConciliacao = async ({
+    duplicataIds,
+    detalhesTransacao,
+  }) => {
+    try {
+      const response = await fetch(`/api/duplicatas/conciliar-pagamento`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify({
+          duplicataIds,
+          detalhesTransacao,
+          contaBancaria: filters.contaExterna,
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Falha ao conciliar o pagamento.");
+      }
+      showNotification(
+        "Pagamento conciliado e duplicatas baixadas com sucesso!",
+        "success"
+      );
+      clearFilters();
+    } catch (err) {
+      showNotification(err.message, "error");
+    }
+  };
+
   const interExtratoProcessado = useMemo(() => {
     if (!interExtrato?.transacoes || !interSaldo) return [];
     const groupedByDate = interExtrato.transacoes.reduce((acc, t) => {
@@ -278,17 +346,16 @@ export default function FluxoDeCaixaPage() {
 
   const handleFilterChange = (e) => {
     setCurrentPage(1);
-    setInterCurrentPage(1); // NOVO: Reseta a página do Inter ao mudar o filtro
+    setInterCurrentPage(1);
     setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleSaveLancamento = async (payload) => {
-    // Se o payload não for fornecido, apenas recarregue os dados (usado após sucesso do PIX).
     if (!payload) {
-        showNotification("PIX enviado e lançamento registrado!", "success");
-        fetchMovimentacoes(filters, sortConfig);
-        fetchSaldos(filters);
-        return true;
+      showNotification("PIX enviado e lançamento registrado!", "success");
+      fetchMovimentacoes(filters, sortConfig);
+      fetchSaldos(filters);
+      return true;
     }
 
     try {
@@ -507,10 +574,12 @@ export default function FluxoDeCaixaPage() {
       ? "Resultado do Período"
       : "Saldos Atuais";
 
-  // NOVO: Lógica de paginação para o extrato do Inter
   const interIndexOfLastItem = interCurrentPage * INTER_ITEMS_PER_PAGE;
   const interIndexOfFirstItem = interIndexOfLastItem - INTER_ITEMS_PER_PAGE;
-  const currentInterItems = interExtratoProcessado.slice(interIndexOfFirstItem, interIndexOfLastItem);
+  const currentInterItems = interExtratoProcessado.slice(
+    interIndexOfFirstItem,
+    interIndexOfLastItem
+  );
 
   return (
     <>
@@ -525,6 +594,14 @@ export default function FluxoDeCaixaPage() {
         onSave={handleSaveLancamento}
         contasMaster={contasMaster}
         clienteMasterNome={clienteMasterNome}
+      />
+      <ConciliacaoModal
+        isOpen={isConciliacaoModalOpen}
+        onClose={() => setIsConciliacaoModalOpen(false)}
+        onConfirm={handleConfirmarConciliacao}
+        transacao={transacaoParaConciliar}
+        fetchSacados={fetchSacados}
+        fetchDuplicatasBySacado={fetchDuplicatasBySacado}
       />
       <EditLancamentoModal
         isOpen={isEditModalOpen}
@@ -584,7 +661,6 @@ export default function FluxoDeCaixaPage() {
         </div>
 
         <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0">
-          {/* ALTERAÇÃO 2: Barra Lateral com rolagem única */}
           <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4 lg:overflow-y-auto lg:max-h-[calc(100vh-160px)] pr-2">
             <motion.div
               initial={{ opacity: 0 }}
@@ -594,7 +670,6 @@ export default function FluxoDeCaixaPage() {
               <h2 className="text-lg font-semibold text-gray-100 mb-2">
                 {saldosTitle}
               </h2>
-              {/* ATENÇÃO: As classes 'max-h-48' e 'overflow-y-auto' foram removidas da div abaixo */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 pr-2">
                 {saldos.map((saldo, index) => (
                   <div
@@ -623,7 +698,6 @@ export default function FluxoDeCaixaPage() {
               onClear={clearFilters}
             />
           </div>
-          {/* FIM DA ALTERAÇÃO 2 */}
 
           <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
             {error && <p className="text-red-400 text-center py-10">{error}</p>}
@@ -638,7 +712,6 @@ export default function FluxoDeCaixaPage() {
                     <div className="flex-grow overflow-y-auto">
                       {currentInterItems.length > 0 ? (
                         <div className="space-y-4">
-                        {/* ALTERAÇÃO 1: Mapeia os dados paginados do extrato do Inter */}
                           {currentInterItems.map((group) => (
                             <div key={group.date}>
                               <div className="flex justify-between items-center bg-gray-600 p-2 rounded-t-md sticky top-0 z-10">
@@ -656,7 +729,13 @@ export default function FluxoDeCaixaPage() {
                                 {group.transactions.map((t, index) => (
                                   <li
                                     key={t.idTransacao || index}
-                                    className="py-2 flex justify-between items-center text-sm"
+                                    className="py-2 flex justify-between items-center text-sm cursor-pointer hover:bg-gray-600/50"
+                                    onContextMenu={(e) => {
+                                      if (t.tipoOperacao === "C") {
+                                        e.preventDefault();
+                                        handleConciliarTransacao(t);
+                                      }
+                                    }}
                                   >
                                     <div>
                                       <p
@@ -695,14 +774,13 @@ export default function FluxoDeCaixaPage() {
                         </p>
                       )}
                     </div>
-                    {/* NOVO: Adiciona o componente de paginação para o extrato do Inter */}
                     <div className="flex-shrink-0 pt-4">
-                        <Pagination
-                            totalItems={interExtratoProcessado.length}
-                            itemsPerPage={INTER_ITEMS_PER_PAGE}
-                            currentPage={interCurrentPage}
-                            onPageChange={(page) => setInterCurrentPage(page)}
-                        />
+                      <Pagination
+                        totalItems={interExtratoProcessado.length}
+                        itemsPerPage={INTER_ITEMS_PER_PAGE}
+                        currentPage={interCurrentPage}
+                        onPageChange={(page) => setInterCurrentPage(page)}
+                      />
                     </div>
                   </>
                 ) : (
@@ -804,7 +882,87 @@ export default function FluxoDeCaixaPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="py-1">
-              {/* ...código original do menu de contexto... */}
+              {contextMenu.selectedItem.categoria === "Pagamento de Borderô" && (
+                <>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleAbrirModalComplemento();
+                    }}
+                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                  >
+                    Lançar Complemento
+                  </a>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleGeneratePdf();
+                    }}
+                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                  >
+                    Gerar PDF do Borderô
+                  </a>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleAbrirEmailModal();
+                    }}
+                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                  >
+                    Enviar Borderô por E-mail
+                  </a>
+                  <div className="border-t border-gray-600 my-1"></div>
+                </>
+              )}
+
+              {contextMenu.selectedItem.categoria === "Recebimento" && (
+                <>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleEstornarRequest();
+                    }}
+                    className="block px-4 py-2 text-sm text-yellow-400 hover:bg-gray-600"
+                  >
+                    Estornar Liquidação
+                  </a>
+                  <div className="border-t border-gray-600 my-1"></div>
+                </>
+              )}
+
+              {[
+                "Despesa Avulsa",
+                "Receita Avulsa",
+                "Movimentação Avulsa",
+              ].includes(contextMenu.selectedItem.categoria) && (
+                <>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleEditRequest();
+                    }}
+                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                  >
+                    Editar Lançamento
+                  </a>
+                  <div className="border-t border-gray-600 my-1"></div>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDeleteRequest();
+                    }}
+                    className="block px-4 py-2 text-sm text-red-400 hover:bg-gray-600"
+                  >
+                    Excluir Lançamento
+                  </a>
+                </>
+              )}
             </div>
           </div>
         )}
