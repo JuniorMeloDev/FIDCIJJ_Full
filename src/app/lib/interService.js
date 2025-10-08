@@ -150,39 +150,60 @@ export async function consultarExtratoInter(accessToken, contaCorrente, dataInic
 /**
  * Envia um pagamento PIX.
  */
+
 export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
-    // ... (esta função não muda)
     console.log("\n--- [INTER API] Etapa 4: Envio de PIX ---");
+
     const apiEndpoint = 'https://cdpj.partners.bancointer.com.br/banking/v2/pix';
-    const payload = JSON.stringify(dadosPix);
     const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
+
+    // Garante campos obrigatórios e formato correto
+    const body = {
+        valor: Number(dadosPix.valor),
+        descricao: dadosPix.descricao || 'Pagamento via API',
+        dataPagamento: dadosPix.dataPagamento || format(new Date(), 'yyyy-MM-dd'),
+        destinatario: {
+            tipo: dadosPix.destinatario?.tipo || 'CHAVE',
+            chave: dadosPix.destinatario?.chave
+        }
+    };
+
+    // Gera UUID para idempotência (evita duplicidade de pagamento)
+    const idIdempotente = randomUUID();
+
     const options = {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`,
-            'x-conta-corrente': cleanContaCorrente
+            'x-conta-corrente': cleanContaCorrente,
+            'x-id-idempotente': idIdempotente,
+            'Content-Type': 'application/json'
         },
-        agent: createInterAgent(),
+        agent: createInterAgent()
     };
+
+    const payload = JSON.stringify(body);
+
     return new Promise((resolve, reject) => {
         const req = https.request(apiEndpoint, options, (res) => {
             let data = '';
-            res.on('data', (chunk) => (data += chunk));
+            res.on('data', chunk => data += chunk);
             res.on('end', () => {
                 try {
                     const jsonData = JSON.parse(data);
                     if (res.statusCode >= 200 && res.statusCode < 300) {
+                        console.log("✅ PIX enviado com sucesso:", jsonData);
                         resolve(jsonData);
                     } else {
+                        console.error("❌ Erro ao enviar PIX:", data);
                         reject(new Error(`Erro ${res.statusCode}: ${jsonData.detail || data}`));
                     }
-                } catch(e) {
+                } catch (e) {
                     reject(new Error(`Falha ao processar resposta do PIX: ${data}`));
                 }
             });
         });
-        req.on('error', (e) => reject(new Error(`Erro de rede no envio de PIX: ${e.message}`)));
+        req.on('error', e => reject(new Error(`Erro de rede no envio de PIX: ${e.message}`)));
         req.write(payload);
         req.end();
     });
