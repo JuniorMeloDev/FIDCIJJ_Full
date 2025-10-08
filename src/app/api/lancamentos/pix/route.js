@@ -31,7 +31,7 @@ export async function POST(request) {
         // Ajusta o payload para corresponder exatamente à documentação do Inter,
         // incluindo dataPagamento e o nome correto do campo 'descricao'.
         const dadosPix = {
-            valor: parseFloat(valor.toFixed(2)),
+            valor: valor.toFixed(2),
             dataPagamento: format(new Date(), 'yyyy-MM-dd'), // A API exige a data do pagamento
             descricao: descricao, // O nome correto do campo é 'descricao'
             destinatario: {
