@@ -1,5 +1,5 @@
 // src/app/lib/interService.js
-import https from 'https://';
+import https from 'https';
 import { format } from 'date-fns';
 
 /**
@@ -74,10 +74,8 @@ export async function consultarSaldoInter(accessToken, contaCorrente) {
     const hoje = format(new Date(), 'yyyy-MM-dd');
     const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/saldo?dataSaldo=${hoje}`;
     
-    // ================== INÍCIO DA CORREÇÃO ==================
     // Remove o dígito verificador da conta corrente
     const cleanContaCorrente = (contaCorrente || '').split('-')[0];
-    // =================== FIM DA CORREÇÃO ====================
 
     const options = {
         method: 'GET',
@@ -116,9 +114,7 @@ export async function consultarExtratoInter(accessToken, contaCorrente, dataInic
     console.log("\n--- [INTER API] Etapa 3: Consulta de Extrato ---");
     const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/extrato?dataInicio=${dataInicio}&dataFim=${dataFim}`;
     
-    // ================== INÍCIO DA CORREÇÃO ==================
     const cleanContaCorrente = (contaCorrente || '').split('-')[0];
-    // =================== FIM DA CORREÇÃO ====================
 
     const options = {
         method: 'GET',
@@ -157,9 +153,7 @@ export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
     const apiEndpoint = 'https://cdpj.partners.bancointer.com.br/banking/v2/pix';
     const payload = JSON.stringify(dadosPix);
 
-    // ================== INÍCIO DA CORREÇÃO ==================
     const cleanContaCorrente = (contaCorrente || '').split('-')[0];
-    // =================== FIM DA CORREÇÃO ====================
 
     const options = {
         method: 'POST',
@@ -180,7 +174,6 @@ export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
                     if (res.statusCode >= 200 && res.statusCode < 300) {
                         resolve(jsonData);
                     } else {
-                        // A mensagem de erro da API do Inter geralmente está em 'detail' ou 'title'
                         const errorMessage = jsonData.detail || jsonData.title || data;
                         reject(new Error(`Erro ${res.statusCode}: ${errorMessage}`));
                     }
