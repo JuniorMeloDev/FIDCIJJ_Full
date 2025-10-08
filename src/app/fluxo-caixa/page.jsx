@@ -230,20 +230,17 @@ export default function FluxoDeCaixaPage() {
     return () => document.removeEventListener("click", handleClick);
   }, []);
 
-  const fetchDuplicatasBySacado = async (sacadoId) => {
-    if (!sacadoId) return [];
-    try {
-      const response = await fetch(
-        `/api/duplicatas?sacadoId=${sacadoId}&status=Pendente`,
-        { headers: getAuthHeader() }
-      );
-      if (!response.ok) return [];
-      return await response.json();
-    } catch (err) {
-      showNotification("Erro ao buscar duplicatas do sacado.", "error");
-      return [];
-    }
-  };
+  const searchDuplicatasParaConciliacao = async (query) => {
+        if (!query) return [];
+        try {
+            const response = await fetch(`/api/duplicatas/search-conciliacao?query=${query}`, { headers: getAuthHeader() });
+            if (!response.ok) return [];
+            return await response.json();
+        } catch (err) {
+            showNotification("Erro ao buscar duplicatas.", "error");
+            return [];
+        }
+    };
 
   const fetchSacados = (query) =>
     fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
