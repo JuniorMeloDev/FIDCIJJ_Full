@@ -19,7 +19,7 @@ import ConciliacaoModal from "@/app/components/ConciliacaoModal";
 import PixReceiptModal from "@/app/components/PixReceiptModal";
 
 const ITEMS_PER_PAGE = 8;
-const INTER_ITEMS_PER_PAGE = 10;
+const INTER_ITEMS_PER_PAGE = 2;
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -602,25 +602,30 @@ export default function FluxoDeCaixaPage() {
   
   const handleAbrirComprovantePix = () => {
     if (!contextMenu.selectedItem) return;
+
     const item = contextMenu.selectedItem;
 
-    // --- CORREÇÃO DA DATA ---
-    // Evita problemas de fuso horário ao criar o objeto Date
     const dateParts = item.dataMovimento.split('-');
     const localDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-    // --- FIM DA CORREÇÃO ---
 
     const isComplemento = item.descricao.toLowerCase().includes('complemento');
+    
+    // --- LÓGICA DO RECIBO CORRIGIDA PARA INCLUIR DADOS DO RECEBEDOR ---
     const receipt = {
         valor: Math.abs(item.valor),
-        data: localDate, // Usa a data local corrigida
+        data: localDate,
         transactionId: item.transaction_id,
         descricao: isComplemento ? `Complemento Borderô #${item.operacaoId}` : `Pagamento Borderô #${item.operacaoId}`,
         pagador: {
             nome: clienteMasterNome,
             conta: item.contaBancaria,
+        },
+        recebedor: { // Novo
+            nome: item.empresaAssociada
         }
     };
+    // --- FIM DA CORREÇÃO ---
+
     setReceiptData(receipt);
     setIsReceiptModalOpen(true);
   };

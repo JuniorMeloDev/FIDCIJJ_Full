@@ -1,20 +1,62 @@
 'use client';
 
 import { FaCheckCircle, FaDownload } from 'react-icons/fa';
-import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
+import { formatBRLNumber } from '@/app/utils/formatters';
 import { format as formatDateFns } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { jsPDF } from 'jspdf';
 
 export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
     if (!isOpen || !receiptData) return null;
 
-    const handleDownload = () => {
-        alert('Funcionalidade de download do comprovante em PDF será implementada em breve.');
-        // Aqui entrará a lógica com jsPDF para gerar o PDF
-    };
-    
     const formatarDataTransacao = (date) => {
       return formatDateFns(date, "EEEE, dd/MM/yyyy", { locale: ptBR });
+    };
+    
+    const handleDownload = () => {
+        const doc = new jsPDF();
+        
+        // Título
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Comprovante de PIX', 105, 20, { align: 'center' });
+
+        // Valor
+        doc.setFontSize(18);
+        doc.text(formatBRLNumber(receiptData.valor), 105, 35, { align: 'center' });
+
+        // Sobre a transação
+        let y = 50;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Sobre a transação', 14, y);
+        y += 7;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(`Data: ${formatarDataTransacao(receiptData.data)}`, 14, y);
+        y += 7;
+        doc.text(`Horário: ${formatDateFns(receiptData.data, "HH:mm")}`, 14, y);
+        y += 7;
+        doc.text(`ID da transação:`, 14, y);
+        doc.setFont('courier', 'normal');
+        doc.text(`${receiptData.transactionId}`, 14, y + 5);
+        doc.setFont('helvetica', 'normal');
+        y += 12;
+        doc.text(`Mensagem: ${receiptData.descricao}`, 14, y);
+
+        // Quem pagou
+        y += 15;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Quem pagou', 14, y);
+        y += 7;
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Nome: ${receiptData.pagador.nome}`, 14, y);
+        y += 7;
+        doc.text(`Conta: ${receiptData.pagador.conta}`, 14, y);
+
+        doc.save(`comprovante_pix_${receiptData.transactionId.substring(0, 8)}.pdf`);
     };
 
     return (
