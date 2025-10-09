@@ -602,20 +602,25 @@ export default function FluxoDeCaixaPage() {
   
   const handleAbrirComprovantePix = () => {
     if (!contextMenu.selectedItem) return;
-
     const item = contextMenu.selectedItem;
 
+    // --- CORREÇÃO DA DATA ---
+    // Evita problemas de fuso horário ao criar o objeto Date
+    const dateParts = item.dataMovimento.split('-');
+    const localDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+    // --- FIM DA CORREÇÃO ---
+
+    const isComplemento = item.descricao.toLowerCase().includes('complemento');
     const receipt = {
         valor: Math.abs(item.valor),
-        data: new Date(item.dataMovimento),
+        data: localDate, // Usa a data local corrigida
         transactionId: item.transaction_id,
-        descricao: `Pagamento ref. Operação #${item.operacaoId}`,
+        descricao: isComplemento ? `Complemento Borderô #${item.operacaoId}` : `Pagamento Borderô #${item.operacaoId}`,
         pagador: {
             nome: clienteMasterNome,
             conta: item.contaBancaria,
         }
     };
-
     setReceiptData(receipt);
     setIsReceiptModalOpen(true);
   };
@@ -947,118 +952,49 @@ export default function FluxoDeCaixaPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="py-1">
-              {contextMenu.selectedItem.categoria ===
-                "Pagamento de Borderô" && (
-                <>
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleAbrirModalComplemento();
-                    }}
-                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-                  >
-                    Lançar Complemento
-                  </a>
-                  {/* --- LÓGICA DO BOTÃO DE COMPROVANTE --- */}
-                  {contextMenu.selectedItem.transaction_id && (
-                      <a
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          handleAbrirComprovantePix();
-                        }}
-                        className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-                      >
-                        Emitir Comprovante PIX
-                      </a>
-                  )}
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleGeneratePdf();
-                    }}
-                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-                  >
-                    Gerar PDF do Borderô
-                  </a>
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleAbrirEmailModal();
-                    }}
-                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-                  >
-                    Enviar Borderô por E-mail
-                  </a>
-                  <div className="border-t border-gray-600 my-1"></div>
-                </>
-              )}
-
-              {contextMenu.selectedItem.categoria === "Recebimento" && (
-                <>
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleEstornarRequest();
-                    }}
-                    className="block px-4 py-2 text-sm text-yellow-400 hover:bg-gray-600"
-                  >
-                    Estornar Liquidação
-                  </a>
-                  <div className="border-t border-gray-600 my-1"></div>
-                </>
-              )}
-
-              {[
-                "Despesa Avulsa",
-                "Receita Avulsa",
-                "Movimentação Avulsa",
-                "Pagamento PIX", // Adicionado aqui para cobrir todos os casos
-              ].includes(contextMenu.selectedItem.categoria) && (
-                <>
-                  {/* --- LÓGICA DUPLICADA PARA GARANTIR A EXIBIÇÃO --- */}
-                  {contextMenu.selectedItem.transaction_id && (
-                      <>
-                        <a
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleAbrirComprovantePix();
-                          }}
-                          className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-                        >
-                          Emitir Comprovante PIX
+                {contextMenu.selectedItem.categoria === "Pagamento de Borderô" && (
+                    <>
+                        <a href="#" onClick={(e) => { e.preventDefault(); handleAbrirModalComplemento(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">
+                            Lançar Complemento
                         </a>
+                        <a href="#" onClick={(e) => { e.preventDefault(); handleGeneratePdf(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">
+                            Gerar PDF do Borderô
+                        </a>
+                        <a href="#" onClick={(e) => { e.preventDefault(); handleAbrirEmailModal(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">
+                            Enviar Borderô por E-mail
+                        </a>
+                    </>
+                )}
+
+                {contextMenu.selectedItem.transaction_id && (
+                    <>
+                      <div className="border-t border-gray-600 my-1"></div>
+                      <a href="#" onClick={(e) => { e.preventDefault(); handleAbrirComprovantePix(); }} className="block px-4 py-2 text-sm text-orange-400 hover:bg-gray-600">
+                          Emitir Comprovante PIX
+                      </a>
+                    </>
+                )}
+
+                {contextMenu.selectedItem.categoria === "Recebimento" && (
+                  <>
+                    <div className="border-t border-gray-600 my-1"></div>
+                    <a href="#" onClick={(e) => { e.preventDefault(); handleEstornarRequest(); }} className="block px-4 py-2 text-sm text-yellow-400 hover:bg-gray-600">
+                        Estornar Liquidação
+                    </a>
+                  </>
+                )}
+                
+                {["Despesa Avulsa", "Receita Avulsa", "Movimentação Avulsa", "Pagamento PIX"].includes(contextMenu.selectedItem.categoria) && (
+                    <>
                         <div className="border-t border-gray-600 my-1"></div>
-                      </>
-                  )}
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleEditRequest();
-                    }}
-                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-                  >
-                    Editar Lançamento
-                  </a>
-                  <div className="border-t border-gray-600 my-1"></div>
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleDeleteRequest();
-                    }}
-                    className="block px-4 py-2 text-sm text-red-400 hover:bg-gray-600"
-                  >
-                    Excluir Lançamento
-                  </a>
-                </>
-              )}
+                        <a href="#" onClick={(e) => { e.preventDefault(); handleEditRequest(); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600">
+                            Editar Lançamento
+                        </a>
+                        <a href="#" onClick={(e) => { e.preventDefault(); handleDeleteRequest(); }} className="block px-4 py-2 text-sm text-red-400 hover:bg-gray-600">
+                            Excluir Lançamento
+                        </a>
+                    </>
+                )}
             </div>
           </div>
         )}
