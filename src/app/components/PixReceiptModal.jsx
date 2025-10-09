@@ -38,10 +38,16 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
 
             doc.setFillColor(34, 197, 94);
             doc.circle(105, 30, 8, 'F');
+
             doc.setDrawColor(255, 255, 255);
             doc.setLineWidth(1.5);
             doc.line(102, 30, 104, 32);
             doc.line(104, 32, 108, 28);
+            
+            // --- CORREÇÃO: Reseta a cor do desenho ---
+            doc.setDrawColor(200, 200, 200); // Um cinza claro
+            doc.setLineWidth(0.2);
+            // --- FIM DA CORREÇÃO ---
 
             doc.setFontSize(22);
             doc.setFont('helvetica', 'bold');
@@ -115,7 +121,6 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
             doc.text(`Instituição`, 14, y);
             doc.text(receiptData.pagador.conta || '', 196, y, { align: 'right' });
 
-            // --- CORREÇÃO FINAL APLICADA AQUI ---
             doc.save(receiptData.filename || `comprovante_pix.pdf`);
         });
     };
@@ -152,7 +157,7 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
                         </div>
                     )}
                     
-                    <div className="bg-gray-800 p-4 rounded-lg">
+                    <div className="bg-gray-700 p-4 rounded-lg">
                         <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-600 pb-1">Quem pagou</h3>
                          <div className="space-y-1">
                             <p><strong>Nome:</strong> {receiptData.pagador.nome}</p>

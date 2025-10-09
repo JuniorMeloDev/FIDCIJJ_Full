@@ -11,12 +11,15 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         
         // --- CORREÇÃO APLICADA AQUI ---
-        // A consulta agora busca os dados do cliente (incluindo o CNPJ) associado à operação.
+        // A consulta agora busca também as contas bancárias do cliente da operação.
         let query = supabase.from('movimentacoes_caixa').select(`
             *, 
             operacao:operacoes ( 
                 valor_liquido, 
-                cliente:clientes ( nome, cnpj ) 
+                cliente:clientes ( 
+                    id, nome, cnpj, 
+                    contas_bancarias ( banco, chave_pix, tipo_chave_pix )
+                ) 
             ),
             duplicata:duplicatas!liquidacao_mov_id ( id, nf_cte )
         `);
@@ -45,7 +48,7 @@ export async function GET(request) {
             contaBancaria: m.conta_bancaria,
             empresaAssociada: m.empresa_associada,
             operacaoId: m.operacao_id,
-            operacao: m.operacao, // Agora contém os dados do cliente
+            operacao: m.operacao,
             duplicata: m.duplicata
         }));
 
