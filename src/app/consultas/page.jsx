@@ -427,6 +427,37 @@ export default function ConsultasPage() {
       showNotification(err.message, "error");
     }
   };
+  
+  const handleDownloadBoletoJson = async () => {
+    const duplicataId = contextMenu.selectedItem?.id;
+    const banco = contextMenu.selectedItem?.banco_emissor_boleto;
+    if (!duplicataId || banco !== 'safra') {
+      showNotification('Esta opção é válida apenas para boletos Safra já emitidos.', 'error');
+      return;
+    }
+
+    showNotification('Preparando JSON para download...', 'info');
+    try {
+        const res = await fetch(`/api/dados-boleto/safra/${duplicataId}?json=true`, { headers: getAuthHeader() });
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.message || 'Falha ao obter dados do boleto.');
+        }
+        const data = await res.json();
+        const jsonString = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `boleto_safra_duplicata_${duplicataId}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (err) {
+        showNotification(err.message, 'error');
+    }
+  };
 
   const handleToggleSelectionMode = () => {
     setIsSelectionMode(!isSelectionMode);
@@ -773,6 +804,18 @@ export default function ConsultasPage() {
                 >
                   Emitir Boleto
                 </a>
+                {contextMenu.selectedItem?.banco_emissor_boleto === 'safra' && (
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDownloadBoletoJson();
+                    }}
+                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                  >
+                    Baixar JSON (Safra)
+                  </a>
+                )}
               </>
             )}
             <a

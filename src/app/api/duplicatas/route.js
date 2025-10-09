@@ -75,7 +75,8 @@ export async function GET(request) {
             contaLiquidacao: d.conta_liquidacao,
             sacado_id: d.sacado_id, // Exporta o ID para o frontend
             sacadoInfo: d.sacado,
-            operacao: d.operacao
+            operacao: d.operacao,
+            banco_emissor_boleto: d.banco_emissor_boleto, // <-- LINHA ADICIONADA
         }));
 
         const sortKey = searchParams.get('sort');
