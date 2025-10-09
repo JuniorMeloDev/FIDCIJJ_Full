@@ -19,7 +19,7 @@ import ConciliacaoModal from "@/app/components/ConciliacaoModal";
 import PixReceiptModal from "@/app/components/PixReceiptModal";
 
 const ITEMS_PER_PAGE = 8;
-const INTER_ITEMS_PER_PAGE = 2;
+const INTER_ITEMS_PER_PAGE = 10;
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -600,57 +600,64 @@ export default function FluxoDeCaixaPage() {
     }
   };
   
-  // --- FUNÇÃO CORRIGIDA E MELHORADA ---
   const handleAbrirComprovantePix = async () => {
-    if (!contextMenu.selectedItem) return;
-    const item = contextMenu.selectedItem;
-
-    const dateParts = item.dataMovimento.split('-');
-    const localDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-
-    const isManualPix = item.categoria === 'Pagamento PIX';
-    const isOperacaoPix = item.categoria === 'Pagamento de Borderô' && item.transaction_id;
-
-    let filename = '';
-    let recebedorData = {};
-    let mensagem = item.descricao;
-
-    if (isOperacaoPix) {
-        const op = item.operacao;
-        const docType = op?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
-        const numerosDoc = [...new Set(item.duplicata?.map(d => d.nf_cte.split('.')[0]))].join('_');
-        const valorFormatado = String(Math.abs(item.valor)).replace('.',',');
-
-        filename = `Comprovante Borderô ${docType} ${numerosDoc} - R$${valorFormatado}.pdf`;
-        mensagem = `Pagamento ref. Operação #${item.operacaoId}`;
-        
-        if (op && op.cliente) {
-            recebedorData = {
-                nome: op.cliente.nome,
-                cnpj: op.cliente.cnpj
-                // Adicionar instituição e chave pix se disponível no futuro
-            };
-        }
-    } else if (isManualPix) {
-        const valorFormatado = String(Math.abs(item.valor)).replace('.',',');
-        filename = `Comprovante PIX - ${item.descricao} - R$${valorFormatado}.pdf`;
-        recebedorData = { nome: item.empresaAssociada };
-        mensagem = item.descricao;
-    }
-
-    setReceiptData({
-        valor: Math.abs(item.valor),
-        data: localDate,
-        transactionId: item.transaction_id,
-        descricao: mensagem,
-        filename: filename,
-        pagador: {
-            nome: clienteMasterNome,
-            conta: item.contaBancaria,
-        },
-        recebedor: recebedorData
-    });
-    setIsReceiptModalOpen(true);
+      if (!contextMenu.selectedItem) return;
+      const item = contextMenu.selectedItem;
+  
+      const dateParts = item.dataMovimento.split('-');
+      const localDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+  
+      const isManualPix = item.categoria === 'Pagamento PIX';
+      const isOperacaoPix = item.categoria === 'Pagamento de Borderô' && item.transaction_id;
+  
+      let filename = '';
+      let recebedorData = {};
+      let mensagem = item.descricao;
+  
+      if (isOperacaoPix && item.operacao) {
+          const op = item.operacao;
+          const valorFormatado = formatBRLNumber(Math.abs(item.valor)).replace(/\s/g, ''); // R$2.620,00
+  
+          // Busca as duplicatas associadas para montar o nome do arquivo
+          const { data: duplicatas } = await fetchApiData(`/api/duplicatas/operacao/${item.operacaoId}`);
+          
+          let numerosDoc = 'N/A';
+          if (duplicatas && duplicatas.length > 0) {
+              numerosDoc = [...new Set(duplicatas.map(d => d.nfCte.split('.')[0]))].join('_');
+          }
+          
+          const docType = op?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
+          const prefixo = item.descricao.toLowerCase().includes('complemento') ? 'Complemento Borderô' : 'Borderô';
+          
+          filename = `${prefixo} ${docType} ${numerosDoc} - ${valorFormatado}.pdf`;
+          mensagem = `Pagamento ref. Operação #${item.operacaoId}`;
+          
+          if (op && op.cliente) {
+              recebedorData = {
+                  nome: op.cliente.nome,
+                  cnpj: op.cliente.cnpj
+              };
+          }
+      } else if (isManualPix) {
+          const valorFormatado = formatBRLNumber(Math.abs(item.valor)).replace(/\s/g, '');
+          filename = `Comprovante PIX - ${item.descricao} - ${valorFormatado}.pdf`;
+          recebedorData = { nome: item.empresaAssociada };
+          mensagem = item.descricao;
+      }
+  
+      setReceiptData({
+          valor: Math.abs(item.valor),
+          data: localDate,
+          transactionId: item.transaction_id,
+          descricao: mensagem,
+          filename: filename,
+          pagador: {
+              nome: clienteMasterNome,
+              conta: item.contaBancaria,
+          },
+          recebedor: recebedorData
+      });
+      setIsReceiptModalOpen(true);
   };
 
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { FaCheckCircle, FaDownload } from 'react-icons/fa';
-import { formatBRLNumber } from '@/app/utils/formatters';
+import { formatBRLNumber, formatCnpjCpf } from '@/app/utils/formatters';
 import { format as formatDateFns } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
@@ -32,22 +32,17 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
         };
 
         loadImageAsBase64('/inter.png', (logoBase64) => {
-            // Logo Inter
             if (logoBase64) {
                 doc.addImage(logoBase64, 'PNG', 95, 15, 20, 5);
             }
 
-            // Círculo Verde
-            doc.setFillColor(34, 197, 94); // green-500
+            doc.setFillColor(34, 197, 94);
             doc.circle(105, 30, 8, 'F');
-
-            // Checkmark
             doc.setDrawColor(255, 255, 255);
             doc.setLineWidth(1.5);
             doc.line(102, 30, 104, 32);
             doc.line(104, 32, 108, 28);
 
-            // Título e Valor
             doc.setFontSize(22);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(40, 40, 40);
@@ -60,8 +55,9 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
             doc.setFont('helvetica', 'bold');
             doc.text('Sobre a transação', 14, y);
             y += 4;
-            doc.setLineWidth(0.2);
+            doc.setLineDashPattern([1, 1], 0);
             doc.line(14, y, 196, y);
+            doc.setLineDashPattern([], 0);
 
             y += 8;
             doc.setFontSize(10);
@@ -83,19 +79,33 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
             doc.setFont('helvetica', 'bold');
             doc.text('Quem recebeu', 14, y);
             y += 4;
+            doc.setLineDashPattern([1, 1], 0);
             doc.line(14, y, 196, y);
+            doc.setLineDashPattern([], 0);
             y += 8;
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
             doc.text(`Nome`, 14, y);
             doc.text(receiptData.recebedor.nome || '', 196, y, { align: 'right' });
+            y += 7;
+            doc.text(`Cpf/Cnpj`, 14, y);
+            doc.text(formatCnpjCpf(receiptData.recebedor.cnpj || ''), 196, y, { align: 'right' });
+            y += 7;
+            doc.text(`Instituição`, 14, y);
+            doc.text(receiptData.recebedor.instituicao || 'Não informado', 196, y, { align: 'right' });
+            y += 7;
+            doc.text(`Chave Pix`, 14, y);
+            doc.text(receiptData.recebedor.chavePix || 'Não informado', 196, y, { align: 'right' });
+            
 
             y += 15;
             doc.setFontSize(14);
             doc.setFont('helvetica', 'bold');
             doc.text('Quem pagou', 14, y);
             y += 4;
+            doc.setLineDashPattern([1, 1], 0);
             doc.line(14, y, 196, y);
+            doc.setLineDashPattern([], 0);
             y += 8;
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
@@ -105,7 +115,8 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
             doc.text(`Instituição`, 14, y);
             doc.text(receiptData.pagador.conta || '', 196, y, { align: 'right' });
 
-            doc.save(`Bordero ${receiptData.transactionId.substring(0, 8)}.pdf`);
+            // --- CORREÇÃO FINAL APLICADA AQUI ---
+            doc.save(receiptData.filename || `comprovante_pix.pdf`);
         });
     };
 
@@ -134,11 +145,14 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
                             <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-600 pb-1">Quem recebeu</h3>
                              <div className="space-y-1">
                                 <p><strong>Nome:</strong> {receiptData.recebedor.nome}</p>
+                                <p><strong>Cpf/Cnpj:</strong> {formatCnpjCpf(receiptData.recebedor.cnpj)}</p>
+                                <p><strong>Instituição:</strong> {receiptData.recebedor.instituicao || 'Não informado'}</p>
+                                <p><strong>Chave Pix:</strong> {receiptData.recebedor.chavePix || 'Não informado'}</p>
                              </div>
                         </div>
                     )}
                     
-                    <div className="bg-gray-700 p-4 rounded-lg">
+                    <div className="bg-gray-800 p-4 rounded-lg">
                         <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-600 pb-1">Quem pagou</h3>
                          <div className="space-y-1">
                             <p><strong>Nome:</strong> {receiptData.pagador.nome}</p>
