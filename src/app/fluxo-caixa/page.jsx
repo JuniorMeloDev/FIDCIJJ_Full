@@ -600,33 +600,56 @@ export default function FluxoDeCaixaPage() {
     }
   };
   
-  const handleAbrirComprovantePix = () => {
+  // --- FUNÇÃO CORRIGIDA E MELHORADA ---
+  const handleAbrirComprovantePix = async () => {
     if (!contextMenu.selectedItem) return;
-
     const item = contextMenu.selectedItem;
 
     const dateParts = item.dataMovimento.split('-');
     const localDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
 
-    const isComplemento = item.descricao.toLowerCase().includes('complemento');
-    
-    // --- LÓGICA DO RECIBO CORRIGIDA PARA INCLUIR DADOS DO RECEBEDOR ---
-    const receipt = {
+    const isManualPix = item.categoria === 'Pagamento PIX';
+    const isOperacaoPix = item.categoria === 'Pagamento de Borderô' && item.transaction_id;
+
+    let filename = '';
+    let recebedorData = {};
+    let mensagem = item.descricao;
+
+    if (isOperacaoPix) {
+        const op = item.operacao;
+        const docType = op?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
+        const numerosDoc = [...new Set(item.duplicata?.map(d => d.nf_cte.split('.')[0]))].join('_');
+        const valorFormatado = String(Math.abs(item.valor)).replace('.',',');
+
+        filename = `Comprovante Borderô ${docType} ${numerosDoc} - R$${valorFormatado}.pdf`;
+        mensagem = `Pagamento ref. Operação #${item.operacaoId}`;
+        
+        if (op && op.cliente) {
+            recebedorData = {
+                nome: op.cliente.nome,
+                cnpj: op.cliente.cnpj
+                // Adicionar instituição e chave pix se disponível no futuro
+            };
+        }
+    } else if (isManualPix) {
+        const valorFormatado = String(Math.abs(item.valor)).replace('.',',');
+        filename = `Comprovante PIX - ${item.descricao} - R$${valorFormatado}.pdf`;
+        recebedorData = { nome: item.empresaAssociada };
+        mensagem = item.descricao;
+    }
+
+    setReceiptData({
         valor: Math.abs(item.valor),
         data: localDate,
         transactionId: item.transaction_id,
-        descricao: isComplemento ? `Complemento Borderô #${item.operacaoId}` : `Pagamento Borderô #${item.operacaoId}`,
+        descricao: mensagem,
+        filename: filename,
         pagador: {
             nome: clienteMasterNome,
             conta: item.contaBancaria,
         },
-        recebedor: { // Novo
-            nome: item.empresaAssociada
-        }
-    };
-    // --- FIM DA CORREÇÃO ---
-
-    setReceiptData(receipt);
+        recebedor: recebedorData
+    });
     setIsReceiptModalOpen(true);
   };
 

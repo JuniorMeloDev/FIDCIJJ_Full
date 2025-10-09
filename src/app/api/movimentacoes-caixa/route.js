@@ -1,5 +1,3 @@
-// src/app/api/movimentacoes-caixa/route.js
-
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
@@ -12,13 +10,14 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
         
-        // #### CORREÇÃO FINAL APLICADA AQUI ####
-        // A sintaxe da junção reversa foi ajustada para ser mais explícita,
-        // especificando a coluna da chave estrangeira ('liquidacao_mov_id') na tabela 'duplicatas'.
-        // Isso resolve a ambiguidade e garante que o vínculo seja feito corretamente.
+        // --- CORREÇÃO APLICADA AQUI ---
+        // A consulta agora busca os dados do cliente (incluindo o CNPJ) associado à operação.
         let query = supabase.from('movimentacoes_caixa').select(`
             *, 
-            operacao:operacoes ( valor_liquido, cliente_id ),
+            operacao:operacoes ( 
+                valor_liquido, 
+                cliente:clientes ( nome, cnpj ) 
+            ),
             duplicata:duplicatas!liquidacao_mov_id ( id, nf_cte )
         `);
 
@@ -46,8 +45,7 @@ export async function GET(request) {
             contaBancaria: m.conta_bancaria,
             empresaAssociada: m.empresa_associada,
             operacaoId: m.operacao_id,
-            operacao: m.operacao,
-            // A Supabase agora deve retornar o objeto da duplicata corretamente.
+            operacao: m.operacao, // Agora contém os dados do cliente
             duplicata: m.duplicata
         }));
 
