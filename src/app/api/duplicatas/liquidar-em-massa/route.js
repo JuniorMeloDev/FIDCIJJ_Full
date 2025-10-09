@@ -9,24 +9,25 @@ export async function POST(request) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        // --- CORREÇÃO APLICADA ---
-        // O parâmetro 'desconto' foi removido temporariamente da chamada RPC
-        const { liquidacoes, dataLiquidacao, jurosMora, contaBancariaId } = await request.json();
+        const { liquidacoes, dataLiquidacao, jurosMora, desconto, contaBancariaId } = await request.json();
 
         if (!liquidacoes || !Array.isArray(liquidacoes) || liquidacoes.length === 0) {
             return NextResponse.json({ message: 'Nenhuma duplicata selecionada.' }, { status: 400 });
         }
+        
+        const totalItems = liquidacoes.length;
+        const jurosPorItem = (jurosMora || 0) / totalItems;
+        const descontoPorItem = (desconto || 0) / totalItems;
 
-        const promises = liquidacoes.map(item =>
+        const promises = liquidacoes.map(item => 
             supabase.rpc('liquidar_duplicata', {
                 p_duplicata_id: item.id,
                 p_data_liquidacao: dataLiquidacao,
-                p_juros_mora: (jurosMora || 0) / liquidacoes.length + (item.juros_a_somar || 0),
+                p_juros_mora: jurosPorItem + (item.juros_a_somar || 0),
+                p_desconto: descontoPorItem, // Parâmetro de desconto REATIVADO
                 p_conta_bancaria_id: contaBancariaId
-                // O parâmetro p_desconto foi removido para evitar o erro
             })
         );
-        // --- FIM DA CORREÇÃO ---
         
         const results = await Promise.all(promises);
         
