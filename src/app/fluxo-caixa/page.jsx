@@ -555,7 +555,8 @@ export default function FluxoDeCaixaPage() {
     setLancamentoParaComplemento(contextMenu.selectedItem);
     setIsComplementModalOpen(true);
   };
-
+  
+  // --- FUNÇÃO CORRIGIDA PARA EXIBIR COMPROVANTE ---
   const handleSaveComplemento = async (payload, pixResult = null) => {
     if (!payload) {
       showNotification("PIX do complemento enviado e lançamento registrado!", "success");
@@ -597,6 +598,27 @@ export default function FluxoDeCaixaPage() {
         showNotification(error.message, "error");
         return false;
     }
+  };
+
+  // --- NOVA FUNÇÃO PARA ABRIR O COMPROVANTE ---
+  const handleAbrirComprovantePix = () => {
+    if (!contextMenu.selectedItem) return;
+
+    const item = contextMenu.selectedItem;
+
+    const receipt = {
+        valor: Math.abs(item.valor),
+        data: new Date(item.dataMovimento),
+        transactionId: item.transaction_id,
+        descricao: `Pagamento ref. Operação #${item.operacaoId}`,
+        pagador: {
+            nome: clienteMasterNome,
+            conta: item.contaBancaria,
+        }
+    };
+
+    setReceiptData(receipt);
+    setIsReceiptModalOpen(true);
   };
 
 
@@ -939,6 +961,19 @@ export default function FluxoDeCaixaPage() {
                   >
                     Lançar Complemento
                   </a>
+                  {/* NOVO ITEM DE MENU */}
+                  {contextMenu.selectedItem.transaction_id && (
+                      <a
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleAbrirComprovantePix();
+                        }}
+                        className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                      >
+                        Emitir Comprovante PIX
+                      </a>
+                  )}
                   <a
                     href="#"
                     onClick={(e) => {
@@ -983,7 +1018,6 @@ export default function FluxoDeCaixaPage() {
                 "Despesa Avulsa",
                 "Receita Avulsa",
                 "Movimentação Avulsa",
-                "Pagamento PIX",
               ].includes(contextMenu.selectedItem.categoria) && (
                 <>
                   <a
