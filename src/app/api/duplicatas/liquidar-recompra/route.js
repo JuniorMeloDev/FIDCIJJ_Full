@@ -15,17 +15,27 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Nenhum ID de duplicata fornecido.' }, { status: 400 });
         }
 
-        const { error } = await supabase
-            .from('duplicatas')
-            .update({ 
-                status_recebimento: 'Recebido', // Ou um novo status 'Recomprado'
-                data_liquidacao: dataLiquidacao,
-                // Importante: Não mexemos na conta de liquidação para não gerar fluxo de caixa
-            })
-            .in('id', duplicataIds);
-        
-        if (error) throw error;
+        // --- CORREÇÃO APLICADA ---
+        // Itera sobre cada ID e cria uma promessa de atualização, garantindo que todas sejam processadas.
+        const updatePromises = duplicataIds.map(id =>
+            supabase
+                .from('duplicatas')
+                .update({ 
+                    status_recebimento: 'Recebido',
+                    data_liquidacao: dataLiquidacao,
+                })
+                .eq('id', id)
+        );
 
+        const results = await Promise.all(updatePromises);
+        
+        const firstError = results.find(res => res.error);
+        if (firstError) {
+            console.error('Erro ao baixar uma ou mais duplicatas de recompra:', firstError.error);
+            throw firstError.error;
+        }
+        // --- FIM DA CORREÇÃO ---
+        
         return NextResponse.json({ message: 'Duplicatas de recompra baixadas com sucesso.' }, { status: 200 });
 
     } catch (error) {

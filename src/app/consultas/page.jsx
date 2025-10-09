@@ -245,6 +245,7 @@ export default function ConsultasPage() {
     liquidacoes,
     dataLiquidacao,
     jurosMora,
+    desconto,
     contaBancariaId
   ) => {
     try {
@@ -255,6 +256,7 @@ export default function ConsultasPage() {
           liquidacoes,
           dataLiquidacao,
           jurosMora,
+          desconto,
           contaBancariaId,
         }),
       });

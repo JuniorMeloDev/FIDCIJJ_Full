@@ -10,19 +10,10 @@ import {
 // Função auxiliar para identificar de forma robusta se os juros são pós-fixados
 const isPostFixedInterest = (operation, duplicate) => {
     if (!operation || !duplicate || !duplicate.valorJuros) return false;
-
-    // A forma mais fiável de verificar é ver se o valor líquido pago ao cliente
-    // foi próximo ao valor bruto (sem o desconto dos juros da operação).
-    // Isso indica que os juros não foram pré-descontados.
     const valorLiquidoSemJuros = operation.valor_total_bruto - (operation.valor_total_descontos || 0);
-    
-    // Se o valor líquido real for muito próximo do valor bruto (descontando apenas taxas), é pós-fixado.
-    // Usamos uma tolerância para problemas de arredondamento.
     const isPostFixed = Math.abs(operation.valor_liquido - valorLiquidoSemJuros) < 0.01;
-
     return isPostFixed;
 };
-
 
 export default function LiquidacaoModal({
   isOpen,
@@ -33,6 +24,7 @@ export default function LiquidacaoModal({
 }) {
   const [dataLiquidacao, setDataLiquidacao] = useState("");
   const [jurosMora, setJurosMora] = useState("");
+  const [desconto, setDesconto] = useState(""); // NOVO: State para o desconto
   const [contaBancariaId, setContaBancariaId] = useState("");
   const [error, setError] = useState("");
 
@@ -45,20 +37,17 @@ export default function LiquidacaoModal({
     return items.reduce((sum, d) => {
       const op = d.operacao;
       if (!op) return sum + d.valorBruto;
-
-      // Se for juros pós-fixados, o valor a ser recebido no final é o Bruto + Juros da Operação.
       if (isPostFixedInterest(op, d)) {
         return sum + d.valorBruto + d.valorJuros;
       }
-      
-      // Se for juros pré-fixados, o valor a receber é apenas o Bruto.
       return sum + d.valorBruto;
     }, 0);
   }, [duplicata, isMultiple]);
 
-  const valorTotalComJuros = useMemo(() => {
-    return totalValue + parseBRL(jurosMora);
-  }, [totalValue, jurosMora]);
+  // NOVO: Valor final considera o desconto
+  const valorTotalFinal = useMemo(() => {
+    return totalValue + parseBRL(jurosMora) - parseBRL(desconto);
+  }, [totalValue, jurosMora, desconto]);
 
   const firstNfCte = isMultiple ? duplicata[0]?.nfCte : duplicata?.nfCte;
 
@@ -66,6 +55,7 @@ export default function LiquidacaoModal({
     if (isOpen) {
       setDataLiquidacao(new Date().toISOString().split("T")[0]);
       setJurosMora("");
+      setDesconto(""); // NOVO: Reseta o desconto ao abrir
       setContaBancariaId("");
       setError("");
     }
@@ -89,10 +79,12 @@ export default function LiquidacaoModal({
         };
     });
 
+    // NOVO: Passa o valor do desconto para a função de confirmação
     onConfirm(
       liquidacoes,
       dataLiquidacao,
       parseBRL(jurosMora),
+      parseBRL(desconto),
       contaBancariaId
     );
     onClose();
@@ -109,7 +101,8 @@ export default function LiquidacaoModal({
           juros_a_somar: isPostFixed ? d.valorJuros : 0
         };
     });
-    onConfirm(liquidacoes, hoje, 0, null);
+    // NOVO: Passa 0 para juros e desconto
+    onConfirm(liquidacoes, hoje, 0, 0, null);
     onClose();
   };
 
@@ -126,7 +119,7 @@ export default function LiquidacaoModal({
               </span>
               , somando o valor de{" "}
               <span className="font-semibold text-orange-400">
-                {formatBRLNumber(valorTotalComJuros)}
+                {formatBRLNumber(valorTotalFinal)}
               </span>
               .
             </>
@@ -138,7 +131,7 @@ export default function LiquidacaoModal({
               </span>{" "}
               no valor de{" "}
               <span className="font-semibold text-orange-400">
-                {formatBRLNumber(valorTotalComJuros)}
+                {formatBRLNumber(valorTotalFinal)}
               </span>
               .
             </>
@@ -160,9 +153,6 @@ export default function LiquidacaoModal({
               onChange={(e) => setDataLiquidacao(e.target.value)}
               className="mt-1 block w-full bg-gray-600 border-gray-500 rounded-md shadow-sm p-2"
             />
-            <p className="text-xs text-gray-400 mt-1">
-              Esta será a data de entrada do valor no fluxo de caixa.
-            </p>
           </div>
           <div>
             <label
@@ -176,6 +166,23 @@ export default function LiquidacaoModal({
               id="jurosMora"
               value={jurosMora}
               onChange={(e) => setJurosMora(formatBRLInput(e.target.value))}
+              placeholder="R$ 0,00"
+              className="mt-1 block w-full bg-gray-600 border-gray-500 rounded-md shadow-sm p-2"
+            />
+          </div>
+          {/* NOVO CAMPO DE DESCONTO */}
+          <div>
+            <label
+              htmlFor="desconto"
+              className="block text-sm font-medium text-gray-300"
+            >
+              Desconto / Abatimento (Opcional)
+            </label>
+            <input
+              type="text"
+              id="desconto"
+              value={desconto}
+              onChange={(e) => setDesconto(formatBRLInput(e.target.value))}
               placeholder="R$ 0,00"
               className="mt-1 block w-full bg-gray-600 border-gray-500 rounded-md shadow-sm p-2"
             />
