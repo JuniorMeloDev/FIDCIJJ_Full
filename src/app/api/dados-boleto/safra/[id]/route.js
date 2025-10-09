@@ -21,6 +21,8 @@ export async function GET(request, { params }) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const { id } = params;
+        const { searchParams } = new URL(request.url);
+        const downloadJson = searchParams.get('json') === 'true';
 
         const { data: duplicata, error: dupError } = await supabase
             .from('duplicatas')
@@ -43,7 +45,7 @@ export async function GET(request, { params }) {
         }
 
         const tipoOperacao = duplicata.operacao.tipo_operacao;
-        const nossoNumeroUnico = duplicata.id.toString().padStart(9, '0');
+        const nossoNumeroUnico = `${duplicata.operacao.id}${duplicata.id}`.slice(-9).padStart(9, '0');
         
         const jurosConfig = {};
         if (tipoOperacao.taxa_juros_mora > 0) {
@@ -62,6 +64,9 @@ export async function GET(request, { params }) {
         } else {
             multaConfig.tipoMulta = "ISENTO";
         }
+        
+        const abatimento = duplicata.valor_abatimento || 0;
+        const valorFinal = duplicata.valor_bruto - abatimento;
 
         const payload = {
             agencia: "02900",
@@ -70,18 +75,20 @@ export async function GET(request, { params }) {
             documento: {
                 numero: nossoNumeroUnico,
                 numeroCliente: duplicata.nf_cte.substring(0, 10),
-                especie: "DM",
+                especie: "02",
                 carteira: "01",
                 dataVencimento: formatDateToSafra(duplicata.data_vencimento),
-                valor: formatValueToSafra(duplicata.valor_bruto),
+                valor: formatValueToSafra(valorFinal),
+                quantidadeDiasProtesto: 5,
+                valorAbatimento: formatValueToSafra(abatimento),
                 pagador: {
                     nome: sacado.nome.replace(/\.$/, '').substring(0, 40),
                     tipoPessoa: (sacado.cnpj || '').length > 11 ? "J" : "F",
                     numeroDocumento: (sacado.cnpj || '').replace(/\D/g, ''),
                     endereco: {
-                        logradouro: (sacado.endereco || 'NAO INFORMADO').substring(0, 40),
-                        bairro: (sacado.bairro || 'NAO INFORMADO').substring(0, 10),
-                        cidade: (sacado.municipio || 'NAO INFORMADO').substring(0, 15),
+                        logradouro: (sacado.endereco || "NAO INFORMADO").substring(0, 40),
+                        bairro: (sacado.bairro || "NAO INFORMADO").substring(0, 10),
+                        cidade: (sacado.municipio || "NAO INFORMADO").substring(0, 15),
                         uf: sacado.uf || 'SP',
                         cep: (sacado.cep || '00000000').replace(/\D/g, ''),
                     }
@@ -90,6 +97,13 @@ export async function GET(request, { params }) {
                 multa: multaConfig
             }
         };
+
+        if (downloadJson) {
+            const headers = new Headers();
+            headers.append('Content-Type', 'application/json');
+            headers.append('Content-Disposition', `attachment; filename="boleto_safra_duplicata_${id}.json"`);
+            return new Response(JSON.stringify(payload, null, 2), { headers });
+        }
 
         return NextResponse.json(payload);
 

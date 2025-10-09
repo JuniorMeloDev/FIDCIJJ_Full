@@ -110,6 +110,32 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
         const token = sessionStorage.getItem('authToken');
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     };
+    
+    // NOVO: Função para baixar o JSON do boleto Safra
+    const handleDownloadJson = async (duplicataId) => {
+        showNotification('Preparando JSON para download...', 'info');
+        try {
+            const res = await fetch(`/api/dados-boleto/safra/${duplicataId}?json=true`, { headers: getAuthHeader() });
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.message || 'Falha ao obter dados do boleto.');
+            }
+            const data = await res.json();
+            const jsonString = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `boleto_safra_duplicata_${duplicataId}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            showNotification(err.message, 'error');
+        }
+    };
+
 
     const handleImprimirTodos = async () => {
         if (!operacaoId) return showNotification('ID da operação não encontrado.', 'error');
@@ -279,7 +305,14 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                                     <div key={index} className={`p-2 rounded-md ${res.success ? 'bg-green-900/50' : 'bg-red-900/50'}`}>
                                         <p className="font-bold">{res.nfCte}</p>
                                         {res.success ? (
-                                            <p className="text-sm text-green-300">Sucesso! Linha Digitável: {res.linhaDigitavel}</p>
+                                            <div>
+                                              <p className="text-sm text-green-300">Sucesso! Linha Digitável: {res.linhaDigitavel}</p>
+                                              {res.banco === 'safra' && (
+                                                  <button onClick={() => handleDownloadJson(res.duplicataId)} className="text-xs mt-1 text-blue-300 hover:underline">
+                                                      Baixar JSON (Safra)
+                                                  </button>
+                                              )}
+                                          </div>
                                         ) : (
                                             <p className="text-sm text-red-300">Erro: {res.error}</p>
                                         )}
