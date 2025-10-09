@@ -1,4 +1,3 @@
-// src/app/fluxo-caixa/page.jsx
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -14,12 +13,12 @@ import Pagination from "@/app/components/Pagination";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 import ComplementModal from "@/app/components/ComplementModal";
 import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal";
-import { format as formatDateFns } from "date-fns";
+import { format as formatDateFns, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ConciliacaoModal from "@/app/components/ConciliacaoModal";
 
 const ITEMS_PER_PAGE = 8;
-const INTER_ITEMS_PER_PAGE = 3;
+const INTER_ITEMS_PER_PAGE = 10;
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -34,14 +33,16 @@ export default function FluxoDeCaixaPage() {
   const [interCurrentPage, setInterCurrentPage] = useState(1);
   const [contasMaster, setContasMaster] = useState([]);
   const [clienteMasterNome, setClienteMasterNome] = useState("");
+
   const [filters, setFilters] = useState({
-    dataInicio: "",
-    dataFim: "",
+    dataInicio: formatDateFns(startOfMonth(new Date()), "yyyy-MM-dd"),
+    dataFim: formatDateFns(new Date(), "yyyy-MM-dd"),
     descricao: "",
     contaBancaria: "",
     categoria: "Todos",
     contaExterna: "",
   });
+
   const [sortConfig, setSortConfig] = useState({
     key: "data_movimento",
     direction: "DESC",
@@ -65,12 +66,18 @@ export default function FluxoDeCaixaPage() {
   const [interExtrato, setInterExtrato] = useState(null);
   const [isConciliacaoModalOpen, setIsConciliacaoModalOpen] = useState(false);
   const [transacaoParaConciliar, setTransacaoParaConciliar] = useState(null);
+  const [reconciledTransactionIds, setReconciledTransactionIds] = useState(
+    new Set()
+  );
 
-  const getAuthHeader = () => {
-    const token = sessionStorage.getItem("authToken");
-    return token ? { Authorization: `Bearer ${token}` } : {};
+  const getAuthHeader = () => ({
+    Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
+  });
+  const showNotification = (message, type) => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification({ message: "", type: "" }), 5000);
   };
-    const fetchApiData = async (url) => {
+  const fetchApiData = async (url) => {
     try {
       const res = await fetch(url, { headers: getAuthHeader() });
       if (!res.ok) return [];
@@ -78,11 +85,6 @@ export default function FluxoDeCaixaPage() {
     } catch {
       return [];
     }
-  };
-
-  const showNotification = (message, type) => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification({ message: "", type: "" }), 5000);
   };
 
   const fetchMovimentacoes = async (currentFilters, currentSortConfig) => {
@@ -110,7 +112,11 @@ export default function FluxoDeCaixaPage() {
         { headers: getAuthHeader() }
       );
       if (!response.ok) throw new Error("Falha ao carregar movimentações.");
-      setMovimentacoes(await response.json());
+      const data = await response.json();
+      setMovimentacoes(data);
+      setReconciledTransactionIds(
+        new Set(data.map((m) => m.transaction_id).filter(Boolean))
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -216,7 +222,7 @@ export default function FluxoDeCaixaPage() {
         );
       } else {
         setLoading(false);
-        setMovimentacoes([]); 
+        setMovimentacoes([]);
       }
     } else {
       fetchMovimentacoes(filters, sortConfig);
@@ -231,18 +237,28 @@ export default function FluxoDeCaixaPage() {
   }, []);
 
   const searchDuplicatasParaConciliacao = async (query) => {
-        if (!query) return [];
-        try {
-            const response = await fetch(`/api/duplicatas/search-conciliacao?query=${query}`, { headers: getAuthHeader() });
-            if (!response.ok) return [];
-            return await response.json();
-        } catch (err) {
-            showNotification("Erro ao buscar duplicatas.", "error");
-            return [];
-        }
-    };
+    if (!query) return [];
+    try {
+      const response = await fetch(
+        `/api/duplicatas/search-conciliacao?query=${query}`,
+        { headers: getAuthHeader() }
+      );
+      if (!response.ok) return [];
+      return await response.json();
+    } catch (err) {
+      showNotification("Erro ao buscar duplicatas.", "error");
+      return [];
+    }
+  };
 
   const handleConciliarTransacao = (transacao) => {
+    if (reconciledTransactionIds.has(transacao.idTransacao)) {
+      showNotification(
+        "Esta transação já foi conciliada. Para refazer, primeiro estorne o lançamento correspondente.",
+        "error"
+      );
+      return;
+    }
     setTransacaoParaConciliar({
       id: transacao.idTransacao,
       data: transacao.dataEntrada,
@@ -252,16 +268,13 @@ export default function FluxoDeCaixaPage() {
     setIsConciliacaoModalOpen(true);
   };
 
-  const handleConfirmarConciliacao = async ({
-    duplicataIds,
-    detalhesTransacao,
-  }) => {
+  const handleConfirmarConciliacao = async ({ items, detalhesTransacao }) => {
     try {
       const response = await fetch(`/api/duplicatas/conciliar-pagamento`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({
-          duplicataIds,
+          items,
           detalhesTransacao,
           contaBancaria: filters.contaExterna,
         }),
@@ -328,8 +341,8 @@ export default function FluxoDeCaixaPage() {
 
   const clearFilters = () => {
     setFilters({
-      dataInicio: "",
-      dataFim: "",
+      dataInicio: formatDateFns(startOfMonth(new Date()), "yyyy-MM-dd"),
+      dataFim: formatDateFns(new Date(), "yyyy-MM-dd"),
       descricao: "",
       contaBancaria: "",
       categoria: "Todos",
@@ -428,7 +441,7 @@ export default function FluxoDeCaixaPage() {
   };
 
   const confirmarEstorno = async () => {
-    if (!estornoInfo || !estornoInfo.duplicata?.id) {
+    if (!estornoInfo || !estornoInfo.duplicata_id) {
       showNotification(
         "Erro: Lançamento não vinculado a uma duplicata para estornar.",
         "error"
@@ -438,7 +451,7 @@ export default function FluxoDeCaixaPage() {
     }
     try {
       const response = await fetch(
-        `/api/duplicatas/${estornoInfo.duplicata.id}/estornar`,
+        `/api/duplicatas/${estornoInfo.duplicata_id}/estornar`,
         { method: "POST", headers: getAuthHeader() }
       );
       if (!response.ok)
@@ -594,7 +607,7 @@ export default function FluxoDeCaixaPage() {
         onClose={() => setIsConciliacaoModalOpen(false)}
         onConfirm={handleConfirmarConciliacao}
         transacao={transacaoParaConciliar}
-        searchDuplicatas={searchDuplicatasParaConciliacao} 
+        searchDuplicatas={searchDuplicatasParaConciliacao}
       />
       <EditLancamentoModal
         isOpen={isEditModalOpen}
@@ -722,7 +735,13 @@ export default function FluxoDeCaixaPage() {
                                 {group.transactions.map((t, index) => (
                                   <li
                                     key={t.idTransacao || index}
-                                    className="py-2 flex justify-between items-center text-sm cursor-pointer hover:bg-gray-600/50"
+                                    className={`py-2 flex justify-between items-center text-sm ${
+                                      reconciledTransactionIds.has(
+                                        t.idTransacao
+                                      )
+                                        ? "cursor-not-allowed opacity-50"
+                                        : "cursor-pointer hover:bg-gray-600/50"
+                                    }`}
                                     onContextMenu={(e) => {
                                       if (t.tipoOperacao === "C") {
                                         e.preventDefault();
@@ -875,7 +894,8 @@ export default function FluxoDeCaixaPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="py-1">
-              {contextMenu.selectedItem.categoria === "Pagamento de Borderô" && (
+              {contextMenu.selectedItem.categoria ===
+                "Pagamento de Borderô" && (
                 <>
                   <a
                     href="#"
@@ -931,6 +951,7 @@ export default function FluxoDeCaixaPage() {
                 "Despesa Avulsa",
                 "Receita Avulsa",
                 "Movimentação Avulsa",
+                "Pagamento PIX",
               ].includes(contextMenu.selectedItem.categoria) && (
                 <>
                   <a
