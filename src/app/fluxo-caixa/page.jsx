@@ -203,6 +203,7 @@ export default function FluxoDeCaixaPage() {
         const masterContasFormatadas = masterContasData.map((c) => ({
           id: c.id,
           banco: c.banco,
+          agencia: c.agencia,
           contaCorrente: c.conta_corrente,
           contaBancaria: `${c.banco} - ${c.agencia}/${c.conta_corrente}`,
         }));
@@ -555,8 +556,7 @@ export default function FluxoDeCaixaPage() {
     setLancamentoParaComplemento(contextMenu.selectedItem);
     setIsComplementModalOpen(true);
   };
-  
-  // --- FUNÇÃO CORRIGIDA PARA EXIBIR COMPROVANTE ---
+
   const handleSaveComplemento = async (payload, pixResult = null) => {
     if (!payload) {
       showNotification("PIX do complemento enviado e lançamento registrado!", "success");
@@ -599,8 +599,7 @@ export default function FluxoDeCaixaPage() {
         return false;
     }
   };
-
-  // --- NOVA FUNÇÃO PARA ABRIR O COMPROVANTE ---
+  
   const handleAbrirComprovantePix = () => {
     if (!contextMenu.selectedItem) return;
 
@@ -961,7 +960,7 @@ export default function FluxoDeCaixaPage() {
                   >
                     Lançar Complemento
                   </a>
-                  {/* NOVO ITEM DE MENU */}
+                  {/* --- LÓGICA DO BOTÃO DE COMPROVANTE --- */}
                   {contextMenu.selectedItem.transaction_id && (
                       <a
                         href="#"
@@ -1018,8 +1017,25 @@ export default function FluxoDeCaixaPage() {
                 "Despesa Avulsa",
                 "Receita Avulsa",
                 "Movimentação Avulsa",
+                "Pagamento PIX", // Adicionado aqui para cobrir todos os casos
               ].includes(contextMenu.selectedItem.categoria) && (
                 <>
+                  {/* --- LÓGICA DUPLICADA PARA GARANTIR A EXIBIÇÃO --- */}
+                  {contextMenu.selectedItem.transaction_id && (
+                      <>
+                        <a
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleAbrirComprovantePix();
+                          }}
+                          className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                        >
+                          Emitir Comprovante PIX
+                        </a>
+                        <div className="border-t border-gray-600 my-1"></div>
+                      </>
+                  )}
                   <a
                     href="#"
                     onClick={(e) => {
