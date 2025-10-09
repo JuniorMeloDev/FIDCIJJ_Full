@@ -3,6 +3,7 @@ import { supabase } from "@/app/utils/supabaseClient";
 import jwt from "jsonwebtoken";
 import { sendOperationStatusEmail } from "@/app/lib/emailService";
 import { getInterAccessToken, enviarPixInter } from "@/app/lib/interService";
+import { format } from 'date-fns'; // Importar a função 'format'
 
 export async function PUT(request, { params }) {
   try {
@@ -68,14 +69,19 @@ export async function PUT(request, { params }) {
           if (!contaDestino || !contaDestino.chave_pix) {
               throw new Error(`Cliente ${operacao.cliente.nome} não possui chave PIX cadastrada para recebimento.`);
           }
-
+          
+          // --- INÍCIO DA CORREÇÃO ---
+          // O objeto 'dadosPix' foi ajustado para corresponder ao formato esperado pela API do Inter.
           const dadosPix = {
-              valor: valorDebitado.toFixed(2),
+              valor: parseFloat(valorDebitado.toFixed(2)),
+              dataPagamento: format(new Date(), 'yyyy-MM-dd'),
+              descricao: `Pagamento Borderô #${id}`,
               destinatario: {
+                  tipo: "CHAVE",
                   chave: contaDestino.chave_pix
-              },
-              infoPagador: `Pagamento Borderô #${id}`
+              }
           };
+          // --- FIM DA CORREÇÃO ---
           
           const tokenInter = await getInterAccessToken();
           const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, conta.conta_corrente);
@@ -104,7 +110,7 @@ export async function PUT(request, { params }) {
       }
       
       if(pixEndToEndId) {
-          descricaoLancamento = `PIX Enviado - ${descricaoLancamento} (E2E: ${pixEndToEndId.substring(0, 10)}...)`;
+          descricaoLancamento = `PIX Enviado - ${descricaoLancamento}`;
       }
 
       await supabase.from("movimentacoes_caixa").insert({
@@ -115,6 +121,7 @@ export async function PUT(request, { params }) {
         categoria: "Pagamento de Borderô",
         conta_bancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
         empresa_associada: empresaMasterNome,
+        transaction_id: pixEndToEndId // Salva o ID da transação PIX
       });
 
       await supabase
@@ -142,9 +149,7 @@ export async function PUT(request, { params }) {
       await supabase.from("notifications").insert({
         user_id: clienteUser.id,
         title: `Sua Operação #${id} foi ${status}`,
-        message: `A operação no valor de R$ ${operacao.valor_liquido.toFixed(
-          2
-        )} foi ${status.toLowerCase()} pela nossa equipe.`,
+        message: `A operação no valor de R$ ${operacao.valor_liquido.toFixed(2)} foi ${status.toLowerCase()} pela nossa equipe.`,
         link: "/portal/dashboard",
       });
 
