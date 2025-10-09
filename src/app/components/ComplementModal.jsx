@@ -11,12 +11,10 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
 
-    // --- NOVOS STATES PARA O PIX ---
     const [isPagarComPix, setIsPagarComPix] = useState(false);
     const [pixData, setPixData] = useState({ tipo_chave_pix: 'CPF/CNPJ', chave: '' });
     const [isPixConfirmOpen, setIsPixConfirmOpen] = useState(false);
     const [pixPayload, setPixPayload] = useState(null);
-    // --- FIM DOS NOVOS STATES ---
 
     const isContaInter = useMemo(() => 
         contaBancaria && contaBancaria.toLowerCase().includes('inter'),
@@ -47,7 +45,6 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
             const result = await response.json();
             if (!response.ok) throw new Error(result.message || 'Falha ao processar pagamento PIX.');
             
-            // Passa os dados do PIX de volta para a função onSave
             await onSave(null, { pixResult: result.pixResult, pixPayload: pixPayload }); 
             
             setIsPixConfirmOpen(false);
@@ -69,11 +66,13 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
                 setError("Conta de origem não encontrada.");
                 return;
             }
+            // --- CORREÇÃO: Adiciona operacao_id ao payload do PIX ---
             const payload = {
                 valor: parseBRL(valorComplemento),
                 descricao: `Complemento Borderô #${lancamentoOriginal?.operacaoId}`,
                 contaOrigem: contaOrigemObj.contaCorrente,
                 empresaAssociada: lancamentoOriginal.empresaAssociada,
+                operacao_id: lancamentoOriginal.operacaoId, // <-- LINHA ADICIONADA
                 pix: {
                     tipo: pixData.tipo_chave_pix,
                     chave: pixData.chave

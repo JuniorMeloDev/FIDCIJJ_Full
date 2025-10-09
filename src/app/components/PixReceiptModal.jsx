@@ -16,47 +16,97 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
     const handleDownload = () => {
         const doc = new jsPDF();
         
-        // Título
-        doc.setFontSize(22);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Comprovante de PIX', 105, 20, { align: 'center' });
+        const loadImageAsBase64 = (url, callback) => {
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                const dataURL = canvas.toDataURL('image/png');
+                callback(dataURL);
+            };
+            img.src = url;
+        };
 
-        // Valor
-        doc.setFontSize(18);
-        doc.text(formatBRLNumber(receiptData.valor), 105, 35, { align: 'center' });
+        loadImageAsBase64('/inter.png', (logoBase64) => {
+            // Logo Inter
+            if (logoBase64) {
+                doc.addImage(logoBase64, 'PNG', 95, 15, 20, 5);
+            }
 
-        // Sobre a transação
-        let y = 50;
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Sobre a transação', 14, y);
-        y += 7;
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
-        doc.text(`Data: ${formatarDataTransacao(receiptData.data)}`, 14, y);
-        y += 7;
-        doc.text(`Horário: ${formatDateFns(receiptData.data, "HH:mm")}`, 14, y);
-        y += 7;
-        doc.text(`ID da transação:`, 14, y);
-        doc.setFont('courier', 'normal');
-        doc.text(`${receiptData.transactionId}`, 14, y + 5);
-        doc.setFont('helvetica', 'normal');
-        y += 12;
-        doc.text(`Mensagem: ${receiptData.descricao}`, 14, y);
+            // Círculo Verde
+            doc.setFillColor(34, 197, 94); // green-500
+            doc.circle(105, 30, 8, 'F');
 
-        // Quem pagou
-        y += 15;
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Quem pagou', 14, y);
-        y += 7;
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Nome: ${receiptData.pagador.nome}`, 14, y);
-        y += 7;
-        doc.text(`Conta: ${receiptData.pagador.conta}`, 14, y);
+            // Checkmark
+            doc.setDrawColor(255, 255, 255);
+            doc.setLineWidth(1.5);
+            doc.line(102, 30, 104, 32);
+            doc.line(104, 32, 108, 28);
 
-        doc.save(`comprovante_pix_${receiptData.transactionId.substring(0, 8)}.pdf`);
+            // Título e Valor
+            doc.setFontSize(22);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(40, 40, 40);
+            doc.text('Pix enviado', 105, 48, { align: 'center' });
+            doc.setFontSize(26);
+            doc.text(formatBRLNumber(receiptData.valor), 105, 58, { align: 'center' });
+
+            let y = 75;
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Sobre a transação', 14, y);
+            y += 4;
+            doc.setLineWidth(0.2);
+            doc.line(14, y, 196, y);
+
+            y += 8;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Data da transação`, 14, y);
+            doc.text(formatarDataTransacao(receiptData.data), 196, y, { align: 'right' });
+            y += 7;
+            doc.text(`Horário`, 14, y);
+            doc.text(formatDateFns(receiptData.data, "HH:mm"), 196, y, { align: 'right' });
+            y += 7;
+            doc.text(`ID da transação`, 14, y);
+            doc.text(receiptData.transactionId, 196, y, { align: 'right' });
+            y += 7;
+            doc.text(`Mensagem ao recebedor`, 14, y);
+            doc.text(receiptData.descricao, 196, y, { align: 'right' });
+
+            y += 15;
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Quem recebeu', 14, y);
+            y += 4;
+            doc.line(14, y, 196, y);
+            y += 8;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Nome`, 14, y);
+            doc.text(receiptData.recebedor.nome || '', 196, y, { align: 'right' });
+
+            y += 15;
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Quem pagou', 14, y);
+            y += 4;
+            doc.line(14, y, 196, y);
+            y += 8;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Nome`, 14, y);
+            doc.text(receiptData.pagador.nome || '', 196, y, { align: 'right' });
+            y += 7;
+            doc.text(`Instituição`, 14, y);
+            doc.text(receiptData.pagador.conta || '', 196, y, { align: 'right' });
+
+            doc.save(`Bordero ${receiptData.transactionId.substring(0, 8)}.pdf`);
+        });
     };
 
     return (
@@ -78,6 +128,15 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
                             <p><strong>Mensagem:</strong> {receiptData.descricao}</p>
                         </div>
                     </div>
+                    
+                    {receiptData.recebedor && (
+                         <div className="bg-gray-700 p-4 rounded-lg">
+                            <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-600 pb-1">Quem recebeu</h3>
+                             <div className="space-y-1">
+                                <p><strong>Nome:</strong> {receiptData.recebedor.nome}</p>
+                             </div>
+                        </div>
+                    )}
                     
                     <div className="bg-gray-700 p-4 rounded-lg">
                         <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-600 pb-1">Quem pagou</h3>

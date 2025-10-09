@@ -1,4 +1,3 @@
-// src/app/api/lancamentos/pix/route.js
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
@@ -12,7 +11,8 @@ export async function POST(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const body = await request.json();
-        const { valor, descricao, contaOrigem, empresaAssociada, pix } = body;
+        // --- CORREÇÃO: Recebe o operacao_id ---
+        const { valor, descricao, contaOrigem, empresaAssociada, pix, operacao_id } = body;
 
         if (!valor || !descricao || !contaOrigem || !pix || !pix.chave) {
             return NextResponse.json({ message: 'Todos os campos são obrigatórios para o PIX.' }, { status: 400 });
@@ -49,15 +49,14 @@ export async function POST(request) {
         const tokenInter = await getInterAccessToken();
         const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, contaOrigem);
 
-        // --- LÓGICA DE DESCRIÇÃO CORRIGIDA ---
         let descricaoLancamento = `PIX Enviado - ${descricao}`;
         const complementMatch = descricao.match(/^Complemento Borderô #(\d+)$/);
 
         if (complementMatch) {
-            const operacaoId = complementMatch[1];
-            const { data: operacaoData } = await supabase.from('operacoes').select('*, cliente:clientes(ramo_de_atividade)').eq('id', operacaoId).single();
+            const operacaoIdFromDesc = complementMatch[1];
+            const { data: operacaoData } = await supabase.from('operacoes').select('*, cliente:clientes(ramo_de_atividade)').eq('id', operacaoIdFromDesc).single();
             if (operacaoData) {
-                const { data: duplicatas } = await supabase.from('duplicatas').select('nf_cte').eq('operacao_id', operacaoId);
+                const { data: duplicatas } = await supabase.from('duplicatas').select('nf_cte').eq('operacao_id', operacaoIdFromDesc);
                 if (duplicatas && duplicatas.length > 0) {
                     const docType = operacaoData.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
                     const numerosDoc = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
@@ -65,17 +64,21 @@ export async function POST(request) {
                 }
             }
         }
-        // --- FIM DA CORREÇÃO ---
         
-        const { error: insertError } = await supabase.from('movimentacoes_caixa').insert({
+        const movementPayload = {
             data_movimento: new Date().toISOString().split('T')[0],
             descricao: descricaoLancamento,
             valor: -Math.abs(valor),
             conta_bancaria: nomeContaCompleto,
-            categoria: 'Pagamento de Borderô', // Alterado para manter consistência
+            categoria: 'Pagamento de Borderô',
             empresa_associada: empresaAssociada,
             transaction_id: resultadoPix.endToEndId,
-        });
+            operacao_id: operacao_id || (complementMatch ? complementMatch[1] : null) // --- CORREÇÃO: Salva o operacao_id
+        };
+        
+        console.log('[DEBUG] Payload para movimentacoes_caixa (pix/route.js):', JSON.stringify(movementPayload, null, 2));
+        
+        const { error: insertError } = await supabase.from('movimentacoes_caixa').insert(movementPayload);
 
         if (insertError) {
              console.error("ERRO CRÍTICO: PIX enviado mas falhou ao registrar no banco de dados.", insertError);
