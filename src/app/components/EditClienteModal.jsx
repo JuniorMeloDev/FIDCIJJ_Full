@@ -7,6 +7,7 @@ import {
   formatCep,
   formatBRLInput,
   parseBRL,
+  formatBRLNumber,
 } from "@/app/utils/formatters";
 import AutocompleteInput from "./AutocompleteInput";
 
@@ -46,6 +47,7 @@ export default function EditClienteModal({
     ramoDeAtividade: "",
     emails: [],
     limite_credito: "",
+    limite_disponivel: 0,
   };
   const [formData, setFormData] = useState(initialState);
   const [isFetchingCnpj, setIsFetchingCnpj] = useState(false);
@@ -110,7 +112,10 @@ export default function EditClienteModal({
           cnpj: cliente.cnpj ? formatCnpjCpf(cliente.cnpj) : "",
           fone: cliente.fone ? formatTelefone(cliente.fone) : "",
           cep: cliente.cep ? formatCep(cliente.cep) : "",
-          limite_credito: cliente.limite_credito ? formatBRLInput(String(cliente.limite_credito * 100)) : "",
+          limite_credito: cliente.limite_credito
+            ? formatBRLInput(String(cliente.limite_credito * 100))
+            : "",
+          limite_disponivel: cliente.limite_disponivel,
           contasBancarias: cliente.contasBancarias
             ? [...cliente.contasBancarias]
             : [],
@@ -176,7 +181,7 @@ export default function EditClienteModal({
         handleCnpjSearch(formattedValue);
     }
     if (name === "limite_credito") {
-        formattedValue = formatBRLInput(value);
+      formattedValue = formatBRLInput(value);
     }
     setFormData((prev) => ({ ...prev, [name]: formattedValue }));
   };
@@ -197,7 +202,13 @@ export default function EditClienteModal({
       ...prev,
       contasBancarias: [
         ...prev.contasBancarias,
-        { banco: "", agencia: "", contaCorrente: "", tipo_chave_pix: "", chave_pix: "" },
+        {
+          banco: "",
+          agencia: "",
+          contaCorrente: "",
+          tipo_chave_pix: "",
+          chave_pix: "",
+        },
       ],
     }));
   const removeConta = (index) => {
@@ -455,9 +466,12 @@ export default function EditClienteModal({
                     className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-gray-700">
                 <div>
                   <label className="block text-xs font-bold text-gray-300">
-                    Limite de Crédito
+                    Limite de Crédito Total
                   </label>
                   <input
                     type="text"
@@ -467,6 +481,20 @@ export default function EditClienteModal({
                     placeholder="R$ 0,00"
                     className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-300">
+                    Limite de Crédito Disponível
+                  </label>
+                  <div
+                    className={`mt-1 block w-full bg-gray-900/50 p-1.5 text-sm rounded-md ${
+                      formData.limite_disponivel < 0
+                        ? "text-red-400"
+                        : "text-green-400"
+                    }`}
+                  >
+                    {formatBRLNumber(formData.limite_disponivel)}
+                  </div>
                 </div>
               </div>
             </div>
@@ -536,7 +564,9 @@ export default function EditClienteModal({
                     >
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
                         <div className="md:col-span-2">
-                          <label className="text-xs font-bold text-gray-400">Banco</label>
+                          <label className="text-xs font-bold text-gray-400">
+                            Banco
+                          </label>
                           <AutocompleteInput
                             value={conta.banco}
                             onChange={(value) =>
@@ -545,21 +575,29 @@ export default function EditClienteModal({
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-bold text-gray-400">Agência</label>
+                          <label className="text-xs font-bold text-gray-400">
+                            Agência
+                          </label>
                           <input
                             type="text"
                             name="agencia"
                             placeholder="Agência"
                             value={conta.agencia || ""}
                             onChange={(e) =>
-                              handleContaChange(index, "agencia", e.target.value)
+                              handleContaChange(
+                                index,
+                                "agencia",
+                                e.target.value
+                              )
                             }
                             className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm w-full"
                           />
                         </div>
                         <div className="flex items-end gap-1">
                           <div className="flex-grow">
-                            <label className="text-xs font-bold text-gray-400">Conta</label>
+                            <label className="text-xs font-bold text-gray-400">
+                              Conta
+                            </label>
                             <input
                               type="text"
                               name="contaCorrente"
@@ -586,18 +624,46 @@ export default function EditClienteModal({
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
                         <div>
-                           <label className="text-xs font-bold text-gray-400">Tipo Chave PIX</label>
-                           <select name="tipo_chave_pix" value={conta.tipo_chave_pix || ''} onChange={(e) => handleContaChange(index, 'tipo_chave_pix', e.target.value)} className="w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
-                             <option value="">Nenhum</option>
-                             <option value="CPF/CNPJ">CPF/CNPJ</option>
-                             <option value="Email">Email</option>
-                             <option value="Telefone">Telefone</option>
-                             <option value="Aleatória">Aleatória</option>
-                           </select>
+                          <label className="text-xs font-bold text-gray-400">
+                            Tipo Chave PIX
+                          </label>
+                          <select
+                            name="tipo_chave_pix"
+                            value={conta.tipo_chave_pix || ""}
+                            onChange={(e) =>
+                              handleContaChange(
+                                index,
+                                "tipo_chave_pix",
+                                e.target.value
+                              )
+                            }
+                            className="w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"
+                          >
+                            <option value="">Nenhum</option>
+                            <option value="CPF/CNPJ">CPF/CNPJ</option>
+                            <option value="Email">Email</option>
+                            <option value="Telefone">Telefone</option>
+                            <option value="Aleatória">Aleatória</option>
+                          </select>
                         </div>
                         <div>
-                           <label className="text-xs font-bold text-gray-400">Chave PIX</label>
-                           <input type="text" name="chave_pix" placeholder="Chave PIX" value={conta.chave_pix || ''} onChange={(e) => handleContaChange(index, 'chave_pix', e.target.value)} className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm w-full"/>
+                          <label className="text-xs font-bold text-gray-400">
+                            Chave PIX
+                          </label>
+                          <input
+                            type="text"
+                            name="chave_pix"
+                            placeholder="Chave PIX"
+                            value={conta.chave_pix || ""}
+                            onChange={(e) =>
+                              handleContaChange(
+                                index,
+                                "chave_pix",
+                                e.target.value
+                              )
+                            }
+                            className="bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm w-full"
+                          />
                         </div>
                       </div>
                     </div>

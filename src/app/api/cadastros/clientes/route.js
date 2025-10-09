@@ -1,4 +1,4 @@
-// Arquivo: src/app/api/cadastros/clientes/route.js
+// src/app/api/cadastros/clientes/route.js
 
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
@@ -12,7 +12,6 @@ export async function GET(request) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
         
-        // **NOVA LÓGICA DE FILTRO**
         const { searchParams } = new URL(request.url);
         const ramo = searchParams.get('ramo');
 
@@ -25,19 +24,37 @@ export async function GET(request) {
                 cliente_tipos_operacao ( tipo_operacao_id )
             `);
         
-        // Aplica o filtro se o parâmetro 'ramo' for fornecido
         if (ramo && ramo !== 'Todos') {
             query = query.eq('ramo_de_atividade', ramo);
         }
 
-        const { data, error } = await query.order('nome', { ascending: true });
+        const { data: clientes, error } = await query.order('nome', { ascending: true });
 
         if (error) {
             console.error('Erro do Supabase ao buscar clientes:', error);
             throw error;
         }
 
-        return NextResponse.json(data, { status: 200 });
+        // NOVO: Calcular o limite disponível para cada cliente
+        const clientesComLimite = await Promise.all(clientes.map(async (cliente) => {
+            const { data: duplicatasPendentes, error: dupError } = await supabase
+                .from('duplicatas')
+                .select('valor_bruto, operacao:operacoes!inner(cliente_id)')
+                .eq('operacao.cliente_id', cliente.id)
+                .eq('status_recebimento', 'Pendente');
+
+            if (dupError) {
+                console.error(`Erro ao buscar duplicatas para cliente ${cliente.id}:`, dupError);
+                return { ...cliente, limite_disponivel: null }; // Retorna null em caso de erro
+            }
+            
+            const limiteUtilizado = duplicatasPendentes.reduce((sum, dup) => sum + dup.valor_bruto, 0);
+            const limiteDisponivel = (cliente.limite_credito || 0) - limiteUtilizado;
+
+            return { ...cliente, limite_disponivel: limiteDisponivel };
+        }));
+
+        return NextResponse.json(clientesComLimite, { status: 200 });
     } catch (error) {
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
