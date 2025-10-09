@@ -47,7 +47,9 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
             const result = await response.json();
             if (!response.ok) throw new Error(result.message || 'Falha ao processar pagamento PIX.');
             
-            await onSave(); 
+            // Passa os dados do PIX de volta para a função onSave
+            await onSave(null, { pixResult: result.pixResult, pixPayload: pixPayload }); 
+            
             setIsPixConfirmOpen(false);
             onClose();
 

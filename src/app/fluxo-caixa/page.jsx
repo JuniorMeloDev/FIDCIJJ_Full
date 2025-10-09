@@ -16,6 +16,7 @@ import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal";
 import { format as formatDateFns, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ConciliacaoModal from "@/app/components/ConciliacaoModal";
+import PixReceiptModal from "@/app/components/PixReceiptModal";
 
 const ITEMS_PER_PAGE = 8;
 const INTER_ITEMS_PER_PAGE = 10;
@@ -69,6 +70,9 @@ export default function FluxoDeCaixaPage() {
   const [reconciledTransactionIds, setReconciledTransactionIds] = useState(
     new Set()
   );
+
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [receiptData, setReceiptData] = useState(null);
 
   const getAuthHeader = () => ({
     Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
@@ -552,26 +556,49 @@ export default function FluxoDeCaixaPage() {
     setIsComplementModalOpen(true);
   };
 
-  const handleSaveComplemento = async (payload) => {
-    try {
-      const response = await fetch(`/api/operacoes/complemento`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok)
-        throw new Error(
-          (await response.json()).message || "Falha ao salvar complemento."
-        );
-      showNotification("Complemento do borderô salvo com sucesso!", "success");
+  const handleSaveComplemento = async (payload, pixResult = null) => {
+    if (!payload) {
+      showNotification("PIX do complemento enviado e lançamento registrado!", "success");
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
+      
+      if (pixResult) {
+          const contaOrigem = contasMaster.find(c => c.contaCorrente === pixResult.pixPayload.contaOrigem);
+          setReceiptData({
+              valor: pixResult.pixPayload.valor,
+              data: new Date(),
+              transactionId: pixResult.pixResult.endToEndId,
+              descricao: pixResult.pixPayload.descricao,
+              pagador: {
+                  nome: clienteMasterNome,
+                  conta: contaOrigem?.contaBancaria || pixResult.pixPayload.contaOrigem,
+              }
+          });
+          setIsReceiptModalOpen(true);
+      }
       return true;
+    }
+
+    try {
+        const response = await fetch(`/api/operacoes/complemento`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getAuthHeader() },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || "Falha ao salvar complemento.");
+        }
+        showNotification("Complemento do borderô salvo com sucesso!", "success");
+        fetchMovimentacoes(filters, sortConfig);
+        fetchSaldos(filters);
+        return true;
     } catch (error) {
-      showNotification(error.message, "error");
-      return false;
+        showNotification(error.message, "error");
+        return false;
     }
   };
+
 
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
@@ -642,6 +669,11 @@ export default function FluxoDeCaixaPage() {
         onSave={handleSaveComplemento}
         lancamentoOriginal={lancamentoParaComplemento}
         contasMaster={contasMaster}
+      />
+      <PixReceiptModal 
+        isOpen={isReceiptModalOpen}
+        onClose={() => setIsReceiptModalOpen(false)}
+        receiptData={receiptData}
       />
 
       <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">

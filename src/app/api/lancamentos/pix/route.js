@@ -18,10 +18,9 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Todos os campos são obrigatórios para o PIX.' }, { status: 400 });
         }
 
-        // 1. Busca a conta bancária completa para usar o nome padronizado
         const { data: contaInfo, error: contaError } = await supabase
             .from('contas_bancarias')
-            .select('banco, agencia, conta_corrente')
+            .select('*')
             .eq('conta_corrente', contaOrigem)
             .single();
 
@@ -50,23 +49,38 @@ export async function POST(request) {
         const tokenInter = await getInterAccessToken();
         const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, contaOrigem);
 
-        const descricaoLancamento = `PIX Enviado - ${descricao}`;
+        // --- LÓGICA DE DESCRIÇÃO CORRIGIDA ---
+        let descricaoLancamento = `PIX Enviado - ${descricao}`;
+        const complementMatch = descricao.match(/^Complemento Borderô #(\d+)$/);
+
+        if (complementMatch) {
+            const operacaoId = complementMatch[1];
+            const { data: operacaoData } = await supabase.from('operacoes').select('*, cliente:clientes(ramo_de_atividade)').eq('id', operacaoId).single();
+            if (operacaoData) {
+                const { data: duplicatas } = await supabase.from('duplicatas').select('nf_cte').eq('operacao_id', operacaoId);
+                if (duplicatas && duplicatas.length > 0) {
+                    const docType = operacaoData.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
+                    const numerosDoc = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
+                    descricaoLancamento = `Complemento Borderô ${docType} ${numerosDoc}`;
+                }
+            }
+        }
+        // --- FIM DA CORREÇÃO ---
         
-        // 2. Insere o lançamento usando o nome completo e correto da conta
         const { error: insertError } = await supabase.from('movimentacoes_caixa').insert({
             data_movimento: new Date().toISOString().split('T')[0],
             descricao: descricaoLancamento,
             valor: -Math.abs(valor),
-            conta_bancaria: nomeContaCompleto, // <-- CORREÇÃO APLICADA AQUI
-            categoria: 'Pagamento PIX',
+            conta_bancaria: nomeContaCompleto,
+            categoria: 'Pagamento de Borderô', // Alterado para manter consistência
             empresa_associada: empresaAssociada,
             transaction_id: resultadoPix.endToEndId,
         });
 
         if (insertError) {
-            console.error("ERRO CRÍTICO: PIX enviado mas falhou ao registrar no banco de dados.", insertError);
+             console.error("ERRO CRÍTICO: PIX enviado mas falhou ao registrar no banco de dados.", insertError);
             return NextResponse.json({ 
-                message: `PIX enviado com sucesso (ID: ${resultadoPix.endToEndId}), mas falhou ao registrar a movimentação. Por favor, registre manualmente um débito de ${valor.toFixed(2)} na conta ${nomeContaCompleto}.`,
+                message: `PIX enviado com sucesso (ID: ${resultadoPix.endToEndId}), mas falhou ao registrar a movimentação. Por favor, registre manualmente.`,
                 pixResult: resultadoPix 
             }, { status: 207 });
         }
