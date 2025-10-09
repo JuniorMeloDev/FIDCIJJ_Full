@@ -21,10 +21,21 @@ export default function AprovacaoOperacaoModal({
     const [isPartialDebit, setIsPartialDebit] = useState(false);
     const [efetuarPix, setEfetuarPix] = useState(false);
 
+    // --- CORREÇÃO ADICIONADA AQUI ---
+    // Encontra o objeto completo da conta bancária selecionada com base no ID.
+    const contaSelecionada = useMemo(() => {
+        if (!contaBancariaId || !Array.isArray(contasBancarias)) {
+            return null;
+        }
+        return contasBancarias.find(conta => String(conta.id) === String(contaBancariaId));
+    }, [contaBancariaId, contasBancarias]);
+    // --- FIM DA CORREÇÃO ---
+
     const valorLiquidoFinal = useMemo(() => {
         if (!operacao) return 0;
-        const totalDescontos = descontosAdicionais.reduce((acc, d) => acc + d.valor, 0);
-        return operacao.valor_liquido - totalDescontos;
+        // O cálculo agora considera que descontos são valores positivos e créditos (recompra) são negativos.
+        const totalAjustes = descontosAdicionais.reduce((acc, d) => acc + d.valor, 0);
+        return operacao.valor_liquido - totalAjustes;
     }, [operacao, descontosAdicionais]);
 
     useEffect(() => {
@@ -50,7 +61,7 @@ export default function AprovacaoOperacaoModal({
             status,
             conta_bancaria_id: status === 'Aprovada' ? parseInt(contaBancariaId, 10) : null,
             isPartialDebit: status === 'Aprovada' ? isPartialDebit : false,
-            efetuar_pix: efetuarPix, // NOVO
+            efetuar_pix: efetuarPix,
         });
     };
 
@@ -60,7 +71,6 @@ export default function AprovacaoOperacaoModal({
     
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
-            {/* CORREÇÃO IMPORTANTE ABAIXO: Adicionado o stopPropagation para o clique não "vazar" para o fundo */}
             <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-xl font-bold mb-4 flex-shrink-0">Análise de Operação #{operacao.id}</h2>
                 
@@ -161,8 +171,8 @@ export default function AprovacaoOperacaoModal({
                                 />
                                 <span className="ml-2 text-sm text-gray-200">Debitar Valor Parcial</span>
                             </label>
-
-                            {/* NOVO CHECKBOX PIX */}
+                            
+                            {/* Este bloco agora funciona porque 'contaSelecionada' está definida */}
                             {contaSelecionada?.banco.toLowerCase().includes('inter') && (
                                 <label className="flex items-center cursor-pointer">
                                     <input
