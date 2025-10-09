@@ -76,7 +76,6 @@ export default function AnalisePage() {
         setIsModalOpen(true);
     };
     
-    // --- FUNÇÃO ATUALIZADA ---
     const handleConfirmRecompra = (data) => {
         if (data && data.credito !== null && data.principal !== null) {
             setRecompraData({ 
@@ -84,18 +83,17 @@ export default function AnalisePage() {
                 dataLiquidacao: operacaoSelecionada.data_operacao 
             });
 
-            // Adiciona as duas linhas (crédito de juros e débito do principal)
             setDescontosAdicionais(prev => [
                 ...prev,
                 {
                     id: `recompra-debito-${Date.now()}`,
                     descricao: `Débito Recompra NF ${data.descricao.split(' ').pop()}`,
-                    valor: Math.abs(data.principal) // Valor POSITIVO para abater
+                    valor: Math.abs(data.principal)
                 },
                 {
-                    id: `recompra-credito-${Date.now()}`,
+                    id: `recompra-credito-${Date.now() + 1}`,
                     descricao: `Crédito Juros Recompra NF ${data.descricao.split(' ').pop()}`,
-                    valor: -Math.abs(data.credito) // Valor NEGATIVO para somar
+                    valor: -Math.abs(data.credito)
                 }
             ]);
             showNotification("Itens de recompra adicionados à operação.", "success");
@@ -105,11 +103,13 @@ export default function AnalisePage() {
     const handleSalvarAnalise = async (operacaoId, payload, partialData) => {
         setIsSaving(true);
         try {
+            // --- CORREÇÃO AQUI: 'recompraData' é incluído no payload principal ---
             const finalPayload = { 
                 ...payload, 
                 descontos: descontosAdicionais,
                 valor_debito_parcial: partialData?.valorDebito || null,
                 data_debito_parcial: partialData?.dataDebito || null,
+                recompraData: recompraData
             };
 
             const response = await fetch(`/api/operacoes/${operacaoId}/status`, {
@@ -117,24 +117,12 @@ export default function AnalisePage() {
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
                 body: JSON.stringify(finalPayload),
             });
+            
+            const result = await response.json();
             if (!response.ok) {
-                 const errorData = await response.json();
-                 throw new Error(errorData.message || "Falha ao atualizar operação.");
+                 throw new Error(result.message || "Falha ao atualizar operação.");
             }
-
-            if (recompraData && recompraData.ids.length > 0) {
-                const recompraResponse = await fetch(`/api/duplicatas/liquidar-recompra`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-                    body: JSON.stringify({ 
-                        duplicataIds: recompraData.ids,
-                        dataLiquidacao: recompraData.dataLiquidacao
-                    }),
-                });
-                if (!recompraResponse.ok) {
-                    showNotification("AVISO: A operação foi salva, mas falhou ao dar baixa nas duplicatas de recompra.", "error");
-                }
-            }
+            // --- FIM DA CORREÇÃO ---
 
             showNotification("Operação analisada com sucesso!", "success");
             fetchPendentes();
@@ -142,7 +130,7 @@ export default function AnalisePage() {
             setIsModalOpen(false);
             setIsPartialDebitModalOpen(false);
 
-            if (payload.status === 'Aprovada') {
+            if (payload.status === 'Aprovada' && !payload.efetuar_pix) {
                 setOperacaoParaEmail({
                     id: operacaoId,
                     clienteId: operacaoSelecionada?.cliente?.id

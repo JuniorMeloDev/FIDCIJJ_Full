@@ -3,7 +3,7 @@ import { supabase } from "@/app/utils/supabaseClient";
 import jwt from "jsonwebtoken";
 import { sendOperationStatusEmail } from "@/app/lib/emailService";
 import { getInterAccessToken, enviarPixInter } from "@/app/lib/interService";
-import { format } from 'date-fns'; // Importar a função 'format'
+import { format } from 'date-fns';
 
 export async function PUT(request, { params }) {
   try {
@@ -18,7 +18,7 @@ export async function PUT(request, { params }) {
     }
 
     const { id } = params;
-    const { status, conta_bancaria_id, descontos, valor_debito_parcial, data_debito_parcial, efetuar_pix } = await request.json();
+    const { status, conta_bancaria_id, descontos, valor_debito_parcial, data_debito_parcial, efetuar_pix, recompraData } = await request.json();
 
     const { data: operacao, error: fetchError } = await supabase
       .from("operacoes")
@@ -69,9 +69,7 @@ export async function PUT(request, { params }) {
           if (!contaDestino || !contaDestino.chave_pix) {
               throw new Error(`Cliente ${operacao.cliente.nome} não possui chave PIX cadastrada para recebimento.`);
           }
-          
-          // --- INÍCIO DA CORREÇÃO ---
-          // O objeto 'dadosPix' foi ajustado para corresponder ao formato esperado pela API do Inter.
+
           const dadosPix = {
               valor: parseFloat(valorDebitado.toFixed(2)),
               dataPagamento: format(new Date(), 'yyyy-MM-dd'),
@@ -81,7 +79,6 @@ export async function PUT(request, { params }) {
                   chave: contaDestino.chave_pix
               }
           };
-          // --- FIM DA CORREÇÃO ---
           
           const tokenInter = await getInterAccessToken();
           const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, conta.conta_corrente);
@@ -121,7 +118,7 @@ export async function PUT(request, { params }) {
         categoria: "Pagamento de Borderô",
         conta_bancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
         empresa_associada: empresaMasterNome,
-        transaction_id: pixEndToEndId // Salva o ID da transação PIX
+        transaction_id: pixEndToEndId
       });
 
       await supabase
@@ -133,6 +130,22 @@ export async function PUT(request, { params }) {
             valor_total_descontos: operacao.valor_total_descontos + totalDescontosAdicionais
         })
         .eq("id", id);
+
+      // --- CORREÇÃO AQUI: Baixa as duplicatas da recompra ---
+      if (recompraData && recompraData.ids && recompraData.ids.length > 0) {
+          const { error: recompraError } = await supabase
+              .from('duplicatas')
+              .update({
+                  status_recebimento: 'Recebido',
+                  data_liquidacao: recompraData.dataLiquidacao
+              })
+              .in('id', recompraData.ids);
+          
+          if (recompraError) {
+              console.error("AVISO: Operação salva, mas falhou ao dar baixa nas duplicatas de recompra. Erro:", recompraError);
+          }
+      }
+      // --- FIM DA CORREÇÃO ---
 
     } else {
       await supabase.from("duplicatas").delete().eq("operacao_id", id);
@@ -149,7 +162,9 @@ export async function PUT(request, { params }) {
       await supabase.from("notifications").insert({
         user_id: clienteUser.id,
         title: `Sua Operação #${id} foi ${status}`,
-        message: `A operação no valor de R$ ${operacao.valor_liquido.toFixed(2)} foi ${status.toLowerCase()} pela nossa equipe.`,
+        message: `A operação no valor de R$ ${operacao.valor_liquido.toFixed(
+          2
+        )} foi ${status.toLowerCase()} pela nossa equipe.`,
         link: "/portal/dashboard",
       });
 
