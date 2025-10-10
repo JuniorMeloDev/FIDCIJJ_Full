@@ -11,11 +11,10 @@ export async function POST(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const body = await request.json();
-        // --- CORREÇÃO: Recebe 'destinatario' em vez de 'pix' ---
-        const { valor, descricao, contaOrigem, empresaAssociada, destinatario, operacao_id } = body;
+        // --- CORREÇÃO: Recebe o operacao_id ---
+        const { valor, descricao, contaOrigem, empresaAssociada, pix, operacao_id } = body;
 
-        // --- CORREÇÃO: Valida o objeto 'destinatario' ---
-        if (!valor || !descricao || !contaOrigem || !destinatario || !destinatario.chave) {
+        if (!valor || !descricao || !contaOrigem || !pix || !pix.chave) {
             return NextResponse.json({ message: 'Todos os campos são obrigatórios para o PIX.' }, { status: 400 });
         }
 
@@ -31,20 +30,18 @@ export async function POST(request) {
         
         const nomeContaCompleto = `${contaInfo.banco} - ${contaInfo.agencia}/${contaInfo.conta_corrente}`;
 
-        // --- CORREÇÃO: Utiliza 'destinatario.chave' e 'destinatario.tipo' ---
-        let chaveFinal = destinatario.chave;
-        if (destinatario.tipo === 'Telefone') {
-            const numeros = destinatario.chave.replace(/\D/g, '');
+        let chaveFinal = pix.chave;
+        if (pix.tipo === 'Telefone') {
+            const numeros = pix.chave.replace(/\D/g, '');
             chaveFinal = numeros.length >= 10 && !numeros.startsWith('+55') ? `+55${numeros}` : numeros;
         }
 
-        // --- Monta o payload para o serviço do Inter ---
         const dadosPix = {
             valor: parseFloat(valor.toFixed(2)),
             dataPagamento: format(new Date(), 'yyyy-MM-dd'),
             descricao: descricao,
             destinatario: {
-                tipo: "CHAVE", // A API do Inter espera "CHAVE" aqui para o envio
+                tipo: "CHAVE",
                 chave: chaveFinal
             }
         };
@@ -76,7 +73,7 @@ export async function POST(request) {
             categoria: 'Pagamento de Borderô',
             empresa_associada: empresaAssociada,
             transaction_id: resultadoPix.endToEndId,
-            operacao_id: operacao_id || (complementMatch ? complementMatch[1] : null)
+            operacao_id: operacao_id || (complementMatch ? complementMatch[1] : null) // --- CORREÇÃO: Salva o operacao_id
         };
         
         console.log('[DEBUG] Payload para movimentacoes_caixa (pix/route.js):', JSON.stringify(movementPayload, null, 2));

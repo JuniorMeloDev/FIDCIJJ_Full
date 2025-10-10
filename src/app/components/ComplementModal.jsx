@@ -66,14 +66,14 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
                 setError("Conta de origem não encontrada.");
                 return;
             }
-            // --- ESTRUTURA CORRETA DO PAYLOAD ---
+            // --- CORREÇÃO: Adiciona operacao_id ao payload do PIX ---
             const payload = {
                 valor: parseBRL(valorComplemento),
                 descricao: `Complemento Borderô #${lancamentoOriginal?.operacaoId}`,
                 contaOrigem: contaOrigemObj.contaCorrente,
                 empresaAssociada: lancamentoOriginal.empresaAssociada,
-                operacao_id: lancamentoOriginal.operacaoId,
-                destinatario: { // Objeto 'destinatario' em vez de 'pix'
+                operacao_id: lancamentoOriginal.operacaoId, // <-- LINHA ADICIONADA
+                pix: {
                     tipo: pixData.tipo_chave_pix,
                     chave: pixData.chave
                 }

@@ -77,24 +77,21 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
             return;
         }
 
-        // Dentro da função handleSubmit, substitua o bloco 'if (tipo === 'PIX')' por este:
-if (tipo === 'PIX') {
-    const payload = {
-        // O valor agora está dentro de 'destinatario'
-        destinatario: {
-            valor: parseBRL(valor),
-            tipo: pixData.tipo_chave_pix,
-            chave: pixData.chave
-        },
-        descricao: descricao,
-        contaOrigem: contaOrigem,
-        empresaAssociada: clienteMasterNome,
-        // O campo 'pix' não é mais necessário, pois seus dados foram movidos
-    };
-    setPixPayload(payload);
-    setIsPixConfirmOpen(true);
-    return;
-}
+        if (tipo === 'PIX') {
+            const payload = {
+                valor: parseBRL(valor),
+                descricao: descricao,
+                contaOrigem: contaOrigem,
+                empresaAssociada: clienteMasterNome,
+                pix: {
+                    tipo: pixData.tipo_chave_pix,
+                    chave: pixData.chave
+                }
+            };
+            setPixPayload(payload);
+            setIsPixConfirmOpen(true);
+            return;
+        }
         
         setIsSaving(true);
         const payload = {
