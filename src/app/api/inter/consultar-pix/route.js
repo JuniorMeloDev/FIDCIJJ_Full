@@ -1,20 +1,29 @@
 import { NextResponse } from 'next/server';
-import { getInterAccessToken, consultarChavePixInter } from '@/app/lib/interService';
+import { getInterAccessToken, simularPixInter } from '@/app/lib/interService';
 
 export async function POST(request) {
   try {
-    const { chavePix, contaCorrente } = await request.json();
+    const { dadosPix, contaCorrente } = await request.json();
 
-    if (!chavePix || !contaCorrente) {
-      return NextResponse.json({ message: 'Chave PIX e conta corrente são obrigatórias.' }, { status: 400 });
+    if (!dadosPix || !contaCorrente) {
+      return NextResponse.json({ message: 'Dados do PIX e conta corrente são obrigatórios.' }, { status: 400 });
     }
 
     const tokenData = await getInterAccessToken();
-    const resultado = await consultarChavePixInter(tokenData.access_token, chavePix, contaCorrente);
 
-    return NextResponse.json(resultado);
+    console.log("[LOG PIX] Simulando PIX para validar dados do favorecido...");
+    const resultado = await simularPixInter(tokenData.access_token, dadosPix, contaCorrente);
+
+    return NextResponse.json({
+      sucesso: true,
+      favorecido: resultado.nome,
+      cpfCnpj: resultado.cpfCnpj,
+      banco: resultado.banco,
+      validacao: resultado.validacao,
+    });
+
   } catch (err) {
-    console.error('Erro na API de consulta de chave PIX Inter:', err);
-    return NextResponse.json({ message: err.message }, { status: 500 });
+    console.error('❌ Erro na simulação de PIX (consultar-pix):', err);
+    return NextResponse.json({ sucesso: false, message: err.message }, { status: 500 });
   }
 }
