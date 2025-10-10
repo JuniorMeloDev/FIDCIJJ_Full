@@ -61,25 +61,26 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
     const handleSaveClick = async () => {
         setError('');
         if (isPagarComPix) {
-            const contaOrigemObj = contasMaster.find(c => c.contaBancaria === contaBancaria);
-            if (!contaOrigemObj) {
-                setError("Conta de origem não encontrada.");
-                return;
-            }
-            // --- CORREÇÃO: Adiciona operacao_id ao payload do PIX ---
-            const payload = {
-                valor: parseBRL(valorComplemento),
-                descricao: `Complemento Borderô #${lancamentoOriginal?.operacaoId}`,
-                contaOrigem: contaOrigemObj.contaCorrente,
-                empresaAssociada: lancamentoOriginal.empresaAssociada,
-                operacao_id: lancamentoOriginal.operacaoId, // <-- LINHA ADICIONADA
-                pix: {
-                    tipo: pixData.tipo_chave_pix,
-                    chave: pixData.chave
-                }
-            };
-            setPixPayload(payload);
-            setIsPixConfirmOpen(true);
+    const contaOrigemObj = contasMaster.find(c => c.contaBancaria === contaBancaria);
+    if (!contaOrigemObj) {
+        setError("Conta de origem não encontrada.");
+        return;
+    }
+    const payload = {
+        // O valor e os dados da chave agora estão dentro de 'destinatario'
+        destinatario: {
+            valor: parseBRL(valorComplemento),
+            tipo: pixData.tipo_chave_pix,
+            chave: pixData.chave
+        },
+        descricao: `Complemento Borderô #${lancamentoOriginal?.operacaoId}`,
+        contaOrigem: contaOrigemObj.contaCorrente,
+        empresaAssociada: lancamentoOriginal.empresaAssociada,
+        operacao_id: lancamentoOriginal.operacaoId,
+    };
+    setPixPayload(payload);
+    setIsPixConfirmOpen(true);
+
         } else {
             setIsSaving(true);
             const payload = {
