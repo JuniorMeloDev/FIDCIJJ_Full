@@ -149,6 +149,49 @@ export async function consultarExtratoInter(accessToken, contaCorrente, dataInic
 }
 
 /**
+ * Consulta informações de uma chave PIX antes de enviar o pagamento.
+ * Permite mostrar o nome e banco do favorecido (lookup DICT).
+ */
+export async function consultarChavePixInter(accessToken, chavePix, contaCorrente) {
+    console.log("\n--- [INTER API] Etapa 1.5: Consulta de Chave PIX ---");
+
+    const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
+    const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/pix/chaves/${encodeURIComponent(chavePix)}`;
+
+    const options = {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'x-conta-corrente': cleanContaCorrente
+        },
+        agent: createInterAgent()
+    };
+
+    return new Promise((resolve, reject) => {
+        const req = https.request(apiEndpoint, options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const jsonData = JSON.parse(data);
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        console.log("✅ Chave PIX consultada:", jsonData);
+                        resolve(jsonData);
+                    } else {
+                        reject(new Error(`Erro ${res.statusCode} ao consultar chave PIX: ${data}`));
+                    }
+                } catch (e) {
+                    reject(new Error(`Falha ao processar resposta da consulta: ${data}`));
+                }
+            });
+        });
+        req.on('error', e => reject(new Error(`Erro de rede na consulta de chave PIX: ${e.message}`)));
+        req.end();
+    });
+}
+
+
+/**
  * Envia um pagamento PIX.
  */
 
