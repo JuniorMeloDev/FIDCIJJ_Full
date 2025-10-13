@@ -14,61 +14,67 @@ export async function POST(request) {
         if (!liquidacoes || !Array.isArray(liquidacoes) || liquidacoes.length === 0) {
             return NextResponse.json({ message: 'Nenhuma duplicata selecionada.' }, { status: 400 });
         }
-        
-        // --- CORREÇÃO APLICADA AQUI: Lógica de rateio proporcional ---
-        
-        // 1. Busca os valores brutos das duplicatas para calcular o total
-        const duplicataIds = liquidacoes.map(item => item.id);
-        const { data: duplicatasInfo, error: dupError } = await supabase
-            .from('duplicatas')
-            .select('id, valor_bruto')
-            .in('id', duplicataIds);
-        if (dupError) throw dupError;
 
-        const totalValorBruto = duplicatasInfo.reduce((sum, d) => sum + d.valor_bruto, 0);
+        // --- CORREÇÃO APLICADA: Lógica separada para baixa com e sem crédito ---
 
-        // 2. Mapeia as promessas, calculando juros e desconto proporcionalmente
-        const promises = liquidacoes.map(item => {
-            const duplicata = duplicatasInfo.find(d => d.id === item.id);
-            // Calcula a proporção do valor desta duplicata em relação ao total
-            const proporcao = totalValorBruto > 0 ? (duplicata.valor_bruto / totalValorBruto) : (1 / liquidacoes.length);
+        if (contaBancariaId) {
+            // LÓGICA PARA LIQUIDAÇÃO COM CRÉDITO EM CONTA
+            const duplicataIds = liquidacoes.map(item => item.id);
+            const { data: duplicatasInfo, error: dupError } = await supabase
+                .from('duplicatas')
+                .select('id, valor_bruto')
+                .in('id', duplicataIds);
+            if (dupError) throw dupError;
 
-            const jurosPorItem = (jurosMora || 0) * proporcao;
-            const descontoPorItem = (desconto || 0) * proporcao;
+            const totalValorBruto = duplicatasInfo.reduce((sum, d) => sum + d.valor_bruto, 0);
 
-            return supabase.rpc('liquidar_duplicata', {
-                p_duplicata_id: item.id,
-                p_data_liquidacao: dataLiquidacao,
-                p_juros_mora: jurosPorItem + (item.juros_a_somar || 0),
-                p_desconto: descontoPorItem,
-                p_conta_bancaria_id: contaBancariaId
+            const promises = liquidacoes.map(item => {
+                const duplicata = duplicatasInfo.find(d => d.id === item.id);
+                const proporcao = totalValorBruto > 0 ? (duplicata.valor_bruto / totalValorBruto) : (1 / liquidacoes.length);
+                const jurosPorItem = (jurosMora || 0) * proporcao;
+                const descontoPorItem = (desconto || 0) * proporcao;
+
+                return supabase.rpc('liquidar_duplicata', {
+                    p_duplicata_id: item.id,
+                    p_data_liquidacao: dataLiquidacao,
+                    p_juros_mora: jurosPorItem + (item.juros_a_somar || 0),
+                    p_desconto: descontoPorItem,
+                    p_conta_bancaria_id: contaBancariaId
+                });
             });
-        });
-        // --- FIM DA CORREÇÃO ---
-        
-        const results = await Promise.all(promises);
-        
-        const firstError = results.find(res => res.error);
-        if (firstError) {
-            console.error('Erro ao liquidar uma ou mais duplicatas via RPC:', firstError.error);
-            throw new Error('Falha ao processar a baixa da(s) duplicata(s).');
-        }
+            
+            const results = await Promise.all(promises);
+            const firstError = results.find(res => res.error);
+            if (firstError) {
+                console.error('Erro ao liquidar uma ou mais duplicatas via RPC:', firstError.error);
+                throw new Error('Falha ao processar a baixa da(s) duplicata(s).');
+            }
 
-        if (!contaBancariaId) {
+        } else {
+            // LÓGICA PARA "APENAS DAR BAIXA" (SEM CONTA)
             const idsParaAtualizar = liquidacoes.map(item => item.id);
             const dataParaAtualizar = dataLiquidacao || new Date().toISOString().split('T')[0];
 
             const { error: updateError } = await supabase
                 .from('duplicatas')
-                .update({ data_liquidacao: dataParaAtualizar })
+                .update({ 
+                    status_recebimento: 'Recebido', 
+                    data_liquidacao: dataParaAtualizar,
+                    // Zera valores financeiros pois não há transação
+                    juros_mora: 0,
+                    valor_abatimento: 0,
+                    conta_liquidacao: null
+                })
                 .in('id', idsParaAtualizar);
 
             if (updateError) {
-                console.error('ERRO CRÍTICO: A baixa foi realizada, mas falhou ao registrar a data explicitamente.', updateError);
+                console.error('Erro ao tentar dar baixa simples nas duplicatas:', updateError);
+                throw updateError;
             }
         }
 
         return new NextResponse(null, { status: 200 });
+
     } catch (error) {
         console.error('Erro no endpoint de liquidação em massa:', error);
         return NextResponse.json({ message: error.message }, { status: 500 });
