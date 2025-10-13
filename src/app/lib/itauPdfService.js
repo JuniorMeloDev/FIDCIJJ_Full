@@ -30,8 +30,17 @@ function modulo11(bloco) {
 }
 
 const getAgenciaContaDAC = (agencia, conta) => modulo10(`${agencia}${conta}`);
-const getNossoNumeroDAC = (agencia, conta, carteira, nossoNumero) => modulo10(`${agencia}${conta}${carteira}${nossoNumero}`);
-
+const getNossoNumeroDAC = (agencia, conta, carteira, nossoNumero) => {
+    let sequencia;
+    if (carteira === '109') {
+        // Para a carteira 109, o cálculo NÃO inclui a carteira.
+        sequencia = `${agencia}${conta}${nossoNumero}`;
+    } else {
+        // Para as demais carteiras (como a 157), o cálculo INCLUI a carteira.
+        sequencia = `${agencia}${conta}${carteira}${nossoNumero}`;
+    }
+    return modulo10(sequencia);
+};
 function gerarLinhaDigitavelECodigoBarras(dados) {
     const { agencia, conta, carteira, nossoNumero, valor, vencimento } = dados;
     const banco = "341";
