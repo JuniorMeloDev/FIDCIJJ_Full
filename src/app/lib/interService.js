@@ -149,64 +149,6 @@ export async function consultarExtratoInter(accessToken, contaCorrente, dataInic
 }
 
 /**
- * Consulta informações de uma chave PIX antes de enviar o pagamento.
- * Permite mostrar o nome e banco do favorecido (lookup DICT).
- */
-export async function simularPixInter(accessToken, dadosPix, contaCorrente) {
-    console.log("\n--- [INTER API] Etapa 2: Simulação de PIX (validação pré-envio) ---");
-
-    const apiEndpoint = 'https://cdpj.partners.bancointer.com.br/banking/v2/pix';
-    const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
-    const idIdempotente = randomUUID();
-
-    const options = {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'x-conta-corrente': cleanContaCorrente,
-            'x-id-idempotente': idIdempotente,
-            'Content-Type': 'application/json'
-        },
-        agent: createInterAgent()
-    };
-
-    const payload = JSON.stringify(dadosPix);
-
-    return new Promise((resolve, reject) => {
-        const req = https.request(apiEndpoint, options, (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-                try {
-                    const json = JSON.parse(data);
-                    // Mesmo em erro (422), o Inter costuma retornar dados do recebedor
-                    if (json?.titularConta) {
-                        resolve({
-                            nome: json.titularConta?.nome || 'Não informado',
-                            cpfCnpj: json.titularConta?.cpfCnpj || '',
-                            banco: json.titularConta?.ispb || '',
-                            validacao: json
-                        });
-                    } else if (res.statusCode === 422) {
-                        resolve({
-                            nome: json?.mensagem || 'Chave inválida ou inexistente',
-                            validacao: json
-                        });
-                    } else {
-                        reject(new Error(`Erro ${res.statusCode}: ${data}`));
-                    }
-                } catch (e) {
-                    reject(new Error(`Falha ao processar resposta da simulação: ${data}`));
-                }
-            });
-        });
-        req.on('error', e => reject(new Error(`Erro de rede na simulação de PIX: ${e.message}`)));
-        req.write(payload);
-        req.end();
-    });
-}
-
-/**
  * Envia efetivamente um pagamento PIX.
  */
 export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {

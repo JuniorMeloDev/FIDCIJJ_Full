@@ -15,19 +15,36 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Nenhuma duplicata selecionada.' }, { status: 400 });
         }
         
-        const totalItems = liquidacoes.length;
-        const jurosPorItem = (jurosMora || 0) / totalItems;
-        const descontoPorItem = (desconto || 0) / totalItems;
+        // --- CORREÇÃO APLICADA AQUI: Lógica de rateio proporcional ---
+        
+        // 1. Busca os valores brutos das duplicatas para calcular o total
+        const duplicataIds = liquidacoes.map(item => item.id);
+        const { data: duplicatasInfo, error: dupError } = await supabase
+            .from('duplicatas')
+            .select('id, valor_bruto')
+            .in('id', duplicataIds);
+        if (dupError) throw dupError;
 
-        const promises = liquidacoes.map(item => 
-            supabase.rpc('liquidar_duplicata', {
+        const totalValorBruto = duplicatasInfo.reduce((sum, d) => sum + d.valor_bruto, 0);
+
+        // 2. Mapeia as promessas, calculando juros e desconto proporcionalmente
+        const promises = liquidacoes.map(item => {
+            const duplicata = duplicatasInfo.find(d => d.id === item.id);
+            // Calcula a proporção do valor desta duplicata em relação ao total
+            const proporcao = totalValorBruto > 0 ? (duplicata.valor_bruto / totalValorBruto) : (1 / liquidacoes.length);
+
+            const jurosPorItem = (jurosMora || 0) * proporcao;
+            const descontoPorItem = (desconto || 0) * proporcao;
+
+            return supabase.rpc('liquidar_duplicata', {
                 p_duplicata_id: item.id,
                 p_data_liquidacao: dataLiquidacao,
                 p_juros_mora: jurosPorItem + (item.juros_a_somar || 0),
-                p_desconto: descontoPorItem, // Parâmetro de desconto REATIVADO
+                p_desconto: descontoPorItem,
                 p_conta_bancaria_id: contaBancariaId
-            })
-        );
+            });
+        });
+        // --- FIM DA CORREÇÃO ---
         
         const results = await Promise.all(promises);
         
