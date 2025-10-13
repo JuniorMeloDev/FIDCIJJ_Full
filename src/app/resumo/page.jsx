@@ -179,31 +179,35 @@ export default function ResumoPage() {
   };
 
   const handleConfirmarLiquidacao = async (
-    liquidacoes,
-    dataLiquidacao,
-    jurosMora,
-    contaBancariaId
-  ) => {
-    try {
-      const response = await fetch("/api/duplicatas/liquidar-em-massa", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify({
-          liquidacoes, 
-          dataLiquidacao,
-          jurosMora,
-          contaBancariaId,
-        }),
-      });
-      if (!response.ok) throw new Error("Falha ao liquidar a duplicata.");
-      showNotification(`Duplicata liquidada com sucesso!`, "success");
-      fetchDashboardData(); 
-    } catch (err) {
-      showNotification(err.message, "error");
-    } finally {
-      setIsLiquidarModalOpen(false);
-    }
-  };
+  liquidacoes,
+  dataLiquidacao,
+  jurosMora,
+  desconto,
+  contaBancariaId
+) => {
+  try {
+    const response = await fetch("/api/duplicatas/liquidar-em-massa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeader() },
+      body: JSON.stringify({
+        liquidacoes,
+        dataLiquidacao,
+        jurosMora,
+        desconto,
+        contaBancariaId,
+      }),
+    });
+
+    if (!response.ok) throw new Error("Falha ao liquidar a duplicata.");
+    showNotification(`Duplicata liquidada com sucesso!`, "success");
+    fetchDashboardData();
+  } catch (err) {
+    showNotification(err.message, "error");
+  } finally {
+    setIsLiquidarModalOpen(false);
+  }
+};
+
 
   const totalGeral = saldos.reduce((sum, c) => sum + (c.saldo || 0), 0);
   
