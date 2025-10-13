@@ -10,6 +10,8 @@ import {
 // Função auxiliar para identificar de forma robusta se os juros são pós-fixados
 const isPostFixedInterest = (operation, duplicate) => {
     if (!operation || !duplicate || !duplicate.valorJuros) return false;
+    // Verifica se o valor líquido da operação é aproximadamente igual ao valor bruto menos descontos,
+    // o que indica que os juros não foram subtraídos no momento da operação.
     const valorLiquidoSemJuros = operation.valor_total_bruto - (operation.valor_total_descontos || 0);
     const isPostFixed = Math.abs(operation.valor_liquido - valorLiquidoSemJuros) < 0.01;
     return isPostFixed;
@@ -24,7 +26,7 @@ export default function LiquidacaoModal({
 }) {
   const [dataLiquidacao, setDataLiquidacao] = useState("");
   const [jurosMora, setJurosMora] = useState("");
-  const [desconto, setDesconto] = useState(""); // NOVO: State para o desconto
+  const [desconto, setDesconto] = useState("");
   const [contaBancariaId, setContaBancariaId] = useState("");
   const [error, setError] = useState("");
 
@@ -37,6 +39,7 @@ export default function LiquidacaoModal({
     return items.reduce((sum, d) => {
       const op = d.operacao;
       if (!op) return sum + d.valorBruto;
+      // Usa a função auxiliar para verificar se os juros são pós-fixados
       if (isPostFixedInterest(op, d)) {
         return sum + d.valorBruto + d.valorJuros;
       }
@@ -44,7 +47,6 @@ export default function LiquidacaoModal({
     }, 0);
   }, [duplicata, isMultiple]);
 
-  // NOVO: Valor final considera o desconto
   const valorTotalFinal = useMemo(() => {
     return totalValue + parseBRL(jurosMora) - parseBRL(desconto);
   }, [totalValue, jurosMora, desconto]);
@@ -55,7 +57,7 @@ export default function LiquidacaoModal({
     if (isOpen) {
       setDataLiquidacao(new Date().toISOString().split("T")[0]);
       setJurosMora("");
-      setDesconto(""); // NOVO: Reseta o desconto ao abrir
+      setDesconto("");
       setContaBancariaId("");
       setError("");
     }
@@ -79,7 +81,6 @@ export default function LiquidacaoModal({
         };
     });
 
-    // NOVO: Passa o valor do desconto para a função de confirmação
     onConfirm(
       liquidacoes,
       dataLiquidacao,
@@ -101,7 +102,6 @@ export default function LiquidacaoModal({
           juros_a_somar: isPostFixed ? d.valorJuros : 0
         };
     });
-    // NOVO: Passa 0 para juros e desconto
     onConfirm(liquidacoes, hoje, 0, 0, null);
     onClose();
   };
@@ -170,7 +170,6 @@ export default function LiquidacaoModal({
               className="mt-1 block w-full bg-gray-600 border-gray-500 rounded-md shadow-sm p-2"
             />
           </div>
-          {/* NOVO CAMPO DE DESCONTO */}
           <div>
             <label
               htmlFor="desconto"

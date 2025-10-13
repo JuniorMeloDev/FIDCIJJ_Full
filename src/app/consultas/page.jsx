@@ -143,7 +143,6 @@ export default function ConsultasPage() {
   const fetchSacados = (query) =>
     fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
 
-  // --- FUNÇÃO CORRIGIDA ---
   const handleFilterChange = (e) => {
     setCurrentPage(1);
     const { name, value } = e.target;
@@ -151,12 +150,10 @@ export default function ConsultasPage() {
       ...prev,
       [name]: value,
       ...(name === "clienteNome" && value === "" && { clienteId: "" }),
-      // Se o usuário apaga ou muda o texto do sacado, o ID é limpo para voltar à busca por texto
       ...(name === "sacado" && { sacadoId: "" }),
     }));
   };
 
-  // --- FUNÇÃO CORRIGIDA ---
   const handleAutocompleteSelect = (name, item) => {
     setCurrentPage(1);
     if (name === "cliente") {
@@ -167,17 +164,15 @@ export default function ConsultasPage() {
       }));
     } else if (name === "sacado") {
       if (item) {
-        // Constrói o nome de exibição (ex: "Empresa [Filial - PE]")
         const displayName = item.matriz_id
           ? `${item.nome} [Filial - ${item.uf}]`
           : item.nome;
         setFilters((prev) => ({
           ...prev,
-          sacadoId: item.id, // Seta o ID para o filtro exato
-          sacado: displayName, // Seta o nome completo para exibição no input
+          sacadoId: item.id,
+          sacado: displayName,
         }));
       } else {
-        // Limpa os filtros se o item for nulo
         setFilters((prev) => ({
           ...prev,
           sacadoId: "",
@@ -187,7 +182,6 @@ export default function ConsultasPage() {
     }
   };
 
-  // --- FUNÇÃO CORRIGIDA ---
   const clearFilters = () => {
     setFilters({
       dataOpInicio: "",
@@ -195,7 +189,7 @@ export default function ConsultasPage() {
       dataVencInicio: "",
       dataVencFim: "",
       sacado: "",
-      sacadoId: "", // Limpa o ID do sacado
+      sacadoId: "",
       nfCte: "",
       status: "Todos",
       clienteId: "",
@@ -241,11 +235,12 @@ export default function ConsultasPage() {
     }
   };
 
+  // --- FUNÇÃO CORRIGIDA ---
   const handleConfirmarLiquidacao = async (
     liquidacoes,
     dataLiquidacao,
     jurosMora,
-    desconto,
+    desconto, // 1. Recebe o novo parâmetro 'desconto'
     contaBancariaId
   ) => {
     try {
@@ -256,7 +251,7 @@ export default function ConsultasPage() {
           liquidacoes,
           dataLiquidacao,
           jurosMora,
-          desconto,
+          desconto, // 2. Passa o 'desconto' para a API
           contaBancariaId,
         }),
       });
@@ -271,6 +266,7 @@ export default function ConsultasPage() {
       setIsLiquidarModalOpen(false);
     }
   };
+  // --- FIM DA CORREÇÃO ---
 
   const handleEstornar = () => {
     if (!contextMenu.selectedItem) return;
@@ -757,7 +753,7 @@ export default function ConsultasPage() {
         <div
           ref={menuRef}
           style={{ top: contextMenu.y, left: contextMenu.x }}
-          className="absolute origin-top-right w-56 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-50"
+          className="absolute origin-top-right w-48 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-50"
         >
           <div className="py-1" onClick={(e) => e.stopPropagation()}>
             <a
