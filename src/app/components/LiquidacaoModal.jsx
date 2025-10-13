@@ -202,7 +202,7 @@ export default function LiquidacaoModal({
               id="contaBancariaId"
               value={contaBancariaId}
               onChange={(e) => {
-                setContaBancariaId(e.target.value);
+                setContaBancariaId(Number(e.target.value));
                 setError("");
               }}
               className="mt-1 block w-full bg-gray-600 border-gray-500 rounded-md shadow-sm p-2"
