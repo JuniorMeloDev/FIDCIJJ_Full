@@ -44,9 +44,11 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
 
   if (banco === "safra") {
     const valorFinal = duplicata.valor_bruto - (abatimento || 0);
-    
+
     // --- LÓGICA PADRONIZADA PARA O NOSSO NÚMERO ---
-    const nossoNumeroUnico = `${duplicata.operacao.id}${duplicata.id}`.slice(-9).padStart(9, '0');
+    const nossoNumeroUnico = `${duplicata.operacao.id}${duplicata.id}`
+      .slice(-9)
+      .padStart(9, "0");
 
     return {
       agencia: "02900",
@@ -203,7 +205,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
             percentual_juros: formatPercent(tipoOperacao.taxa_juros_mora),
           },
           protesto: {
-            codigo_tipo_protesto: "1",
+            codigo_protesto: "1", // Campo corrigido para "codigo_protesto"
             quantidade_dias_protesto: "5",
           },
           recebimento_divergente: { codigo_tipo_autorizacao: "03" },
