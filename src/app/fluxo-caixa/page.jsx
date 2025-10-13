@@ -19,7 +19,7 @@ import ConciliacaoModal from "@/app/components/ConciliacaoModal";
 import PixReceiptModal from "@/app/components/PixReceiptModal";
 
 const ITEMS_PER_PAGE = 8;
-const INTER_ITEMS_PER_PAGE = 10;
+const INTER_ITEMS_PER_PAGE = 3;
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
