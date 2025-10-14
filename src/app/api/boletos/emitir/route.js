@@ -235,10 +235,10 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
             codigo_tipo_juros: tipoOperacao.taxa_juros_mora > 0 ? "90" : "0",
             percentual_juros: formatPercent(tipoOperacao.taxa_juros_mora),
           },
-          protesto: {
-            codigo_tipo_protesto: "9", // ✅ válido
-            quantidade_dias_protesto: "5",
-          },
+          //protesto: {
+           // codigo_tipo_protesto: "9", // ✅ válido
+            //quantidade_dias_protesto: "5",
+          //},
           recebimento_divergente: { codigo_tipo_autorizacao: "03" },
           desconto_expresso: false,
         },
