@@ -236,7 +236,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
             percentual_juros: formatPercent(tipoOperacao.taxa_juros_mora),
           },
           protesto: {
-            codigo_tipo_protesto: "4", // ✅ válido
+            codigo_tipo_protesto: "9", // ✅ válido
             quantidade_dias_protesto: "5",
           },
           recebimento_divergente: { codigo_tipo_autorizacao: "03" },
