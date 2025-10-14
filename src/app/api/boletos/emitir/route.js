@@ -19,10 +19,11 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
   const { data: duplicata, error: dupError } = await supabase
     .from("duplicatas")
     .select(
-      "*, operacao:operacoes(id, cliente:clientes(*), tipo_operacao:tipos_operacao(*))" // Adicionado 'id' da operação
+      "*, operacao:operacoes(id, cliente:clientes(*), tipo_operacao:tipos_operacao(*))"
     )
     .eq("id", duplicataId)
     .single();
+
   if (dupError || !duplicata)
     throw new Error(`Duplicata com ID ${duplicataId} não encontrada.`);
 
@@ -31,21 +32,24 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
       `A duplicata ${duplicata.nf_cte} não possui um ID de sacado vinculado.`
     );
   }
+
   const { data: sacado, error: sacadoError } = await supabase
     .from("sacados")
     .select("*")
     .eq("id", duplicata.sacado_id)
     .single();
+
   if (sacadoError || !sacado) {
     throw new Error(`Sacado com ID ${duplicata.sacado_id} não encontrado.`);
   }
 
   const { tipo_operacao: tipoOperacao } = duplicata.operacao;
 
+  // =====================================
+  // BANCO SAFRA
+  // =====================================
   if (banco === "safra") {
     const valorFinal = duplicata.valor_bruto - (abatimento || 0);
-
-    // --- LÓGICA PADRONIZADA PARA O NOSSO NÚMERO ---
     const nossoNumeroUnico = `${duplicata.operacao.id}${duplicata.id}`
       .slice(-9)
       .padStart(9, "0");
@@ -56,14 +60,14 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
       documento: {
         numero: nossoNumeroUnico,
         numeroCliente: duplicata.nf_cte.substring(0, 10),
-        especie: "02", // 02 = Duplicata Mercantil
+        especie: "02",
         dataVencimento: format(
           new Date(duplicata.data_vencimento + "T12:00:00Z"),
           "yyyy-MM-dd"
         ),
         valor: parseFloat(valorFinal.toFixed(2)),
-        quantidadeDiasProtesto: 5, // <-- INCLUÍDO PROTESTO
-        valorAbatimento: parseFloat((abatimento || 0).toFixed(2)), // <-- INCLUÍDO ABATIMENTO
+        quantidadeDiasProtesto: 5,
+        valorAbatimento: parseFloat((abatimento || 0).toFixed(2)),
         pagador: {
           nome: sacado.nome.replace(/\.$/, "").substring(0, 40),
           tipoPessoa: (sacado.cnpj || "").length > 11 ? "J" : "F",
@@ -78,7 +82,12 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
         },
       },
     };
-  } else if (banco === "bradesco") {
+  }
+
+  // =====================================
+  // BANCO BRADESCO
+  // =====================================
+  else if (banco === "bradesco") {
     const valorFinal = duplicata.valor_bruto - (abatimento || 0);
     return {
       filialCPFCNPJ: process.env.BRADESCO_FILIAL_CNPJ,
@@ -117,12 +126,21 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
         qtdeDiasMulta: "0",
       },
     };
-  } else if (banco === "itau") {
+  }
+
+  // =====================================
+  // BANCO ITAÚ
+  // =====================================
+  else if (banco === "itau") {
     if (!process.env.ITAU_ID_BENEFICIARIO) {
       throw new Error(
         "A variável de ambiente ITAU_ID_BENEFICIARIO não está configurada."
       );
     }
+
+    const agencia = "0550";
+    const conta = "99359";
+    const carteira = "109";
 
     const valorComAbatimento = duplicata.valor_bruto - (abatimento || 0);
     if (valorComAbatimento <= 0) {
@@ -130,6 +148,28 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
         "O valor do abatimento não pode ser maior ou igual ao valor da duplicata."
       );
     }
+
+    // Cálculo do dígito verificador (DAC) – módulo 10
+    function calcularDAC(agencia, conta, carteira, nossoNumero) {
+      const sequencia = `${agencia}${conta}${carteira}${nossoNumero}`;
+      let soma = 0;
+      let peso = 2;
+      for (let i = sequencia.length - 1; i >= 0; i--) {
+        const multiplicacao = parseInt(sequencia[i], 10) * peso;
+        soma += multiplicacao > 9 ? multiplicacao - 9 : multiplicacao;
+        peso = peso === 2 ? 1 : 2;
+      }
+      const resto = soma % 10;
+      return resto === 0 ? 0 : 10 - resto;
+    }
+
+    const baseNossoNumero = duplicata.id.toString().padStart(8, "0");
+    const dac = calcularDAC(agencia, conta, carteira, baseNossoNumero);
+    const nossoNumeroCompleto = `${baseNossoNumero}${dac}`;
+    const nossoNumeroImpresso = `${carteira}/${baseNossoNumero}-${dac}`;
+
+    console.log("Nosso Número (API):", nossoNumeroCompleto);
+    console.log("Nosso Número (impresso):", nossoNumeroImpresso);
 
     const isCpf = (sacado.cnpj || "").replace(/\D/g, "").length === 11;
     const valorFormatado = Math.round(valorComAbatimento * 100)
@@ -152,7 +192,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
         dado_boleto: {
           descricao_instrumento_cobranca: "boleto",
           tipo_boleto: "a vista",
-          codigo_carteira: "109",
+          codigo_carteira: carteira,
           codigo_especie: "01",
           valor_total_titulo: valorFormatado,
           valor_abatimento: "0",
@@ -187,7 +227,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
           },
           dados_individuais_boleto: [
             {
-              numero_nosso_numero: duplicata.id.toString().padStart(8, "0"),
+              numero_nosso_numero: nossoNumeroCompleto, // ✅ com dígito verificador
               data_vencimento: format(
                 new Date(duplicata.data_vencimento + "T12:00:00Z"),
                 "yyyy-MM-dd"
@@ -205,7 +245,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
             percentual_juros: formatPercent(tipoOperacao.taxa_juros_mora),
           },
           protesto: {
-            codigo_protesto: "1", // Campo corrigido para "codigo_protesto"
+            codigo_protesto: "1",
             quantidade_dias_protesto: "5",
           },
           recebimento_divergente: { codigo_tipo_autorizacao: "03" },
@@ -214,6 +254,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
       },
     };
   }
+
   throw new Error("Banco inválido.");
 }
 
