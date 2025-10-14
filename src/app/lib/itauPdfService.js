@@ -4,8 +4,6 @@ import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
-
-
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
     let soma = 0;
@@ -35,14 +33,13 @@ const getAgenciaContaDAC = (agencia, conta) => modulo10(`${agencia}${conta}`);
 const getNossoNumeroDAC = (agencia, conta, carteira, nossoNumero) => {
     let sequencia;
     if (carteira === '109') {
-        // Para a carteira 109, o cálculo NÃO inclui a carteira.
         sequencia = `${agencia}${conta}${nossoNumero}`;
     } else {
-        // Para as demais carteiras (como a 157), o cálculo INCLUI a carteira.
         sequencia = `${agencia}${conta}${carteira}${nossoNumero}`;
     }
     return modulo10(sequencia);
 };
+
 function gerarLinhaDigitavelECodigoBarras(dados) {
     const { agencia, conta, carteira, nossoNumero, valor, vencimento } = dados;
     const banco = "341";
@@ -151,6 +148,10 @@ export function gerarPdfBoletoItau(listaBoletos) {
         vencimento: dadosBoleto.data_vencimento
     });
     const vencimentoDate = new Date(dadosBoleto.data_vencimento + 'T12:00:00Z');
+
+    // *** CORREÇÃO APLICADA AQUI ***
+    // Formata o "Nosso Número" para incluir o dígito verificador calculado
+    const nossoNumeroImpresso = `${dadosBoleto.carteira}/${dadosBoleto.nosso_numero}-${dadosBoleto.dac_nosso_numero}`;
     
     const drawSection = (yOffset) => {
         doc.setLineWidth(0.2);
@@ -176,7 +177,10 @@ export function gerarPdfBoletoItau(listaBoletos) {
         drawField(doc, 'Espécie Doc.', 'DM', 75, y3, 20, 10, 'left', 8);
         drawField(doc, 'Aceite', 'N', 95, y3, 15, 10, 'left', 8);
         drawField(doc, 'Data Processamento', format(new Date(), 'dd/MM/yyyy'), 110, y3, 45, 10, 'left', 8);
-        drawField(doc, 'Nosso Número', `${dadosBoleto.carteira}/${dadosBoleto.nosso_numero}`, 155, y3, 40, 10, 'right');
+        
+        // *** CORREÇÃO APLICADA AQUI ***
+        // Usa a variável 'nossoNumeroImpresso' que contém o dígito
+        drawField(doc, 'Nosso Número', nossoNumeroImpresso, 155, y3, 40, 10, 'right');
 
         const y4 = y3 + 10;
         drawField(doc, 'Uso do Banco', '', 15, y4, 25, 10);

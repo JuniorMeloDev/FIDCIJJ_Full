@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
-import { gerarPdfBoletoItau } from '@/app/lib/itauPdfService';
+import { gerarPdfBoletoItau, getNossoNumeroDAC } from '@/app/lib/itauPdfService';
 
 export async function GET(request, { params }) {
     try {
@@ -14,7 +14,6 @@ export async function GET(request, { params }) {
             return NextResponse.json({ message: 'ID da Operação é obrigatório.' }, { status: 400 });
         }
         
-        // ALTERADO: A consulta agora busca a operação completa para obter as regras de juros/multa
         const { data: duplicatas, error: dupError } = await supabase
             .from('duplicatas')
             .select('*, operacao:operacoes!inner(cliente:clientes!inner(*), tipo_operacao:tipos_operacao(*))')
@@ -25,31 +24,43 @@ export async function GET(request, { params }) {
 
         const listaBoletos = [];
         for (const duplicata of duplicatas) {
-            if (!duplicata.operacao?.cliente || !duplicata.sacado_id) continue;
+            if (!duplicata.operacao?.cliente || !duplicata.sacado_id || !duplicata.linha_digitavel) {
+                continue;
+            }
             
             const { data: sacado } = await supabase.from('sacados').select('*').eq('id', duplicata.sacado_id).single();
             if (!sacado) continue;
 
-            // ALTERADO: Simplificado para passar apenas os dados brutos. O `boletoInfo` foi removido.
+            // Dados fixos do convênio Itaú
+            const agencia = '0550';
+            const conta = '99359'; // Sem o dígito
+            const carteira = '109'; 
+            const nosso_numero = duplicata.id.toString().padStart(8, '0');
+
+            // Calcula o dígito do nosso número
+            const dac_nosso_numero = getNossoNumeroDAC(agencia, conta, carteira, nosso_numero);
+
             listaBoletos.push({
-                ...duplicata, // Contém valor_bruto, data_vencimento, etc.
+                ...duplicata,
                 cedente: duplicata.operacao.cliente,
                 sacado: sacado,
-                agencia: '0550', 
-                conta: '99359-6', 
-                carteira: '109', 
-                nosso_numero: duplicata.id.toString().padStart(8, '0'),
-                operacao: duplicata.operacao // Passa o objeto completo da operação
+                agencia: agencia,
+                conta: '99359-6', // Para exibição
+                carteira: carteira,
+                nosso_numero: nosso_numero,
+                dac_nosso_numero: dac_nosso_numero, // Dígito calculado
+                numero_documento: duplicata.nf_cte,
+                operacao: duplicata.operacao
             });
         }
         
-        if (listaBoletos.length === 0) throw new Error("Não foi possível montar os dados para nenhum boleto da operação.");
+        if (listaBoletos.length === 0) throw new Error("Não foi possível montar os dados para nenhum boleto da operação (verifique se já foram registrados).");
 
         const pdfBuffer = gerarPdfBoletoItau(listaBoletos);
         
         const tipoDocumento = duplicatas[0]?.operacao?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const numerosDocumento = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join('_');
-        const filename = `Boletos ${tipoDocumento} ${numerosDocumento}.pdf`;
+        const filename = `Boletos_${tipoDocumento}_${numerosDocumento}.pdf`;
         
         const headers = new Headers();
         headers.append('Content-Type', 'application/pdf');
