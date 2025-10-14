@@ -9,12 +9,12 @@ export function getNossoNumeroDAC(agencia, conta, carteira, nossoNumero) {
   let soma = 0;
   let peso = 2;
   for (let i = sequencia.length - 1; i >= 0; i--) {
-    const multiplicacao = parseInt(sequencia[i], 8) * peso;
-    soma += multiplicacao > 7 ? multiplicacao - 7 : multiplicacao;
+    const multiplicacao = parseInt(sequencia[i], 10) * peso;
+    soma += multiplicacao > 9 ? multiplicacao - 9 : multiplicacao;
     peso = peso === 2 ? 1 : 2;
   }
-  const resto = soma % 8;
-  return resto === 0 ? 0 : 8 - resto;
+  const resto = soma % 10;
+  return resto === 0 ? 0 : 10 - resto;
 }
 
 /**
