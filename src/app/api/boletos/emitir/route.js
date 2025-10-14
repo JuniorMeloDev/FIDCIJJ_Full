@@ -15,6 +15,28 @@ import {
 } from "@/app/lib/bradescoService";
 import { getItauAccessToken, registrarBoletoItau } from "@/app/lib/itauService";
 
+// ---------------------------
+// Função para calcular o dígito (DAC) do Nosso Número Itaú
+// ---------------------------
+function calcularDacItau(nossoNumeroBase, codigoCarteira = "109") {
+  const base = codigoCarteira + nossoNumeroBase; // Ex: "10900001540"
+  const pesos = [2, 3, 4, 5, 6, 7, 8, 9];
+  let soma = 0;
+  let pesoIndex = 0;
+
+  for (let i = base.length - 1; i >= 0; i--) {
+    soma += parseInt(base[i]) * pesos[pesoIndex];
+    pesoIndex = (pesoIndex + 1) % pesos.length;
+  }
+
+  const resto = soma % 11;
+  const dac = resto === 0 || resto === 1 ? 0 : 11 - resto;
+  return dac.toString();
+}
+
+// ---------------------------
+// Montagem de dados por banco
+// ---------------------------
 async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
   const { data: duplicata, error: dupError } = await supabase
     .from("duplicatas")
@@ -45,11 +67,10 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
 
   const { tipo_operacao: tipoOperacao } = duplicata.operacao;
 
-  // =====================================
-  // BANCO SAFRA
-  // =====================================
+  // ----------------- SAFRA -----------------
   if (banco === "safra") {
     const valorFinal = duplicata.valor_bruto - (abatimento || 0);
+
     const nossoNumeroUnico = `${duplicata.operacao.id}${duplicata.id}`
       .slice(-9)
       .padStart(9, "0");
@@ -84,10 +105,8 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
     };
   }
 
-  // =====================================
-  // BANCO BRADESCO
-  // =====================================
-  else if (banco === "bradesco") {
+  // ----------------- BRADESCO -----------------
+  if (banco === "bradesco") {
     const valorFinal = duplicata.valor_bruto - (abatimento || 0);
     return {
       filialCPFCNPJ: process.env.BRADESCO_FILIAL_CNPJ,
@@ -128,48 +147,18 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
     };
   }
 
-  // =====================================
-  // BANCO ITAÚ
-  // =====================================
-  else if (banco === "itau") {
-    if (!process.env.ITAU_ID_BENEFICIARIO) {
-      throw new Error(
-        "A variável de ambiente ITAU_ID_BENEFICIARIO não está configurada."
-      );
-    }
-
-    const agencia = "0550";
-    const conta = "99359";
-    const carteira = "109";
-
+  // ----------------- ITAÚ -----------------
+  if (banco === "itau") {
     const valorComAbatimento = duplicata.valor_bruto - (abatimento || 0);
-    if (valorComAbatimento <= 0) {
+    if (valorComAbatimento <= 0)
       throw new Error(
         "O valor do abatimento não pode ser maior ou igual ao valor da duplicata."
       );
-    }
 
-    // Cálculo do dígito verificador (DAC) – módulo 10
-    function calcularDAC(agencia, conta, carteira, nossoNumero) {
-      const sequencia = `${agencia}${conta}${carteira}${nossoNumero}`;
-      let soma = 0;
-      let peso = 2;
-      for (let i = sequencia.length - 1; i >= 0; i--) {
-        const multiplicacao = parseInt(sequencia[i], 10) * peso;
-        soma += multiplicacao > 9 ? multiplicacao - 9 : multiplicacao;
-        peso = peso === 2 ? 1 : 2;
-      }
-      const resto = soma % 10;
-      return resto === 0 ? 0 : 10 - resto;
-    }
-
+    // Base do Nosso Número (8 dígitos)
     const baseNossoNumero = duplicata.id.toString().padStart(8, "0");
-    const dac = calcularDAC(agencia, conta, carteira, baseNossoNumero);
-    const nossoNumeroCompleto = `${baseNossoNumero}${dac}`;
-    const nossoNumeroImpresso = `${carteira}/${baseNossoNumero}-${dac}`;
-
-    console.log("Nosso Número (API):", nossoNumeroCompleto);
-    console.log("Nosso Número (impresso):", nossoNumeroImpresso);
+    // Cálculo do DAC para impressão
+    const dac = calcularDacItau(baseNossoNumero, "109");
 
     const isCpf = (sacado.cnpj || "").replace(/\D/g, "").length === 11;
     const valorFormatado = Math.round(valorComAbatimento * 100)
@@ -188,11 +177,13 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
       data: {
         etapa_processo_boleto: "Efetivacao",
         codigo_canal_operacao: "API",
-        beneficiario: { id_beneficiario: process.env.ITAU_ID_BENEFICIARIO },
+        beneficiario: {
+          id_beneficiario: process.env.ITAU_ID_BENEFICIARIO,
+        },
         dado_boleto: {
           descricao_instrumento_cobranca: "boleto",
           tipo_boleto: "a vista",
-          codigo_carteira: carteira,
+          codigo_carteira: "109",
           codigo_especie: "01",
           valor_total_titulo: valorFormatado,
           valor_abatimento: "0",
@@ -227,7 +218,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
           },
           dados_individuais_boleto: [
             {
-              numero_nosso_numero: nossoNumeroCompleto, // ✅ com dígito verificador
+              numero_nosso_numero: baseNossoNumero, // ✅ apenas 8 dígitos
               data_vencimento: format(
                 new Date(duplicata.data_vencimento + "T12:00:00Z"),
                 "yyyy-MM-dd"
@@ -245,8 +236,8 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
             percentual_juros: formatPercent(tipoOperacao.taxa_juros_mora),
           },
           protesto: {
-            protesto: 5, // 5 = Protestar em dias corridos
-            quantidade_dias_protesto: 5, // número de dias
+            codigo_protesto: "1", // ✅ válido
+            quantidade_dias_protesto: "5",
           },
           recebimento_divergente: { codigo_tipo_autorizacao: "03" },
           desconto_expresso: false,
@@ -258,6 +249,9 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
   throw new Error("Banco inválido.");
 }
 
+// ---------------------------
+// Método POST principal
+// ---------------------------
 export async function POST(request) {
   try {
     const token = request.headers.get("Authorization")?.split(" ")[1];
@@ -266,7 +260,6 @@ export async function POST(request) {
     jwt.verify(token, process.env.JWT_SECRET);
 
     const { duplicataId, banco, abatimento } = await request.json();
-
     const dadosParaBoleto = await getDadosParaBoleto(
       duplicataId,
       banco,
@@ -279,27 +272,10 @@ export async function POST(request) {
 
     if (banco === "safra") {
       const tokenData = await getSafraAccessToken();
-      try {
-        boletoGerado = await registrarBoletoSafra(
-          tokenData.access_token,
-          dadosParaBoleto
-        );
-      } catch (error) {
-        if (error.message && error.message.includes("DUPLICADOS")) {
-          const consultaParams = {
-            agencia: dadosParaBoleto.agencia,
-            conta: dadosParaBoleto.conta,
-            nossoNumero: dadosParaBoleto.documento.numero,
-            numeroCliente: dadosParaBoleto.documento.numeroCliente,
-          };
-          boletoGerado = await consultarBoletoSafra(
-            tokenData.access_token,
-            consultaParams
-          );
-        } else {
-          throw error;
-        }
-      }
+      boletoGerado = await registrarBoletoSafra(
+        tokenData.access_token,
+        dadosParaBoleto
+      );
       linhaDigitavelParaRetorno =
         boletoGerado.data?.documento?.linhaDigitavel ||
         boletoGerado.data?.linhaDigitavel ||
