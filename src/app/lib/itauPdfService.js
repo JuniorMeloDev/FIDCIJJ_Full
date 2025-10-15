@@ -4,6 +4,8 @@ import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
+
+
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
     let soma = 0;
@@ -30,11 +32,15 @@ function modulo11(bloco) {
 }
 
 const getAgenciaContaDAC = (agencia, conta) => modulo10(`${agencia}${conta}`);
-const getNossoNumeroDAC = (agencia, conta, carteira, nossoNumero) => {
+
+// CORREÇÃO: A função PRECISA ser exportada para ser utilizada na API route.js
+export const getNossoNumeroDAC = (agencia, conta, carteira, nossoNumero) => { 
     let sequencia;
     if (carteira === '109') {
+        // Para a carteira 109, o cálculo NÃO inclui a carteira.
         sequencia = `${agencia}${conta}${nossoNumero}`;
     } else {
+        // Para as demais carteiras (como a 157), o cálculo INCLUI a carteira.
         sequencia = `${agencia}${conta}${carteira}${nossoNumero}`;
     }
     return modulo10(sequencia);
@@ -61,6 +67,7 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
     const nossoNumeroSemDac = nossoNumero.padStart(8, '0');
     const contaSemDac = (conta || '').split('-')[0].padStart(5, '0');
 
+    // A função getNossoNumeroDAC é usada aqui dentro também
     const dacNossoNumero = getNossoNumeroDAC(agencia, contaSemDac, carteira, nossoNumeroSemDac);
     const dacAgenciaConta = getAgenciaContaDAC(agencia, contaSemDac);
 
@@ -149,8 +156,7 @@ export function gerarPdfBoletoItau(listaBoletos) {
     });
     const vencimentoDate = new Date(dadosBoleto.data_vencimento + 'T12:00:00Z');
 
-    // *** CORREÇÃO APLICADA AQUI ***
-    // Formata o "Nosso Número" para incluir o dígito verificador calculado
+    // Recupera a informação do "Nosso Número" com o DV que foi calculado na rota
     const nossoNumeroImpresso = `${dadosBoleto.carteira}/${dadosBoleto.nosso_numero}-${dadosBoleto.dac_nosso_numero}`;
     
     const drawSection = (yOffset) => {
@@ -178,7 +184,6 @@ export function gerarPdfBoletoItau(listaBoletos) {
         drawField(doc, 'Aceite', 'N', 95, y3, 15, 10, 'left', 8);
         drawField(doc, 'Data Processamento', format(new Date(), 'dd/MM/yyyy'), 110, y3, 45, 10, 'left', 8);
         
-        // *** CORREÇÃO APLICADA AQUI ***
         // Usa a variável 'nossoNumeroImpresso' que contém o dígito
         drawField(doc, 'Nosso Número', nossoNumeroImpresso, 155, y3, 40, 10, 'right');
 
