@@ -1,4 +1,3 @@
-// src/app/components/LiquidacaoModal.jsx
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
