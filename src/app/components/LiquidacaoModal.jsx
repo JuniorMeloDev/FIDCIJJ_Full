@@ -7,14 +7,11 @@ import {
   formatBRLNumber,
 } from "@/app/utils/formatters";
 
-// 🔧 NOVA LÓGICA — identifica juros pós-fixados corretamente
-// Se a operação NÃO for juros pré (checkbox desmarcado), soma os juros da duplicata.
+// Lógica para identificar juros pós-fixados
 const isPostFixedInterest = (operation, duplicate) => {
   if (!operation || !duplicate) return false;
-  // Se a operação for marcada como "juros pré", não soma
-  if (operation.jurosPre === true || operation.tipo_juros === "PRE") return false;
-  // Caso contrário, se houver valor de juros, considera pós-fixado
-  return duplicate.valorJuros > 0;
+  // Se a operação NÃO for juros pré, soma os juros da duplicata.
+  return (operation.juros_pre === false || operation.juros_pre === null) && duplicate.valor_juros > 0;
 };
 
 export default function LiquidacaoModal({
@@ -32,21 +29,23 @@ export default function LiquidacaoModal({
 
   const isMultiple = Array.isArray(duplicata);
 
-  // 💰 Cálculo do valor total considerando juros pós-fixados
+  // Cálculo do valor total considerando juros pós-fixados
   const totalValue = useMemo(() => {
     if (!duplicata) return 0;
     const items = isMultiple ? duplicata : [duplicata];
 
     return items.reduce((sum, d) => {
-      const op = d.operacao;
-      if (!op) return sum + d.valorBruto;
+      // Acessa a operação aninhada para verificar a flag 'juros_pre'
+      const op = d.operacao; 
       if (isPostFixedInterest(op, d)) {
         // Soma o valor bruto + juros da duplicata (pós-fixado)
-        return sum + d.valorBruto + d.valorJuros;
+        return sum + d.valor_bruto + d.valor_juros;
       }
-      return sum + d.valorBruto;
+      // Para juros pré, considera apenas o valor bruto
+      return sum + d.valor_bruto;
     }, 0);
   }, [duplicata, isMultiple]);
+
 
   // Valor final mostrado no modal (aplica juros de mora e desconto)
   const valorTotalFinal = useMemo(() => {
@@ -67,7 +66,7 @@ export default function LiquidacaoModal({
 
   if (!isOpen) return null;
 
-  // ✅ Confirmação com crédito em conta
+  // Confirmação com crédito em conta
   const handleConfirmarCredito = () => {
     if (!contaBancariaId) {
       setError("Por favor, selecione uma conta para creditar o valor.");
@@ -75,14 +74,8 @@ export default function LiquidacaoModal({
     }
     setError("");
 
-    const liquidacoes = duplicata.map((dup) => {
-      const op = dup.operacao;
-      const isPostFixed = isPostFixedInterest(op, dup);
-      return {
-        id: dup.id,
-        juros_a_somar: isPostFixed ? dup.valorJuros : 0,
-      };
-    });
+    // Simplificado: Agora passa apenas os IDs. A lógica de juros fica no backend.
+    const liquidacoes = (isMultiple ? duplicata : [duplicata]).map(dup => ({ id: dup.id }));
 
     onConfirm(
       liquidacoes,
@@ -94,19 +87,15 @@ export default function LiquidacaoModal({
     onClose();
   };
 
-  // ✅ Baixa sem crédito em conta
+  // Baixa sem crédito em conta
   const handleApenasBaixa = () => {
     setError("");
-    const hoje = new Date().toISOString().split("T")[0];
-    const liquidacoes = duplicata.map((d) => {
-      const op = d.operacao;
-      const isPostFixed = isPostFixedInterest(op, d);
-      return {
-        id: d.id,
-        juros_a_somar: isPostFixed ? d.valorJuros : 0,
-      };
-    });
-    onConfirm(liquidacoes, hoje, 0, 0, null);
+    const hoje = new Date().toISOString().split('T')[0];
+    
+    // Simplificado: Apenas os IDs são necessários
+    const liquidacoes = (isMultiple ? duplicata : [duplicata]).map(d => ({ id: d.id }));
+    
+    onConfirm(liquidacoes, hoje, 0, 0, null); // Envia juros e desconto como zero
     onClose();
   };
 

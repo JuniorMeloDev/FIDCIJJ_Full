@@ -15,10 +15,8 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Nenhuma duplicata selecionada.' }, { status: 400 });
         }
 
-        // --- CORREÇÃO APLICADA: Lógica separada para baixa com e sem crédito ---
-
         if (contaBancariaId) {
-            // LÓGICA PARA LIQUIDAÇÃO COM CRÉDITO EM CONTA
+            // Lógica para liquidação com crédito em conta
             const duplicataIds = liquidacoes.map(item => item.id);
             const { data: duplicatasInfo, error: dupError } = await supabase
                 .from('duplicatas')
@@ -30,15 +28,17 @@ export async function POST(request) {
 
             const promises = liquidacoes.map(item => {
                 const duplicata = duplicatasInfo.find(d => d.id === item.id);
+                // Distribui juros e descontos proporcionalmente ao valor de cada duplicata
                 const proporcao = totalValorBruto > 0 ? (duplicata.valor_bruto / totalValorBruto) : (1 / liquidacoes.length);
                 const jurosPorItem = (jurosMora || 0) * proporcao;
                 const descontoPorItem = (desconto || 0) * proporcao;
 
+                // Chamada RPC corrigida
                 return supabase.rpc('liquidar_duplicata', {
                     p_duplicata_id: item.id,
                     p_data_liquidacao: dataLiquidacao,
-                    p_juros_mora: jurosPorItem + (item.juros_a_somar || 0),
-                    p_desconto: descontoPorItem,
+                    p_juros_mora: jurosPorItem,
+                    p_desconto: descontoPorItem, // Passa o desconto proporcional
                     p_conta_bancaria_id: contaBancariaId
                 });
             });
@@ -51,7 +51,7 @@ export async function POST(request) {
             }
 
         } else {
-            // LÓGICA PARA "APENAS DAR BAIXA" (SEM CONTA)
+            // Lógica para "Apenas Dar Baixa" (sem movimentação de caixa)
             const idsParaAtualizar = liquidacoes.map(item => item.id);
             const dataParaAtualizar = dataLiquidacao || new Date().toISOString().split('T')[0];
 
@@ -60,9 +60,9 @@ export async function POST(request) {
                 .update({ 
                     status_recebimento: 'Recebido', 
                     data_liquidacao: dataParaAtualizar,
-                    // Zera valores financeiros pois não há transação
+                    // Zera valores financeiros pois não há transação de caixa
                     juros_mora: 0,
-                    valor_abatimento: 0,
+                    desconto: 0, 
                     conta_liquidacao: null
                 })
                 .in('id', idsParaAtualizar);
