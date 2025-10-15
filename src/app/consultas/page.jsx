@@ -224,8 +224,14 @@ export default function ConsultasPage() {
 
   const handleAbrirModalLiquidacao = () => {
     let itemsParaLiquidar = [];
-    if (isSelectionMode && selectedItems.size > 0) {
-      itemsParaLiquidar = duplicatas.filter((d) => selectedItems.has(d.id));
+    if (itemsParaLiquidar.length > 0) {
+      // **AQUI ESTÁ O PONTO IMPORTANTE**
+      // Garanta que você está passando os objetos completos, não apenas os IDs.
+      setDuplicataParaLiquidar(itemsParaLiquidar); 
+      setIsLiquidarModalOpen(true);
+    
+    //if (isSelectionMode && selectedItems.size > 0) {
+      //itemsParaLiquidar = duplicatas.filter((d) => selectedItems.has(d.id));
     } else if (contextMenu.selectedItem) {
       itemsParaLiquidar = [contextMenu.selectedItem];
     }
