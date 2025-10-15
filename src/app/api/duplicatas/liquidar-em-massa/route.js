@@ -16,7 +16,7 @@ export async function POST(request) {
         }
 
         if (contaBancariaId) {
-            // Lógica para liquidação com crédito em conta
+            // LÓGICA PARA LIQUIDAÇÃO COM CRÉDITO EM CONTA
             const duplicataIds = liquidacoes.map(item => item.id);
             const { data: duplicatasInfo, error: dupError } = await supabase
                 .from('duplicatas')
@@ -26,32 +26,35 @@ export async function POST(request) {
 
             const totalValorBruto = duplicatasInfo.reduce((sum, d) => sum + d.valor_bruto, 0);
 
-            const promises = liquidacoes.map(item => {
+            // **INÍCIO DA CORREÇÃO**
+            // Usaremos um loop 'for...of' para garantir que cada chamada RPC seja feita corretamente.
+            for (const item of liquidacoes) {
                 const duplicata = duplicatasInfo.find(d => d.id === item.id);
-                // Distribui juros e descontos proporcionalmente ao valor de cada duplicata
+                if (!duplicata) continue; // Pula se a duplicata não for encontrada
+
+                // Distribui os valores de juros e desconto proporcionalmente
                 const proporcao = totalValorBruto > 0 ? (duplicata.valor_bruto / totalValorBruto) : (1 / liquidacoes.length);
                 const jurosPorItem = (jurosMora || 0) * proporcao;
                 const descontoPorItem = (desconto || 0) * proporcao;
 
-                // Chamada RPC corrigida
-                return supabase.rpc('liquidar_duplicata', {
+                const { error: rpcError } = await supabase.rpc('liquidar_duplicata', {
                     p_duplicata_id: item.id,
                     p_data_liquidacao: dataLiquidacao,
                     p_juros_mora: jurosPorItem,
-                    p_desconto: descontoPorItem, // Passa o desconto proporcional
+                    p_desconto: descontoPorItem,
                     p_conta_bancaria_id: contaBancariaId
                 });
-            });
-            
-            const results = await Promise.all(promises);
-            const firstError = results.find(res => res.error);
-            if (firstError) {
-                console.error('Erro ao liquidar uma ou mais duplicatas via RPC:', firstError.error);
-                throw new Error('Falha ao processar a baixa da(s) duplicata(s).');
+
+                // Se qualquer uma das chamadas falhar, interrompe o processo e retorna o erro.
+                if (rpcError) {
+                    console.error(`Erro ao liquidar duplicata ID ${item.id}:`, rpcError);
+                    throw new Error('Falha ao processar a baixa de uma das duplicatas.');
+                }
             }
+            // **FIM DA CORREÇÃO**
 
         } else {
-            // Lógica para "Apenas Dar Baixa" (sem movimentação de caixa)
+            // LÓGICA PARA "APENAS DAR BAIXA" (sem alterações, já estava correta)
             const idsParaAtualizar = liquidacoes.map(item => item.id);
             const dataParaAtualizar = dataLiquidacao || new Date().toISOString().split('T')[0];
 
@@ -60,7 +63,6 @@ export async function POST(request) {
                 .update({ 
                     status_recebimento: 'Recebido', 
                     data_liquidacao: dataParaAtualizar,
-                    // Zera valores financeiros pois não há transação de caixa
                     juros_mora: 0,
                     desconto: 0, 
                     conta_liquidacao: null
@@ -77,6 +79,6 @@ export async function POST(request) {
 
     } catch (error) {
         console.error('Erro no endpoint de liquidação em massa:', error);
-        return NextResponse.json({ message: error.message }, { status: 500 });
+        return NextResponse.json({ message: error.message || 'Falha ao processar a baixa da(s) duplicata(s).' }, { status: 500 });
     }
 }
