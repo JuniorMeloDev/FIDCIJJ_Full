@@ -1,4 +1,3 @@
-// src/app/api/duplicatas/liquidar-em-massa/route.js
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
@@ -16,7 +15,6 @@ export async function POST(request) {
         }
 
         if (contaBancariaId) {
-            // LÓGICA PARA LIQUIDAÇÃO COM CRÉDITO EM CONTA
             const duplicataIds = liquidacoes.map(item => item.id);
             const { data: duplicatasInfo, error: dupError } = await supabase
                 .from('duplicatas')
@@ -26,13 +24,10 @@ export async function POST(request) {
 
             const totalValorBruto = duplicatasInfo.reduce((sum, d) => sum + d.valor_bruto, 0);
 
-            // **INÍCIO DA CORREÇÃO**
-            // Usaremos um loop 'for...of' para garantir que cada chamada RPC seja feita corretamente.
             for (const item of liquidacoes) {
                 const duplicata = duplicatasInfo.find(d => d.id === item.id);
-                if (!duplicata) continue; // Pula se a duplicata não for encontrada
+                if (!duplicata) continue;
 
-                // Distribui os valores de juros e desconto proporcionalmente
                 const proporcao = totalValorBruto > 0 ? (duplicata.valor_bruto / totalValorBruto) : (1 / liquidacoes.length);
                 const jurosPorItem = (jurosMora || 0) * proporcao;
                 const descontoPorItem = (desconto || 0) * proporcao;
@@ -45,16 +40,12 @@ export async function POST(request) {
                     p_conta_bancaria_id: contaBancariaId
                 });
 
-                // Se qualquer uma das chamadas falhar, interrompe o processo e retorna o erro.
                 if (rpcError) {
                     console.error(`Erro ao liquidar duplicata ID ${item.id}:`, rpcError);
                     throw new Error('Falha ao processar a baixa de uma das duplicatas.');
                 }
             }
-            // **FIM DA CORREÇÃO**
-
         } else {
-            // LÓGICA PARA "APENAS DAR BAIXA" (sem alterações, já estava correta)
             const idsParaAtualizar = liquidacoes.map(item => item.id);
             const dataParaAtualizar = dataLiquidacao || new Date().toISOString().split('T')[0];
 
