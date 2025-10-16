@@ -44,10 +44,8 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
             doc.line(102, 30, 104, 32);
             doc.line(104, 32, 108, 28);
             
-            // --- CORREÇÃO: Reseta a cor do desenho ---
-            doc.setDrawColor(200, 200, 200); // Um cinza claro
+            doc.setDrawColor(200, 200, 200);
             doc.setLineWidth(0.2);
-            // --- FIM DA CORREÇÃO ---
 
             doc.setFontSize(22);
             doc.setFont('helvetica', 'bold');

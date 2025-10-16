@@ -600,6 +600,7 @@ export default function FluxoDeCaixaPage() {
     }
   };
   
+  // --- INÍCIO DA CORREÇÃO ---
   const handleAbrirComprovantePix = async () => {
       if (!contextMenu.selectedItem) return;
       const item = contextMenu.selectedItem;
@@ -616,9 +617,8 @@ export default function FluxoDeCaixaPage() {
   
       if (isOperacaoPix && item.operacao) {
           const op = item.operacao;
-          const valorFormatado = formatBRLNumber(Math.abs(item.valor)).replace(/\s/g, ''); // R$2.620,00
+          const valorFormatado = formatBRLNumber(Math.abs(item.valor)).replace(/\s/g, ''); 
   
-          // Busca as duplicatas associadas para montar o nome do arquivo
           const { data: duplicatas } = await fetchApiData(`/api/duplicatas/operacao/${item.operacaoId}`);
           
           let numerosDoc = 'N/A';
@@ -633,15 +633,22 @@ export default function FluxoDeCaixaPage() {
           mensagem = `Pagamento ref. Operação #${item.operacaoId}`;
           
           if (op && op.cliente) {
+              // Busca os dados da conta do cliente que tem a chave PIX
+              const recebedorContas = op.cliente.contas_bancarias || [];
+              const contaRecebedor = recebedorContas.find(c => c.chave_pix) || recebedorContas[0] || {};
+
               recebedorData = {
                   nome: op.cliente.nome,
-                  cnpj: op.cliente.cnpj
+                  cnpj: op.cliente.cnpj,
+                  instituicao: contaRecebedor.banco,
+                  chavePix: contaRecebedor.chave_pix
               };
           }
       } else if (isManualPix) {
           const valorFormatado = formatBRLNumber(Math.abs(item.valor)).replace(/\s/g, '');
           filename = `Comprovante PIX - ${item.descricao} - ${valorFormatado}.pdf`;
-          recebedorData = { nome: item.empresaAssociada };
+          // Para PIX manual, não temos os dados do recebedor, então deixamos em branco
+          recebedorData = { nome: item.empresaAssociada }; 
           mensagem = item.descricao;
       }
   
@@ -659,6 +666,7 @@ export default function FluxoDeCaixaPage() {
       });
       setIsReceiptModalOpen(true);
   };
+  // --- FIM DA CORREÇÃO ---
 
 
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
