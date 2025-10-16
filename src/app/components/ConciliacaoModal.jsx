@@ -84,8 +84,9 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-grow overflow-y-hidden">
-                    <div className="flex flex-col h-full">
-                        <div className="flex gap-2 mb-2">
+                    {/* COLUNA DA ESQUERDA (BUSCA) - COM CORREÇÃO */}
+                    <div className="flex flex-col h-full min-h-0">
+                        <div className="flex gap-2 mb-2 flex-shrink-0">
                             <input type="text" value={busca} onChange={(e) => setBusca(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} placeholder="Buscar Sacado ou NF/CTe..." className="flex-grow bg-gray-700 border-gray-600 rounded-md p-2 text-sm" />
                             <button onClick={handleSearch} disabled={loading} className="bg-blue-600 font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50">{loading ? '...' : 'Buscar'}</button>
                         </div>
@@ -104,6 +105,7 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
                         </div>
                     </div>
 
+                    {/* COLUNA DA DIREITA (SELECIONADOS) - COM CORREÇÃO */}
                     <div className="flex flex-col h-full min-h-0">
                         <h3 className="text-md font-semibold mb-2 flex-shrink-0">Duplicatas Selecionadas para Baixa</h3>
                         <div className="flex-grow space-y-2 overflow-y-auto border border-gray-700 p-2 rounded-md">
