@@ -7,7 +7,6 @@ import { randomUUID } from 'crypto';
  * Cria um agente HTTPS com os certificados mTLS do Inter para autenticação mútua.
  */
 const createInterAgent = () => {
-    // ... (esta função não muda)
     const certificate = process.env.INTER_CERTIFICATE;
     const privateKey = process.env.INTER_PRIVATE_KEY;
 
@@ -25,7 +24,6 @@ const createInterAgent = () => {
  * Obtém o token de acesso (access_token) da API de produção do Banco Inter.
  */
 export async function getInterAccessToken() {
-    // ... (esta função não muda)
     console.log("\n--- [INTER API] Etapa 1: Obtenção de Token de PRODUÇÃO ---");
     const clientId = process.env.INTER_CLIENT_ID;
     const clientSecret = process.env.INTER_CLIENT_SECRET;
@@ -73,12 +71,8 @@ export async function getInterAccessToken() {
  */
 export async function consultarSaldoInter(accessToken, contaCorrente) {
     console.log("\n--- [INTER API] Etapa 2: Consulta de Saldo ---");
-    
-    // ================== INÍCIO DA CORREÇÃO ==================
     const hoje = format(new Date(), 'yyyy-MM-dd');
     const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/saldo?dataSaldo=${hoje}`;
-    // =================== FIM DA CORREÇÃO ====================
-    
     const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
 
     const options = {
@@ -115,7 +109,6 @@ export async function consultarSaldoInter(accessToken, contaCorrente) {
  * Consulta o extrato da conta em um período.
  */
 export async function consultarExtratoInter(accessToken, contaCorrente, dataInicio, dataFim) {
-    // ... (esta função não muda)
     console.log("\n--- [INTER API] Etapa 3: Consulta de Extrato ---");
     const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/extrato?dataInicio=${dataInicio}&dataFim=${dataFim}`;
     const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
@@ -148,8 +141,61 @@ export async function consultarExtratoInter(accessToken, contaCorrente, dataInic
     });
 }
 
+// --- NOVA FUNÇÃO ADICIONADA ---
 /**
- * Envia efetivamente um pagamento PIX.
+ * Consulta um PIX enviado usando o código de solicitação para obter o endToEndId.
+ * Tenta por até 10 segundos.
+ */
+async function consultarPixEnviadoInter(accessToken, contaCorrente, codigoSolicitacao) {
+    console.log(`\n--- [INTER API] Etapa 3.1: Consultando PIX com código ${codigoSolicitacao} ---`);
+    const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/pix/${codigoSolicitacao}`;
+    const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
+    const options = {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'x-conta-corrente': cleanContaCorrente
+        },
+        agent: createInterAgent(),
+    };
+
+    const maxAttempts = 5;
+    const delay = 2000; // 2 segundos
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const data = await new Promise((resolve, reject) => {
+                const req = https.request(apiEndpoint, options, (res) => {
+                    let responseData = '';
+                    res.on('data', chunk => responseData += chunk);
+                    res.on('end', () => resolve({ statusCode: res.statusCode, body: responseData }));
+                });
+                req.on('error', e => reject(new Error(`Erro de rede na consulta de PIX: ${e.message}`)));
+                req.end();
+            });
+
+            console.log(`[LOG INTER] Tentativa ${attempt} - Resposta da consulta:`, data.body);
+            const jsonData = JSON.parse(data.body);
+
+            if (data.statusCode >= 200 && data.statusCode < 300 && jsonData.endToEndId) {
+                console.log("✅ endToEndId encontrado:", jsonData.endToEndId);
+                return jsonData; // Retorna o objeto completo com o endToEndId
+            }
+        } catch (error) {
+            console.warn(`Tentativa ${attempt} falhou: ${error.message}`);
+        }
+        
+        if (attempt < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+
+    throw new Error('Não foi possível obter o ID da transação (endToEndId) após várias tentativas.');
+}
+// --- FIM DA NOVA FUNÇÃO ---
+
+/**
+ * Envia efetivamente um pagamento PIX e depois consulta para obter o endToEndId.
  */
 export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
     console.log("\n--- [INTER API] Etapa 3: Envio de PIX ---");
@@ -171,7 +217,8 @@ export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
 
     const payload = JSON.stringify(dadosPix);
 
-    return new Promise((resolve, reject) => {
+    // Etapa 1: Enviar o PIX e obter o código de solicitação
+    const resultadoEnvio = await new Promise((resolve, reject) => {
         const req = https.request(apiEndpoint, options, (res) => {
             let data = '';
             res.on('data', chunk => data += chunk);
@@ -179,14 +226,14 @@ export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
                 try {
                     const jsonData = JSON.parse(data);
                     if (res.statusCode >= 200 && res.statusCode < 300) {
-                        console.log("✅ PIX enviado com sucesso:", jsonData);
+                        console.log("✅ Solicitação de PIX processada com sucesso:", jsonData);
                         resolve(jsonData);
                     } else {
-                        console.error("❌ Erro ao enviar PIX:", data);
+                        console.error("❌ Erro ao solicitar PIX:", data);
                         reject(new Error(`Erro ${res.statusCode}: ${jsonData.detail || data}`));
                     }
                 } catch (e) {
-                    reject(new Error(`Falha ao processar resposta do PIX: ${data}`));
+                    reject(new Error(`Falha ao processar resposta da solicitação PIX: ${data}`));
                 }
             });
         });
@@ -194,4 +241,11 @@ export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
         req.write(payload);
         req.end();
     });
+
+    if (!resultadoEnvio.codigoSolicitacao) {
+        throw new Error("A resposta da API do Inter não retornou um 'codigoSolicitacao' para consulta.");
+    }
+    
+    // Etapa 2: Usar o código de solicitação para obter os detalhes completos, incluindo o endToEndId
+    return await consultarPixEnviadoInter(accessToken, contaCorrente, resultadoEnvio.codigoSolicitacao);
 }
