@@ -1,3 +1,4 @@
+// src/app/api/lancamentos/pix/route.js
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
@@ -11,7 +12,6 @@ export async function POST(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const body = await request.json();
-        // --- CORREÇÃO: Recebe o operacao_id ---
         const { valor, descricao, contaOrigem, empresaAssociada, pix, operacao_id } = body;
 
         if (!valor || !descricao || !contaOrigem || !pix || !pix.chave) {
@@ -49,6 +49,18 @@ export async function POST(request) {
         const tokenInter = await getInterAccessToken();
         const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, contaOrigem);
 
+        // --- INÍCIO DA CORREÇÃO E DEBUG ---
+        // Adicionamos um log para ver a resposta completa da API do Inter nos logs da Vercel
+        console.log('[DEBUG] Resposta completa da API PIX Inter (Lançamento Manual):', JSON.stringify(resultadoPix, null, 2));
+
+        // Capturamos o ID da transação. A API do Inter retorna este valor como "endToEndId".
+        const pixEndToEndId = resultadoPix.endToEndId; 
+
+        if (!pixEndToEndId) {
+            console.warn("[AVISO] O campo 'endToEndId' não foi encontrado na resposta da API do Inter para o lançamento manual.");
+        }
+        // --- FIM DA CORREÇÃO E DEBUG ---
+
         let descricaoLancamento = `PIX Enviado - ${descricao}`;
         const complementMatch = descricao.match(/^Complemento Borderô #(\d+)$/);
 
@@ -70,10 +82,11 @@ export async function POST(request) {
             descricao: descricaoLancamento,
             valor: -Math.abs(valor),
             conta_bancaria: nomeContaCompleto,
-            categoria: 'Pagamento de Borderô',
+            // Altera a categoria para algo mais específico para o lançamento manual
+            categoria: 'Pagamento PIX', 
             empresa_associada: empresaAssociada,
-            transaction_id: resultadoPix.endToEndId,
-            operacao_id: operacao_id || (complementMatch ? complementMatch[1] : null) // --- CORREÇÃO: Salva o operacao_id
+            transaction_id: pixEndToEndId, // Salva o ID capturado
+            operacao_id: operacao_id || (complementMatch ? complementMatch[1] : null)
         };
         
         console.log('[DEBUG] Payload para movimentacoes_caixa (pix/route.js):', JSON.stringify(movementPayload, null, 2));
