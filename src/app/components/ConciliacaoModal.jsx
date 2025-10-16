@@ -104,8 +104,8 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
                         </div>
                     </div>
 
-                    <div className="flex flex-col h-full">
-                        <h3 className="text-md font-semibold mb-2">Duplicatas Selecionadas para Baixa</h3>
+                    <div className="flex flex-col h-full min-h-0">
+                        <h3 className="text-md font-semibold mb-2 flex-shrink-0">Duplicatas Selecionadas para Baixa</h3>
                         <div className="flex-grow space-y-2 overflow-y-auto border border-gray-700 p-2 rounded-md">
                            {selectedItemsData.length > 0 ? selectedItemsData.map(d => (
                                 <div key={d.id} className="p-2 rounded-md bg-gray-900/50">
