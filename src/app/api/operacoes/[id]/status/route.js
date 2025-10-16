@@ -83,22 +83,12 @@ export async function PUT(request, { params }) {
           const tokenInter = await getInterAccessToken();
           const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, conta.conta_corrente);
           
-console.log('[DEBUG] Resposta completa da API PIX Inter:', JSON.stringify(resultadoPix, null, 2));
+          pixEndToEndId = resultadoPix.transacaoPix?.endToEnd; 
 
-// Correção para acessar o endToEnd aninhado.
-pixEndToEndId = resultadoPix.transacaoPix?.endToEnd; 
-
-if (!pixEndToEndId) {
-  console.warn("[AVISO] O campo 'endToEnd' não foi encontrado em 'transacaoPix' na resposta da API do Inter.");
-}
+          if (!pixEndToEndId) {
+            console.warn("[AVISO] O campo 'endToEnd' não foi encontrado em 'transacaoPix' na resposta da API do Inter.");
+          }
       }
-
-      const { data: clientes } = await supabase
-        .from("clientes")
-        .select("nome")
-        .limit(1);
-      const empresaMasterNome =
-        clientes && clientes.length > 0 ? clientes[0].nome : "FIDC IJJ";
 
       let descricaoLancamento = `Borderô #${id}`;
       const { data: duplicatas } = await supabase
@@ -114,10 +104,8 @@ if (!pixEndToEndId) {
         descricaoLancamento = `Borderô ${docType} ${numerosDoc}`;
       }
       
-      if(pixEndToEndId) {
-          descricaoLancamento = `PIX Enviado - ${descricaoLancamento}`;
-      }
-
+      // O prefixo "PIX Enviado" foi removido daqui
+      
       await supabase.from("movimentacoes_caixa").insert({
         operacao_id: id,
         data_movimento: data_debito_parcial || operacao.data_operacao,
@@ -125,7 +113,7 @@ if (!pixEndToEndId) {
         valor: -Math.abs(valorDebitado),
         categoria: "Pagamento de Borderô",
         conta_bancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
-        empresa_associada: empresaMasterNome,
+        empresa_associada: operacao.cliente.nome, // <-- CORREÇÃO APLICADA
         transaction_id: pixEndToEndId
       });
 
@@ -139,7 +127,6 @@ if (!pixEndToEndId) {
         })
         .eq("id", id);
 
-      // --- CORREÇÃO AQUI: Baixa as duplicatas da recompra ---
       if (recompraData && recompraData.ids && recompraData.ids.length > 0) {
           const { error: recompraError } = await supabase
               .from('duplicatas')
@@ -153,7 +140,6 @@ if (!pixEndToEndId) {
               console.error("AVISO: Operação salva, mas falhou ao dar baixa nas duplicatas de recompra. Erro:", recompraError);
           }
       }
-      // --- FIM DA CORREÇÃO ---
 
     } else {
       await supabase.from("duplicatas").delete().eq("operacao_id", id);

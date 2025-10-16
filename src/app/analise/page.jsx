@@ -103,7 +103,6 @@ export default function AnalisePage() {
     const handleSalvarAnalise = async (operacaoId, payload, partialData) => {
         setIsSaving(true);
         try {
-            // --- CORREÇÃO AQUI: 'recompraData' é incluído no payload principal ---
             const finalPayload = { 
                 ...payload, 
                 descontos: descontosAdicionais,
@@ -122,7 +121,6 @@ export default function AnalisePage() {
             if (!response.ok) {
                  throw new Error(result.message || "Falha ao atualizar operação.");
             }
-            // --- FIM DA CORREÇÃO ---
 
             showNotification("Operação analisada com sucesso!", "success");
             fetchPendentes();
@@ -130,13 +128,17 @@ export default function AnalisePage() {
             setIsModalOpen(false);
             setIsPartialDebitModalOpen(false);
 
-            if (payload.status === 'Aprovada' && !payload.efetuar_pix) {
+            // --- CORREÇÃO APLICADA AQUI ---
+            // A condição `!payload.efetuar_pix` foi removida.
+            if (payload.status === 'Aprovada') {
                 setOperacaoParaEmail({
                     id: operacaoId,
                     clienteId: operacaoSelecionada?.cliente?.id
                 });
                 setIsEmailModalOpen(true);
             }
+            // --- FIM DA CORREÇÃO ---
+
         } catch (err) {
             showNotification(err.message, "error");
         } finally {

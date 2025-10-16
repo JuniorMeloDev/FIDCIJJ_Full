@@ -10,6 +10,9 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
     if (!isOpen || !receiptData) return null;
 
     const formatarDataTransacao = (date) => {
+      if (!date || !(date instanceof Date) || isNaN(date)) {
+        return "Data inválida";
+      }
       return formatDateFns(date, "EEEE, dd/MM/yyyy", { locale: ptBR });
     };
     
@@ -70,7 +73,8 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
             doc.text(formatarDataTransacao(receiptData.data), 196, y, { align: 'right' });
             y += 7;
             doc.text(`Horário`, 14, y);
-            doc.text(formatDateFns(receiptData.data, "HH:mm"), 196, y, { align: 'right' });
+            // --- CORREÇÃO DO HORÁRIO NO PDF ---
+            doc.text(receiptData.data ? formatDateFns(receiptData.data, "HH:mm") : '00:00', 196, y, { align: 'right' });
             y += 7;
             doc.text(`ID da transação`, 14, y);
             doc.text(receiptData.transactionId, 196, y, { align: 'right' });
@@ -125,19 +129,21 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[70]" onClick={onClose}>
-            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md text-white border-t-4 border-green-500" onClick={e => e.stopPropagation()}>
-                <div className="text-center mb-6">
+            {/* --- CORREÇÃO DO TAMANHO E ROLAGEM --- */}
+            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-sm text-white border-t-4 border-green-500 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                <div className="text-center mb-6 flex-shrink-0">
                     <FaCheckCircle className="text-green-500 text-5xl mx-auto mb-3" />
                     <h2 className="text-2xl font-bold">Pix enviado</h2>
                     <p className="text-3xl font-bold text-gray-100 mt-2">{formatBRLNumber(receiptData.valor)}</p>
                 </div>
 
-                <div className="space-y-4 text-sm">
+                <div className="space-y-4 text-sm overflow-y-auto pr-2">
                     <div className="bg-gray-700 p-4 rounded-lg">
                         <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-600 pb-1">Sobre a transação</h3>
                         <div className="space-y-1">
                             <p><strong>Data:</strong> {formatarDataTransacao(receiptData.data)}</p>
-                            <p><strong>Horário:</strong> {formatDateFns(receiptData.data, "HH:mm")}</p>
+                            {/* --- CORREÇÃO DO HORÁRIO NA TELA --- */}
+                            <p><strong>Horário:</strong> {receiptData.data ? formatDateFns(receiptData.data, "HH:mm") : '00:00'}</p>
                             <p className="break-all"><strong>ID da transação:</strong> {receiptData.transactionId}</p>
                             <p><strong>Mensagem:</strong> {receiptData.descricao}</p>
                         </div>
@@ -164,7 +170,7 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
                     </div>
                 </div>
 
-                <div className="mt-8 flex flex-col sm:flex-row justify-end gap-4">
+                <div className="mt-8 flex flex-col sm:flex-row justify-end gap-4 flex-shrink-0">
                     <button onClick={onClose} className="bg-gray-600 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition">
                         Fechar
                     </button>

@@ -600,74 +600,69 @@ export default function FluxoDeCaixaPage() {
     }
   };
   
-  // --- INÍCIO DA CORREÇÃO ---
   const handleAbrirComprovantePix = async () => {
-      if (!contextMenu.selectedItem) return;
-      const item = contextMenu.selectedItem;
-  
-      const dateParts = item.dataMovimento.split('-');
-      const localDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-  
-      const isManualPix = item.categoria === 'Pagamento PIX';
-      const isOperacaoPix = item.categoria === 'Pagamento de Borderô' && item.transaction_id;
-  
-      let filename = '';
-      let recebedorData = {};
-      let mensagem = item.descricao;
-  
-      if (isOperacaoPix && item.operacao) {
-          const op = item.operacao;
-          const valorFormatado = formatBRLNumber(Math.abs(item.valor)).replace(/\s/g, ''); 
-  
-          const { data: duplicatas } = await fetchApiData(`/api/duplicatas/operacao/${item.operacaoId}`);
-          
-          let numerosDoc = 'N/A';
-          if (duplicatas && duplicatas.length > 0) {
-              numerosDoc = [...new Set(duplicatas.map(d => d.nfCte.split('.')[0]))].join('_');
-          }
-          
-          const docType = op?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
-          const prefixo = item.descricao.toLowerCase().includes('complemento') ? 'Complemento Borderô' : 'Borderô';
-          
-          filename = `${prefixo} ${docType} ${numerosDoc} - ${valorFormatado}.pdf`;
-          mensagem = `Pagamento ref. Operação #${item.operacaoId}`;
-          
-          if (op && op.cliente) {
-              // Busca os dados da conta do cliente que tem a chave PIX
-              const recebedorContas = op.cliente.contas_bancarias || [];
-              const contaRecebedor = recebedorContas.find(c => c.chave_pix) || recebedorContas[0] || {};
+    if (!contextMenu.selectedItem) return;
+    const item = contextMenu.selectedItem;
 
-              recebedorData = {
-                  nome: op.cliente.nome,
-                  cnpj: op.cliente.cnpj,
-                  instituicao: contaRecebedor.banco,
-                  chavePix: contaRecebedor.chave_pix
-              };
-          }
-      } else if (isManualPix) {
-          const valorFormatado = formatBRLNumber(Math.abs(item.valor)).replace(/\s/g, '');
-          filename = `Comprovante PIX - ${item.descricao} - ${valorFormatado}.pdf`;
-          // Para PIX manual, não temos os dados do recebedor, então deixamos em branco
-          recebedorData = { nome: item.empresaAssociada }; 
-          mensagem = item.descricao;
-      }
-  
-      setReceiptData({
-          valor: Math.abs(item.valor),
-          data: localDate,
-          transactionId: item.transaction_id,
-          descricao: mensagem,
-          filename: filename,
-          pagador: {
-              nome: clienteMasterNome,
-              conta: item.contaBancaria,
-          },
-          recebedor: recebedorData
-      });
-      setIsReceiptModalOpen(true);
-  };
-  // --- FIM DA CORREÇÃO ---
+    const isManualPix = item.categoria === 'Pagamento PIX';
+    const isOperacaoPix = item.categoria === 'Pagamento de Borderô' && item.transaction_id;
 
+    let filename = '';
+    let recebedorData = {};
+    let mensagem = item.descricao;
+
+    if (isOperacaoPix && item.operacao) {
+        const op = item.operacao;
+        const valorFormatado = formatBRLNumber(Math.abs(item.valor)).replace(/\s/g, '');
+
+        const { data: duplicatas } = await fetchApiData(`/api/duplicatas/operacao/${item.operacaoId}`);
+        
+        let numerosDoc = 'N/A';
+        if (duplicatas && duplicatas.length > 0) {
+            numerosDoc = [...new Set(duplicatas.map(d => d.nfCte.split('.')[0]))].join('_');
+        }
+        
+        const docType = op?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
+        const prefixo = item.descricao.toLowerCase().includes('complemento') ? 'Complemento Borderô' : 'Borderô';
+        
+        // --- INÍCIO DA CORREÇÃO DO NOME DO ARQUIVO ---
+        filename = `${prefixo} ${docType} ${numerosDoc} - ${valorFormatado}.pdf`;
+        // --- FIM DA CORREÇÃO DO NOME DO ARQUIVO ---
+
+        mensagem = `Pagamento ref. Operação #${item.operacaoId}`;
+        
+        if (op && op.cliente) {
+            const recebedorContas = op.cliente.contas_bancarias || [];
+            const contaRecebedor = recebedorContas.find(c => c.chave_pix) || recebedorContas[0] || {};
+
+            recebedorData = {
+                nome: op.cliente.nome,
+                cnpj: op.cliente.cnpj,
+                instituicao: contaRecebedor.banco,
+                chavePix: contaRecebedor.chave_pix
+            };
+        }
+    } else if (isManualPix) {
+        const valorFormatado = formatBRLNumber(Math.abs(item.valor)).replace(/\s/g, '');
+        filename = `Comprovante PIX - ${item.descricao} - ${valorFormatado}.pdf`;
+        recebedorData = { nome: item.empresaAssociada };
+        mensagem = item.descricao;
+    }
+
+    setReceiptData({
+        valor: Math.abs(item.valor),
+        data: new Date(), // --- CORREÇÃO DO HORÁRIO ---
+        transactionId: item.transaction_id,
+        descricao: mensagem,
+        filename: filename,
+        pagador: {
+            nome: clienteMasterNome,
+            conta: item.contaBancaria,
+        },
+        recebedor: recebedorData
+    });
+    setIsReceiptModalOpen(true);
+};
 
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
