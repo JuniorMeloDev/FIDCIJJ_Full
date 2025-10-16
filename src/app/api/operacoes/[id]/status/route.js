@@ -82,7 +82,15 @@ export async function PUT(request, { params }) {
           
           const tokenInter = await getInterAccessToken();
           const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, conta.conta_corrente);
-          pixEndToEndId = resultadoPix.endToEndId;
+          
+console.log('[DEBUG] Resposta completa da API PIX Inter:', JSON.stringify(resultadoPix, null, 2));
+
+// Correção para acessar o endToEnd aninhado.
+pixEndToEndId = resultadoPix.transacaoPix?.endToEnd; 
+
+if (!pixEndToEndId) {
+  console.warn("[AVISO] O campo 'endToEnd' não foi encontrado em 'transacaoPix' na resposta da API do Inter.");
+}
       }
 
       const { data: clientes } = await supabase

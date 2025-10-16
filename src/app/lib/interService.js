@@ -177,10 +177,12 @@ async function consultarPixEnviadoInter(accessToken, contaCorrente, codigoSolici
             console.log(`[LOG INTER] Tentativa ${attempt} - Resposta da consulta:`, data.body);
             const jsonData = JSON.parse(data.body);
 
-            if (data.statusCode >= 200 && data.statusCode < 300 && jsonData.endToEndId) {
-                console.log("✅ endToEndId encontrado:", jsonData.endToEndId);
-                return jsonData; // Retorna o objeto completo com o endToEndId
-            }
+            // Correção para acessar o objeto aninhado
+if (data.statusCode >= 200 && data.statusCode < 300 && jsonData.transacaoPix && jsonData.transacaoPix.endToEnd) {
+    console.log("✅ endToEndId encontrado:", jsonData.transacaoPix.endToEnd);
+    // Retorna o objeto jsonData completo, que contém transacaoPix
+    return jsonData; 
+}
         } catch (error) {
             console.warn(`Tentativa ${attempt} falhou: ${error.message}`);
         }
