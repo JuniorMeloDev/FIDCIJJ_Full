@@ -11,6 +11,18 @@ import Notification from "@/app/components/Notification";
 import { FaChartLine, FaDollarSign, FaClock } from "react-icons/fa";
 import { startOfMonth, endOfMonth, format } from "date-fns";
 
+// --- FUNÇÃO ADICIONADA AQUI ---
+// Esta é a mesma lógica do modal, agora aplicada a esta página.
+const isPostFixedInterest = (operation, duplicate) => {
+  if (!operation) return false;
+  const totalDescontadoNaOrigem = (operation.valor_total_bruto || 0) - (operation.valor_liquido || 0);
+  const descontosEsperadosPreFixado = (operation.valor_total_juros || 0) + (operation.valor_total_descontos || 0);
+  if (totalDescontadoNaOrigem < (descontosEsperadosPreFixado - 0.01)) {
+    return (duplicate.valorJuros || duplicate.valor_juros || 0) > 0;
+  }
+  return false;
+};
+
 export default function ResumoPage() {
   const [saldos, setSaldos] = useState([]);
   const [metrics, setMetrics] = useState(null);
@@ -463,9 +475,13 @@ export default function ResumoPage() {
                       )
                       .map((dup) => {
                         const isVencido = dup.dataVencimento < today;
-                        const op = dup.operacao;
-                        const jurosNaoDescontados = op && op.valor_total_juros < 0.01 && dup.valorJuros > 0;
-                        const valorExibido = jurosNaoDescontados ? dup.valorBruto + dup.valorJuros : dup.valorBruto;
+                        
+                        // --- INÍCIO DA CORREÇÃO ---
+                        // Calcula o valor a ser exibido usando a mesma lógica do modal
+                        const valorExibido = isPostFixedInterest(dup.operacao, dup)
+                          ? (dup.valorBruto || 0) + (dup.valorJuros || 0)
+                          : (dup.valorBruto || 0);
+                        // --- FIM DA CORREÇÃO ---
                         
                         return (
                           <div

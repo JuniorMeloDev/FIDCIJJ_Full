@@ -140,13 +140,11 @@ export default function OperacaoBorderoPage() {
     }
   };
 
-  // --- FUNÇÃO CORRIGIDA ---
   const preencherFormularioComXml = (data) => {
     const prazosArray = data.parcelas
       ? data.parcelas.map((p) => {
           const d1 = new Date(data.dataEmissao);
           const d2 = new Date(p.dataVencimento);
-          // Adiciona 1 para corrigir a contagem de dias
           return Math.ceil(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24)) +1;
         })
       : [];
@@ -155,7 +153,6 @@ export default function OperacaoBorderoPage() {
       ? formatBRLInput(String(data.valorTotal * 100))
       : "";
 
-    // Constrói o nome de exibição para o sacado (matriz/filial)
     const nomeExibicaoSacado = data.sacado.matriz_id
       ? `${data.sacado.nome} [Filial - ${data.sacado.uf}]`
       : data.sacado.nome;
@@ -164,7 +161,7 @@ export default function OperacaoBorderoPage() {
       nfCte: data.numeroNf || data.numeroCte || "",
       dataNf: data.dataEmissao ? data.dataEmissao.split("T")[0] : "",
       valorNf: valorFormatado,
-      clienteSacado: nomeExibicaoSacado, // Usa o nome de exibição
+      clienteSacado: nomeExibicaoSacado,
       parcelas:
         data.parcelas && data.parcelas.length > 0
           ? String(data.parcelas.length)
@@ -176,11 +173,7 @@ export default function OperacaoBorderoPage() {
     setEmpresaCedente(data.emitente.nome || "");
     setEmpresaCedenteId(data.emitente.id || null);
     setCedenteRamo(data.emitente.ramo_de_atividade || "");
-    
-    // Seta o objeto completo do sacado para uso posterior
     setSacadoSelecionado(data.sacado); 
-    
-    // Atualiza as condições de pagamento com base nos dados do sacado que vieram da API
     const condicoes = data.sacado.condicoes_pagamento || [];
     setCondicoesSacado(condicoes);
     if (condicoes.length > 0 && !prazosString) {
@@ -195,7 +188,6 @@ export default function OperacaoBorderoPage() {
     showNotification("Dados do XML preenchidos com sucesso!", "success");
     setXmlDataPendente(null);
   };
-  // --- FIM DA CORREÇÃO ---
 
   const handleSaveNovoCliente = async (id, data) => {
     try {
@@ -400,16 +392,26 @@ export default function OperacaoBorderoPage() {
     }
   };
 
+  // ***** FUNÇÃO CORRIGIDA *****
   const confirmarSalvamento = async (valorDebito, dataDebito) => {
     setIsPartialDebitModalOpen(false);
     setIsSaving(true);
+
+    // Recalcula o valor líquido final com base no checkbox ANTES de enviar.
+    const finalLiquidoOperacao = jurosPre
+      ? totais.liquidoOperacao // Se for pré, o total já está correto.
+      : totais.valorTotalBruto - totais.totalOutrosDescontos; // Se for pós, ignora o deságio.
 
     const payload = {
       dataOperacao,
       tipoOperacaoId: parseInt(tipoOperacaoId),
       clienteId: empresaCedenteId,
       contaBancariaId: parseInt(contaBancariaId),
-      totais: totais,
+      // Envia os totais, mas com o líquido ajustado
+      totais: {
+        ...totais,
+        liquidoOperacao: finalLiquidoOperacao, 
+      },
       descontos: todosOsDescontos.map(({ id, ...rest }) => rest),
       notasFiscais,
       cedenteRamo,
@@ -539,6 +541,7 @@ export default function OperacaoBorderoPage() {
       0
     );
     
+    // Este cálculo é apenas para exibição na tela
     const liquidoOperacao = jurosPre
       ? valorTotalBruto - desagioTotal - totalOutrosDescontos
       : valorTotalBruto - totalOutrosDescontos;

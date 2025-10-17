@@ -9,32 +9,26 @@ import {
 
 /**
  * Verifica se os juros da duplicata devem ser somados ao valor principal no momento da liquidação.
- * Isso acontece em operações pós-fixadas (baseadas em taxa de juros, não em valor fixo).
- * @param {object} operation - O objeto da operação.
- * @param {object} duplicate - O objeto da duplicata.
+ * Isso acontece em operações pós-fixadas (onde os juros não foram descontados do cedente na origem).
+ * @param {object} operation - O objeto completo da operação.
+ * @param {object} duplicate - O objeto da duplicata individual.
  * @returns {boolean}
  */
 const isPostFixedInterest = (operation, duplicate) => {
-  // Se não houver dados da operação ou da duplicata, não faz nada.
-  if (!operation || !duplicate) return false;
-  
-  // Acessa o tipo de operação aninhado para verificar o valor_fixo
-  const tipoOperacao = operation.tipo_operacao;
-
-  // Se não houver tipo de operação ou se valor_fixo for maior que zero, os juros são PRÉ-FIXADOS.
-  if (!tipoOperacao || tipoOperacao.valor_fixo > 0) {
-    return false;
+  if (!operation) return false;
+  const totalDescontadoNaOrigem = (operation.valor_total_bruto || 0) - (operation.valor_liquido || 0);
+  const descontosEsperadosPreFixado = (operation.valor_total_juros || 0) + (operation.valor_total_descontos || 0);
+  if (totalDescontadoNaOrigem < (descontosEsperadosPreFixado - 0.01)) {
+    return (duplicate.valorJuros || duplicate.valor_juros || 0) > 0;
   }
-  
-  // Caso contrário, os juros são PÓS-FIXADOS e devem ser somados.
-  return (duplicate.valor_juros || 0) > 0;
+  return false;
 };
 
 export default function LiquidacaoModal({
   isOpen,
   onClose,
   onConfirm,
-  duplicata,
+  duplicata, // Pode ser um objeto ou um array de objetos
   contasMaster,
 }) {
   const [dataLiquidacao, setDataLiquidacao] = useState("");
@@ -45,24 +39,37 @@ export default function LiquidacaoModal({
 
   const isMultiple = Array.isArray(duplicata);
 
-  // Cálculo do valor total com segurança para evitar "NaN"
   const totalValue = useMemo(() => {
     if (!duplicata) return 0;
     const items = isMultiple ? duplicata : [duplicata];
 
-    return items.reduce((sum, d) => {
-      const valorBruto = Number(d.valorBruto) || 0;
-      const valorJuros = Number(d.valorJuros) || 0;
+    console.groupCollapsed("--- DEBUG LIQUIDAÇÃO MODAL ---");
+    const calculatedValue = items.reduce((sum, d) => {
+      const valorBruto = Number(d.valorBruto || d.valor_bruto) || 0;
+      const valorJuros = Number(d.valorJuros || d.valor_juros) || 0;
+      
+      const ehPosFixado = isPostFixedInterest(d.operacao, d);
 
-      // Usa a lógica para decidir se soma os juros
-      if (isPostFixedInterest(d.operacao, d)) {
+      // ***** INÍCIO DO CONSOLE.LOG PARA DEBUG *****
+      console.log(`Analisando Duplicata: ${d.nfCte}`);
+      console.log("Objeto da Duplicata (d):", d);
+      console.log("Objeto da Operação (d.operacao):", d.operacao);
+      console.log(`A função isPostFixedInterest retornou: ${ehPosFixado}`);
+      // ***** FIM DO CONSOLE.LOG PARA DEBUG *****
+
+      if (ehPosFixado) {
+        console.log(`Resultado: Pós-Fixado. Somando: ${valorBruto} + ${valorJuros}`);
         return sum + valorBruto + valorJuros;
       }
+      
+      console.log(`Resultado: Pré-Fixado. Somando apenas: ${valorBruto}`);
       return sum + valorBruto;
     }, 0);
+    console.groupEnd();
+    
+    return calculatedValue;
   }, [duplicata, isMultiple]);
 
-  // Valor final que será exibido no modal
   const valorTotalFinal = useMemo(() => {
     return totalValue + parseBRL(jurosMora) - parseBRL(desconto);
   }, [totalValue, jurosMora, desconto]);

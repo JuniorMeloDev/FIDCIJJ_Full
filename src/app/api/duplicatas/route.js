@@ -10,13 +10,16 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
+        // A consulta agora busca todos os dados da operação e do tipo de operação associado,
+        // que são necessários para a lógica de juros no frontend.
         let { data: duplicatas, error } = await supabase
             .from('duplicatas')
             .select(`
                 *,
                 operacao:operacoes (
                     *,
-                    cliente:clientes ( nome, ramo_de_atividade ) 
+                    cliente:clientes ( nome, ramo_de_atividade ),
+                    tipo_operacao:tipos_operacao ( * )
                 ),
                 sacado:sacados ( id, nome, uf, matriz_id )
             `)
@@ -24,8 +27,9 @@ export async function GET(request) {
 
         if (error) throw error;
 
+        // Os filtros permanecem os mesmos
         const sacadoFilter = searchParams.get('sacado');
-        const sacadoIdFilter = searchParams.get('sacadoId'); // <-- NOVO: Pega o ID do sacado
+        const sacadoIdFilter = searchParams.get('sacadoId');
         const statusFilter = searchParams.get('status');
         const dataOpInicio = searchParams.get('dataOpInicio');
         const dataOpFim = searchParams.get('dataOpFim');
@@ -38,14 +42,11 @@ export async function GET(request) {
         const filteredData = duplicatas.filter(dup => {
             if (!dup.operacao) return false;
             
-            // --- LÓGICA DE FILTRO CORRIGIDA ---
-            // Prioriza o filtro por ID exato. Se não houver ID, usa o filtro por texto.
             if (sacadoIdFilter) {
                 if (String(dup.sacado_id) !== sacadoIdFilter) return false;
             } else if (sacadoFilter) {
                 if (!dup.cliente_sacado.toLowerCase().includes(sacadoFilter.toLowerCase())) return false;
             }
-            // --- FIM DA CORREÇÃO ---
 
             if (statusFilter && statusFilter !== 'Todos' && dup.status_recebimento !== statusFilter) return false;
             if (dataOpInicio && dup.data_operacao < dataOpInicio) return false;
@@ -73,10 +74,10 @@ export async function GET(request) {
             statusRecebimento: d.status_recebimento,
             dataLiquidacao: d.data_liquidacao,
             contaLiquidacao: d.conta_liquidacao,
-            sacado_id: d.sacado_id, // Exporta o ID para o frontend
+            sacado_id: d.sacado_id,
             sacadoInfo: d.sacado,
-            operacao: d.operacao,
-            banco_emissor_boleto: d.banco_emissor_boleto, // <-- LINHA ADICIONADA
+            operacao: d.operacao, // Passa o objeto completo da operação para o frontend
+            banco_emissor_boleto: d.banco_emissor_boleto,
         }));
 
         const sortKey = searchParams.get('sort');
