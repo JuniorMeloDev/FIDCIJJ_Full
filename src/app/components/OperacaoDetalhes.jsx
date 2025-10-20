@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { formatBRLNumber } from '@/app/utils/formatters';
 
 export default function OperacaoDetalhes({
@@ -18,9 +19,32 @@ export default function OperacaoDetalhes({
     isPartialDebit,
     setIsPartialDebit,
     jurosPre,
-    setjurosPre
+    setjurosPre,
+    isPagarComPix,
+    setIsPagarComPix,
+    pixData,
+    setPixData,
+    cedenteSelecionado // <-- Nova Prop
 }) {
     const docType = cedenteRamo === 'Transportes' ? 'CT-e' : 'NF-e';
+
+    const contaSelecionada = contasBancarias.find(c => String(c.id) === String(contaBancariaId));
+    const isContaInter = contaSelecionada?.banco.toLowerCase().includes('inter');
+    
+    // --- LÓGICA PARA EXTRAIR AS CHAVES PIX DO CLIENTE ---
+    const chavesPixDisponiveis = useMemo(() => {
+        if (!cedenteSelecionado || !Array.isArray(cedenteSelecionado.contasBancarias)) {
+            return [];
+        }
+        return cedenteSelecionado.contasBancarias
+            .filter(conta => conta.chave_pix)
+            .map(conta => ({
+                label: `${conta.tipo_chave_pix}: ${conta.chave_pix}`,
+                value: conta.chave_pix,
+                type: conta.tipo_chave_pix
+            }));
+    }, [cedenteSelecionado]);
+
 
     return (
         <section className="bg-gray-800 p-4 rounded-lg shadow-md mt-4">
@@ -118,7 +142,6 @@ export default function OperacaoDetalhes({
                         </select>
                     </div>
 
-                    {/* Checkboxes */}
                     <div className="pt-2 space-y-2">
                         <label className="flex items-center cursor-pointer">
                             <input
@@ -138,7 +161,43 @@ export default function OperacaoDetalhes({
                             />
                             <span className="ml-2 text-sm text-gray-200">Juros Pré</span>
                         </label>
+                        {isContaInter && (
+                          <label className="flex items-center cursor-pointer pt-2 border-t border-gray-600 mt-2">
+                            <input
+                              type="checkbox"
+                              checked={isPagarComPix}
+                              onChange={(e) => setIsPagarComPix(e.target.checked)}
+                              className="h-4 w-4 rounded text-green-500 bg-gray-600 border-gray-500 focus:ring-green-500"
+                            />
+                            <span className="ml-2 text-sm font-semibold text-green-300">Pagar com PIX</span>
+                          </label>
+                        )}
                     </div>
+                    {isPagarComPix && isContaInter && (
+                        <div className="space-y-2 pt-2 border-t border-gray-600">
+                            <label className="text-xs font-bold text-gray-300">Chave PIX do Favorecido</label>
+                            {chavesPixDisponiveis.length > 0 ? (
+                                <select 
+                                    value={pixData.chave} 
+                                    onChange={e => {
+                                        const chaveSelecionada = chavesPixDisponiveis.find(c => c.value === e.target.value);
+                                        setPixData({
+                                            chave: e.target.value,
+                                            tipo_chave_pix: chaveSelecionada ? chaveSelecionada.type : ''
+                                        });
+                                    }}
+                                    className="mt-1 block w-full bg-gray-600 p-1.5 rounded text-sm"
+                                >
+                                    <option value="">Selecione uma chave...</option>
+                                    {chavesPixDisponiveis.map(chave => (
+                                        <option key={chave.value} value={chave.value}>{chave.label}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <p className="text-xs text-yellow-400 mt-1">Nenhuma chave PIX cadastrada para este cliente.</p>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 

@@ -16,9 +16,11 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
     const [isPixConfirmOpen, setIsPixConfirmOpen] = useState(false);
     const [pixPayload, setPixPayload] = useState(null);
 
+    // Verifica se a conta selecionada é do Inter para exibir a opção de PIX
     const isContaInter = useMemo(() => 
-        contaBancaria && contaBancaria.toLowerCase().includes('inter'),
-    [contaBancaria]);
+        contaBancaria && contasMaster.find(c => c.contaBancaria === contaBancaria)?.banco.toLowerCase().includes('inter'),
+    [contaBancaria, contasMaster]);
+
 
     useEffect(() => {
         if (isOpen) {
@@ -45,7 +47,8 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
             const result = await response.json();
             if (!response.ok) throw new Error(result.message || 'Falha ao processar pagamento PIX.');
             
-            await onSave(null, { pixResult: result.pixResult, pixPayload: pixPayload }); 
+            // onSave é chamado sem payload para indicar sucesso e permitir que a página pai atualize
+            await onSave(); 
             
             setIsPixConfirmOpen(false);
             onClose();
@@ -60,20 +63,33 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
 
     const handleSaveClick = async () => {
         setError('');
+        if (!valorComplemento || parseBRL(valorComplemento) <= 0) {
+            setError("O valor do complemento deve ser maior que zero.");
+            return;
+        }
+        if (!contaBancaria) {
+            setError("Selecione uma conta de origem.");
+            return;
+        }
+
         if (isPagarComPix) {
+            if (!pixData.chave) {
+                setError("A chave PIX é obrigatória.");
+                return;
+            }
             const contaOrigemObj = contasMaster.find(c => c.contaBancaria === contaBancaria);
             if (!contaOrigemObj) {
                 setError("Conta de origem não encontrada.");
                 return;
             }
-            // --- CORREÇÃO: Adiciona operacao_id ao payload do PIX ---
+            
             const payload = {
                 valor: parseBRL(valorComplemento),
                 descricao: `Complemento Borderô #${lancamentoOriginal?.operacaoId}`,
                 contaOrigem: contaOrigemObj.contaCorrente,
                 empresaAssociada: lancamentoOriginal.empresaAssociada,
-                operacao_id: lancamentoOriginal.operacaoId, // <-- LINHA ADICIONADA
-                pix: {
+                operacao_id: lancamentoOriginal.operacaoId, 
+                destinatario: {
                     tipo: pixData.tipo_chave_pix,
                     chave: pixData.chave
                 }
@@ -128,7 +144,7 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
                                 id="dataComplemento"
                                 value={dataComplemento}
                                 onChange={(e) => setDataComplemento(e.target.value)}
-                                className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"
+                                className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 disabled:bg-gray-600"
                                 disabled={isPagarComPix}
                             />
                         </div>

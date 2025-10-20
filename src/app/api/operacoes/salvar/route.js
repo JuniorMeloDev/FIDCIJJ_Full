@@ -9,12 +9,11 @@ export async function POST(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const body = await request.json();
-        const { totais, notasFiscais } = body;
+        const { totais, notasFiscais, efetuar_pix, pixEndToEndId } = body;
         
-        /// Prepara as duplicatas para serem enviadas para a função SQL
         const duplicatasParaSalvar = body.notasFiscais.flatMap(nf => {
             return nf.parcelasCalculadas.map(p => ({
-                nfCte: `${nf.nfCte}.${p.numeroParcela}`, // Garante que a parcela seja salva
+                nfCte: `${nf.nfCte}.${p.numeroParcela}`,
                 clienteSacado: nf.clienteSacado, 
                 sacadoId: nf.sacadoId,
                 valorParcela: p.valorParcela,
@@ -35,7 +34,9 @@ export async function POST(request) {
             p_descontos: body.descontos,
             p_valor_debito_parcial: body.valorDebito,
             p_data_debito_parcial: body.dataDebito,
-            p_valor_liquido_debito: totais.liquidoOperacao
+            p_valor_liquido_debito: totais.liquidoOperacao,
+            p_is_pix: efetuar_pix,
+            p_pix_transaction_id: pixEndToEndId
         });
 
         if (rpcError) {
