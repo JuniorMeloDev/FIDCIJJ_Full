@@ -187,7 +187,7 @@ export default function NotificationModal({ isOpen, onClose, onUpdateCount, onOp
                                         <label className="text-xs text-gray-400">Até:</label>
                                         <input type="date" name="dataFim" value={filters.dataFim} onChange={handleFilterChange} className="w-full bg-gray-700 p-2 rounded mt-1 text-sm" />
                                     </div>
-                                    <button onClick={() => setFilters({ dataInicio: '', dataFim: '' })} className="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-md transition h-10 text-sm">Limpar</button>
+                                    <button onClick={() => setFilters({ dataInicio: '', dataFim: '' })} className="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-md transition h-10 text-sm">Limpar Filtros</button>
                                 </div>
                             </div>
 
@@ -197,11 +197,15 @@ export default function NotificationModal({ isOpen, onClose, onUpdateCount, onOp
                                         <div 
                                             key={notif.id} 
                                             className={`p-3 rounded-md flex items-start gap-3 transition-all duration-200 cursor-pointer ${notif.is_read ? 'bg-gray-900/50 hover:bg-gray-700/80' : 'bg-gray-700 hover:bg-gray-600'} ${selectedItems.has(notif.id) ? 'ring-2 ring-orange-500' : ''}`}
+                                            // --- LÓGICA ALTERADA AQUI ---
                                             onClick={() => {
                                                 if (isSelectionMode) {
                                                     handleToggleSelection(notif.id);
                                                 } else {
                                                     setSelectedNotification(notif);
+                                                    if (!notif.is_read) {
+                                                        markAsRead([notif.id]);
+                                                    }
                                                 }
                                             }}
                                         >

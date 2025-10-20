@@ -10,8 +10,6 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
         
-        // --- CORREÇÃO APLICADA AQUI ---
-        // A consulta agora busca também as contas bancárias do cliente da operação.
         let query = supabase.from('movimentacoes_caixa').select(`
             *, 
             operacao:operacoes ( 
@@ -32,9 +30,18 @@ export async function GET(request) {
             query = query.eq('categoria', searchParams.get('categoria'));
         }
 
+        // --- LÓGICA DE ORDENAÇÃO CORRIGIDA ---
         const sortKey = searchParams.get('sort') || 'data_movimento';
         const sortDirection = searchParams.get('direction') || 'DESC';
-        query = query.order(sortKey, { ascending: sortDirection === 'ASC' });
+        const isAscending = sortDirection === 'ASC';
+
+        // 1. Ordena pela coluna principal escolhida pelo usuário (ex: data_movimento)
+        query = query.order(sortKey, { ascending: isAscending });
+        
+        // 2. Adiciona uma segunda ordenação pelo ID para garantir uma ordem estável e previsível
+        query = query.order('id', { ascending: isAscending });
+        // --- FIM DA CORREÇÃO ---
+
 
         const { data, error } = await query;
         if (error) {
