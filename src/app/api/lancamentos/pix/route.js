@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/utils/supabaseClient";
 import jwt from "jsonwebtoken";
 import { getInterAccessToken, enviarPixInter } from "@/app/lib/interService";
-import { format } from "date-fns";
+import { getItauAccessToken, enviarPixItau } from "@/app/lib/itauService";
+import { format } from "date-fns"; // Apenas 'format' é necessário
 
 export async function POST(request) {
   try {
@@ -14,13 +15,15 @@ export async function POST(request) {
 
     const body = await request.json();
     const {
-      valor,
+      valor, // Vem como número do frontend (ex: 5)
       descricao,
       contaOrigem,
       empresaAssociada,
       pix,
       operacao_id,
     } = body;
+
+    console.log("[LOG PIX] Payload recebido pela API:", JSON.stringify(body, null, 2));
 
     if (!valor || !descricao || !contaOrigem || !pix || !pix.chave) {
       return NextResponse.json(
@@ -29,20 +32,24 @@ export async function POST(request) {
       );
     }
 
-    const { data: contaInfo, error: contaError } = await supabase
+    // 1. Busca dados da conta de origem (só para saber o banco)
+    console.log(`[LOG PIX] Buscando conta selecionada: ${contaOrigem}`);
+    const { data: contaInfoSelecionada, error: contaError } = await supabase
       .from("contas_bancarias")
-      .select("*")
+      .select("banco")
       .eq("conta_corrente", contaOrigem)
       .single();
 
-    if (contaError || !contaInfo) {
+    if (contaError || !contaInfoSelecionada) {
+      console.error(`[ERRO PIX] Conta selecionada (${contaOrigem}) não encontrada. Erro:`, contaError);
       throw new Error(
         `Conta de origem (${contaOrigem}) não encontrada no cadastro de contas.`
       );
     }
 
-    const nomeContaCompleto = `${contaInfo.banco} - ${contaInfo.agencia}/${contaInfo.conta_corrente}`;
+    console.log("[LOG PIX] Banco da conta selecionada:", contaInfoSelecionada.banco);
 
+    // 2. Prepara a chave PIX
     let chaveFinal = pix.chave;
     if (pix.tipo === "Telefone") {
       const numeros = pix.chave.replace(/\D/g, "");
@@ -52,46 +59,135 @@ export async function POST(request) {
           : numeros;
     }
 
-    const dadosPix = {
-      valor: parseFloat(valor.toFixed(2)),
-      dataPagamento: format(new Date(), "yyyy-MM-dd"),
-      descricao: descricao,
-      destinatario: {
-        tipo: "CHAVE",
-        chave: chaveFinal,
-      },
-    };
+    let resultadoPix;
+    let pixEndToEndId;
+    let nomeContaCompletoParaSalvar;
+    const dataPagamentoHoje = new Date(); // Data/Hora atual
 
-    const tokenInter = await getInterAccessToken();
-    const resultadoPix = await enviarPixInter(
-      tokenInter.access_token,
-      dadosPix,
-      contaOrigem
-    );
+    const banco = contaInfoSelecionada.banco.toLowerCase();
 
-    // --- INÍCIO DA CORREÇÃO E DEBUG ---
-    // Adicionamos um log para ver a resposta completa da API do Inter nos logs da Vercel
-    console.log(
-      "[DEBUG] Resposta completa da API PIX Inter (Lançamento Manual):",
-      JSON.stringify(resultadoPix, null, 2)
-    );
+    if (banco.includes("inter")) {
+      // --- LÓGICA DO INTER (sem alteração) ---
+      console.log("[LOG PIX INTER] Iniciando fluxo de pagamento PIX Inter.");
 
-    // Capturamos o ID da transação. A API do Inter retorna este valor como "endToEndId".
-    // Correção para acessar o endToEnd aninhado. Note que a API do Inter retorna "endToEnd" e não "endToEndId" na consulta.
-    const pixEndToEndId = resultadoPix.transacaoPix?.endToEnd;
+      const { data: contaInter, error: contaInterError } = await supabase
+        .from("contas_bancarias")
+        .select("*")
+        .eq("conta_corrente", contaOrigem)
+        .single();
 
-    if (!pixEndToEndId) {
-      console.warn(
-        "[AVISO] O campo 'endToEnd' não foi encontrado em 'transacaoPix' na resposta da API do Inter."
+      if (contaInterError) throw new Error("Erro ao buscar dados da conta Inter.");
+      nomeContaCompletoParaSalvar = `${contaInter.banco} - ${contaInter.agencia}/${contaInter.conta_corrente}`;
+
+      const dadosPixInter = {
+        // Inter aceita número
+        valor: parseFloat(valor.toFixed(2)),
+        dataPagamento: format(dataPagamentoHoje, "yyyy-MM-dd"),
+        descricao: descricao,
+        destinatario: {
+          tipo: "CHAVE",
+          chave: chaveFinal,
+        },
+      };
+
+      const tokenInter = await getInterAccessToken();
+      resultadoPix = await enviarPixInter(
+        tokenInter.access_token,
+        dadosPixInter,
+        contaOrigem
       );
+
+      console.log("[DEBUG] Resposta Inter:", JSON.stringify(resultadoPix, null, 2));
+      pixEndToEndId = resultadoPix.transacaoPix?.endToEnd;
+
+    } else if (banco.includes("itaú") || banco.includes("itau")) {
+      // --- LÓGICA DO ITAÚ (COM DADOS FIXOS E FORMATAÇÃO DE VALOR CORRIGIDA) ---
+      console.log("[LOG PIX ITAÚ] Iniciando fluxo de pagamento PIX Itaú.");
+
+      // 1. Busca os dados da CONTA REAL (via .env)
+      const CONTA_REAL_ITAU = process.env.ITAU_PIX_CONTA_REAL;
+      if (!CONTA_REAL_ITAU) {
+        throw new Error("Variável de ambiente ITAU_PIX_CONTA_REAL não configurada.");
+      }
+      console.log(`[LOG PIX ITAÚ] Buscando dados da conta REAL: ${CONTA_REAL_ITAU}`);
+
+      const { data: contaRealInfo, error: contaRealError } = await supabase
+          .from('contas_bancarias')
+          .select('*')
+          .eq('conta_corrente', CONTA_REAL_ITAU)
+          .single();
+
+      if (contaRealError || !contaRealInfo) {
+          throw new Error(`A conta REAL do Itaú (${CONTA_REAL_ITAU}) não foi encontrada.`);
+      }
+
+      nomeContaCompletoParaSalvar = `${contaRealInfo.banco} - ${contaRealInfo.agencia}/${contaRealInfo.conta_corrente}`;
+
+      // 2. Busca o CNPJ do PAGADOR REAL (via .env)
+      const ID_CLIENTE_PAGADOR = process.env.ITAU_PIX_CLIENTE_ID_REAL;
+       if (!ID_CLIENTE_PAGADOR) {
+        throw new Error("Variável de ambiente ITAU_PIX_CLIENTE_ID_REAL não configurada.");
+      }
+      console.log(`[LOG PIX ITAÚ] Buscando CNPJ do cliente pagador (ID: ${ID_CLIENTE_PAGADOR})`);
+
+      const { data: dadosPagador, error: pagadorError } = await supabase
+          .from('clientes')
+          .select('cnpj')
+          .eq('id', ID_CLIENTE_PAGADOR)
+          .single();
+
+      if (pagadorError || !dadosPagador || !dadosPagador.cnpj) {
+          throw new Error(`O cadastro do cliente (ID: ${ID_CLIENTE_PAGADOR}) não possui um CNPJ preenchido.`);
+      }
+
+      const pagadorDocumento = dadosPagador.cnpj.replace(/\D/g, '');
+      const pagadorTipoPessoa = pagadorDocumento.length > 11 ? 'J' : 'F';
+
+      console.log(`[LOG PIX ITAÚ] Documento do pagador (limpo): ${pagadorDocumento}, Tipo: ${pagadorTipoPessoa}`);
+
+      // 2.2. Monta o payload do Itaú
+      const dadosPixItau = {
+          // --- ALTERAÇÃO AQUI: Formato do Valor ---
+          // Usando toFixed(2) diretamente para garantir a string com duas casas decimais
+          valor_pagamento: valor.toFixed(2),
+
+          data_pagamento: dataPagamentoHoje.toISOString(),
+          chave: chaveFinal,
+          referencia_empresa: descricao.substring(0, 30),
+          identificacao_comprovante: descricao.substring(0, 40),
+          informacoes_entre_usuarios: descricao.substring(0, 140),
+          pagador: {
+              tipo_conta: "CC",
+              agencia: contaRealInfo.agencia.replace(/\D/g, ''),
+              conta: contaRealInfo.conta_corrente.replace(/\D/g, ''),
+              tipo_pessoa: pagadorTipoPessoa,
+              documento: pagadorDocumento,
+              modulo_sispag: "Fornecedores"
+          }
+      };
+
+      console.log("[LOG PIX ITAÚ] Payload final a ser enviado para o Itaú:", JSON.stringify(dadosPixItau, null, 2));
+
+      const tokenItau = await getItauAccessToken();
+      resultadoPix = await enviarPixItau(
+        tokenItau.access_token,
+        dadosPixItau
+      );
+
+      console.log("[DEBUG] Resposta Itaú:", JSON.stringify(resultadoPix, null, 2));
+      pixEndToEndId = resultadoPix.cod_pagamento;
+
+    } else {
+      throw new Error(`Banco "${contaInfoSelecionada.banco}" não configurado para pagamentos PIX.`);
     }
-    // --- FIM DA CORREÇÃO E DEBUG ---
+
+    // 3. Lógica de salvar no banco de dados
 
     let descricaoLancamento = `PIX Enviado - ${descricao}`;
     const complementMatch = descricao.match(/^Complemento Borderô #(\d+)$/);
 
     if (complementMatch) {
-      const operacaoIdFromDesc = complementMatch[1];
+       const operacaoIdFromDesc = complementMatch[1];
       const { data: operacaoData } = await supabase
         .from("operacoes")
         .select("*, cliente:clientes(ramo_de_atividade)")
@@ -116,14 +212,13 @@ export async function POST(request) {
     }
 
     const movementPayload = {
-      data_movimento: new Date().toISOString().split("T")[0],
+      data_movimento: format(dataPagamentoHoje, "yyyy-MM-dd"), // Salva no banco só a data
       descricao: descricaoLancamento,
       valor: -Math.abs(valor),
-      conta_bancaria: nomeContaCompleto,
-      // Altera a categoria para algo mais específico para o lançamento manual
+      conta_bancaria: nomeContaCompletoParaSalvar,
       categoria: "Pagamento PIX",
       empresa_associada: empresaAssociada,
-      transaction_id: pixEndToEndId, // Salva o ID capturado
+      transaction_id: pixEndToEndId,
       operacao_id: operacao_id || (complementMatch ? complementMatch[1] : null),
     };
 
@@ -143,7 +238,7 @@ export async function POST(request) {
       );
       return NextResponse.json(
         {
-          message: `PIX enviado com sucesso (ID: ${resultadoPix.endToEndId}), mas falhou ao registrar a movimentação. Por favor, registre manualmente.`,
+          message: `PIX enviado com sucesso (ID: ${pixEndToEndId}), mas falhou ao registrar a movimentação. Por favor, registre manualmente.`,
           pixResult: resultadoPix,
         },
         { status: 207 }
@@ -156,8 +251,30 @@ export async function POST(request) {
     );
   } catch (error) {
     console.error("Erro na API de Lançamento PIX:", error);
+
+    let errorMessage = error.message || "Erro interno do servidor";
+
+    try {
+        const errorJsonMatch = errorMessage.match(/(\[.*\]|\{.*\})/); // Tenta pegar JSON em array ou objeto
+        if (errorJsonMatch) {
+            const errorJson = JSON.parse(errorJsonMatch[0]);
+            if (Array.isArray(errorJson) && errorJson.length > 0) {
+                // Erro de validação (ex: 400)
+                errorMessage = errorJson.map(e => `${e.campo}: ${e.erro}`).join(', ');
+            } else if (errorJson.motivo_recusa && errorJson.motivo_recusa.length > 0) {
+                 // Erro de processamento (ex: 422)
+                 errorMessage = errorJson.motivo_recusa[0].nome;
+            } else if (errorJson.mensagem) {
+                 // Outros erros (ex: 500)
+                 errorMessage = errorJson.mensagem;
+            }
+        }
+    } catch(e) {
+        // Não era JSON, segue com a mensagem original
+    }
+
     return NextResponse.json(
-      { message: error.message || "Erro interno do servidor" },
+      { message: `Erro: ${errorMessage}` },
       { status: 500 }
     );
   }

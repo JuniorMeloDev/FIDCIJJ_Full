@@ -20,7 +20,12 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
     const [isPixConfirmOpen, setIsPixConfirmOpen] = useState(false);
     const [pixPayload, setPixPayload] = useState(null);
 
-    const contasInter = Array.isArray(contasMaster) ? contasMaster.filter(c => c.banco.toLowerCase().includes('inter')) : [];
+    // --- MODIFICAÇÃO AQUI ---
+    // Filtra contas que podem fazer PIX (Inter ou Itaú)
+    const contasPix = Array.isArray(contasMaster) ? contasMaster.filter(
+        c => c.banco.toLowerCase().includes('inter') || c.banco.toLowerCase().includes('itaú')
+    ) : [];
+    // --- FIM DA MODIFICAÇÃO ---
 
     useEffect(() => {
         if (isOpen) {
@@ -48,6 +53,7 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
         setIsSaving(true);
         setError('');
         try {
+            // A API /api/lancamentos/pix já está pronta para lidar com Itaú
             const response = await fetch('/api/lancamentos/pix', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('authToken')}` },
@@ -81,7 +87,7 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
             const payload = {
                 valor: parseBRL(valor),
                 descricao: descricao,
-                contaOrigem: contaOrigem,
+                contaOrigem: contaOrigem, // Este é o 'contaCorrente' (ex: "12345-6")
                 empresaAssociada: clienteMasterNome,
                 pix: {
                     tipo: pixData.tipo_chave_pix,
@@ -199,13 +205,17 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
                             </div>
                         )}
 
+                        {/* --- INÍCIO DAS MODIFICAÇÕES NO JSX --- */}
                         {tipo === 'PIX' && (
                             <div className="space-y-4 border-t border-orange-500/50 pt-4">
                                  <div>
-                                    <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Conta de Origem (Inter)</label>
+                                    {/* 1. Label atualizada */}
+                                    <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Selecione a conta</label>
                                     <select id="contaOrigem" name="contaOrigem" value={contaOrigem} onChange={e => setContaOrigem(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
-                                        <option value="">Selecione uma conta Inter...</option>
-                                        {contasInter.map(c => <option key={c.id} value={c.contaCorrente}>{c.contaBancaria}</option>)}
+                                        {/* 2. Placeholder atualizado */}
+                                        <option value="">Selecione uma conta</option>
+                                        {/* 3. Mapeamento usa 'contasPix' */}
+                                        {contasPix.map(c => <option key={c.id} value={c.contaCorrente}>{c.contaBancaria}</option>)}
                                     </select>
                                  </div>
                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -225,6 +235,7 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
                                  </div>
                             </div>
                         )}
+                        {/* --- FIM DAS MODIFICAÇÕES NO JSX --- */}
 
                         {error && <p className="text-sm text-red-400 mt-2 text-center">{error}</p>}
                         

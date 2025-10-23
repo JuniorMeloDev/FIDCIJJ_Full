@@ -173,7 +173,7 @@ export default function AprovacaoOperacaoModal({
                             </label>
                             
                             {/* Este bloco agora funciona porque 'contaSelecionada' está definida */}
-                            {contaSelecionada?.banco.toLowerCase().includes('inter') && (
+                            {(contaSelecionada?.banco.toLowerCase().includes('inter') || contaSelecionada?.banco.toLowerCase().includes('itaú')) && (
                                 <label className="flex items-center cursor-pointer">
                                     <input
                                         type="checkbox"

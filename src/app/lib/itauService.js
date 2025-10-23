@@ -1,25 +1,33 @@
 import https from 'https';
+import { randomUUID } from 'crypto'; 
 
-// Função para obter o token de acesso da API do Itaú
-export async function getItauAccessToken() {
-    console.log("\n--- [ITAÚ API] Etapa 1: Obtenção de Token (PRODUÇÃO) ---");
-    const clientId = process.env.ITAU_CLIENT_ID;
-    const clientSecret = process.env.ITAU_CLIENT_SECRET;
-    // NOVO: Lê o certificado e a chave das variáveis de ambiente
+// --- FUNÇÃO AUXILIAR CRIADA (Baseada no seu registrarBoletoItau) ---
+const createItauAgent = () => {
     const certificate = process.env.ITAU_CERTIFICATE;
     const privateKey = process.env.ITAU_PRIVATE_KEY;
 
-
-    if (!clientId || !clientSecret) {
-        throw new Error('As credenciais do Itaú (Client ID/Secret) não estão configuradas.');
-    }
-
-    // NOVO: Validação para garantir que o certificado e a chave foram carregados
     if (!certificate || !privateKey) {
         throw new Error('O certificado ou a chave privada do Itaú não foram encontrados nas variáveis de ambiente.');
     }
 
-    // URL DE PRODUÇÃO PARA TOKEN
+    return new https.Agent({
+        cert: certificate, 
+        key: privateKey,   
+    });
+}
+
+// Função existente (sem alterações)
+export async function getItauAccessToken() {
+    console.log("\n--- [ITAÚ API] Etapa 1: Obtenção de Token (PRODUÇÃO) ---");
+    const clientId = process.env.ITAU_CLIENT_ID;
+    const clientSecret = process.env.ITAU_CLIENT_SECRET;
+    const certificate = process.env.ITAU_CERTIFICATE;
+    const privateKey = process.env.ITAU_PRIVATE_KEY;
+
+    if (!clientId || !clientSecret || !certificate || !privateKey) {
+        throw new Error('Credenciais, certificado ou chave privada do Itaú não configurados.');
+    }
+
     const tokenEndpoint = 'https://sts.itau.com.br/api/oauth/token'; 
     const postData = new URLSearchParams({
         'grant_type': 'client_credentials',
@@ -27,15 +35,14 @@ export async function getItauAccessToken() {
         'client_secret': clientSecret
     }).toString();
 
-    // ALTERADO: Adicionado 'cert' e 'key' para autenticação mTLS (mútua)
     const options = {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'User-Agent': 'FIDCIJJ/1.0'
         },
-        cert: certificate, // Certificado do cliente
-        key: privateKey,   // Chave privada do cliente
+        cert: certificate,
+        key: privateKey,
     };
 
     console.log("[LOG ITAÚ] Enviando requisição de token para:", tokenEndpoint);
@@ -68,25 +75,15 @@ export async function getItauAccessToken() {
     });
 }
 
-
-// Função para registrar um boleto na API do Itaú
+// Função existente (sem alterações)
 export async function registrarBoletoItau(accessToken, dadosBoleto) {
     console.log("\n--- [ITAÚ API] Etapa 2: Registro de Boleto (PRODUÇÃO) ---");
-    // URL DE PRODUÇÃO PARA REGISTRO DE BOLETOS
     const apiEndpoint = 'https://api.itau.com.br/cash_management/v2/boletos';
-    const correlationId = crypto.randomUUID();
-    const flowId = crypto.randomUUID(); 
-
-    // NOVO: Lê o certificado e a chave para a chamada de registro
-    const certificate = process.env.ITAU_CERTIFICATE;
-    const privateKey = process.env.ITAU_PRIVATE_KEY;
-    if (!certificate || !privateKey) {
-        throw new Error('O certificado ou a chave privada do Itaú não foram encontrados nas variáveis de ambiente para o registro.');
-    }
+    const correlationId = randomUUID(); 
+    const flowId = randomUUID(); 
 
     const payload = JSON.stringify(dadosBoleto);
 
-    // ALTERADO: Adicionado 'cert' e 'key' também na requisição de registro
     const options = {
         method: 'POST',
         headers: {
@@ -97,8 +94,7 @@ export async function registrarBoletoItau(accessToken, dadosBoleto) {
             'x-itau-flowID': flowId,
             'User-Agent': 'FIDCIJJ/1.0'
         },
-        cert: certificate, // Certificado do cliente
-        key: privateKey,   // Chave privada do cliente
+        agent: createItauAgent(), 
     };
 
     console.log(`[LOG ITAÚ] Enviando requisição de registro para: ${apiEndpoint}`);
@@ -127,6 +123,84 @@ export async function registrarBoletoItau(accessToken, dadosBoleto) {
         req.on('error', (e) => {
             console.error("[ERRO ITAÚ] Erro na requisição de registro:", e);
             reject(new Error(`Erro de rede na requisição de registro no Itaú: ${e.message}`));
+        });
+        req.write(payload);
+        req.end();
+    });
+}
+
+
+// --- FUNÇÃO DE PIX ATUALIZADA COM MELHORIA NOS LOGS DE ERRO ---
+export async function enviarPixItau(accessToken, dadosPix) {
+    console.log("\n--- [ITAÚ API] Etapa 3: Envio de PIX SISPAG ---");
+    
+    const apiEndpoint = 'https://api.itau.com.br/sispag/v1/transferencias';
+    const correlationId = randomUUID();
+    const flowId = randomUUID();
+    
+    const payload = JSON.stringify(dadosPix);
+
+    const options = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'x-itau-apikey': process.env.ITAU_CLIENT_ID,
+            'x-itau-correlationID': correlationId,
+            'x-itau-flowID': flowId,
+            'Accept': 'application/json' 
+        },
+        agent: createItauAgent(), 
+    };
+
+    console.log(`[LOG ITAÚ] Enviando requisição de PIX para: ${apiEndpoint}`);
+    // Log do payload já existe na rota, não precisa duplicar
+    // console.log("[LOG ITAÚ] Payload PIX enviado:", payload); 
+
+    return new Promise((resolve, reject) => {
+        const req = https.request(apiEndpoint, options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => (data += chunk));
+            res.on('end', () => {
+                console.log(`[LOG ITAÚ] Resposta do PIX (Status ${res.statusCode}):`, data);
+                try {
+                    // Tenta parsear, mas guarda o 'data' original para o erro
+                    const jsonData = JSON.parse(data); 
+                    
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        if (jsonData.status_pagamento === 'Sucesso' || jsonData.status_pagamento === 'Agendado') {
+                            console.log("--- [ITAÚ API] PIX enviado/agendado com sucesso. ---");
+                            resolve(jsonData);
+                        } else {
+                             const motivo = jsonData.motivo_recusa?.[0]?.nome || 'Motivo desconhecido';
+                             reject(new Error(`PIX Rejeitado pelo Itaú: ${motivo}`));
+                        }
+                    } else {
+                        // --- MELHORIA NA CAPTURA DO ERRO ---
+                        console.error("[ERRO API ITAÚ] Payload do erro:", JSON.stringify(jsonData, null, 2));
+                        
+                        let detailedError = data; // Fallback para a string bruta
+                        if (Array.isArray(jsonData) && jsonData.length > 0 && jsonData[0].campo) {
+                            // Se for um array de erros, como o da screenshot
+                            detailedError = jsonData.map(e => `Campo "${e.campo}": ${e.erro}`).join(', ');
+                        } else if (jsonData.mensagem) {
+                            detailedError = jsonData.mensagem;
+                        } else if (jsonData.detail) {
+                            detailedError = jsonData.detail;
+                        }
+                        
+                        reject(new Error(`Erro ${res.statusCode} ao enviar PIX no Itaú: ${detailedError}`));
+                        // --- FIM DA MELHORIA ---
+                    }
+                } catch (e) {
+                    // Se o JSON.parse falhar, rejeita com o 'data' bruto
+                    reject(new Error(`Falha ao processar a resposta do PIX Itaú (Status ${res.statusCode}): ${data}`));
+                }
+            });
+        });
+        req.on('error', (e) => {
+            console.error("[ERRO ITAÚ] Erro na requisição de PIX:", e);
+            reject(new Error(`Erro de rede na requisição de PIX no Itaú: ${e.message}`));
         });
         req.write(payload);
         req.end();
