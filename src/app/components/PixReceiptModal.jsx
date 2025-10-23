@@ -1,6 +1,6 @@
 'use client';
 
-import { FaCheckCircle, FaDownload } from 'react-icons/fa';
+import { FaDownload } from 'react-icons/fa';
 import { formatBRLNumber, formatCnpjCpf } from '@/app/utils/formatters';
 import { format as formatDateFns } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -15,10 +15,17 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
       }
       return formatDateFns(date, "EEEE, dd/MM/yyyy", { locale: ptBR });
     };
-    
+
     const handleDownload = () => {
         const doc = new jsPDF();
+
+        const payerAccountString = receiptData.pagador.conta || '';
+        const payerStringLower = payerAccountString.toLowerCase();
         
+        const logoPath = (payerStringLower.includes('itaú') || payerStringLower.includes('itau')) 
+            ? '/ItauEmpresas.png' 
+            : '/inter.png';
+
         const loadImageAsBase64 = (url, callback) => {
             const img = new Image();
             img.crossOrigin = 'Anonymous';
@@ -29,111 +36,163 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0);
                 const dataURL = canvas.toDataURL('image/png');
-                callback(dataURL);
+                callback(dataURL, img.width, img.height);
+            };
+            img.onerror = () => {
+                console.error(`Erro ao carregar imagem: ${url}`);
+                callback(null, 0, 0);
             };
             img.src = url;
         };
 
-        loadImageAsBase64('/inter.png', (logoBase64) => {
-            if (logoBase64) {
-                doc.addImage(logoBase64, 'PNG', 95, 15, 20, 5);
+        loadImageAsBase64(logoPath, (logoBase64, imgWidth, imgHeight) => {
+            if (logoBase64 && logoPath === '/ItauEmpresas.png') {
+                const pdfWidth = 25; 
+                const pdfHeight = (imgHeight * pdfWidth) / imgWidth; 
+                doc.addImage(logoBase64, 'PNG', 14, 15, pdfWidth, pdfHeight); 
+            } else if (logoBase64) {
+                 const pdfWidth = 20;
+                 const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
+                doc.addImage(logoBase64, 'PNG', 95, 15, pdfWidth, pdfHeight); 
             }
 
-            doc.setFillColor(34, 197, 94);
-            doc.circle(105, 30, 8, 'F');
+            let y = 40; 
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 100, 100); 
 
-            doc.setDrawColor(255, 255, 255);
-            doc.setLineWidth(1.5);
-            doc.line(102, 30, 104, 32);
-            doc.line(104, 32, 108, 28);
-            
-            doc.setDrawColor(200, 200, 200);
-            doc.setLineWidth(0.2);
+            const dataFormatada = receiptData.data 
+                ? formatDateFns(receiptData.data, "dd MMM. yyyy, HH:mm:ss", { locale: ptBR }) 
+                : "Data inválida";
+            doc.text(`${dataFormatada}, via API`, 14, y);
 
-            doc.setFontSize(22);
+            y += 7;
+            doc.setLineDashPattern([1, 1], 0);
+            doc.line(14, y, 196, y);
+            doc.setLineDashPattern([], 0);
+
+            // Tipo de transferência
+            y += 7;
+            doc.setTextColor(100, 100, 100);
+            doc.text('Tipo de transferência', 14, y);
+            doc.setTextColor(40, 40, 40);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Pix', 196, y, { align: 'right' });
+
+            // Valor
+            y += 7;
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 100, 100);
+            doc.text('Valor da transferência', 14, y);
+            doc.setTextColor(40, 40, 40);
+            doc.setFont('helvetica', 'bold');
+            doc.text(formatBRLNumber(receiptData.valor), 196, y, { align: 'right' });
+            y += 7;
+            doc.setLineDashPattern([1, 1], 0);
+            doc.line(14, y, 196, y);
+            doc.setLineDashPattern([], 0);
+
+            // Pagador ("de")
+            y += 10;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 100, 100);
+            doc.text('de', 14, y);
+            y += 5;
+            doc.setFontSize(12);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(40, 40, 40);
-            doc.text('Pix enviado', 105, 48, { align: 'center' });
-            doc.setFontSize(26);
-            doc.text(formatBRLNumber(receiptData.valor), 105, 58, { align: 'center' });
+            doc.text(receiptData.pagador.nome || 'Não informado', 14, y);
+            y += 5;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 100, 100);
+            doc.text(receiptData.pagador.conta || 'Conta não informada', 14, y);
+            y += 5;
+            doc.text(`CPF/CNPJ - ${receiptData.pagador.cnpj ? formatCnpjCpf(receiptData.pagador.cnpj) : 'Não informado'}`, 14, y);
 
-            let y = 75;
-            doc.setFontSize(14);
+            // Recebedor ("para")
+            y += 10;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 100, 100);
+            doc.text('para', 14, y);
+            y += 5;
+            doc.setFontSize(12);
             doc.setFont('helvetica', 'bold');
-            doc.text('Sobre a transação', 14, y);
-            y += 4;
+            doc.setTextColor(40, 40, 40);
+            doc.text(receiptData.recebedor?.nome || 'Não informado', 14, y);
+            y += 5;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 100, 100);
+            doc.text(receiptData.recebedor?.instituicao || 'Instituição não informada', 14, y);
+            y += 5;
+            
+            let docRecebedorFormatado = 'Não informado';
+            if (receiptData.recebedor?.cnpj) {
+                 docRecebedorFormatado = formatCnpjCpf(receiptData.recebedor.cnpj);
+                 if (docRecebedorFormatado.length <= 14) { 
+                    docRecebedorFormatado = `***.${docRecebedorFormatado.substring(4, 7)}.${docRecebedorFormatado.substring(8, 11)}-**`;
+                 }
+            }
+            
+            doc.text(`CPF/CNPJ - ${docRecebedorFormatado}`, 14, y);
+            y += 5;
+            doc.text(`Chave - ${receiptData.recebedor?.chavePix || 'Não informada'}`, 14, y);
+
+            // Identificação no comprovante (Mensagem)
+            y += 10;
             doc.setLineDashPattern([1, 1], 0);
             doc.line(14, y, 196, y);
             doc.setLineDashPattern([], 0);
-
-            y += 8;
-            doc.setFontSize(10);
+            y += 7;
             doc.setFont('helvetica', 'normal');
-            doc.text(`Data da transação`, 14, y);
-            doc.text(formatarDataTransacao(receiptData.data), 196, y, { align: 'right' });
-            y += 7;
-            doc.text(`Horário`, 14, y);
-            // --- CORREÇÃO DO HORÁRIO NO PDF ---
-            doc.text(receiptData.data ? formatDateFns(receiptData.data, "HH:mm") : '00:00', 196, y, { align: 'right' });
-            y += 7;
-            doc.text(`ID da transação`, 14, y);
-            doc.text(receiptData.transactionId, 196, y, { align: 'right' });
-            y += 7;
-            doc.text(`Mensagem ao recebedor`, 14, y);
+            doc.setTextColor(100, 100, 100);
+            doc.text('Identificação no comprovante', 14, y);
+            doc.setTextColor(40, 40, 40);
+            doc.setFont('helvetica', 'bold');
             doc.text(receiptData.descricao, 196, y, { align: 'right' });
 
-            y += 15;
-            doc.setFontSize(14);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Quem recebeu', 14, y);
-            y += 4;
+            // ID da transação
+            y += 7;
             doc.setLineDashPattern([1, 1], 0);
             doc.line(14, y, 196, y);
             doc.setLineDashPattern([], 0);
-            y += 8;
-            doc.setFontSize(10);
+            y += 7;
             doc.setFont('helvetica', 'normal');
-            doc.text(`Nome`, 14, y);
-            doc.text(receiptData.recebedor.nome || '', 196, y, { align: 'right' });
-            y += 7;
-            doc.text(`Cpf/Cnpj`, 14, y);
-            doc.text(formatCnpjCpf(receiptData.recebedor.cnpj || ''), 196, y, { align: 'right' });
-            y += 7;
-            doc.text(`Instituição`, 14, y);
-            doc.text(receiptData.recebedor.instituicao || 'Não informado', 196, y, { align: 'right' });
-            y += 7;
-            doc.text(`Chave Pix`, 14, y);
-            doc.text(receiptData.recebedor.chavePix || 'Não informado', 196, y, { align: 'right' });
+            doc.setTextColor(100, 100, 100);
+            doc.text('ID da transação', 14, y);
+            doc.setTextColor(40, 40, 40);
+            doc.setFont('helvetica', 'bold');
+            doc.text(receiptData.transactionId, 196, y, { align: 'right' });
+
+            // --- INÍCIO DA MODIFICAÇÃO DO NOME DO ARQUIVO ---
+            // 1. Pega os dados do recibo
+            const desc = receiptData.descricao || 'Comprovante PIX';
+            const valor = receiptData.valor || 0;
             
-
-            y += 15;
-            doc.setFontSize(14);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Quem pagou', 14, y);
-            y += 4;
-            doc.setLineDashPattern([1, 1], 0);
-            doc.line(14, y, 196, y);
-            doc.setLineDashPattern([], 0);
-            y += 8;
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'normal');
-            doc.text(`Nome`, 14, y);
-            doc.text(receiptData.pagador.nome || '', 196, y, { align: 'right' });
-            y += 7;
-            doc.text(`Instituição`, 14, y);
-            doc.text(receiptData.pagador.conta || '', 196, y, { align: 'right' });
-
-            doc.save(receiptData.filename || `comprovante_pix.pdf`);
+            // 2. Formata o valor
+            const valorFormatado = formatBRLNumber(valor); // Ex: "R$ 5,00"
+            
+            // 3. Limpa a descrição (remove caracteres inválidos para nome de arquivo)
+            const cleanDesc = desc.replace(/[/\\]/g, '-').replace(/[:*?"<>|]/g, '');
+            
+            // 4. Cria o nome final do arquivo
+            const finalFilename = `${cleanDesc} - ${valorFormatado}.pdf`;
+            // --- FIM DA MODIFICAÇÃO ---
+            
+            // 5. Salva o PDF com o nome dinâmico
+            doc.save(finalFilename);
         });
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[70]" onClick={onClose}>
-            {/* --- CORREÇÃO DO TAMANHO E ROLAGEM --- */}
             <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-sm text-white border-t-4 border-green-500 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                
                 <div className="text-center mb-6 flex-shrink-0">
-                    <FaCheckCircle className="text-green-500 text-5xl mx-auto mb-3" />
-                    <h2 className="text-2xl font-bold">Pix enviado</h2>
+                    <h2 className="text-2xl font-bold mt-3">Pagamento Enviado</h2>
                     <p className="text-3xl font-bold text-gray-100 mt-2">{formatBRLNumber(receiptData.valor)}</p>
                 </div>
 
@@ -142,28 +201,28 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
                         <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-600 pb-1">Sobre a transação</h3>
                         <div className="space-y-1">
                             <p><strong>Data:</strong> {formatarDataTransacao(receiptData.data)}</p>
-                            {/* --- CORREÇÃO DO HORÁRIO NA TELA --- */}
                             <p><strong>Horário:</strong> {receiptData.data ? formatDateFns(receiptData.data, "HH:mm") : '00:00'}</p>
                             <p className="break-all"><strong>ID da transação:</strong> {receiptData.transactionId}</p>
                             <p><strong>Mensagem:</strong> {receiptData.descricao}</p>
                         </div>
                     </div>
-                    
+
                     {receiptData.recebedor && (
                          <div className="bg-gray-700 p-4 rounded-lg">
                             <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-600 pb-1">Quem recebeu</h3>
                              <div className="space-y-1">
-                                <p><strong>Nome:</strong> {receiptData.recebedor.nome}</p>
-                                <p><strong>Cpf/Cnpj:</strong> {formatCnpjCpf(receiptData.recebedor.cnpj)}</p>
-                                <p><strong>Instituição:</strong> {receiptData.recebedor.instituicao || 'Não informado'}</p>
-                                <p><strong>Chave Pix:</strong> {receiptData.recebedor.chavePix || 'Não informado'}</p>
+                                <p><strong>Nome:</strong> {receiptData.recebedor?.nome || 'Não informado'}</p>
+                                <p><strong>Cpf/Cnpj:</strong> {receiptData.recebedor?.cnpj ? formatCnpjCpf(receiptData.recebedor.cnpj) : 'Não informado'}</p>
+                                <p><strong>Instituição:</strong> {receiptData.recebedor?.instituicao || 'Não informado'}</p>
+                                <p><strong>Chave Pix:</strong> {receiptData.recebedor?.chavePix || 'Não informado'}</p>
                              </div>
                         </div>
                     )}
-                    
+
                     <div className="bg-gray-700 p-4 rounded-lg">
                         <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-600 pb-1">Quem pagou</h3>
                          <div className="space-y-1">
+                            <p><strong>CPF/CNPJ:</strong> {receiptData.pagador.cnpj ? formatCnpjCpf(receiptData.pagador.cnpj) : 'Não informado'}</p>
                             <p><strong>Nome:</strong> {receiptData.pagador.nome}</p>
                             <p><strong>Conta:</strong> {receiptData.pagador.conta}</p>
                          </div>

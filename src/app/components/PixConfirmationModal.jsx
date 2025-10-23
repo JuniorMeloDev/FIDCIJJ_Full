@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { formatBRLNumber } from '@/app/utils/formatters';
 import PixReceiptModal from './PixReceiptModal';
 
@@ -17,26 +17,42 @@ export default function PixConfirmationModal({
     const [showReceipt, setShowReceipt] = useState(false);
     const [receiptData, setReceiptData] = useState(null);
 
+    const [chave, tipoChave] = useMemo(() => {
+        if (!data) return [null, null];
+        
+        // Tenta o formato aninhado (preferencial)
+        if (data.destinatario?.chave) {
+            return [data.destinatario.chave, data.destinatario.tipo];
+        }
+        
+        // Tenta o formato "flat" (o que está acontecendo agora)
+        if (data.chavePix) {
+            return [data.chavePix, data.tipoChave];
+        }
+        
+        return [null, null]; // Nenhum dado encontrado
+
+    }, [data]);
+
     useEffect(() => {
-        if (isOpen && data?.destinatario?.chave) {
+        if (isOpen && chave) {
             consultarDadosFavorecido();
         } else if (!isOpen) {
             setRecebedor(null);
             setErrorInfo('');
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, data]);
+    }, [isOpen, chave]); 
 
     async function consultarDadosFavorecido() {
         setLoadingInfo(true);
         setErrorInfo('');
         try {
-            // Monta o payload para a API de consulta/simulação
             const payloadParaConsulta = {
-                valor: data.valor, // Valor no nível principal
+                valor: data.valor, 
                 destinatario: {
-                    tipo: "CHAVE", // Tipo fixo para a API do Inter
-                    chave: data.destinatario.chave,
+                    tipo: "CHAVE", 
+                    chave: chave,
                 },
                 dataPagamento: new Date().toISOString().split('T')[0],
                 descricao: data.descricao
@@ -44,7 +60,7 @@ export default function PixConfirmationModal({
 
             const resposta = await fetch('/api/inter/consultar-pix', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('authToken')}` }, 
                 body: JSON.stringify({
                     dadosPix: payloadParaConsulta,
                     contaCorrente: data.contaOrigem
@@ -69,7 +85,7 @@ export default function PixConfirmationModal({
     }
 
     if (!isOpen || !data) return null;
-    
+
     return (
         <>
             <div
@@ -104,12 +120,12 @@ export default function PixConfirmationModal({
 
                         <div className="flex justify-between">
                             <span className="text-gray-400">Chave PIX:</span>
-                            <span className="font-semibold break-all text-right">{data.destinatario?.chave}</span>
+                            <span className="font-semibold break-all text-right">{chave || 'Não informado'}</span>
                         </div>
 
                         <div className="flex justify-between">
                             <span className="text-gray-400">Tipo da Chave:</span>
-                            <span className="font-semibold">{data.destinatario?.tipo}</span>
+                            <span className="font-semibold">{tipoChave || 'Não informado'}</span>
                         </div>
 
                         {recebedor && (
@@ -144,13 +160,18 @@ export default function PixConfirmationModal({
                         >
                             Cancelar
                         </button>
+                        
+                        {/* --- INÍCIO DA CORREÇÃO --- */}
+                        {/* Removido o '!!errorInfo' da lógica de 'disabled' */}
                         <button
                             onClick={onConfirm}
-                            disabled={isSending || loadingInfo || !!errorInfo}
+                            disabled={isSending || loadingInfo}
                             className="bg-green-600 font-semibold py-2 px-4 rounded-md hover:bg-green-700 transition disabled:opacity-50"
                         >
                             {isSending ? 'Enviando...' : 'Confirmar e Pagar'}
                         </button>
+                        {/* --- FIM DA CORREÇÃO --- */}
+
                     </div>
                 </div>
             </div>

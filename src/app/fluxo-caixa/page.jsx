@@ -33,7 +33,10 @@ export default function FluxoDeCaixaPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [interCurrentPage, setInterCurrentPage] = useState(1);
   const [contasMaster, setContasMaster] = useState([]);
-  const [clienteMasterNome, setClienteMasterNome] = useState("");
+  const [clienteMasterInfo, setClienteMasterInfo] = useState({
+    nome: "",
+    cnpj: "",
+  });
 
   const [filters, setFilters] = useState({
     dataInicio: formatDateFns(startOfMonth(new Date()), "yyyy-MM-dd"),
@@ -208,7 +211,32 @@ export default function FluxoDeCaixaPage() {
           contaBancaria: `${c.banco} - ${c.agencia}/${c.conta_corrente}`,
         }));
         setContasMaster(masterContasFormatadas);
-        if (clientesData.length > 0) setClienteMasterNome(clientesData[0].nome);
+        
+        // --- INÍCIO DA MODIFICAÇÃO (Variável de Ambiente) ---
+        // Lê o ID do cliente master do .env.local
+        const masterClientId = parseInt(process.env.NEXT_PUBLIC_MASTER_CLIENT_ID, 10);
+        
+        let clientePagador;
+        if (masterClientId) {
+            clientePagador = clientesData.find(c => c.id === masterClientId);
+        }
+        
+        if (clientePagador) {
+          // Se encontrou o cliente pelo ID do .env, usa ele
+          setClienteMasterInfo({
+            nome: clientePagador.nome,
+            cnpj: clientePagador.cnpj,
+          });
+        } else if (clientesData.length > 0) {
+           // Fallback: Se não achou ou a var não existe, usa o primeiro cliente da lista
+           setClienteMasterInfo({
+            nome: clientesData[0].nome,
+            cnpj: clientesData[0].cnpj,
+          });
+           console.warn(`Cliente master com ID (${masterClientId}) não encontrado. Usando fallback (primeiro cliente).`);
+        }
+        // --- FIM DA MODIFICAÇÃO ---
+
       } catch (err) {
         console.error(err.message);
       }
@@ -571,7 +599,8 @@ export default function FluxoDeCaixaPage() {
               transactionId: pixResult.pixResult.endToEndId,
               descricao: pixResult.pixPayload.descricao,
               pagador: {
-                  nome: clienteMasterNome,
+                  nome: clienteMasterInfo.nome,
+                  cnpj: clienteMasterInfo.cnpj, 
                   conta: contaOrigem?.contaBancaria || pixResult.pixPayload.contaOrigem,
               }
           });
@@ -625,10 +654,7 @@ export default function FluxoDeCaixaPage() {
         const docType = op?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const prefixo = item.descricao.toLowerCase().includes('complemento') ? 'Complemento Borderô' : 'Borderô';
         
-        // --- INÍCIO DA CORREÇÃO DO NOME DO ARQUIVO ---
         filename = `${prefixo} ${docType} ${numerosDoc} - ${valorFormatado}.pdf`;
-        // --- FIM DA CORREÇÃO DO NOME DO ARQUIVO ---
-
         mensagem = `Pagamento ref. Operação #${item.operacaoId}`;
         
         if (op && op.cliente) {
@@ -651,12 +677,13 @@ export default function FluxoDeCaixaPage() {
 
     setReceiptData({
         valor: Math.abs(item.valor),
-        data: new Date(), // --- CORREÇÃO DO HORÁRIO ---
+        data: new Date(item.dataMovimento + 'T12:00:00Z'), 
         transactionId: item.transaction_id,
         descricao: mensagem,
         filename: filename,
         pagador: {
-            nome: clienteMasterNome,
+            nome: clienteMasterInfo.nome, 
+            cnpj: clienteMasterInfo.cnpj, 
             conta: item.contaBancaria,
         },
         recebedor: recebedorData
@@ -691,7 +718,7 @@ export default function FluxoDeCaixaPage() {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveLancamento}
         contasMaster={contasMaster}
-        clienteMasterNome={clienteMasterNome}
+        clienteMasterNome={clienteMasterInfo.nome} 
       />
       <ConciliacaoModal
         isOpen={isConciliacaoModalOpen}
@@ -733,6 +760,7 @@ export default function FluxoDeCaixaPage() {
         onSave={handleSaveComplemento}
         lancamentoOriginal={lancamentoParaComplemento}
         contasMaster={contasMaster}
+        clienteMasterNome={clienteMasterInfo.nome} 
       />
       <PixReceiptModal 
         isOpen={isReceiptModalOpen}

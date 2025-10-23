@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { formatBRLInput, parseBRL } from '@/app/utils/formatters';
 import PixConfirmationModal from './PixConfirmationModal'; // Importa o novo modal
+import PixReceiptModal from './PixReceiptModal'; // IMPORTA O MODAL DE RECIBO
 
 export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster, clienteMasterNome }) {
     const [tipo, setTipo] = useState('DEBITO');
@@ -20,12 +21,13 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
     const [isPixConfirmOpen, setIsPixConfirmOpen] = useState(false);
     const [pixPayload, setPixPayload] = useState(null);
 
-    // --- MODIFICAÇÃO AQUI ---
-    // Filtra contas que podem fazer PIX (Inter ou Itaú)
+    // STATES PARA O MODAL DE RECIBO
+    const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+    const [receiptData, setReceiptData] = useState(null);
+
     const contasPix = Array.isArray(contasMaster) ? contasMaster.filter(
         c => c.banco.toLowerCase().includes('inter') || c.banco.toLowerCase().includes('itaú')
     ) : [];
-    // --- FIM DA MODIFICAÇÃO ---
 
     useEffect(() => {
         if (isOpen) {
@@ -33,8 +35,7 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
         }
     }, [isOpen]);
     
-    if (!isOpen) return null;
-
+    // ATUALIZA A FUNÇÃO DE LIMPAR
     const handleLimpar = () => {
         setTipo('DEBITO');
         setData(new Date().toISOString().split('T')[0]);
@@ -47,13 +48,17 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
         setPixData({ tipo_chave_pix: 'CPF/CNPJ', chave: '' });
         setPixPayload(null);
         setIsPixConfirmOpen(false);
+        setIsReceiptModalOpen(false); // Adicionado
+        setReceiptData(null); // Adicionado
     };
 
+    if (!isOpen) return null;
+
+    // ATUALIZA O 'handleConfirmAndSendPix' PARA GERAR O RECIBO
     const handleConfirmAndSendPix = async () => {
         setIsSaving(true);
         setError('');
         try {
-            // A API /api/lancamentos/pix já está pronta para lidar com Itaú
             const response = await fetch('/api/lancamentos/pix', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('authToken')}` },
@@ -62,9 +67,38 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
             const result = await response.json();
             if (!response.ok) throw new Error(result.message || 'Falha ao processar pagamento PIX.');
             
-            await onSave(); 
-            setIsPixConfirmOpen(false);
-            onClose();
+            // PIX ENVIADO COM SUCESSO!
+            await onSave(); // Salva o lançamento no banco
+
+            // --- INÍCIO DA LÓGICA DO RECIBO ---
+            const apiResponse = result.pixResult; 
+            
+            const contaOrigemCompleta = contasMaster.find(c => c.contaCorrente === pixPayload.contaOrigem)?.contaBancaria || pixPayload.contaOrigem;
+
+            const newReceiptData = {
+                valor: parseFloat(apiResponse.valor_pagamento || pixPayload.valor),
+                data: new Date(apiResponse.data_pagamento), // Converte a string ISO para Date
+                transactionId: apiResponse.cod_pagamento || apiResponse.transacaoPix?.endToEnd,
+                descricao: apiResponse.informacoes_entre_usuarios || pixPayload.descricao,
+                
+                pagador: {
+                    nome: pixPayload.empresaAssociada || clienteMasterNome,
+                    cnpj: apiResponse.pagador?.documento, // <-- VEM DA API
+                    conta: contaOrigemCompleta, 
+                },
+
+                recebedor: apiResponse.recebedor ? { // Verifica se 'recebedor' existe (padrão Itaú)
+                    nome: apiResponse.recebedor.nome,
+                    cnpj: apiResponse.recebedor.documento,
+                    instituicao: apiResponse.recebedor.banco,
+                    chavePix: apiResponse.recebedor.identificacao_chave
+                } : null 
+            };
+
+            setReceiptData(newReceiptData);    // Define os dados do recibo
+            setIsPixConfirmOpen(false);        // Fecha o modal de confirmação
+            setIsReceiptModalOpen(true);       // ABRE O MODAL DE RECIBO
+            // --- FIM DA LÓGICA DO RECIBO ---
 
         } catch (err) {
             setError(err.message);
@@ -87,13 +121,17 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
             const payload = {
                 valor: parseBRL(valor),
                 descricao: descricao,
-                contaOrigem: contaOrigem, // Este é o 'contaCorrente' (ex: "12345-6")
+                contaOrigem: contaOrigem, 
                 empresaAssociada: clienteMasterNome,
+                
                 pix: {
                     tipo: pixData.tipo_chave_pix,
                     chave: pixData.chave
-                }
+                },
+                chavePix: pixData.chave,
+                tipoChave: pixData.tipo_chave_pix
             };
+
             setPixPayload(payload);
             setIsPixConfirmOpen(true);
             return;
@@ -131,7 +169,17 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
                 isSending={isSaving}
             />
 
-            <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50" onClick={onClose}>
+            {/* ADICIONA O MODAL DE RECIBO AO JSX */}
+            <PixReceiptModal
+                isOpen={isReceiptModalOpen}
+                onClose={() => {
+                    setIsReceiptModalOpen(false);
+                    onClose(); // Ao fechar o recibo, fecha o modal principal
+                }}
+                receiptData={receiptData}
+            />
+
+            <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50" onClick={isReceiptModalOpen ? () => {} : onClose}>
                 <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
                     <h2 className="text-xl font-bold mb-6">Novo Lançamento Manual</h2>
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -205,16 +253,12 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
                             </div>
                         )}
 
-                        {/* --- INÍCIO DAS MODIFICAÇÕES NO JSX --- */}
                         {tipo === 'PIX' && (
                             <div className="space-y-4 border-t border-orange-500/50 pt-4">
                                  <div>
-                                    {/* 1. Label atualizada */}
                                     <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Selecione a conta</label>
                                     <select id="contaOrigem" name="contaOrigem" value={contaOrigem} onChange={e => setContaOrigem(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
-                                        {/* 2. Placeholder atualizado */}
                                         <option value="">Selecione uma conta</option>
-                                        {/* 3. Mapeamento usa 'contasPix' */}
                                         {contasPix.map(c => <option key={c.id} value={c.contaCorrente}>{c.contaBancaria}</option>)}
                                     </select>
                                  </div>
@@ -230,12 +274,13 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-300">Chave PIX</label>
+                                        {/* --- INÍCIO DA CORREÇÃO --- */}
                                         <input type="text" value={pixData.chave} onChange={e => setPixData(p => ({...p, chave: e.target.value}))} required className="mt-1 block w-full bg-gray-700 p-2 rounded"/>
+                                        {/* --- FIM DA CORREÇÃO --- */}
                                     </div>
                                  </div>
                             </div>
                         )}
-                        {/* --- FIM DAS MODIFICAÇÕES NO JSX --- */}
 
                         {error && <p className="text-sm text-red-400 mt-2 text-center">{error}</p>}
                         

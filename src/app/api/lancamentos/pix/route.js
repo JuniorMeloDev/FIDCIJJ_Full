@@ -178,7 +178,7 @@ export async function POST(request) {
         valor_pagamento: valor.toFixed(2),
 
         // 1. CORREÇÃO DA DATA (Voltar para o formato da documentação)
-        data_pagamento: format(dataPagamentoHoje, "yyyy-MM-dd"), // <-- Use 'format' como no Inter
+        data_pagamento: format(dataPagamentoHoje, "yyyy-MM-dd"), // esta ficando com agendado o pix
         chave: chaveFinal,
         referencia_empresa: descricao.substring(0, 20), // Ajustado para 20 (doc)
         identificacao_comprovante: descricao.substring(0, 100), // Ajustado para 100 (doc)
