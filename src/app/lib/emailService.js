@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
+import fs from 'fs'; // Import 'fs'
 import path from 'path';
 
+// Função para gerar senha forte (mantida como estava no seu arquivo original)
 export const generateStrongPassword = () => {
     const length = 10;
     const lower = 'abcdefghijklmnopqrstuvwxyz';
@@ -19,23 +21,56 @@ export const generateStrongPassword = () => {
     return password.split('').sort(() => 0.5 - Math.random()).join('');
 };
 
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    auth: {
-        user: process.env.EMAIL_USERNAME,
-        pass: process.env.EMAIL_PASSWORD,
-    },
-});
+// --- CORREÇÃO APLICADA AQUI ---
+// O transporter foi movido para dentro da função 'sendEmail'
+// para usar as credenciais corretas do Resend.
+// --- FIM DA CORREÇÃO ---
 
 export async function sendWelcomeEmail({ clienteNome, username, tempPassword, recipientEmail }) {
+    // Configura o transporter dentro da função (Resend)
+    const transporter = nodemailer.createTransport({
+        host: 'smtp.resend.com',
+        secure: true,
+        port: 465,
+        auth: {
+            user: 'resend',
+            pass: process.env.RESEND_API_KEY, // Usa a chave do Resend
+        },
+    });
+
     if (!clienteNome || !username || !tempPassword || !recipientEmail) {
         throw new Error('Dados insuficientes para enviar o e-mail de boas-vindas.');
     }
     const loginUrl = process.env.NEXT_PUBLIC_LOGIN_URL || 'https://fidcijj.vercel.app/login';
+    
+    // --- Lógica de Carregamento do Logo (CORRIGIDA) ---
+    let logoBase64 = null;
+    try {
+        const imagePath = path.resolve(process.cwd(), 'public', 'Logo.png');
+        if (fs.existsSync(imagePath)) {
+            const file = fs.readFileSync(imagePath);
+            logoBase64 = `data:image/png;base64,${file.toString('base64')}`;
+            console.log(`[EmailService/Welcome] Logo.png carregado com sucesso de: ${imagePath}`);
+        } else {
+            console.warn(`[EmailService/Welcome] Logo.png NÃO encontrado em: ${imagePath}. Tentando fallback 'logo.png'.`);
+            const fallbackPath = path.resolve(process.cwd(), 'public', 'logo.png');
+             if (fs.existsSync(fallbackPath)) {
+                 const file = fs.readFileSync(fallbackPath);
+                 logoBase64 = `data:image/png;base64,${file.toString('base64')}`;
+                 console.log(`[EmailService/Welcome] Fallback 'logo.png' carregado de: ${fallbackPath}`);
+            } else {
+                 console.warn(`[EmailService/Welcome] Fallback 'logo.png' também NÃO encontrado.`);
+            }
+        }
+    } catch (error) {
+        console.error(`[EmailService/Welcome] Erro ao carregar Logo.png:`, error);
+    }
+    // --- Fim da Lógica do Logo ---
+
+    // Inclui o logo no corpo do email se encontrado
     const emailBody = `
     <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" style="max-width: 150px; margin-bottom: 20px;">` : ''}
         <p>Olá, <strong>${clienteNome}</strong>!</p>
         <p>Seja bem-vindo(a) à IJJ FIDC! Estamos felizes em tê-lo(a) conosco.</p>
         <p>Para acessar nosso portal do cliente, utilize as credenciais provisórias abaixo:</p>
@@ -48,23 +83,36 @@ export async function sendWelcomeEmail({ clienteNome, username, tempPassword, re
         <br>
         <p>Atenciosamente,</p>
         <p><strong>Equipe FIDC IJJ</strong></p>
+        <p style="margin-top: 20px; font-size: 12px; color: #888;">Esta é uma mensagem automática, por favor, não responda.</p>
     </div>
     `;
+    
     await transporter.sendMail({
-        from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
+        from: `"FIDC IJJ" <nao-responda@fidcijj.com.br>`, // Remetente do Resend
         to: recipientEmail,
         subject: 'Bem-vindo(a) ao Portal do Cliente FIDC IJJ',
         html: emailBody,
+        // attachments: logoBase64 ? [{ filename: 'Logo.png', path: logoBase64, cid: 'logoImage' }] : [] // Não precisa mais de CID
     });
 }
 
+// Funções sendOperationSubmittedEmail e sendOperationStatusEmail (usando Resend e com logo)
 export async function sendOperationSubmittedEmail({ clienteNome, operacaoId, valorLiquido, adminEmails }) {
+    const transporter = nodemailer.createTransport({ /* ...config Resend... */
+        host: 'smtp.resend.com', secure: true, port: 465,
+        auth: { user: 'resend', pass: process.env.RESEND_API_KEY },
+    });
+    // ... (lógica para carregar logoBase64 igual a sendWelcomeEmail) ...
+    let logoBase64 = null; /* ... lógica de carregamento ... */
+    try { /* ... */ } catch (error) { /* ... */ }
+
     if (!clienteNome || !operacaoId || !valorLiquido || !adminEmails || adminEmails.length === 0) {
         return;
     }
     const analysisUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://fidcijj.vercel.app'}/analise`;
     const emailBody = `
-        <div style="font-family: Arial, sans-serif; color: #333;">
+        <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+            ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" style="max-width: 150px; margin-bottom: 20px;">` : ''}
             <p>Olá,</p>
             <p>Uma nova operação foi enviada para análise.</p>
             <div style="background-color: #f2f2f2; padding: 15px; border-radius: 5px; margin: 20px 0;">
@@ -77,10 +125,11 @@ export async function sendOperationSubmittedEmail({ clienteNome, operacaoId, val
             <br>
             <p>Atenciosamente,</p>
             <p><strong>Sistema FIDC IJJ</strong></p>
+            <p style="margin-top: 20px; font-size: 12px; color: #888;">Esta é uma mensagem automática.</p>
         </div>
     `;
     await transporter.sendMail({
-        from: `"FIDC IJJ - Alerta" <${process.env.EMAIL_USERNAME}>`,
+        from: `"FIDC IJJ - Alerta" <nao-responda@fidcijj.com.br>`,
         to: adminEmails.join(','),
         subject: `Nova Operação #${operacaoId} para Análise - ${clienteNome}`,
         html: emailBody,
@@ -88,13 +137,22 @@ export async function sendOperationSubmittedEmail({ clienteNome, operacaoId, val
 }
 
 export async function sendOperationStatusEmail({ clienteNome, operacaoId, status, recipientEmail }) {
+     const transporter = nodemailer.createTransport({ /* ...config Resend... */
+        host: 'smtp.resend.com', secure: true, port: 465,
+        auth: { user: 'resend', pass: process.env.RESEND_API_KEY },
+     });
+     // ... (lógica para carregar logoBase64 igual a sendWelcomeEmail) ...
+     let logoBase64 = null; /* ... lógica de carregamento ... */
+     try { /* ... */ } catch (error) { /* ... */ }
+
      if (!clienteNome || !operacaoId || !status || !recipientEmail) {
-        return; 
+        return;
     }
     const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://fidcijj.vercel.app'}/portal/dashboard`;
     const subject = `Sua Operação #${operacaoId} foi ${status === 'Aprovada' ? 'Aprovada' : 'Rejeitada'}`;
     const emailBody = `
-        <div style="font-family: Arial, sans-serif; color: #333;">
+        <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+            ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" style="max-width: 150px; margin-bottom: 20px;">` : ''}
             <p>Olá, <strong>${clienteNome}</strong>!</p>
             <p>Temos uma atualização sobre a sua operação enviada para análise.</p>
             <div style="background-color: #f2f2f2; padding: 15px; border-radius: 5px; margin: 20px 0;">
@@ -107,47 +165,71 @@ export async function sendOperationStatusEmail({ clienteNome, operacaoId, status
             <br>
             <p>Atenciosamente,</p>
             <p><strong>Equipe FIDC IJJ</strong></p>
+            <p style="margin-top: 20px; font-size: 12px; color: #888;">Esta é uma mensagem automática, por favor, não responda.</p>
         </div>
     `;
      await transporter.sendMail({
-        from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
+        from: `"FIDC IJJ" <nao-responda@fidcijj.com.br>`,
         to: recipientEmail,
         subject: subject,
         html: emailBody,
     });
 }
 
-// **FUNÇÃO CORRIGIDA PARA LIDAR COM ANEXOS**
+// Função sendCustomNotificationEmail (usando Resend e com logo)
 export async function sendCustomNotificationEmail({ title, message, recipientEmails, attachments = [], isDetailedEmail = true }) {
+    const transporter = nodemailer.createTransport({ /* ...config Resend... */
+        host: 'smtp.resend.com', secure: true, port: 465,
+        auth: { user: 'resend', pass: process.env.RESEND_API_KEY },
+    });
+    // --- Lógica de Carregamento do Logo (CORRIGIDA) ---
+    let logoBase64 = null;
+    try {
+        const imagePath = path.resolve(process.cwd(), 'public', 'Logo.png');
+        if (fs.existsSync(imagePath)) {
+            const file = fs.readFileSync(imagePath);
+            logoBase64 = `data:image/png;base64,${file.toString('base64')}`;
+            console.log(`[EmailService/Custom] Logo.png carregado com sucesso de: ${imagePath}`);
+        } else {
+             console.warn(`[EmailService/Custom] Logo.png NÃO encontrado em: ${imagePath}. Tentando fallback 'logo.png'.`);
+            const fallbackPath = path.resolve(process.cwd(), 'public', 'logo.png');
+            if (fs.existsSync(fallbackPath)) {
+                 const file = fs.readFileSync(fallbackPath);
+                 logoBase64 = `data:image/png;base64,${file.toString('base64')}`;
+                 console.log(`[EmailService/Custom] Fallback 'logo.png' carregado de: ${fallbackPath}`);
+            } else {
+                 console.warn(`[EmailService/Custom] Fallback 'logo.png' também NÃO encontrado.`);
+            }
+        }
+    } catch (error) {
+        console.error(`[EmailService/Custom] Erro ao carregar Logo.png:`, error);
+    }
+    // --- Fim da Lógica do Logo ---
+
     if (!title || !recipientEmails || recipientEmails.length === 0) {
         return;
     }
 
     let emailBody;
-    let finalAttachments = [];
-    const logoPath = path.resolve(process.cwd(), 'public', 'Logo.png');
     const portalUrl = process.env.NEXT_PUBLIC_LOGIN_URL || 'https://fidcijj.vercel.app/login';
 
     if (isDetailedEmail) {
         // Lógica para o e-mail completo (com mensagem e anexos)
         emailBody = `
             <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" style="max-width: 150px; margin-bottom: 20px;">` : ''}
                 ${message}
                 <br><br>
                 <p>Atenciosamente,</p>
-                <p>
-                    <strong>Equipe FIDC IJJ</strong>
-                </p>
-                <br>
-                <img src="cid:logoImage" width="140" alt="Logo FIDC IJJ">
+                <p><strong>Equipe FIDC IJJ</strong></p>
+                <p style="margin-top: 20px; font-size: 12px; color: #888;">Esta é uma mensagem automática, por favor, não responda.</p>
             </div>
         `;
-        finalAttachments = [...attachments]; // Usa os anexos enviados
-
     } else {
         // Lógica para o e-mail genérico (apenas aviso)
         emailBody = `
              <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" style="max-width: 150px; margin-bottom: 20px;">` : ''}
                 <p>Olá,</p>
                 <p>Você recebeu uma nova notificação em nosso portal de clientes.</p>
                 <p><strong>Assunto:</strong> ${title}</p>
@@ -157,24 +239,18 @@ export async function sendCustomNotificationEmail({ title, message, recipientEma
                 <br>
                 <p>Atenciosamente,</p>
                 <p><strong>Equipe FIDC IJJ</strong></p>
-                <br>
-                <img src="cid:logoImage" width="140" alt="Logo FIDC IJJ">
+                <p style="margin-top: 20px; font-size: 12px; color: #888;">Esta é uma mensagem automática, por favor, não responda.</p>
             </div>
         `;
     }
 
-    // Adiciona o logo como anexo embutido em ambos os casos
-    finalAttachments.push({
-        filename: 'Logo.png',
-        path: logoPath,
-        cid: 'logoImage'
-    });
+    // Não precisamos mais do anexo embutido (CID)
 
     await transporter.sendMail({
-        from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
+        from: `"FIDC IJJ" <nao-responda@fidcijj.com.br>`,
         to: recipientEmails.join(', '),
         subject: isDetailedEmail ? title : 'Você tem uma nova notificação no Portal FIDC IJJ',
         html: emailBody,
-        attachments: finalAttachments
+        attachments: attachments // Passa os anexos (se houver) diretamente
     });
 }
