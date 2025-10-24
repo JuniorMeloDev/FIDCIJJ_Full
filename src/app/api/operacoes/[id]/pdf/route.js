@@ -1,8 +1,3 @@
-// Este arquivo parece ser o mesmo que o anterior (emailService.js),
-// mas com a lógica específica da rota /pdf/[id].
-// Vamos assumir que você queria o código da ROTA /pdf/[id] aqui.
-// Se este arquivo 'pdf/route.js' realmente existe, o código corrigido seria:
-
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
@@ -11,14 +6,38 @@ import autoTable from 'jspdf-autotable';
 import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 // Removidos 'fs' e 'path'
 
+// NOVA FUNÇÃO HELPER
+const getBaseURL = () => {
+    // 1. Prioriza a URL de produção que você definiu
+    let baseURL = process.env.NEXT_PUBLIC_APP_URL; 
+
+    // 2. Se não estiver, tenta a URL automática da Vercel (para deploys de preview/dev)
+    if (!baseURL && process.env.VERCEL_URL) {
+        baseURL = `https://${process.env.VERCEL_URL}`;
+    }
+    
+    // 3. Se ainda não estiver, usa o localhost (ambiente local)
+    if (!baseURL) {
+        baseURL = 'http://localhost:3000';
+    }
+
+    // Remove barra final se houver
+    return baseURL.replace(/\/$/, '');
+};
+
 // Função atualizada para buscar logo via URL
 const getLogoBase64 = async () => {
     try {
-        const baseURL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
+        const baseURL = getBaseURL();
         const logoURL = `${baseURL}/Logo.png`;
+        
         console.log(`[LOG LOGO PDF] Buscando logo de: ${logoURL}`);
+        
         const response = await fetch(logoURL);
-        if (!response.ok) throw new Error(`Falha ao buscar logo (${response.status})`);
+        if (!response.ok) {
+             throw new Error(`Falha ao buscar logo (${response.status}): ${response.statusText} - URL: ${logoURL}`);
+        }
+        
         const imageBuffer = await response.arrayBuffer();
         return `data:image/png;base64,${Buffer.from(imageBuffer).toString('base64')}`;
     } catch (error) {
@@ -88,28 +107,20 @@ export async function GET(request, { params }) {
 
         const { id } = params;
 
-        // Busca dados da operação, cliente, tipo de operação, duplicatas e descontos
         const { data: operacaoData, error: operacaoError } = await supabase
             .from('operacoes')
             .select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*), descontos(*)')
             .eq('id', id)
             .single();
-
         if (operacaoError) throw new Error("Operação não encontrada.");
 
         const { data: duplicatasData, error: duplicatasError } = await supabase
             .from('duplicatas')
             .select('*')
             .eq('operacao_id', id);
-
         if (duplicatasError) throw new Error("Erro ao buscar duplicatas da operação.");
 
-        const operacao = {
-            ...operacaoData,
-            duplicatas: duplicatasData || [],
-            // descontos já vem da consulta principal
-        };
-
+        const operacao = { ...operacaoData, duplicatas: duplicatasData || [] };
         const pdfBuffer = await generatePdfBuffer(operacao); // Usar await
 
         const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';

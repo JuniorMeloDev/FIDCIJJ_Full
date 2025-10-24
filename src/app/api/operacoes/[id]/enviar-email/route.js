@@ -5,23 +5,41 @@ import nodemailer from 'nodemailer';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
+// Removidos 'fs' e 'path'
+
+// NOVA FUNÇÃO HELPER
+const getBaseURL = () => {
+    // 1. Prioriza a URL de produção que você definiu
+    let baseURL = process.env.NEXT_PUBLIC_APP_URL; 
+
+    // 2. Se não estiver, tenta a URL automática da Vercel (para deploys de preview/dev)
+    if (!baseURL && process.env.VERCEL_URL) {
+        baseURL = `https://${process.env.VERCEL_URL}`;
+    }
+    
+    // 3. Se ainda não estiver, usa o localhost (ambiente local)
+    if (!baseURL) {
+        baseURL = 'http://localhost:3000';
+    }
+
+    // Remove barra final se houver, para evitar URL duplicada (ex: https://site.com//Logo.png)
+    return baseURL.replace(/\/$/, '');
+};
+
 
 // Função atualizada para buscar logo via URL
 const getLogoBase64 = async () => {
     try {
-        // Constrói a URL base dependendo do ambiente
-        const baseURL = process.env.VERCEL_URL
-            ? `https://${process.env.VERCEL_URL}` // URL de deploy da Vercel
-            : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'); // URL local ou definida
-
+        const baseURL = getBaseURL();
         const logoURL = `${baseURL}/Logo.png`;
+        
         console.log(`[LOG LOGO] Buscando logo de: ${logoURL}`);
 
         const response = await fetch(logoURL);
         if (!response.ok) {
-            throw new Error(`Falha ao buscar logo (${response.status}): ${response.statusText}`);
+            throw new Error(`Falha ao buscar logo (${response.status}): ${response.statusText} - URL: ${logoURL}`);
         }
-        // Converte a resposta para ArrayBuffer e depois para base64
+        
         const imageBuffer = await response.arrayBuffer();
         const base64String = Buffer.from(imageBuffer).toString('base64');
         return `data:image/png;base64,${base64String}`;
@@ -44,8 +62,6 @@ const generatePdfBuffer = async (operacao) => {
     const pageWidth = doc.internal.pageSize.getWidth();
 
     if (logoBase64) {
-        // Verificar as dimensões da imagem se necessário ou usar valores fixos
-        // Para este exemplo, usaremos 50x15 como antes, ajuste se precisar
         doc.addImage(logoBase64, 'PNG', 14, 12, 50, 15);
     } else {
         console.warn("[AVISO PDF] Logo não disponível para adicionar ao PDF.");
@@ -100,31 +116,20 @@ export async function POST(request, { params }) {
             return NextResponse.json({ message: 'Nenhum destinatário fornecido.' }, { status: 400 });
         }
 
-        // Busca dados da operação, cliente, tipo de operação, duplicatas e descontos
         const { data: operacaoData, error: operacaoError } = await supabase
             .from('operacoes')
-            .select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*), descontos(*)') // Inclui descontos na consulta principal
+            .select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*), descontos(*)')
             .eq('id', id)
             .single();
-
         if (operacaoError) throw new Error("Operação não encontrada.");
 
-        // Busca duplicatas separadamente
         const { data: duplicatasData, error: duplicatasError } = await supabase
             .from('duplicatas')
             .select('*')
             .eq('operacao_id', id);
-
         if (duplicatasError) throw new Error("Erro ao buscar duplicatas da operação.");
 
-        // Combina os dados
-        const operacao = {
-            ...operacaoData,
-            duplicatas: duplicatasData || [],
-            // 'descontos' já vem da consulta principal
-        };
-
-
+        const operacao = { ...operacaoData, duplicatas: duplicatasData || [] };
         const pdfBuffer = await generatePdfBuffer(operacao); // Usar await
 
         const transporter = nodemailer.createTransport({
@@ -151,16 +156,14 @@ export async function POST(request, { params }) {
             <img src="cid:logoImage" width="140">
         `;
 
-        // Busca o logo via URL para o anexo embutido
         const logoBase64ForEmail = await getLogoBase64();
         const attachments = [
              { filename: `${subject}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }
         ];
-        // Adiciona o logo apenas se foi carregado com sucesso
+        
         if(logoBase64ForEmail) {
             attachments.push({ filename: 'Logo.png', content: logoBase64ForEmail.split("base64,")[1], encoding: 'base64', cid: 'logoImage' });
         }
-
 
         await transporter.sendMail({
             from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,

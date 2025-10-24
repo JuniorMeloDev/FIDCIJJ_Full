@@ -3,6 +3,49 @@ import { format, differenceInDays, addDays } from 'date-fns';
 import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
 // Removidos 'fs' e 'path'
 
+// NOVA FUNÇÃO HELPER
+const getBaseURL = () => {
+    // 1. Prioriza a URL de produção que você definiu
+    let baseURL = process.env.NEXT_PUBLIC_APP_URL; 
+
+    // 2. Se não estiver, tenta a URL automática da Vercel (para deploys de preview/dev)
+    if (!baseURL && process.env.VERCEL_URL) {
+        baseURL = `https://${process.env.VERCEL_URL}`;
+    }
+    
+    // 3. Se ainda não estiver, usa o localhost (ambiente local)
+    if (!baseURL) {
+        baseURL = 'http://localhost:3000';
+    }
+
+    // Remove barra final se houver
+    return baseURL.replace(/\/$/, '');
+};
+
+
+// Nova função assíncrona
+const getItauLogoBase64 = async () => {
+    try {
+        const baseURL = getBaseURL();
+        const logoURL = `${baseURL}/itau.png`; // Nome correto do arquivo
+        
+        console.log(`[LOG ITAÚ PDF] Buscando logo de: ${logoURL}`);
+
+        const response = await fetch(logoURL);
+        if (!response.ok) {
+            throw new Error(`Falha ao buscar logo Itaú (${response.status}): ${response.statusText} - URL: ${logoURL}`);
+        }
+        
+        const imageBuffer = await response.arrayBuffer();
+        const base64String = Buffer.from(imageBuffer).toString('base64');
+        return `data:image/png;base64,${base64String}`;
+    } catch (error) {
+        console.error("[ERRO ITAÚ PDF] Erro ao buscar/converter logo via URL:", error);
+        return null;
+    }
+};
+
+
 // ... (Funções modulo10, modulo11, getAgenciaContaDAC, getNossoNumeroDAC, gerarLinhaDigitavelECodigoBarras, drawInterleaved2of5, drawField permanecem iguais) ...
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
@@ -116,50 +159,24 @@ const drawField = (doc, label, value, x, y, width, height, valueAlign = 'left', 
     }
 };
 
-// Nova função assíncrona
-const getItauLogoBase64 = async () => {
-    try {
-        const baseURL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
-        const logoURL = `${baseURL}/itau.png`; // Nome correto do arquivo
-        console.log(`[LOG ITAÚ PDF] Buscando logo de: ${logoURL}`);
-
-        const response = await fetch(logoURL);
-        if (!response.ok) {
-            throw new Error(`Falha ao buscar logo Itaú (${response.status}): ${response.statusText}`);
-        }
-        const imageBuffer = await response.arrayBuffer();
-        const base64String = Buffer.from(imageBuffer).toString('base64');
-        return `data:image/png;base64,${base64String}`;
-    } catch (error) {
-        console.error("[ERRO ITAÚ PDF] Erro ao buscar/converter logo via URL:", error);
-        return null;
-    }
-};
-
 // Marcar a função principal como async
 export async function gerarPdfBoletoItau(listaBoletos) {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
     const itauLogoBase64 = await getItauLogoBase64(); // Use await
 
     listaBoletos.forEach((dadosBoleto, index) => {
-        // ... (resto da função gerarPdfBoletoItau permanece igual) ...
          if (index > 0) doc.addPage();
-
         const valorFinalBoleto = dadosBoleto.valor_bruto - (dadosBoleto.abatimento || 0);
-
         const { linhaDigitavel, codigoBarras } = gerarLinhaDigitavelECodigoBarras({
             agencia: dadosBoleto.agencia, conta: dadosBoleto.conta, carteira: dadosBoleto.carteira,
             nossoNumero: dadosBoleto.nosso_numero, valor: valorFinalBoleto,
             vencimento: dadosBoleto.data_vencimento
         });
         const vencimentoDate = new Date(dadosBoleto.data_vencimento + 'T12:00:00Z');
-
         const nossoNumeroImpresso = `${dadosBoleto.carteira}/${dadosBoleto.nosso_numero}-${dadosBoleto.dac_nosso_numero}`;
-
         const drawSection = (yOffset) => {
             doc.setLineWidth(0.2);
             if (itauLogoBase64) {
-               // Ajustar as dimensões se necessário
                doc.addImage(itauLogoBase64, 'PNG', 15, yOffset + 1, 30, 8);
             } else {
                console.warn("[AVISO ITAÚ PDF] Logo não disponível para adicionar ao PDF.");
@@ -171,17 +188,14 @@ export async function gerarPdfBoletoItau(listaBoletos) {
             doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(0, 0, 0);
             doc.text(linhaDigitavel, 65, yOffset + 7, { charSpace: 0.5 });
             doc.setFont('helvetica', 'bold');
-
             const y1 = yOffset + 10;
             drawField(doc, 'Local de pagamento', 'Pague pelo aplicativo, internet ou em agências e correspondentes.', 15, y1, 140, 10, 'left', 8);
             drawField(doc, 'Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), 155, y1, 40, 10, 'right', 9);
-
             const y2 = y1 + 10;
             const beneficiarioLine1 = `${dadosBoleto.cedente?.nome || ''}    CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente?.cnpj)}`;
             const beneficiarioLine2 = dadosBoleto.cedente?.endereco;
             drawField(doc, 'Beneficiário', [beneficiarioLine1, beneficiarioLine2], 15, y2, 140, 15, 'left', 8);
             drawField(doc, 'Agência/Código Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, 155, y2, 40, 15, 'right');
-
             const y3 = y2 + 15;
             drawField(doc, 'Data do documento', format(new Date(dadosBoleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), 15, y3, 30, 10, 'left', 8);
             drawField(doc, 'Núm. do documento', dadosBoleto.nf_cte || '', 45, y3, 30, 10, 'left', 8);
@@ -189,7 +203,6 @@ export async function gerarPdfBoletoItau(listaBoletos) {
             drawField(doc, 'Aceite', 'N', 95, y3, 15, 10, 'left', 8);
             drawField(doc, 'Data Processamento', format(new Date(), 'dd/MM/yyyy'), 110, y3, 45, 10, 'left', 8);
             drawField(doc, 'Nosso Número', nossoNumeroImpresso, 155, y3, 40, 10, 'right');
-
             const y4 = y3 + 10;
             drawField(doc, 'Uso do Banco', '', 15, y4, 25, 10);
             drawField(doc, 'Carteira', dadosBoleto.carteira, 40, y4, 15, 10, 'center');
@@ -197,7 +210,6 @@ export async function gerarPdfBoletoItau(listaBoletos) {
             drawField(doc, 'Quantidade', '', 70, y4, 30, 10);
             drawField(doc, 'Valor', '', 100, y4, 55, 10);
             drawField(doc, '(=) Valor do Documento', formatBRLNumber(valorFinalBoleto), 155, y4, 40, 10, 'right', 9);
-
             const y5 = y4 + 10;
             const tipoOp = dadosBoleto.operacao?.tipo_operacao;
             const jurosText = tipoOp?.taxa_juros_mora > 0 ? `APÓS 1 DIA(S) CORRIDO(S) DO VENCIMENTO COBRAR JUROS DE ${tipoOp.taxa_juros_mora.toFixed(2).replace('.',',')}% AO MÊS` : null;
@@ -220,7 +232,6 @@ export async function gerarPdfBoletoItau(listaBoletos) {
             drawField(doc, '(-) Descontos/Abatimento', '', 155, y5, 40, 10);
             drawField(doc, '(+) Juros/Multa', '', 155, y5 + 10, 40, 10);
             drawField(doc, '(=) Valor Cobrado', '', 155, y5 + 20, 40, 10);
-
             const y6 = y5 + 30;
             const sacado = dadosBoleto.sacado || {};
             const pagadorLine1 = `${sacado.nome || ''}    CNPJ/CPF: ${formatCnpjCpf(sacado.cnpj)}`;
@@ -229,11 +240,9 @@ export async function gerarPdfBoletoItau(listaBoletos) {
             drawField(doc, 'Pagador', null, 15, y6, 180, 20);
             doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(0,0,0);
             doc.text([pagadorLine1, pagadorLine2, pagadorLine3], 16, y6 + 5, { lineHeightFactor: 1.15 });
-
             const y7 = y6 + 20;
             drawInterleaved2of5(doc, 15, y7 + 2, codigoBarras, 103, 13);
             doc.setFontSize(8).text('Autenticação mecânica', 195, y7 + 18, {align: 'right'});
-
             doc.setLineWidth(0.2);
             const allY = [yOffset, y1, y2, y3, y4, y5, y6, y7];
             allY.forEach(yPos => doc.line(15, yPos, 195, yPos));
@@ -245,18 +254,14 @@ export async function gerarPdfBoletoItau(listaBoletos) {
             doc.line(155, y5 + 10, 195, y5 + 10);
             doc.line(155, y5 + 20, 195, y5 + 20);
         };
-
         drawSection(15);
         doc.setFont('helvetica', 'bold').setFontSize(9).text('RECIBO DO PAGADOR', 15, 12);
         doc.setLineDashPattern([2, 1], 0).line(15, 148, 195, 148).setLineDashPattern([], 0);
-
         drawSection(155);
         doc.setFont('helvetica', 'bold').setFontSize(9).text('Ficha de Compensação', 15, 152);
-
         doc.setFontSize(6).setTextColor(100,100,100);
         const footerText = 'Em caso de dúvidas, de posse do comprovante, contate seu gerente ou a Central no 4004 1685 (capitais e regiões metropolitanas) ou 0800 770 1685 (demais localidades). Reclamações, informações e cancelamentos: SAC 0800 728 0728, 24 horas por dia. Fale Conosco: www.itau.com.br/empresas. Se não ficar satisfeito com a solução, contate a Ouvidoria: 0800 570 0011, em dias úteis, das 9h às 18h. Deficiente auditivo/fala: 0800 722 1722.';
         doc.text(footerText, 15, 288, { maxWidth: 180, align: 'justify' });
-
     });
 
     return doc.output('arraybuffer');
