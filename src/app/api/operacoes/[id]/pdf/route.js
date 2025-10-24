@@ -1,136 +1,180 @@
-import { NextResponse } from 'next/server';
-import { supabase } from '@/app/utils/supabaseClient';
-import jwt from 'jsonwebtoken';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
-import fs from 'fs';
+import nodemailer from 'nodemailer';
 import path from 'path';
 
-// --- Função getLogoBase64 ATUALIZADA ---
-const getLogoBase64 = () => {
-    try {
-        // Tenta um caminho relativo comum em builds Vercel (ajuste '../' conforme necessário)
-        // __dirname points to /var/task/.next/server/app/api/operacoes/[id]/pdf
-        // Need to go up 6 levels to reach the root equivalent
-        let imagePath = path.resolve(__dirname, '../../../../../../public', 'Logo.png');
-
-        if (!fs.existsSync(imagePath)) {
-            // Se não encontrar, tenta o caminho original baseado no CWD
-            console.warn(`[Logo PDF] Logo não encontrado em ${imagePath}. Tentando path via CWD.`);
-            imagePath = path.resolve(process.cwd(), 'public', 'Logo.png');
-        }
-
-        // Verifica se encontrou em algum dos caminhos
-        if (fs.existsSync(imagePath)) {
-            console.log(`[Logo PDF] Logo encontrado em: ${imagePath}`);
-            const imageBuffer = fs.readFileSync(imagePath);
-            return `data:image/png;base64,${imageBuffer.toString('base64')}`;
-        } else {
-             // Tenta fallback com 'logo.png' minúsculo
-            let fallbackPath = path.resolve(__dirname, '../../../../../../public', 'logo.png');
-            if (!fs.existsSync(fallbackPath)) {
-                fallbackPath = path.resolve(process.cwd(), 'public', 'logo.png');
-            }
-            if (fs.existsSync(fallbackPath)) {
-                console.log(`[Logo PDF] Fallback logo.png encontrado em: ${fallbackPath}`);
-                const fallbackBuffer = fs.readFileSync(fallbackPath);
-                return `data:image/png;base64,${fallbackBuffer.toString('base64')}`;
-            } else {
-                console.error(`[Logo PDF] Logo.png ou logo.png NÃO encontrados.`);
-                return null;
-            }
-        }
-    } catch (error) {
-        console.error("Erro ao carregar logo para PDF:", error);
-        return null;
+export const generateStrongPassword = () => {
+    const length = 10;
+    const lower = 'abcdefghijklmnopqrstuvwxyz';
+    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const numbers = '0123456789';
+    const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    const all = lower + upper + numbers + special;
+    let password = '';
+    password += lower[Math.floor(Math.random() * lower.length)];
+    password += upper[Math.floor(Math.random() * upper.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += special[Math.floor(Math.random() * special.length)];
+    for (let i = 4; i < length; i++) {
+        password += all[Math.floor(Math.random() * all.length)];
     }
+    return password.split('').sort(() => 0.5 - Math.random()).join('');
 };
 
-
-
-const getHeaderCell = (text) => ({
-    content: text, styles: { fillColor: [31, 41, 55], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }
+const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+        user: process.env.EMAIL_USERNAME,
+        pass: process.env.EMAIL_PASSWORD,
+    },
 });
 
-const sanitizeFilename = (filename) => {
-    // Remove acentos comuns e caracteres inválidos para nomes de arquivo
-    return filename
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
-        .replace(/[ôõóò]/g, 'o') // Trata 'o' especificamente se normalize não pegar
-        .replace(/[^\w\s.,-]/g, '_'); // Substitui inválidos por underscore
-};
-
-
-export async function GET(request, { params }) {
-    try {
-        const token = request.headers.get('Authorization')?.split(' ')[1];
-        if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
-        jwt.verify(token, process.env.JWT_SECRET);
-
-        const { id } = params;
-
-        const { data: operacaoData, error: operacaoError } = await supabase.from('operacoes').select('*').eq('id', id).single();
-        if (operacaoError) throw new Error("Operação não encontrada.");
-
-        const { data: clienteData } = await supabase.from('clientes').select('*').eq('id', operacaoData.cliente_id).single();
-        const { data: tipoOpData } = await supabase.from('tipos_operacao').select('*').eq('id', operacaoData.tipo_operacao_id).single();
-        const { data: duplicatasData } = await supabase.from('duplicatas').select('*').eq('operacao_id', id);
-        const { data: descontosData } = await supabase.from('descontos').select('*').eq('operacao_id', id);
-
-        const operacao = { ...operacaoData, cliente: clienteData, tipo_operacao: tipoOpData, duplicatas: duplicatasData || [], descontos: descontosData || [] };
-
-        const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
-        const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join('_'); // Usa underscore
-        const rawFilename = `Borderô ${tipoDocumento} ${numeros}.pdf`;
-        const filename = sanitizeFilename(rawFilename);
-
-        const doc = new jsPDF();
-
-        const logoBase64 = getLogoBase64(); // Função atualizada
-        if (logoBase64) {
-            const logoWidth = 40;
-            const logoHeight = logoWidth / 2.3; // Ajuste conforme a proporção do seu logo
-            doc.addImage(logoBase64, 'PNG', 14, 12, logoWidth, logoHeight);
-        }
-        const pageWidth = doc.internal.pageSize.getWidth();
-        doc.setFontSize(18);
-        doc.text("BORDERO ANALITICO", pageWidth - 14, 22, { align: 'right' });
-        doc.setFontSize(10);
-        doc.text(`Data Assinatura: ${formatDate(operacao.data_operacao)}`, pageWidth - 14, 28, { align: 'right' });
-        doc.text(`Empresa: ${operacao.cliente.nome}`, 14, 40);
-        const head = [[getHeaderCell('Nº. Do Título'), getHeaderCell('Venc. Parcelas'), getHeaderCell('Sacado/Emitente'), getHeaderCell('Juros Parcela'), getHeaderCell('Valor')]];
-        const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), dup.cliente_sacado, { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
-        autoTable(doc, {
-            startY: 50, head: head, body: body,
-            foot: [[{ content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }]],
-            theme: 'grid', headStyles: { fillColor: [31, 41, 55] },
-        });
-        const finalY = doc.lastAutoTable.finalY + 10;
-        const totaisBody = [
-            ['Valor total dos Títulos:', { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right' } }],
-            [`Deságio (${operacao.tipo_operacao.nome}):`, { content: `-${formatBRLNumber(operacao.valor_total_juros)}`, styles: { halign: 'right' } }],
-            ...operacao.descontos.map(d => [
-                `${d.descricao}:`,
-                { content: d.valor < 0 ? `+${formatBRLNumber(Math.abs(d.valor))}` : `-${formatBRLNumber(d.valor)}`, styles: { halign: 'right' } }
-            ]),
-            [{ content: 'Líquido da Operação:', styles: { fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_liquido), styles: { halign: 'right', fontStyle: 'bold' } }]
-        ];
-        autoTable(doc, {
-            startY: finalY, body: totaisBody, theme: 'plain', tableWidth: 'wrap',
-            margin: { left: pageWidth / 2 }, styles: { cellPadding: 1, fontSize: 10 }
-        });
-
-        const pdfBuffer = doc.output('arraybuffer');
-        const headers = new Headers();
-        headers.append('Content-Type', 'application/pdf');
-        // Usar encodeURIComponent para garantir que caracteres especiais no nome do arquivo sejam tratados
-        headers.append('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
-
-        return new Response(pdfBuffer, { headers });
-
-    } catch (error) {
-        console.error("Erro ao gerar PDF do borderô:", error);
-        return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
+export async function sendWelcomeEmail({ clienteNome, username, tempPassword, recipientEmail }) {
+    if (!clienteNome || !username || !tempPassword || !recipientEmail) {
+        throw new Error('Dados insuficientes para enviar o e-mail de boas-vindas.');
     }
+    const loginUrl = process.env.NEXT_PUBLIC_LOGIN_URL || 'https://fidcijj.vercel.app/login';
+    const emailBody = `
+    <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <p>Olá, <strong>${clienteNome}</strong>!</p>
+        <p>Seja bem-vindo(a) à IJJ FIDC! Estamos felizes em tê-lo(a) conosco.</p>
+        <p>Para acessar nosso portal do cliente, utilize as credenciais provisórias abaixo:</p>
+        <div style="background-color: #f2f2f2; padding: 20px; border-radius: 8px; margin: 25px 0; font-size: 16px;">
+            <p style="margin: 5px 0;"><strong>URL de Acesso:</strong> <a href="${loginUrl}" target="_blank">${loginUrl}</a></p>
+            <p style="margin: 5px 0;"><strong>Usuário:</strong> ${username}</p>
+            <p style="margin: 5px 0;"><strong>Senha Provisória:</strong> <span style="font-weight: bold; color: #d9534f;">${tempPassword}</span></p>
+        </div>
+        <p>Por segurança, recomendamos fortemente que você <strong>altere sua senha</strong> no primeiro acesso através do menu "Perfil".</p>
+        <br>
+        <p>Atenciosamente,</p>
+        <p><strong>Equipe FIDC IJJ</strong></p>
+    </div>
+    `;
+    await transporter.sendMail({
+        from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
+        to: recipientEmail,
+        subject: 'Bem-vindo(a) ao Portal do Cliente FIDC IJJ',
+        html: emailBody,
+    });
+}
+
+export async function sendOperationSubmittedEmail({ clienteNome, operacaoId, valorLiquido, adminEmails }) {
+    if (!clienteNome || !operacaoId || !valorLiquido || !adminEmails || adminEmails.length === 0) {
+        return;
+    }
+    const analysisUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://fidcijj.vercel.app'}/analise`;
+    const emailBody = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+            <p>Olá,</p>
+            <p>Uma nova operação foi enviada para análise.</p>
+            <div style="background-color: #f2f2f2; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p><strong>Cliente:</strong> ${clienteNome}</p>
+                <p><strong>ID da Operação:</strong> #${operacaoId}</p>
+                <p><strong>Valor Líquido:</strong> ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorLiquido)}</p>
+            </div>
+            <p>Por favor, acesse o painel de administração para analisar e aprovar a operação.</p>
+            <p><a href="${analysisUrl}" target="_blank">Analisar Operação</a></p>
+            <br>
+            <p>Atenciosamente,</p>
+            <p><strong>Sistema FIDC IJJ</strong></p>
+        </div>
+    `;
+    await transporter.sendMail({
+        from: `"FIDC IJJ - Alerta" <${process.env.EMAIL_USERNAME}>`,
+        to: adminEmails.join(','),
+        subject: `Nova Operação #${operacaoId} para Análise - ${clienteNome}`,
+        html: emailBody,
+    });
+}
+
+export async function sendOperationStatusEmail({ clienteNome, operacaoId, status, recipientEmail }) {
+     if (!clienteNome || !operacaoId || !status || !recipientEmail) {
+        return; 
+    }
+    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://fidcijj.vercel.app'}/portal/dashboard`;
+    const subject = `Sua Operação #${operacaoId} foi ${status === 'Aprovada' ? 'Aprovada' : 'Rejeitada'}`;
+    const emailBody = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+            <p>Olá, <strong>${clienteNome}</strong>!</p>
+            <p>Temos uma atualização sobre a sua operação enviada para análise.</p>
+            <div style="background-color: #f2f2f2; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p><strong>ID da Operação:</strong> #${operacaoId}</p>
+                <p><strong>Novo Status:</strong> <strong style="color: ${status === 'Aprovada' ? 'green' : 'red'};">${status}</strong></p>
+            </div>
+            ${status === 'Aprovada' ? '<p>O valor líquido será creditado na conta bancária informada em breve.</p>' : '<p>Para mais detalhes sobre o motivo da rejeição, entre em contato conosco.</p>'}
+            <p>Você pode ver mais detalhes acessando o portal do cliente:</p>
+            <p><a href="${portalUrl}" target="_blank">Acessar Portal</a></p>
+            <br>
+            <p>Atenciosamente,</p>
+            <p><strong>Equipe FIDC IJJ</strong></p>
+        </div>
+    `;
+     await transporter.sendMail({
+        from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
+        to: recipientEmail,
+        subject: subject,
+        html: emailBody,
+    });
+}
+
+// **FUNÇÃO CORRIGIDA PARA LIDAR COM ANEXOS**
+export async function sendCustomNotificationEmail({ title, message, recipientEmails, attachments = [], isDetailedEmail = true }) {
+    if (!title || !recipientEmails || recipientEmails.length === 0) {
+        return;
+    }
+
+    let emailBody;
+    let finalAttachments = [];
+    const logoPath = path.resolve(process.cwd(), 'public', 'Logo.png');
+    const portalUrl = process.env.NEXT_PUBLIC_LOGIN_URL || 'https://fidcijj.vercel.app/login';
+
+    if (isDetailedEmail) {
+        // Lógica para o e-mail completo (com mensagem e anexos)
+        emailBody = `
+            <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                ${message}
+                <br><br>
+                <p>Atenciosamente,</p>
+                <p>
+                    <strong>Equipe FIDC IJJ</strong>
+                </p>
+                <br>
+                <img src="cid:logoImage" width="140" alt="Logo FIDC IJJ">
+            </div>
+        `;
+        finalAttachments = [...attachments]; // Usa os anexos enviados
+
+    } else {
+        // Lógica para o e-mail genérico (apenas aviso)
+        emailBody = `
+             <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                <p>Olá,</p>
+                <p>Você recebeu uma nova notificação em nosso portal de clientes.</p>
+                <p><strong>Assunto:</strong> ${title}</p>
+                <br>
+                <p>Para visualizar os detalhes, por favor, acesse o portal.</p>
+                <p><a href="${portalUrl}" target="_blank" style="display: inline-block; padding: 10px 20px; background-color: #f97316; color: #ffffff; text-decoration: none; border-radius: 5px;">Acessar Portal FIDC IJJ</a></p>
+                <br>
+                <p>Atenciosamente,</p>
+                <p><strong>Equipe FIDC IJJ</strong></p>
+                <br>
+                <img src="cid:logoImage" width="140" alt="Logo FIDC IJJ">
+            </div>
+        `;
+    }
+
+    // Adiciona o logo como anexo embutido em ambos os casos
+    finalAttachments.push({
+        filename: 'Logo.png',
+        path: logoPath,
+        cid: 'logoImage'
+    });
+
+    await transporter.sendMail({
+        from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
+        to: recipientEmails.join(', '),
+        subject: isDetailedEmail ? title : 'Você tem uma nova notificação no Portal FIDC IJJ',
+        html: emailBody,
+        attachments: finalAttachments
+    });
 }
