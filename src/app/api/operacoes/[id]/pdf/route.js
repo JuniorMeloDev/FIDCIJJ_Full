@@ -7,24 +7,60 @@ import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 import fs from 'fs';
 import path from 'path';
 
+// --- Função getLogoBase64 ATUALIZADA ---
 const getLogoBase64 = () => {
     try {
-        const imagePath = path.resolve(process.cwd(), 'public', 'Logo.png');
-        const imageBuffer = fs.readFileSync(imagePath);
-        return `data:image/png;base64,${imageBuffer.toString('base64')}`;
+        // Tenta um caminho relativo comum em builds Vercel (ajuste '../' conforme necessário)
+        // __dirname points to /var/task/.next/server/app/api/operacoes/[id]/pdf
+        // Need to go up 6 levels to reach the root equivalent
+        let imagePath = path.resolve(__dirname, '../../../../../../public', 'Logo.png');
+
+        if (!fs.existsSync(imagePath)) {
+            // Se não encontrar, tenta o caminho original baseado no CWD
+            console.warn(`[Logo PDF] Logo não encontrado em ${imagePath}. Tentando path via CWD.`);
+            imagePath = path.resolve(process.cwd(), 'public', 'Logo.png');
+        }
+
+        // Verifica se encontrou em algum dos caminhos
+        if (fs.existsSync(imagePath)) {
+            console.log(`[Logo PDF] Logo encontrado em: ${imagePath}`);
+            const imageBuffer = fs.readFileSync(imagePath);
+            return `data:image/png;base64,${imageBuffer.toString('base64')}`;
+        } else {
+             // Tenta fallback com 'logo.png' minúsculo
+            let fallbackPath = path.resolve(__dirname, '../../../../../../public', 'logo.png');
+            if (!fs.existsSync(fallbackPath)) {
+                fallbackPath = path.resolve(process.cwd(), 'public', 'logo.png');
+            }
+            if (fs.existsSync(fallbackPath)) {
+                console.log(`[Logo PDF] Fallback logo.png encontrado em: ${fallbackPath}`);
+                const fallbackBuffer = fs.readFileSync(fallbackPath);
+                return `data:image/png;base64,${fallbackBuffer.toString('base64')}`;
+            } else {
+                console.error(`[Logo PDF] Logo.png ou logo.png NÃO encontrados.`);
+                return null;
+            }
+        }
     } catch (error) {
-        console.error("Erro ao carregar a imagem do logo:", error);
+        console.error("Erro ao carregar logo para PDF:", error);
         return null;
     }
 };
+
+
 
 const getHeaderCell = (text) => ({
     content: text, styles: { fillColor: [31, 41, 55], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }
 });
 
 const sanitizeFilename = (filename) => {
-    return filename.replace(/ô/g, 'o').replace(/[^\w\s.,-]/g, '');
+    // Remove acentos comuns e caracteres inválidos para nomes de arquivo
+    return filename
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+        .replace(/[ôõóò]/g, 'o') // Trata 'o' especificamente se normalize não pegar
+        .replace(/[^\w\s.,-]/g, '_'); // Substitui inválidos por underscore
 };
+
 
 export async function GET(request, { params }) {
     try {
@@ -45,16 +81,16 @@ export async function GET(request, { params }) {
         const operacao = { ...operacaoData, cliente: clienteData, tipo_operacao: tipoOpData, duplicatas: duplicatasData || [], descontos: descontosData || [] };
 
         const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
-        const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
+        const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join('_'); // Usa underscore
         const rawFilename = `Borderô ${tipoDocumento} ${numeros}.pdf`;
         const filename = sanitizeFilename(rawFilename);
 
         const doc = new jsPDF();
 
-        const logoBase64 = getLogoBase64();
+        const logoBase64 = getLogoBase64(); // Função atualizada
         if (logoBase64) {
             const logoWidth = 40;
-            const logoHeight = logoWidth / 2.3;
+            const logoHeight = logoWidth / 2.3; // Ajuste conforme a proporção do seu logo
             doc.addImage(logoBase64, 'PNG', 14, 12, logoWidth, logoHeight);
         }
         const pageWidth = doc.internal.pageSize.getWidth();
@@ -74,14 +110,10 @@ export async function GET(request, { params }) {
         const totaisBody = [
             ['Valor total dos Títulos:', { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right' } }],
             [`Deságio (${operacao.tipo_operacao.nome}):`, { content: `-${formatBRLNumber(operacao.valor_total_juros)}`, styles: { halign: 'right' } }],
-            
-            // --- CORREÇÃO APLICADA AQUI ---
-            ...operacao.descontos.map(d => [ 
-                `${d.descricao}:`, 
+            ...operacao.descontos.map(d => [
+                `${d.descricao}:`,
                 { content: d.valor < 0 ? `+${formatBRLNumber(Math.abs(d.valor))}` : `-${formatBRLNumber(d.valor)}`, styles: { halign: 'right' } }
             ]),
-            // --- FIM DA CORREÇÃO ---
-
             [{ content: 'Líquido da Operação:', styles: { fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_liquido), styles: { halign: 'right', fontStyle: 'bold' } }]
         ];
         autoTable(doc, {
@@ -92,7 +124,8 @@ export async function GET(request, { params }) {
         const pdfBuffer = doc.output('arraybuffer');
         const headers = new Headers();
         headers.append('Content-Type', 'application/pdf');
-        headers.append('Content-Disposition', `attachment; filename="${filename}"`);
+        // Usar encodeURIComponent para garantir que caracteres especiais no nome do arquivo sejam tratados
+        headers.append('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
 
         return new Response(pdfBuffer, { headers });
 
