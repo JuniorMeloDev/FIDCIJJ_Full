@@ -1,135 +1,177 @@
 import { NextResponse } from 'next/server';
-    import { supabase } from '@/app/utils/supabaseClient';
-    import jwt from 'jsonwebtoken';
-    import nodemailer from 'nodemailer';
-    import { jsPDF } from 'jspdf';
-    import autoTable from 'jspdf-autotable';
-    import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
-    import fs from 'fs';
-    import path from 'path';
+import { supabase } from '@/app/utils/supabaseClient';
+import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 
-    const getLogoBase64 = () => {
-        try {
-            const imagePath = path.resolve(process.cwd(), 'public', 'Logo.png');
-            const imageBuffer = fs.readFileSync(imagePath);
-            return `data:image/png;base64,${imageBuffer.toString('base64')}`;
-        } catch (error) { return null; }
-    };
+// Função atualizada para buscar logo via URL
+const getLogoBase64 = async () => {
+    try {
+        // Constrói a URL base dependendo do ambiente
+        const baseURL = process.env.VERCEL_URL
+            ? `https://${process.env.VERCEL_URL}` // URL de deploy da Vercel
+            : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'); // URL local ou definida
 
-    const getHeaderCell = (text) => ({
-        content: text,
-        styles: { fillColor: [31, 41, 55], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }
+        const logoURL = `${baseURL}/Logo.png`;
+        console.log(`[LOG LOGO] Buscando logo de: ${logoURL}`);
+
+        const response = await fetch(logoURL);
+        if (!response.ok) {
+            throw new Error(`Falha ao buscar logo (${response.status}): ${response.statusText}`);
+        }
+        // Converte a resposta para ArrayBuffer e depois para base64
+        const imageBuffer = await response.arrayBuffer();
+        const base64String = Buffer.from(imageBuffer).toString('base64');
+        return `data:image/png;base64,${base64String}`;
+
+    } catch (error) {
+        console.error("[ERRO LOGO] Erro ao buscar/converter logo via URL:", error);
+        return null; // Retorna null se falhar
+    }
+};
+
+const getHeaderCell = (text) => ({
+    content: text,
+    styles: { fillColor: [31, 41, 55], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }
+});
+
+// Marcar como async
+const generatePdfBuffer = async (operacao) => {
+    const doc = new jsPDF();
+    const logoBase64 = await getLogoBase64(); // Usar await
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    if (logoBase64) {
+        // Verificar as dimensões da imagem se necessário ou usar valores fixos
+        // Para este exemplo, usaremos 50x15 como antes, ajuste se precisar
+        doc.addImage(logoBase64, 'PNG', 14, 12, 50, 15);
+    } else {
+        console.warn("[AVISO PDF] Logo não disponível para adicionar ao PDF.");
+    }
+
+    doc.setFontSize(18);
+    doc.text("BORDERÔ ANALÍTICO", pageWidth - 14, 22, { align: 'right' });
+    doc.setFontSize(10);
+    doc.text(`Data Assinatura: ${formatDate(operacao.data_operacao)}`, pageWidth - 14, 28, { align: 'right' });
+
+    doc.text(`Empresa: ${operacao.cliente.nome}`, 14, 40);
+
+    const head = [[getHeaderCell('Nº. Do Título'), getHeaderCell('Venc. Parcelas'), getHeaderCell('Sacado/Emitente'), getHeaderCell('Juros Parcela'), getHeaderCell('Valor')]];
+    const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), dup.cliente_sacado, { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
+
+    autoTable(doc, {
+        startY: 50, head: head, body: body,
+        foot: [[{ content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }]],
+        theme: 'grid', headStyles: { fillColor: [31, 41, 55] },
     });
 
-    const generatePdfBuffer = (operacao) => {
-        const doc = new jsPDF();
-        const logoBase64 = getLogoBase64();
-        const pageWidth = doc.internal.pageSize.getWidth();
+    const finalY = doc.lastAutoTable.finalY + 10;
+    const totaisBody = [
+        ['Valor total dos Títulos:', { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right' } }],
+        [`Deságio (${operacao.tipo_operacao.nome}):`, { content: `-${formatBRLNumber(operacao.valor_total_juros)}`, styles: { halign: 'right' } }],
+        ...operacao.descontos.map(d => [
+            `${d.descricao}:`,
+            { content: d.valor < 0 ? `+${formatBRLNumber(Math.abs(d.valor))}` : `-${formatBRLNumber(d.valor)}`, styles: { halign: 'right' } }
+        ]),
+        [{ content: 'Líquido da Operação:', styles: { fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_liquido), styles: { halign: 'right', fontStyle: 'bold' } }]
+    ];
 
-        if (logoBase64) {
-            doc.addImage(logoBase64, 'PNG', 14, 12, 50, 15);
+    autoTable(doc, {
+        startY: finalY, body: totaisBody, theme: 'plain', tableWidth: 'wrap',
+        margin: { left: pageWidth / 2 }, styles: { cellPadding: 1, fontSize: 10 }
+    });
+
+    return Buffer.from(doc.output('arraybuffer'));
+};
+
+// Marcar como async
+export async function POST(request, { params }) {
+    try {
+        const token = request.headers.get('Authorization')?.split(' ')[1];
+        if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
+        jwt.verify(token, process.env.JWT_SECRET);
+
+        const { id } = params;
+        const { destinatarios } = await request.json();
+
+        if (!destinatarios || destinatarios.length === 0) {
+            return NextResponse.json({ message: 'Nenhum destinatário fornecido.' }, { status: 400 });
         }
 
-        doc.setFontSize(18);
-        doc.text("BORDERÔ ANALÍTICO", pageWidth - 14, 22, { align: 'right' });
-        doc.setFontSize(10);
-        doc.text(`Data Assinatura: ${formatDate(operacao.data_operacao)}`, pageWidth - 14, 28, { align: 'right' });
+        // Busca dados da operação, cliente, tipo de operação, duplicatas e descontos
+        const { data: operacaoData, error: operacaoError } = await supabase
+            .from('operacoes')
+            .select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*), descontos(*)') // Inclui descontos na consulta principal
+            .eq('id', id)
+            .single();
 
-        doc.text(`Empresa: ${operacao.cliente.nome}`, 14, 40);
+        if (operacaoError) throw new Error("Operação não encontrada.");
 
-        const head = [[getHeaderCell('Nº. Do Título'), getHeaderCell('Venc. Parcelas'), getHeaderCell('Sacado/Emitente'), getHeaderCell('Juros Parcela'), getHeaderCell('Valor')]];
-        const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), dup.cliente_sacado, { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
+        // Busca duplicatas separadamente
+        const { data: duplicatasData, error: duplicatasError } = await supabase
+            .from('duplicatas')
+            .select('*')
+            .eq('operacao_id', id);
 
-        autoTable(doc, {
-            startY: 50, head: head, body: body,
-            foot: [[{ content: 'TOTAIS', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, { content: formatBRLNumber(operacao.valor_total_juros), styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right', fontStyle: 'bold' } }]],
-            theme: 'grid', headStyles: { fillColor: [31, 41, 55] },
+        if (duplicatasError) throw new Error("Erro ao buscar duplicatas da operação.");
+
+        // Combina os dados
+        const operacao = {
+            ...operacaoData,
+            duplicatas: duplicatasData || [],
+            // 'descontos' já vem da consulta principal
+        };
+
+
+        const pdfBuffer = await generatePdfBuffer(operacao); // Usar await
+
+        const transporter = nodemailer.createTransport({
+            host: 'smtp.gmail.com', port: 587, secure: false,
+            auth: { user: process.env.EMAIL_USERNAME, pass: process.env.EMAIL_PASSWORD },
         });
 
-        const finalY = doc.lastAutoTable.finalY + 10;
-        const totaisBody = [
-            ['Valor total dos Títulos:', { content: formatBRLNumber(operacao.valor_total_bruto), styles: { halign: 'right' } }],
-            [`Deságio (${operacao.tipo_operacao.nome}):`, { content: `-${formatBRLNumber(operacao.valor_total_juros)}`, styles: { halign: 'right' } }],
-            
-            // --- CORREÇÃO APLICADA AQUI ---
-            ...operacao.descontos.map(d => [ 
-                `${d.descricao}:`, 
-                { content: d.valor < 0 ? `+${formatBRLNumber(Math.abs(d.valor))}` : `-${formatBRLNumber(d.valor)}`, styles: { halign: 'right' } }
-            ]),
-            // --- FIM DA CORREÇÃO ---
+        const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
+        const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
+        const subject = `Borderô ${tipoDocumento} ${numeros}`;
 
-            [{ content: 'Líquido da Operação:', styles: { fontStyle: 'bold' } }, { content: formatBRLNumber(operacao.valor_liquido), styles: { halign: 'right', fontStyle: 'bold' } }]
+        const emailBody = `
+            <p>Prezados,</p>
+            <p>Segue em anexo o borderô referente à operação.</p>
+            <br>
+            <p>Atenciosamente,</p>
+            <p>
+                <strong>Junior Melo</strong><br>
+                Analista Financeiro<br>
+                <strong>FIDC IJJ</strong><br>
+                (81) 9 7339-0292
+            </p>
+            <br>
+            <img src="cid:logoImage" width="140">
+        `;
+
+        // Busca o logo via URL para o anexo embutido
+        const logoBase64ForEmail = await getLogoBase64();
+        const attachments = [
+             { filename: `${subject}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }
         ];
+        // Adiciona o logo apenas se foi carregado com sucesso
+        if(logoBase64ForEmail) {
+            attachments.push({ filename: 'Logo.png', content: logoBase64ForEmail.split("base64,")[1], encoding: 'base64', cid: 'logoImage' });
+        }
 
-        autoTable(doc, {
-            startY: finalY, body: totaisBody, theme: 'plain', tableWidth: 'wrap',
-            margin: { left: pageWidth / 2 }, styles: { cellPadding: 1, fontSize: 10 }
+
+        await transporter.sendMail({
+            from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
+            to: destinatarios.join(', '), subject, html: emailBody,
+            attachments: attachments,
         });
 
-        return Buffer.from(doc.output('arraybuffer'));
-    };
+        return NextResponse.json({ message: 'E-mail enviado com sucesso!' }, { status: 200 });
 
-    export async function POST(request, { params }) {
-        try {
-            const token = request.headers.get('Authorization')?.split(' ')[1];
-            if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
-            jwt.verify(token, process.env.JWT_SECRET);
-
-            const { id } = params;
-            const { destinatarios } = await request.json();
-
-            if (!destinatarios || destinatarios.length === 0) {
-                return NextResponse.json({ message: 'Nenhum destinatário fornecido.' }, { status: 400 });
-            }
-
-            const { data: operacaoData, error: operacaoError } = await supabase.from('operacoes').select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*)').eq('id', id).single();
-            if (operacaoError) throw new Error("Operação não encontrada.");
-
-            const { data: duplicatasData } = await supabase.from('duplicatas').select('*').eq('operacao_id', id);
-            const { data: descontosData } = await supabase.from('descontos').select('*').eq('operacao_id', id);
-
-            const operacao = { ...operacaoData, duplicatas: duplicatasData || [], descontos: descontosData || [] };
-
-            const pdfBuffer = generatePdfBuffer(operacao);
-
-            const transporter = nodemailer.createTransport({
-                host: 'smtp.gmail.com', port: 587, secure: false,
-                auth: { user: process.env.EMAIL_USERNAME, pass: process.env.EMAIL_PASSWORD },
-            });
-
-            const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
-            const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
-            const subject = `Borderô ${tipoDocumento} ${numeros}`;
-
-            const emailBody = `
-                <p>Prezados,</p>
-                <p>Segue em anexo o borderô referente à operação.</p>
-                <br>
-                <p>Atenciosamente,</p>
-                <p>
-                    <strong>Junior Melo</strong><br>
-                    Analista Financeiro<br>
-                    <strong>FIDC IJJ</strong><br>
-                    (81) 9 7339-0292
-                </p>
-                <br>
-                <img src="cid:logoImage" width="140">
-            `;
-            const logoPath = path.resolve(process.cwd(), 'public', 'Logo.png');
-
-            await transporter.sendMail({
-                from: `"FIDC IJJ" <${process.env.EMAIL_USERNAME}>`,
-                to: destinatarios.join(', '), subject, html: emailBody,
-                attachments: [
-                    { filename: `${subject}.pdf`, content: pdfBuffer, contentType: 'application/pdf' },
-                    { filename: 'Logo.png', path: logoPath, cid: 'logoImage' }
-                ],
-            });
-
-            return NextResponse.json({ message: 'E-mail enviado com sucesso!' }, { status: 200 });
-
-        } catch (error) {
-            console.error("Erro ao enviar e-mail:", error);
-            return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
-        }
+    } catch (error) {
+        console.error("Erro ao enviar e-mail:", error);
+        return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });
     }
+}

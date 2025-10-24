@@ -1,19 +1,28 @@
 import { jsPDF } from 'jspdf';
 import { format, addDays } from 'date-fns';
 import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
-import fs from 'fs';
-import path from 'path';
+// Removidos 'fs' e 'path'
 
-const getSafraLogoBase64 = () => {
+// Nova função assíncrona
+const getSafraLogoBase64 = async () => {
     try {
-        const imagePath = path.resolve(process.cwd(), 'public', 'safra.png');
-        const imageBuffer = fs.readFileSync(imagePath);
-        return `data:image/png;base64,${imageBuffer.toString('base64')}`;
+        const baseURL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
+        const logoURL = `${baseURL}/safra.png`; // Nome correto do arquivo
+        console.log(`[LOG SAFRA PDF] Buscando logo de: ${logoURL}`);
+
+        const response = await fetch(logoURL);
+         if (!response.ok) {
+            throw new Error(`Falha ao buscar logo Safra (${response.status}): ${response.statusText}`);
+        }
+        const imageBuffer = await response.arrayBuffer();
+        const base64String = Buffer.from(imageBuffer).toString('base64');
+        return `data:image/png;base64,${base64String}`;
     } catch (error) {
-        console.error("Erro ao carregar a imagem do logo Safra:", error);
+        console.error("[ERRO SAFRA PDF] Erro ao buscar/converter logo via URL:", error);
         return null;
     }
 };
+
 
 // Função para calcular o dígito verificador (módulo 10), necessária para formatar a linha digitável
 function modulo10(bloco) {
@@ -60,7 +69,7 @@ function decodificarCodigoDeBarras(codigoBarras) {
     const campo5 = `${fatorVencimento}${valor}`;
 
     const linhaDigitavel = `${campo1Formatado}  ${campo2Formatado}  ${campo3Formatado}  ${campo4}  ${campo5}`;
-    
+
     // Extrai o "Nosso Número" do Campo Livre para ser exibido no corpo do boleto
     const nossoNumero = campoLivre.substring(14, 23);
 
@@ -96,9 +105,10 @@ function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
     }
 }
 
-export function gerarPdfBoletoSafra(listaBoletos) {
+// Marcar a função principal como async
+export async function gerarPdfBoletoSafra(listaBoletos) {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    const safraLogoBase64 = getSafraLogoBase64();
+    const safraLogoBase64 = await getSafraLogoBase64(); // Use await
 
     const drawField = (label, value, x, y, width, height, valueAlign = 'left', valueSize = 9, labelSize = 6) => {
         doc.setFontSize(labelSize); doc.setTextColor(100, 100, 100);
@@ -113,55 +123,55 @@ export function gerarPdfBoletoSafra(listaBoletos) {
 
     listaBoletos.forEach((boleto, index) => {
         if (index > 0) doc.addPage();
-        
+
         // Decodifica o código de barras que foi salvo no banco de dados.
         const { linhaDigitavel, codigoBarras, nossoNumero } = decodificarCodigoDeBarras(boleto.linha_digitavel);
-        
+
         const vencimentoDate = new Date(boleto.data_vencimento + 'T12:00:00Z');
         const nomePagador = boleto.sacado.nome.replace(/\.$/, '');
 
         // --- Seção Recibo do Pagador ---
-        if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 12, 25, 8);
+        if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 12, 25, 8); // Ajustar dimensões se necessário
         doc.setFont('helvetica', 'bold').setFontSize(10).text('Recibo do Pagador', 195, 15, { align: 'right' });
         doc.line(15, 20, 195, 20);
-        
+
         const xRecibo = 15, yRecibo = 22, wRecibo = 180;
         drawField('Beneficiário', boleto.cedente.nome, xRecibo, yRecibo, 100, 10);
         drawField('Nosso Número', nossoNumero, xRecibo + 100, yRecibo, 40, 10);
         doc.line(xRecibo + 100, yRecibo, xRecibo + 100, yRecibo + 10);
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), xRecibo + 140, yRecibo, 40, 10, 'right');
         doc.line(xRecibo + 140, yRecibo, xRecibo + 140, yRecibo + 10);
-        
+
         doc.line(xRecibo, yRecibo + 10, xRecibo + wRecibo, yRecibo + 10);
         drawField('Pagador', `${nomePagador} CNPJ/CPF: ${formatCnpjCpf(boleto.sacado.cnpj)}`, xRecibo, yRecibo + 10, 140, 10);
         drawField('Valor', formatBRLNumber(boleto.valor_bruto), xRecibo + 140, yRecibo + 10, 40, 10, 'right');
-        
+
         doc.setFontSize(8).text('Autenticação Mecânica', 195, yRecibo + 25, { align: 'right' });
         doc.setLineDashPattern([2, 1], 0).line(15, 88, 195, 88).setLineDashPattern([], 0);
 
         // --- Ficha de Compensação ---
-        if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 92, 25, 8);
-        
+        if (safraLogoBase64) doc.addImage(safraLogoBase64, 'PNG', 15, 92, 25, 8); // Ajustar dimensões se necessário
+
         doc.setLineWidth(0.5).line(40, 92, 40, 99);
         doc.setFont('helvetica', 'bold').setFontSize(12).text('422-7', 47.5, 96, { align: 'center' });
         doc.setLineWidth(0.5).line(55, 92, 55, 99);
         doc.setFontSize(11).setFont('courier', 'bold').text(linhaDigitavel, 125, 96, { align: 'center' });
-        
+
         const x = 15, y = 101, w = 180;
         doc.setLineWidth(0.2);
-        
+
         doc.rect(x, y, w, 105);
         doc.line(x, y, x + w, y);
         doc.line(x + 130, y, x + 130, y + 65);
-        
+
         drawField('Local de Pagamento', 'Pagável em qualquer banco', x, y, 130, 10);
         drawField('Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), x + 130, y, 50, 10, 'right', 10);
         doc.line(x, y + 10, x + w, y + 10);
-        
+
         drawField('Beneficiário', `${boleto.cedente.nome} CNPJ/CPF: ${formatCnpjCpf(boleto.cedente.cnpj)}`, x, y + 10, 130, 10);
         drawField('Agência/Cód. Beneficiário', `02900/005860430`, x + 130, y + 10, 50, 10, 'right');
         doc.line(x, y + 20, x + w, y + 20);
-        
+
         drawField('Data do Doc.', format(new Date(boleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), x, y + 20, 25, 10);
         doc.line(x + 25, y + 20, x + 25, y + 30);
         drawField('Nº do Doc.', boleto.nf_cte, x + 25, y + 20, 35, 10);
@@ -173,7 +183,7 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         drawField('Data do Movto', format(new Date(boleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), x + 90, y + 20, 40, 10);
         drawField('Nosso Número', nossoNumero, x + 130, y + 20, 50, 10, 'right');
         doc.line(x, y + 30, x + w, y + 30);
-        
+
         drawField('Data do Oper.', format(new Date(boleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), x, y+30, 25, 10);
         doc.line(x + 25, y + 30, x + 25, y + 40);
         drawField('Carteira', '01', x + 25, y + 30, 20, 10);
@@ -185,7 +195,7 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         drawField('Valor', '', x + 95, y + 30, 35, 10);
         drawField('(=)Valor do Documento', formatBRLNumber(boleto.valor_bruto), x + 130, y + 30, 50, 10, 'right', 10);
         doc.line(x, y + 40, x + w, y + 40);
-        
+
         const instrucoes = [];
         const tipoOp = boleto.operacao?.tipo_operacao;
         if (tipoOp) {
@@ -198,10 +208,10 @@ export function gerarPdfBoletoSafra(listaBoletos) {
                  instrucoes.push(`A partir de ${dataJurosMulta}, multa de ${ (tipoOp.taxa_multa || 0).toFixed(2).replace('.', ',') }%.`);
             }
         }
-        
+
         doc.setFontSize(6).setTextColor(100, 100, 100).text('Instruções', x + 1.5, y + 40 + 2.5);
         doc.setFontSize(9).setTextColor(0, 0, 0).text(instrucoes, x + 1.5, y + 40 + 7);
-        
+
         const hCampoValor = 5;
         drawField('(-)Desconto/Abatimento', '', x + 130, y + 40, 50, hCampoValor);
         doc.line(x + 130, y + 40 + hCampoValor, x + w, y + 40 + hCampoValor);
@@ -214,17 +224,17 @@ export function gerarPdfBoletoSafra(listaBoletos) {
         drawField('(=)Valor Cobrado', '', x + 130, y + 60, 50, hCampoValor);
 
         doc.line(x, y + 65, x + w, y + 65);
-        
+
         const pagadorAddressFicha = `${boleto.sacado.endereco}\n${boleto.sacado.municipio} ${boleto.sacado.uf} CEP: ${boleto.sacado.cep}`;
         const pagadorLinesFicha = doc.splitTextToSize(`${nomePagador} CNPJ/CPF: ${formatCnpjCpf(boleto.sacado.cnpj)}\n${pagadorAddressFicha}`, 178);
         drawField('Pagador', pagadorLinesFicha, x, y + 65, 180, 15, 'left', 9, 6);
-        
+
         drawField('Beneficiário Final', '', x, y + 80, 180, 5);
         doc.line(x, y + 85, x + w, y + 85);
-        
+
         drawInterleaved2of5(doc, 15, 190, codigoBarras, 103, 15);
         doc.setFont('helvetica', 'normal').setFontSize(8).text('Autenticação Mecânica - Ficha de Compensação', 195, 210, { align: 'right' });
     });
-    
+
     return doc.output('arraybuffer');
 }

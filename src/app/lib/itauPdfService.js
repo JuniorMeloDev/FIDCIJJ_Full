@@ -1,12 +1,10 @@
 import { jsPDF } from 'jspdf';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
-import fs from 'fs';
-import path from 'path';
+// Removidos 'fs' e 'path'
 
 // ... (Funções modulo10, modulo11, getAgenciaContaDAC, getNossoNumeroDAC, gerarLinhaDigitavelECodigoBarras, drawInterleaved2of5, drawField permanecem iguais) ...
 function modulo10(bloco) {
-    // ... (código original) ...
     const multiplicadores = [2, 1];
     let soma = 0;
     for (let i = bloco.length - 1; i >= 0; i--) {
@@ -21,7 +19,6 @@ function modulo10(bloco) {
 }
 
 function modulo11(bloco) {
-    // ... (código original) ...
     const multiplicadores = [2, 3, 4, 5, 6, 7, 8, 9];
     let soma = 0;
     for (let i = bloco.length - 1; i >= 0; i--) {
@@ -35,7 +32,6 @@ function modulo11(bloco) {
 const getAgenciaContaDAC = (agencia, conta) => modulo10(`${agencia}${conta}`);
 
 export const getNossoNumeroDAC = (agencia, conta, carteira, nossoNumero) => {
-    // ... (código original) ...
      let sequencia;
     if (['109', '112', '126', '131', '146', '196', '198'].includes(carteira)) {
         sequencia = `${agencia}${conta}${nossoNumero}`;
@@ -46,7 +42,6 @@ export const getNossoNumeroDAC = (agencia, conta, carteira, nossoNumero) => {
 };
 
 function gerarLinhaDigitavelECodigoBarras(dados) {
-    // ... (código original) ...
     const { agencia, conta, carteira, nossoNumero, valor, vencimento } = dados;
     const banco = "341";
     const moeda = "9";
@@ -86,7 +81,6 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
 }
 
 function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
-    // ... (código original) ...
     if (!code || !/^\d+$/.test(code)) return;
     const patterns = ['00110','10001','01001','11000','00101','10100','01100','00011','10010','01010'];
     const start = '0000', stop = '100';
@@ -111,7 +105,6 @@ function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
 }
 
 const drawField = (doc, label, value, x, y, width, height, valueAlign = 'left', valueSize = 9, labelSize = 6.5) => {
-    // ... (código original) ...
      doc.setFontSize(labelSize).setTextColor(0,0,0);
     doc.text(label || '', x + 1, y + 2.5);
     doc.setFont('helvetica', 'normal').setFontSize(valueSize).setTextColor(0,0,0);
@@ -123,30 +116,30 @@ const drawField = (doc, label, value, x, y, width, height, valueAlign = 'left', 
     }
 };
 
-// --- Função getItauLogoBase64 ATUALIZADA ---
-const getItauLogoBase64 = () => {
+// Nova função assíncrona
+const getItauLogoBase64 = async () => {
     try {
-        let imagePath = path.resolve(__dirname, '../../../../public', 'itau.png'); // Ajuste conforme necessário
-        if (!fs.existsSync(imagePath)) {
-            imagePath = path.resolve(process.cwd(), 'public', 'itau.png');
+        const baseURL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
+        const logoURL = `${baseURL}/itau.png`; // Nome correto do arquivo
+        console.log(`[LOG ITAÚ PDF] Buscando logo de: ${logoURL}`);
+
+        const response = await fetch(logoURL);
+        if (!response.ok) {
+            throw new Error(`Falha ao buscar logo Itaú (${response.status}): ${response.statusText}`);
         }
-        if (fs.existsSync(imagePath)) {
-            console.log("[LOG ITAÚ PDF] Logo encontrado em:", imagePath);
-            return `data:image/png;base64,${fs.readFileSync(imagePath).toString('base64')}`;
-        } else {
-            console.warn("[AVISO ITAÚ PDF] Arquivo do logo não encontrado em:", imagePath);
-            return null;
-        }
+        const imageBuffer = await response.arrayBuffer();
+        const base64String = Buffer.from(imageBuffer).toString('base64');
+        return `data:image/png;base64,${base64String}`;
     } catch (error) {
-       console.error("[ERRO ITAÚ PDF] Erro ao carregar logo:", error);
-       return null;
+        console.error("[ERRO ITAÚ PDF] Erro ao buscar/converter logo via URL:", error);
+        return null;
     }
 };
-// --- FIM DA ATUALIZAÇÃO ---
 
-export function gerarPdfBoletoItau(listaBoletos) {
+// Marcar a função principal como async
+export async function gerarPdfBoletoItau(listaBoletos) {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    const itauLogoBase64 = getItauLogoBase64(); // Função atualizada
+    const itauLogoBase64 = await getItauLogoBase64(); // Use await
 
     listaBoletos.forEach((dadosBoleto, index) => {
         // ... (resto da função gerarPdfBoletoItau permanece igual) ...
@@ -166,6 +159,7 @@ export function gerarPdfBoletoItau(listaBoletos) {
         const drawSection = (yOffset) => {
             doc.setLineWidth(0.2);
             if (itauLogoBase64) {
+               // Ajustar as dimensões se necessário
                doc.addImage(itauLogoBase64, 'PNG', 15, yOffset + 1, 30, 8);
             } else {
                console.warn("[AVISO ITAÚ PDF] Logo não disponível para adicionar ao PDF.");
