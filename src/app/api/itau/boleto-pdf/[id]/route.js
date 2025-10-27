@@ -63,7 +63,7 @@ export async function GET(request, { params }) {
 
         // --- ACESSANDO VARIÁVEIS DE AMBIENTE ---
         const agencia = process.env.ITAU_AGENCIA;
-        const contaCompleta = process.env.ITAU_CONTA; // Ex: "99359-6"
+        const contaCompleta = process.env.ITAU_CONTA; 
         const carteira = process.env.ITAU_BOLETO_CARTEIRA || '109'; // Padrão 109 se não definida
 
         if (!agencia || !contaCompleta) {
