@@ -1,24 +1,17 @@
 import { jsPDF } from 'jspdf';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
-// Removidos 'fs' e 'path'
 
 // Função HELPER para obter a URL base
 const getBaseURL = () => {
     // 1. Prioriza a URL de produção que você definiu
-    let baseURL = process.env.NEXT_PUBLIC_APP_URL; 
-
-    // 2. Se não estiver, tenta a URL automática da Vercel (para deploys de preview/dev)
+    let baseURL = process.env.NEXT_PUBLIC_APP_URL;
     if (!baseURL && process.env.VERCEL_URL) {
         baseURL = `https://${process.env.VERCEL_URL}`;
     }
-    
-    // 3. Se ainda não estiver, usa o localhost (ambiente local)
     if (!baseURL) {
         baseURL = 'http://localhost:3000';
     }
-
-    // Remove barra final se houver
     return baseURL.replace(/\/$/, '');
 };
 
@@ -29,7 +22,7 @@ const getItauLogoBase64 = async () => {
     console.log(`[LOG ITAÚ PDF] Tentando buscar logo de: ${logoURL}`);
 
     try {
-        const response = await fetch(logoURL, { cache: 'no-store' }); // Evita cache
+        const response = await fetch(logoURL, { cache: 'no-store' });
         console.log(`[LOG ITAÚ PDF] Fetch status: ${response.status}`);
 
         if (!response.ok) {
@@ -55,12 +48,11 @@ const getItauLogoBase64 = async () => {
         return `data:image/png;base64,${base64String}`;
     } catch (error) {
         console.error("[ERRO ITAÚ PDF] Exceção durante busca/conversão do logo:", error);
-        return null; // Retorna null em caso de erro
+        return null;
     }
 };
 
 // --- Funções de Cálculo de Dígito ---
-
 function modulo10(bloco) {
     const multiplicadores = [2, 1];
     let soma = 0;
@@ -156,7 +148,6 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
         console.log(`[LOG LINHA/BARRA] Código Barras: ${codigoBarras}`);
         if (codigoBarras.length !== 44) throw new Error(`Código de barras gerado incorretamente (tamanho ${codigoBarras.length}).`);
 
-        // Campos da linha digitável
         const campo1 = `${banco}${moeda}${campoLivre.substring(0, 5)}`;
         const dv1 = modulo10(campo1);
         const campo2 = campoLivre.substring(5, 15);
@@ -184,7 +175,6 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
 // --- FIM DA FUNÇÃO gerarLinhaDigitavelECodigoBarras ---
 
 // --- Funções de Desenho PDF ---
-
 function drawInterleaved2of5(doc, x, y, code, width = 103, height = 13) {
     if (!code || !/^\d+$/.test(code)) return;
     const patterns = ['00110','10001','01001','11000','00101','10100','01100','00011','10010','01010'];
@@ -220,9 +210,9 @@ const drawField = (doc, label, value, x, y, width, height, valueAlign = 'left', 
         doc.text(lines, textX, textY, { align: valueAlign, lineHeightFactor: 1.15 });
     }
 };
+// --- FIM FUNÇÕES DE DESENHO ---
 
 // --- Função Principal de Geração de PDF ---
-
 export async function gerarPdfBoletoItau(listaBoletos) {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
     console.log("[LOG ITAÚ PDF] Iniciando geração do PDF...");
@@ -232,7 +222,7 @@ export async function gerarPdfBoletoItau(listaBoletos) {
 
     listaBoletos.forEach((dadosBoleto, index) => {
         console.log(`[LOG ITAÚ PDF] Desenhando boleto índice ${index} (ID Duplicata: ${dadosBoleto.id})...`);
-        try { // Adiciona try/catch em volta do processamento de cada boleto
+        try {
             if (index > 0) doc.addPage();
 
             const valorFinalBoleto = dadosBoleto.valor_bruto - (dadosBoleto.abatimento || 0);
@@ -240,19 +230,18 @@ export async function gerarPdfBoletoItau(listaBoletos) {
             // --- PONTO CRÍTICO ---
             const linhaBarrasResult = gerarLinhaDigitavelECodigoBarras({
                 agencia: dadosBoleto.agencia,
-                conta: dadosBoleto.conta, // Conta COM dígito
+                conta: dadosBoleto.conta, // Conta COM dígito para ser tratada dentro da função
                 carteira: dadosBoleto.carteira,
                 nossoNumero: dadosBoleto.nosso_numero,
                 valor: valorFinalBoleto,
                 vencimento: dadosBoleto.data_vencimento
             });
 
-            // Verifica se a função retornou undefined (indicando erro interno)
             if (!linhaBarrasResult) {
                  console.error(`[ERRO ITAÚ PDF] Falha ao gerar linha/barras para boleto ${index} (ID Duplicata: ${dadosBoleto.id}). Pulando este boleto.`);
                  doc.setTextColor(255, 0, 0);
                  doc.text(`ERRO AO GERAR BOLETO ${index + 1} (ID ${dadosBoleto.id})`, 15, 15 + (index * 10));
-                 doc.setTextColor(0, 0, 0); // Reseta a cor
+                 doc.setTextColor(0, 0, 0);
                  return; // Pula para o próximo boleto
             }
             const { linhaDigitavel, codigoBarras } = linhaBarrasResult;
@@ -274,7 +263,7 @@ export async function gerarPdfBoletoItau(listaBoletos) {
                 } else {
                    console.warn(`[AVISO ITAÚ PDF] Logo não disponível para boleto ${index}.`);
                 }
-                
+
                 doc.setLineWidth(0.5).line(48, yOffset, 48, yOffset + 10);
                 doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(0, 0, 0);
                 doc.text('341-7', 55.5, yOffset + 7, { align: 'center' });
@@ -282,25 +271,30 @@ export async function gerarPdfBoletoItau(listaBoletos) {
                 doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(0, 0, 0);
                 doc.text(linhaDigitavel, 65, yOffset + 7, { charSpace: 0.5 });
                 doc.setFont('helvetica', 'bold');
-                
+
                 const y1 = yOffset + 10;
                 drawField(doc, 'Local de pagamento', 'Pague pelo aplicativo, internet ou em agências e correspondentes.', 15, y1, 140, 10, 'left', 8);
                 drawField(doc, 'Vencimento', format(vencimentoDate, 'dd/MM/yyyy'), 155, y1, 40, 10, 'right', 9);
-                
+
                 const y2 = y1 + 10;
                 const beneficiarioLine1 = `${dadosBoleto.cedente?.nome || ''}    CNPJ/CPF: ${formatCnpjCpf(dadosBoleto.cedente?.cnpj)}`;
                 const beneficiarioLine2 = dadosBoleto.cedente?.endereco;
                 drawField(doc, 'Beneficiário', [beneficiarioLine1, beneficiarioLine2], 15, y2, 140, 15, 'left', 8);
                 drawField(doc, 'Agência/Código Beneficiário', `${dadosBoleto.agencia}/${dadosBoleto.conta}`, 155, y2, 40, 15, 'right');
-                
+
                 const y3 = y2 + 15;
                 drawField(doc, 'Data do documento', format(new Date(dadosBoleto.data_operacao + 'T12:00:00Z'), 'dd/MM/yyyy'), 15, y3, 30, 10, 'left', 8);
+
+                // --- ALTERAÇÃO AQUI ---
+                // Usa nf_cte (Seu Número) no campo "Núm. do documento" visualmente
                 drawField(doc, 'Núm. do documento', dadosBoleto.nf_cte || '', 45, y3, 30, 10, 'left', 8);
+                // --- FIM DA ALTERAÇÃO ---
+
                 drawField(doc, 'Espécie Doc.', 'DM', 75, y3, 20, 10, 'left', 8);
                 drawField(doc, 'Aceite', 'N', 95, y3, 15, 10, 'left', 8);
                 drawField(doc, 'Data Processamento', format(new Date(), 'dd/MM/yyyy'), 110, y3, 45, 10, 'left', 8);
                 drawField(doc, 'Nosso Número', nossoNumeroImpresso, 155, y3, 40, 10, 'right');
-                
+
                 const y4 = y3 + 10;
                 drawField(doc, 'Uso do Banco', '', 15, y4, 25, 10);
                 drawField(doc, 'Carteira', dadosBoleto.carteira, 40, y4, 15, 10, 'center');
@@ -308,7 +302,7 @@ export async function gerarPdfBoletoItau(listaBoletos) {
                 drawField(doc, 'Quantidade', '', 70, y4, 30, 10);
                 drawField(doc, 'Valor', '', 100, y4, 55, 10);
                 drawField(doc, '(=) Valor do Documento', formatBRLNumber(valorFinalBoleto), 155, y4, 40, 10, 'right', 9);
-                
+
                 const y5 = y4 + 10;
                 const tipoOp = dadosBoleto.operacao?.tipo_operacao;
                 const jurosText = tipoOp?.taxa_juros_mora > 0 ? `APÓS 1 DIA(S) CORRIDO(S) DO VENCIMENTO COBRAR JUROS DE ${tipoOp.taxa_juros_mora.toFixed(2).replace('.',',')}% AO MÊS` : null;
@@ -325,7 +319,7 @@ export async function gerarPdfBoletoItau(listaBoletos) {
                 drawField(doc, '(-) Descontos/Abatimento', '', 155, y5, 40, 10);
                 drawField(doc, '(+) Juros/Multa', '', 155, y5 + 10, 40, 10);
                 drawField(doc, '(=) Valor Cobrado', '', 155, y5 + 20, 40, 10);
-                
+
                 const y6 = y5 + 30;
                 const sacado = dadosBoleto.sacado || {};
                 const pagadorLine1 = `${sacado.nome || ''}    CNPJ/CPF: ${formatCnpjCpf(sacado.cnpj)}`;
@@ -334,11 +328,11 @@ export async function gerarPdfBoletoItau(listaBoletos) {
                 drawField(doc, 'Pagador', null, 15, y6, 180, 20);
                 doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(0,0,0);
                 doc.text([pagadorLine1, pagadorLine2, pagadorLine3], 16, y6 + 5, { lineHeightFactor: 1.15 });
-                
+
                 const y7 = y6 + 20;
                 drawInterleaved2of5(doc, 15, y7 + 2, codigoBarras, 103, 13);
                 doc.setFontSize(8).text('Autenticação mecânica', 195, y7 + 18, {align: 'right'});
-                
+
                 doc.setLineWidth(0.2);
                 const allY = [yOffset, y1, y2, y3, y4, y5, y6, y7];
                 allY.forEach(yPos => doc.line(15, yPos, 195, yPos));
@@ -363,12 +357,11 @@ export async function gerarPdfBoletoItau(listaBoletos) {
             console.log(`[LOG ITAÚ PDF] Desenho do boleto índice ${index} concluído.`);
 
         } catch (boletoError) {
-            // Captura erro no processamento de um boleto específico
             console.error(`[ERRO ITAÚ PDF] Erro ao processar boleto ${index} (ID Duplicata: ${dadosBoleto?.id}):`, boletoError);
-             if (index > 0) doc.addPage(); // Adiciona nova página para o erro não sobrescrever
+             if (index > 0) doc.addPage();
              doc.setTextColor(255, 0, 0);
              doc.text(`ERRO AO GERAR BOLETO ${index + 1} (ID ${dadosBoleto?.id}): ${boletoError.message}`, 10, 15, { maxWidth: 180 });
-             doc.setTextColor(0, 0, 0); // Reseta a cor
+             doc.setTextColor(0, 0, 0);
         }
     }); // Fim do forEach
 
