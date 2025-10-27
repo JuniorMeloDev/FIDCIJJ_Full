@@ -89,3 +89,18 @@ export const formatDate = (dateString) => {
     const [year, month, day] = dateString.split('-');
     return `${day}/${month}/${year}`;
 };
+
+export const formatDisplayConta = (conta) => {
+    // Lê as variáveis de ambiente (serão undefined se não definidas, o que é ok)
+    const contaNoDb = process.env.NEXT_PUBLIC_ITAU_CONTA_DB;
+    const contaDisplay = process.env.NEXT_PUBLIC_ITAU_CONTA_DISPLAY;
+
+    // Só faz a substituição se ambas as variáveis estiverem definidas
+    // e se a conta atual terminar com o número definido em contaNoDb
+    if (typeof conta === 'string' && contaNoDb && contaDisplay && conta.endsWith(contaNoDb)) {
+        // Substitui apenas a parte final (número da conta)
+        return conta.replace(contaNoDb, contaDisplay);
+    }
+    // Caso contrário, retorna a conta original
+    return conta;
+};

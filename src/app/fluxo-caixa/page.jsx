@@ -7,7 +7,8 @@ import EditLancamentoModal from "@/app/components/EditLancamentoModal";
 import Notification from "@/app/components/Notification";
 import ConfirmacaoModal from "@/app/components/ConfirmacaoModal";
 import EmailModal from "@/app/components/EmailModal";
-import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
+// IMPORTA A NOVA FUNÇÃO DE FORMATAÇÃO
+import { formatBRLNumber, formatDate, formatDisplayConta } from "@/app/utils/formatters";
 import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
@@ -211,16 +212,16 @@ export default function FluxoDeCaixaPage() {
           contaBancaria: `${c.banco} - ${c.agencia}/${c.conta_corrente}`,
         }));
         setContasMaster(masterContasFormatadas);
-        
+
         // --- INÍCIO DA MODIFICAÇÃO (Variável de Ambiente) ---
         // Lê o ID do cliente master do .env.local
         const masterClientId = parseInt(process.env.NEXT_PUBLIC_MASTER_CLIENT_ID, 10);
-        
+
         let clientePagador;
         if (masterClientId) {
             clientePagador = clientesData.find(c => c.id === masterClientId);
         }
-        
+
         if (clientePagador) {
           // Se encontrou o cliente pelo ID do .env, usa ele
           setClienteMasterInfo({
@@ -590,7 +591,7 @@ export default function FluxoDeCaixaPage() {
       showNotification("PIX do complemento enviado e lançamento registrado!", "success");
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
-      
+
       if (pixResult) {
           const contaOrigem = contasMaster.find(c => c.contaCorrente === pixResult.pixPayload.contaOrigem);
           setReceiptData({
@@ -600,7 +601,7 @@ export default function FluxoDeCaixaPage() {
               descricao: pixResult.pixPayload.descricao,
               pagador: {
                   nome: clienteMasterInfo.nome,
-                  cnpj: clienteMasterInfo.cnpj, 
+                  cnpj: clienteMasterInfo.cnpj,
                   conta: contaOrigem?.contaBancaria || pixResult.pixPayload.contaOrigem,
               }
           });
@@ -628,7 +629,7 @@ export default function FluxoDeCaixaPage() {
         return false;
     }
   };
-  
+
   const handleAbrirComprovantePix = async () => {
     if (!contextMenu.selectedItem) return;
     const item = contextMenu.selectedItem;
@@ -645,18 +646,18 @@ export default function FluxoDeCaixaPage() {
         const valorFormatado = formatBRLNumber(Math.abs(item.valor)).replace(/\s/g, '');
 
         const { data: duplicatas } = await fetchApiData(`/api/duplicatas/operacao/${item.operacaoId}`);
-        
+
         let numerosDoc = 'N/A';
         if (duplicatas && duplicatas.length > 0) {
             numerosDoc = [...new Set(duplicatas.map(d => d.nfCte.split('.')[0]))].join('_');
         }
-        
+
         const docType = op?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const prefixo = item.descricao.toLowerCase().includes('complemento') ? 'Complemento Borderô' : 'Borderô';
-        
+
         filename = `${prefixo} ${docType} ${numerosDoc} - ${valorFormatado}.pdf`;
         mensagem = `Pagamento ref. Operação #${item.operacaoId}`;
-        
+
         if (op && op.cliente) {
             const recebedorContas = op.cliente.contas_bancarias || [];
             const contaRecebedor = recebedorContas.find(c => c.chave_pix) || recebedorContas[0] || {};
@@ -677,13 +678,13 @@ export default function FluxoDeCaixaPage() {
 
     setReceiptData({
         valor: Math.abs(item.valor),
-        data: new Date(item.dataMovimento + 'T12:00:00Z'), 
+        data: new Date(item.dataMovimento + 'T12:00:00Z'),
         transactionId: item.transaction_id,
         descricao: mensagem,
         filename: filename,
         pagador: {
-            nome: clienteMasterInfo.nome, 
-            cnpj: clienteMasterInfo.cnpj, 
+            nome: clienteMasterInfo.nome,
+            cnpj: clienteMasterInfo.cnpj,
             conta: item.contaBancaria,
         },
         recebedor: recebedorData
@@ -718,7 +719,7 @@ export default function FluxoDeCaixaPage() {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveLancamento}
         contasMaster={contasMaster}
-        clienteMasterNome={clienteMasterInfo.nome} 
+        clienteMasterNome={clienteMasterInfo.nome}
       />
       <ConciliacaoModal
         isOpen={isConciliacaoModalOpen}
@@ -760,9 +761,9 @@ export default function FluxoDeCaixaPage() {
         onSave={handleSaveComplemento}
         lancamentoOriginal={lancamentoParaComplemento}
         contasMaster={contasMaster}
-        clienteMasterNome={clienteMasterInfo.nome} 
+        clienteMasterNome={clienteMasterInfo.nome}
       />
-      <PixReceiptModal 
+      <PixReceiptModal
         isOpen={isReceiptModalOpen}
         onClose={() => setIsReceiptModalOpen(false)}
         receiptData={receiptData}
@@ -807,7 +808,8 @@ export default function FluxoDeCaixaPage() {
                     className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
                   >
                     <p className="text-sm text-gray-400 truncate">
-                      {saldo.contaBancaria}
+                      {/* --- MODIFICAÇÃO APLICADA --- */}
+                      {formatDisplayConta(saldo.contaBancaria)}
                     </p>
                     <p
                       className={`text-xl font-bold ${
@@ -969,7 +971,8 @@ export default function FluxoDeCaixaPage() {
                                   {mov.descricao}
                                 </td>
                                 <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
-                                  {mov.contaBancaria}
+                                  {/* --- MODIFICAÇÃO APLICADA --- */}
+                                  {formatDisplayConta(mov.contaBancaria)}
                                 </td>
                                 <td
                                   className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${
@@ -1049,7 +1052,7 @@ export default function FluxoDeCaixaPage() {
                     </a>
                   </>
                 )}
-                
+
                 {["Despesa Avulsa", "Receita Avulsa", "Movimentação Avulsa", "Pagamento PIX"].includes(contextMenu.selectedItem.categoria) && (
                     <>
                         <div className="border-t border-gray-600 my-1"></div>

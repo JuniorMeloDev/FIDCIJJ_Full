@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { formatBRLInput, parseBRL } from '@/app/utils/formatters';
+// IMPORTA A NOVA FUNÇÃO DE FORMATAÇÃO
+import { formatBRLInput, parseBRL, formatDisplayConta } from '@/app/utils/formatters';
 
 export default function EditLancamentoModal({ isOpen, onClose, onSave, lancamento, contasMaster }) {
     const [formData, setFormData] = useState({});
@@ -97,7 +98,12 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
                            <label htmlFor="conta_bancaria" className="block text-sm font-medium text-gray-300">Conta</label>
                            <select id="conta_bancaria" name="conta_bancaria" value={formData.conta_bancaria || ''} onChange={handleChange} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
                                 <option value="">Selecione...</option>
-                                {Array.isArray(contasMaster) && contasMaster.map(c => <option key={c.contaBancaria} value={c.contaBancaria}>{c.contaBancaria}</option>)}
+                                {/* --- MODIFICAÇÃO APLICADA --- */}
+                                {Array.isArray(contasMaster) && contasMaster.map(c => 
+                                    <option key={c.contaBancaria} value={c.contaBancaria}>
+                                        {formatDisplayConta(c.contaBancaria)}
+                                    </option>
+                                )}
                            </select>
                         </div>
 

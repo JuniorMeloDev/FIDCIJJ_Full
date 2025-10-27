@@ -1,7 +1,9 @@
+// src/app/components/FiltroLateral.jsx
 'use client';
+import { formatDisplayConta } from '@/app/utils/formatters'; // <-- Importar
 
 export default function FiltroLateral({ filters, onFilterChange, onClear, saldos, contasMaster }) {
-    
+
     // Agora usamos o contasMaster, que tem os dados mais limpos
     const contasInter = Array.isArray(contasMaster)
         ? contasMaster.filter(c => c.contaBancaria.toLowerCase().includes('inter'))
@@ -12,14 +14,14 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
             <div className="p-4 border-b border-gray-700 flex-shrink-0">
                 <h2 className="text-lg font-semibold text-gray-100">Filtros</h2>
             </div>
-            
+
             <div className="flex-grow p-4 overflow-y-auto">
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-semibold text-gray-300 mb-1">Extrato Bancário API</label>
-                        <select 
-                            name="contaExterna" 
-                            value={filters.contaExterna || ''} 
+                        <select
+                            name="contaExterna"
+                            value={filters.contaExterna || ''}
                             onChange={onFilterChange}
                             className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
                         >
@@ -27,7 +29,7 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
                             {/* CORREÇÃO: O 'value' agora pega apenas o número da conta */}
                             {contasInter.map(conta => (
                                 <option key={conta.id} value={conta.contaBancaria.split('/')[1]}>
-                                    {conta.contaBancaria}
+                                    {formatDisplayConta(conta.contaBancaria)} {/* <-- Aplicar formatação */}
                                 </option>
                             ))}
                         </select>
@@ -38,20 +40,23 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
 
                     <div>
                         <label className="block text-sm font-semibold text-gray-300 mb-1">Conta (Interno)</label>
-                        <select 
-                            name="contaBancaria" 
-                            value={filters.contaBancaria} 
+                        <select
+                            name="contaBancaria"
+                            value={filters.contaBancaria}
                             onChange={onFilterChange}
                             className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
                             disabled={!!filters.contaExterna}
                         >
                             <option value="">Todas as Contas</option>
                             {Array.isArray(saldos) && saldos.map(conta => (
-                                <option key={conta.contaBancaria} value={conta.contaBancaria}>{conta.contaBancaria}</option>
+                                <option key={conta.contaBancaria} value={conta.contaBancaria}>
+                                    {formatDisplayConta(conta.contaBancaria)} {/* <-- Aplicar formatação */}
+                                </option>
                             ))}
                         </select>
                     </div>
 
+                    {/* ... (restante do código do filtro) ... */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-300">Período</label>
                         <div className="mt-1 space-y-2">

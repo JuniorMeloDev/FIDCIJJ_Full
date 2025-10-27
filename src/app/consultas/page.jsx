@@ -227,10 +227,10 @@ export default function ConsultasPage() {
     if (itemsParaLiquidar.length > 0) {
       // **AQUI ESTÁ O PONTO IMPORTANTE**
       // Garanta que você está passando os objetos completos, não apenas os IDs.
-      setDuplicataParaLiquidar(itemsParaLiquidar); 
+      setDuplicataParaLiquidar(itemsParaLiquidar);
       setIsLiquidarModalOpen(true);
-    
-    //if (isSelectionMode && selectedItems.size > 0) {
+
+      //if (isSelectionMode && selectedItems.size > 0) {
       //itemsParaLiquidar = duplicatas.filter((d) => selectedItems.has(d.id));
     } else if (contextMenu.selectedItem) {
       itemsParaLiquidar = [contextMenu.selectedItem];
@@ -429,35 +429,41 @@ export default function ConsultasPage() {
       showNotification(err.message, "error");
     }
   };
-  
+
   const handleDownloadBoletoJson = async () => {
     const duplicataId = contextMenu.selectedItem?.id;
     const banco = contextMenu.selectedItem?.banco_emissor_boleto;
-    if (!duplicataId || banco !== 'safra') {
-      showNotification('Esta opção é válida apenas para boletos Safra já emitidos.', 'error');
+    if (!duplicataId || banco !== "safra") {
+      showNotification(
+        "Esta opção é válida apenas para boletos Safra já emitidos.",
+        "error"
+      );
       return;
     }
 
-    showNotification('Preparando JSON para download...', 'info');
+    showNotification("Preparando JSON para download...", "info");
     try {
-        const res = await fetch(`/api/dados-boleto/safra/${duplicataId}?json=true`, { headers: getAuthHeader() });
-        if (!res.ok) {
-            const errorData = await res.json();
-            throw new Error(errorData.message || 'Falha ao obter dados do boleto.');
-        }
-        const data = await res.json();
-        const jsonString = JSON.stringify(data, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `boleto_safra_duplicata_${duplicataId}.json`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
+      const res = await fetch(
+        `/api/dados-boleto/safra/${duplicataId}?json=true`,
+        { headers: getAuthHeader() }
+      );
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Falha ao obter dados do boleto.");
+      }
+      const data = await res.json();
+      const jsonString = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `boleto_safra_duplicata_${duplicataId}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
-        showNotification(err.message, 'error');
+      showNotification(err.message, "error");
     }
   };
 
@@ -663,8 +669,8 @@ export default function ConsultasPage() {
                                 isLiquidado ? "text-gray-500" : "text-gray-100"
                               }`}
                             >
-                              {dup.cedenteRamoAtividade === 'Transportes'
-                                ? dup.nfCte.split('.')[0]
+                              {dup.cedenteRamoAtividade === "Transportes"
+                                ? dup.nfCte.split(".")[0]
                                 : dup.nfCte}
                             </td>
                             <td
@@ -806,7 +812,7 @@ export default function ConsultasPage() {
                 >
                   Emitir Boleto
                 </a>
-                {contextMenu.selectedItem?.banco_emissor_boleto === 'safra' && (
+                {contextMenu.selectedItem?.banco_emissor_boleto === "safra" && (
                   <a
                     href="#"
                     onClick={(e) => {
