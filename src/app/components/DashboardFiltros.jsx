@@ -1,13 +1,15 @@
 'use client'
 
 import AutocompleteSearch from './AutoCompleteSearch'
+// 1. Importar a função de formatação
+import { formatDisplayConta } from '@/app/utils/formatters';
 
 export default function DashboardFiltros({
   filters,
   onFilterChange,
   onAutocompleteSelect,
   tiposOperacao,
-  contasBancarias,
+  contasBancarias, // Esta prop recebe o array com snake_case (ex: conta_corrente)
   fetchClientes,
   fetchSacados,
   onClear,
@@ -63,7 +65,7 @@ export default function DashboardFiltros({
                        focus:ring-orange-500 focus:border-orange-500 outline-none"
           >
             <option value="">Todos</option>
-            {tiposOperacao.map((op) => (
+            {Array.isArray(tiposOperacao) && tiposOperacao.map((op) => (
               <option key={op.id} value={op.id}>
                 {op.nome}
               </option>
@@ -121,7 +123,7 @@ export default function DashboardFiltros({
           />
         </div>
 
-        {/* Conta Bancária */}
+        {/* --- CORREÇÃO NO SELECT DE CONTA BANCÁRIA --- */}
         <div className="md:col-span-2">
           <label
             htmlFor="contaBancaria"
@@ -137,14 +139,34 @@ export default function DashboardFiltros({
             className="mt-1 block w-full bg-gray-600 border border-gray-500 rounded-md px-2 py-1 text-gray-200 placeholder-gray-400
                        focus:ring-orange-500 focus:border-orange-500 outline-none"
           >
+            {/* CORREÇÃO AQUI: </as> mudado para </option> */}
             <option value="">Todas</option>
-            {contasBancarias.map((conta) => (
-              <option key={conta.id} value={conta.contaCorrente}>
-                {`${conta.banco} - ${conta.agencia}/${conta.contaCorrente}`}
-              </option>
-            ))}
+            {/* Mapear e formatar as contas */}
+            {Array.isArray(contasBancarias) && contasBancarias.map((conta) => {
+
+               // Verifica se 'conta' tem as propriedades necessárias (usando snake_case)
+              if (!conta || !conta.id || !conta.banco || !conta.conta_corrente) {
+                 // O 'agencia' pode ser nulo (ex: Inter), mas banco e conta_corrente são essenciais
+                 console.warn("Item inválido em contasBancarias (DashboardFiltros):", conta);
+                 return null; // Pula itens inválidos
+              }
+
+              // Monta a string completa usando snake_case
+              // Trata o caso de agência nula ou vazia
+              const agencia = conta.agencia || 'N/A';
+              const contaCompleta = `${conta.banco} - ${agencia}/${conta.conta_corrente}`;
+
+              // O 'value' para o filtro DEVE ser a string completa que a API de filtro espera
+              return (
+                <option key={conta.id} value={contaCompleta}>
+                   {/* Aplica a formatação para exibição */}
+                  {formatDisplayConta(contaCompleta)}
+                </option>
+              );
+            })}
           </select>
         </div>
+        {/* --- FIM DA CORREÇÃO --- */}
 
         {/* Limpar Filtros */}
         <div className="md:col-span-2">
@@ -160,3 +182,4 @@ export default function DashboardFiltros({
     </div>
   )
 }
+

@@ -1,35 +1,22 @@
+// src/app/components/LiquidacaoModal.jsx
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+// Importar a função de formatação correta
 import {
   formatBRLInput,
   parseBRL,
   formatBRLNumber,
+  formatDate, // Adicione se precisar formatar datas aqui
+  formatDisplayConta // Certifique-se que esta função está importada
 } from "@/app/utils/formatters";
-
-/**
- * Verifica se os juros da duplicata devem ser somados ao valor principal no momento da liquidação.
- * Isso acontece em operações pós-fixadas (onde os juros não foram descontados do cedente na origem).
- * @param {object} operation - O objeto completo da operação.
- * @param {object} duplicate - O objeto da duplicata individual.
- * @returns {boolean}
- */
-const isPostFixedInterest = (operation, duplicate) => {
-  if (!operation) return false;
-  const totalDescontadoNaOrigem = (operation.valor_total_bruto || 0) - (operation.valor_liquido || 0);
-  const descontosEsperadosPreFixado = (operation.valor_total_juros || 0) + (operation.valor_total_descontos || 0);
-  if (totalDescontadoNaOrigem < (descontosEsperadosPreFixado - 0.01)) {
-    return (duplicate.valorJuros || duplicate.valor_juros || 0) > 0;
-  }
-  return false;
-};
 
 export default function LiquidacaoModal({
   isOpen,
   onClose,
   onConfirm,
-  duplicata, // Pode ser um objeto ou um array de objetos
-  contasMaster,
+  duplicata,
+  contasMaster, // Verifique se esta prop está sendo recebida corretamente
 }) {
   const [dataLiquidacao, setDataLiquidacao] = useState("");
   const [jurosMora, setJurosMora] = useState("");
@@ -39,43 +26,40 @@ export default function LiquidacaoModal({
 
   const isMultiple = Array.isArray(duplicata);
 
+  // Função interna para verificar juros pós-fixados (mantida)
+  const isPostFixedInterest = (operation, duplicate) => {
+    if (!operation) return false;
+    const totalDescontadoNaOrigem = (operation.valor_total_bruto || 0) - (operation.valor_liquido || 0);
+    const descontosEsperadosPreFixado = (operation.valor_total_juros || 0) + (operation.valor_total_descontos || 0);
+    // Considera uma pequena margem para erros de arredondamento
+    if (totalDescontadoNaOrigem < (descontosEsperadosPreFixado - 0.01)) {
+        return (duplicate.valorJuros || duplicate.valor_juros || 0) > 0;
+    }
+    return false;
+  };
+
+  // Calcula o valor total a ser liquidado (considerando juros pós-fixados se aplicável)
   const totalValue = useMemo(() => {
     if (!duplicata) return 0;
     const items = isMultiple ? duplicata : [duplicata];
-
-    console.groupCollapsed("--- DEBUG LIQUIDAÇÃO MODAL ---");
-    const calculatedValue = items.reduce((sum, d) => {
+    return items.reduce((sum, d) => {
       const valorBruto = Number(d.valorBruto || d.valor_bruto) || 0;
       const valorJuros = Number(d.valorJuros || d.valor_juros) || 0;
-      
+      // Assume que 'd.operacao' está disponível se 'duplicata' for um array de objetos completos
       const ehPosFixado = isPostFixedInterest(d.operacao, d);
-
-      // ***** INÍCIO DO CONSOLE.LOG PARA DEBUG *****
-      console.log(`Analisando Duplicata: ${d.nfCte}`);
-      console.log("Objeto da Duplicata (d):", d);
-      console.log("Objeto da Operação (d.operacao):", d.operacao);
-      console.log(`A função isPostFixedInterest retornou: ${ehPosFixado}`);
-      // ***** FIM DO CONSOLE.LOG PARA DEBUG *****
-
-      if (ehPosFixado) {
-        console.log(`Resultado: Pós-Fixado. Somando: ${valorBruto} + ${valorJuros}`);
-        return sum + valorBruto + valorJuros;
-      }
-      
-      console.log(`Resultado: Pré-Fixado. Somando apenas: ${valorBruto}`);
-      return sum + valorBruto;
+      return sum + (ehPosFixado ? valorBruto + valorJuros : valorBruto);
     }, 0);
-    console.groupEnd();
-    
-    return calculatedValue;
   }, [duplicata, isMultiple]);
 
+
+  // Calcula o valor final considerando juros/mora e descontos
   const valorTotalFinal = useMemo(() => {
     return totalValue + parseBRL(jurosMora) - parseBRL(desconto);
   }, [totalValue, jurosMora, desconto]);
 
   const firstNfCte = isMultiple ? duplicata[0]?.nfCte : duplicata?.nfCte;
 
+  // Reseta o estado do modal quando ele é aberto
   useEffect(() => {
     if (isOpen) {
       setDataLiquidacao(new Date().toISOString().split("T")[0]);
@@ -88,6 +72,7 @@ export default function LiquidacaoModal({
 
   if (!isOpen) return null;
 
+  // Função chamada ao confirmar o crédito
   const handleConfirmarCredito = () => {
     if (!contaBancariaId) {
       setError("Por favor, selecione uma conta para creditar o valor.");
@@ -95,26 +80,30 @@ export default function LiquidacaoModal({
     }
     setError("");
     const items = isMultiple ? duplicata : [duplicata];
+    // A API só aceita o ID, não podemos mandar o nome formatado aqui sem mudar o backend
     const liquidacoes = items.map(dup => ({ id: dup.id }));
 
+    // Chama a função onConfirm passada pelo componente pai
     onConfirm(
       liquidacoes,
       dataLiquidacao,
       parseBRL(jurosMora),
       parseBRL(desconto),
-      contaBancariaId
+      contaBancariaId // Envia o ID numérico como esperado pela API atual
     );
-    onClose();
+    onClose(); // Fecha o modal
   };
 
+  // Função chamada para apenas dar baixa (sem crédito em conta)
   const handleApenasBaixa = () => {
     setError("");
     const hoje = new Date().toISOString().split('T')[0];
     const items = isMultiple ? duplicata : [duplicata];
     const liquidacoes = items.map(d => ({ id: d.id }));
-    
+
+    // Chama onConfirm sem contaBancariaId
     onConfirm(liquidacoes, hoje, 0, 0, null);
-    onClose();
+    onClose(); // Fecha o modal
   };
 
   return (
@@ -122,6 +111,7 @@ export default function LiquidacaoModal({
       <div className="relative bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg text-white">
         <h2 className="text-2xl font-bold mb-4">Confirmar Liquidação</h2>
 
+        {/* Mensagem descritiva */}
         <p className="mb-4 text-gray-300">
           {isMultiple ? (
             <>
@@ -150,6 +140,7 @@ export default function LiquidacaoModal({
           )}
         </p>
 
+        {/* Inputs */}
         <div className="mb-4 bg-gray-700 p-4 rounded-md space-y-4">
           <div>
             <label
@@ -209,17 +200,30 @@ export default function LiquidacaoModal({
               id="contaBancariaId"
               value={contaBancariaId}
               onChange={(e) => {
-                setContaBancariaId(Number(e.target.value));
+                // Converte para número ou string vazia
+                setContaBancariaId(e.target.value ? Number(e.target.value) : "");
                 setError("");
               }}
               className="mt-1 block w-full bg-gray-600 border-gray-500 rounded-md shadow-sm p-2"
             >
               <option value="">Selecione uma conta...</option>
-              {contasMaster?.map((conta) => (
-                <option key={conta.id} value={conta.id}>
-                  {conta.banco} - Ag. {conta.agencia} / CC {conta.contaCorrente}
-                </option>
-              ))}
+              {/* --- EXIBIÇÃO CORRIGIDA --- */}
+              {Array.isArray(contasMaster) && contasMaster.map((conta) => {
+                  // Verifica se o objeto 'conta' e suas propriedades existem
+                  if (!conta || !conta.id || !conta.banco || !conta.agencia || !conta.conta_corrente) {
+                      console.warn("Item inválido em contasMaster:", conta);
+                      return null; // Pula a renderização deste item
+                  }
+                  // Monta a string completa ANTES de formatar para exibição
+                  const contaCompleta = `${conta.banco} - Ag. ${conta.agencia} / CC ${conta.conta_corrente}`;
+                  return (
+                    // O 'value' é o ID numérico
+                    <option key={conta.id} value={conta.id}>
+                      {formatDisplayConta(contaCompleta)} {/* Formata apenas para EXIBIÇÃO */}
+                    </option>
+                  );
+                })}
+              {/* --- FIM DA CORREÇÃO --- */}
             </select>
           </div>
         </div>
@@ -228,7 +232,8 @@ export default function LiquidacaoModal({
           <p className="text-red-400 text-sm text-center mb-4">{error}</p>
         )}
 
-        <div className="flex flex-col sm:flex-row justify-end gap-4">
+        {/* Botões */}
+         <div className="flex flex-col sm:flex-row justify-end gap-4">
           <button
             onClick={handleApenasBaixa}
             className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition"
