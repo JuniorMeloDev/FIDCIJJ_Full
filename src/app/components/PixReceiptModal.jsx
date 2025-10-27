@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react'; // Importa o useMemo
 import { FaDownload } from 'react-icons/fa';
 import { formatBRLNumber, formatCnpjCpf } from '@/app/utils/formatters';
 import { format as formatDateFns } from 'date-fns';
@@ -7,6 +8,30 @@ import { ptBR } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
 
 export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
+    
+    // --- INÍCIO DA CORREÇÃO ---
+    // A lógica para determinar os dados do pagador agora fica centralizada aqui
+    const pagadorInfo = useMemo(() => {
+        if (!isOpen || !receiptData) return null;
+
+        const payerAccountString = receiptData.pagador.conta || '';
+        const isInter = payerAccountString.toLowerCase().includes('inter');
+
+        // Se for Inter, tenta usar as variáveis de ambiente. Se não existirem, usa o padrão.
+        if (isInter) {
+            return {
+                nome: process.env.INTER_EMITENTE_NOME || receiptData.pagador.nome,
+                cnpj: process.env.INTER_EMITENTE_CNPJ || receiptData.pagador.cnpj,
+                conta: receiptData.pagador.conta
+            };
+        }
+
+        // Se não for Inter, retorna os dados originais (padrão Itaú)
+        return receiptData.pagador;
+
+    }, [isOpen, receiptData]);
+    // --- FIM DA CORREÇÃO ---
+    
     if (!isOpen || !receiptData) return null;
 
     const formatarDataTransacao = (date) => {
@@ -19,12 +44,12 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
     const handleDownload = () => {
         const doc = new jsPDF();
 
-        const payerAccountString = receiptData.pagador.conta || '';
+        const payerAccountString = pagadorInfo.conta || '';
         const payerStringLower = payerAccountString.toLowerCase();
         
-        const logoPath = (payerStringLower.includes('itaú') || payerStringLower.includes('itau')) 
-            ? '/ItauEmpresas.png' 
-            : '/inter.png';
+        const isItau = payerStringLower.includes('itaú') || payerStringLower.includes('itau');
+
+        const logoPath = isItau ? '/ItauEmpresas.png' : '/inter.png';
 
         const loadImageAsBase64 = (url, callback) => {
             const img = new Image();
@@ -92,7 +117,7 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
             doc.line(14, y, 196, y);
             doc.setLineDashPattern([], 0);
 
-            // Pagador ("de")
+            // Pagador ("de") - USA OS DADOS CORRIGIDOS
             y += 10;
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
@@ -102,14 +127,14 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
             doc.setFontSize(12);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(40, 40, 40);
-            doc.text(receiptData.pagador.nome || 'Não informado', 14, y);
+            doc.text(pagadorInfo.nome || 'Não informado', 14, y);
             y += 5;
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(100, 100, 100);
-            doc.text(receiptData.pagador.conta || 'Conta não informada', 14, y);
+            doc.text(pagadorInfo.conta || 'Conta não informada', 14, y);
             y += 5;
-            doc.text(`CPF/CNPJ - ${receiptData.pagador.cnpj ? formatCnpjCpf(receiptData.pagador.cnpj) : 'Não informado'}`, 14, y);
+            doc.text(`CPF/CNPJ - ${pagadorInfo.cnpj ? formatCnpjCpf(pagadorInfo.cnpj) : 'Não informado'}`, 14, y);
 
             // Recebedor ("para")
             y += 10;
@@ -141,7 +166,7 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
             y += 5;
             doc.text(`Chave - ${receiptData.recebedor?.chavePix || 'Não informada'}`, 14, y);
 
-            // Identificação no comprovante (Mensagem)
+            // Identificação e ID
             y += 10;
             doc.setLineDashPattern([1, 1], 0);
             doc.line(14, y, 196, y);
@@ -153,8 +178,6 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
             doc.setTextColor(40, 40, 40);
             doc.setFont('helvetica', 'bold');
             doc.text(receiptData.descricao, 196, y, { align: 'right' });
-
-            // ID da transação
             y += 7;
             doc.setLineDashPattern([1, 1], 0);
             doc.line(14, y, 196, y);
@@ -166,23 +189,13 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
             doc.setTextColor(40, 40, 40);
             doc.setFont('helvetica', 'bold');
             doc.text(receiptData.transactionId, 196, y, { align: 'right' });
-
-            // --- INÍCIO DA MODIFICAÇÃO DO NOME DO ARQUIVO ---
-            // 1. Pega os dados do recibo
+            
             const desc = receiptData.descricao || 'Comprovante PIX';
             const valor = receiptData.valor || 0;
-            
-            // 2. Formata o valor
-            const valorFormatado = formatBRLNumber(valor); // Ex: "R$ 5,00"
-            
-            // 3. Limpa a descrição (remove caracteres inválidos para nome de arquivo)
+            const valorFormatado = formatBRLNumber(valor);
             const cleanDesc = desc.replace(/[/\\]/g, '-').replace(/[:*?"<>|]/g, '');
-            
-            // 4. Cria o nome final do arquivo
             const finalFilename = `${cleanDesc} - ${valorFormatado}.pdf`;
-            // --- FIM DA MODIFICAÇÃO ---
             
-            // 5. Salva o PDF com o nome dinâmico
             doc.save(finalFilename);
         });
     };
@@ -219,14 +232,16 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
                         </div>
                     )}
 
-                    <div className="bg-gray-700 p-4 rounded-lg">
-                        <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-600 pb-1">Quem pagou</h3>
-                         <div className="space-y-1">
-                            <p><strong>CPF/CNPJ:</strong> {receiptData.pagador.cnpj ? formatCnpjCpf(receiptData.pagador.cnpj) : 'Não informado'}</p>
-                            <p><strong>Nome:</strong> {receiptData.pagador.nome}</p>
-                            <p><strong>Conta:</strong> {receiptData.pagador.conta}</p>
-                         </div>
-                    </div>
+                    {pagadorInfo && (
+                        <div className="bg-gray-700 p-4 rounded-lg">
+                            <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-600 pb-1">Quem pagou</h3>
+                             <div className="space-y-1">
+                                <p><strong>CPF/CNPJ:</strong> {pagadorInfo.cnpj ? formatCnpjCpf(pagadorInfo.cnpj) : 'Não informado'}</p>
+                                <p><strong>Nome:</strong> {pagadorInfo.nome}</p>
+                                <p><strong>Conta:</strong> {pagadorInfo.conta}</p>
+                             </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="mt-8 flex flex-col sm:flex-row justify-end gap-4 flex-shrink-0">
