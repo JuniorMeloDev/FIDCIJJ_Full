@@ -1,5 +1,4 @@
 // src/app/api/duplicatas/liquidar-em-massa/route.js
-
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
@@ -14,11 +13,18 @@ export async function POST(request) {
 
         const { liquidacoes, dataLiquidacao, jurosMora, desconto, contaBancariaId } = await request.json();
 
+        // <<<<<< LOG 1: VERIFICAR VALOR RECEBIDO >>>>>>
+        console.log('API liquidar-em-massa RECEBEU contaBancariaId:', contaBancariaId);
+
+
         if (!liquidacoes || !Array.isArray(liquidacoes) || liquidacoes.length === 0) {
             return NextResponse.json({ message: 'Nenhuma duplicata selecionada.' }, { status: 400 });
         }
 
         if (contaBancariaId) {
+            // <<<<<< LOG 2: CONFIRMAR QUE ENTROU NO 'IF' >>>>>>
+            console.log('API liquidar-em-massa: Entrou no bloco IF (com contaBancariaId)');
+
             // --- INÍCIO DA MODIFICAÇÃO ---
             // 2. Buscar os detalhes da conta e formatar o nome
             let nomeContaFormatado = null;
@@ -27,7 +33,7 @@ export async function POST(request) {
                 .select('banco, agencia, conta_corrente')
                 .eq('id', contaBancariaId)
                 .single();
-            
+
             if (contaError) {
                 console.error("Erro ao buscar conta bancária:", contaError);
                 throw new Error(`Conta bancária com ID ${contaBancariaId} não encontrada.`);
@@ -37,6 +43,8 @@ export async function POST(request) {
                 const contaCompleta = `${contaInfo.banco} - ${contaInfo.agencia}/${contaInfo.conta_corrente}`;
                 // Usa a função de formatação importada
                 nomeContaFormatado = formatDisplayConta(contaCompleta);
+                 // <<<<<< LOG 3: VERIFICAR NOME FORMATADO >>>>>>
+                 console.log('API liquidar-em-massa: Nome formatado:', nomeContaFormatado);
             } else {
                 throw new Error("Conta bancária não encontrada (sem info).");
             }
@@ -50,20 +58,35 @@ export async function POST(request) {
                 .in('id', duplicataIds);
             if (dupError) throw dupError;
 
-            const totalValorBruto = duplicatasInfo.reduce((sum, d) => sum + d.valor_bruto, 0);
+            // Garante que totalValorBruto seja sempre um número
+            const totalValorBruto = duplicatasInfo.reduce((sum, d) => sum + (d.valor_bruto || 0), 0);
+            const isMultiple = liquidacoes.length > 1; // Definindo isMultiple aqui
 
             for (const item of liquidacoes) {
                 const duplicata = duplicatasInfo.find(d => d.id === item.id);
-                if (!duplicata) continue;
+                if (!duplicata) {
+                    console.warn(`Duplicata ID ${item.id} não encontrada nos dados buscados, pulando.`);
+                    continue;
+                }
 
-                const proporcao = totalValorBruto > 0 ? (duplicata.valor_bruto / totalValorBruto) : (1 / liquidacoes.length);
-                const jurosPorItem = (jurosMora || 0) * proporcao;
-                const descontoPorItem = (desconto || 0) * proporcao;
+                let jurosPorItem = 0;
+                let descontoPorItem = 0;
+
+                // Cálculo proporcional
+                if (isMultiple && totalValorBruto > 0) {
+                    const proporcao = (duplicata.valor_bruto || 0) / totalValorBruto;
+                    jurosPorItem = (jurosMora || 0) * proporcao;
+                    descontoPorItem = (desconto || 0) * proporcao;
+                } else if (!isMultiple) { // Se for apenas uma duplicata
+                    jurosPorItem = jurosMora || 0;
+                    descontoPorItem = desconto || 0;
+                }
+
 
                 // 3. Chamar a RPC com o NOVO parâmetro
                 const { error: rpcError } = await supabase.rpc('liquidar_duplicata', {
                     p_duplicata_id: item.id,
-                    p_data_liquidacao: dataLiquidacao,
+                    p_data_liquidacao: dataLiquidacao || new Date().toISOString().split('T')[0], // Garante data
                     p_juros_mora: jurosPorItem,
                     p_desconto: descontoPorItem,
                     p_conta_bancaria_id: contaBancariaId,
@@ -71,27 +94,30 @@ export async function POST(request) {
                 });
 
                 if (rpcError) {
-                    console.error(`Erro ao liquidar duplicata ID ${item.id}:`, rpcError);
+                    console.error(`Erro ao liquidar duplicata ID ${item.id} via RPC:`, rpcError);
                     // Mensagem de erro útil se a RPC não for atualizada
                     if (rpcError.message.includes("function liquidar_duplicata(") && rpcError.message.includes("does not exist")) {
-                         throw new Error('A função RPC "liquidar_duplicata" no Supabase ainda não foi atualizada para aceitar o novo parâmetro "p_nome_conta_formatado".');
+                         throw new Error('A função RPC "liquidar_duplicata" no Supabase ainda não foi atualizada para aceitar o novo parâmetro "p_nome_conta_formatado". Verifique a função SQL.');
                     }
-                    throw new Error('Falha ao processar a baixa de uma das duplicatas.');
+                    throw new Error(`Falha ao processar a baixa da duplicata ${duplicata.nf_cte || item.id} via RPC.`);
                 }
             }
         } else {
+             // <<<<<< LOG 4: CONFIRMAR QUE ENTROU NO 'ELSE' >>>>>>
+            console.log('API liquidar-em-massa: Entrou no bloco ELSE (Apenas Baixa, sem contaBancariaId)');
+
             // Sua lógica de "Apenas Baixa" (inalterada)
             const idsParaAtualizar = liquidacoes.map(item => item.id);
             const dataParaAtualizar = dataLiquidacao || new Date().toISOString().split('T')[0];
 
             const { error: updateError } = await supabase
                 .from('duplicatas')
-                .update({ 
-                    status_recebimento: 'Recebido', 
+                .update({
+                    status_recebimento: 'Recebido',
                     data_liquidacao: dataParaAtualizar,
-                    juros_mora: 0,
-                    desconto: 0, 
-                    conta_liquidacao: null
+                    juros_mora: 0, // Zera juros/mora na baixa simples
+                    desconto: 0,  // Zera desconto na baixa simples
+                    conta_liquidacao: null // Garante que a conta fique nula
                 })
                 .in('id', idsParaAtualizar);
 
@@ -101,10 +127,12 @@ export async function POST(request) {
             }
         }
 
-        return new NextResponse(null, { status: 200 });
+        return new NextResponse(null, { status: 200 }); // Sucesso
 
     } catch (error) {
+         // <<<<<< LOG 5: ERRO >>>>>>
         console.error('Erro no endpoint de liquidação em massa:', error);
+        // Retorna a mensagem de erro específica, se disponível
         return NextResponse.json({ message: error.message || 'Falha ao processar a baixa da(s) duplicata(s).' }, { status: 500 });
     }
 }

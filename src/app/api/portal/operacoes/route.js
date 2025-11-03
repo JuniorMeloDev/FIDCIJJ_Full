@@ -26,6 +26,7 @@ export async function GET(request) {
             .from('operacoes')
             .select('*, duplicatas(*)')
             .eq('cliente_id', clienteId)
+            .eq('status', 'Aprovada')
             .order('data_operacao', { ascending: false });
 
         if (error) throw error;

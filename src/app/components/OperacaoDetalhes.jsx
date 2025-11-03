@@ -12,6 +12,7 @@ export default function OperacaoDetalhes({
     isSaving,
     onAddDescontoClick,
     onRemoveDesconto,
+    onRecompraClick, // <-- 1. PROP ADICIONADA
     contasBancarias,
     contaBancariaId,
     setContaBancariaId,
@@ -24,7 +25,7 @@ export default function OperacaoDetalhes({
     setIsPagarComPix,
     pixData,
     setPixData,
-    cedenteSelecionado // <-- Nova Prop
+    cedenteSelecionado 
 }) {
     const docType = cedenteRamo === 'Transportes' ? 'CT-e' : 'NF-e';
 
@@ -89,9 +90,15 @@ export default function OperacaoDetalhes({
                         <ul className="border border-gray-700 rounded-md divide-y divide-gray-700">
                             {descontos.map(d => (
                                 <li key={d.id} className="p-3 flex justify-between items-center text-sm">
-                                    <span className="text-gray-300">{d.descricao}</span>
+                                    {/* --- CORREÇÃO DE COR PARA RECOMPRA --- */}
+                                    <span className={`text-gray-300 ${d.valor < 0 ? 'text-green-400' : ''}`}>
+                                        {d.descricao}
+                                    </span>
                                     <div className="flex items-center gap-3">
-                                        <span className="font-medium text-red-400">-{formatBRLNumber(d.valor)}</span>
+                                        <span className={`font-medium ${d.valor < 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                            {/* Se o valor for negativo (crédito), mostra com sinal de + */}
+                                            {d.valor < 0 ? `+${formatBRLNumber(Math.abs(d.valor))}` : `-${formatBRLNumber(d.valor)}`}
+                                        </span>
                                         <button onClick={() => onRemoveDesconto(d.id)} className="text-gray-500 hover:text-red-400">&times;</button>
                                     </div>
                                 </li>
@@ -100,9 +107,16 @@ export default function OperacaoDetalhes({
                     ) : (
                         <p className="text-sm text-gray-400 italic">Nenhum desconto adicionado.</p>
                     )}
-                    <button onClick={onAddDescontoClick} type="button" className="text-sm font-medium text-orange-400 hover:text-orange-500 transition">
-                        + Adicionar Desconto/Taxa
-                    </button>
+                    {/* --- 2. BOTÃO ADICIONADO AQUI --- */}
+                    <div className="flex items-center gap-4">
+                        <button onClick={onAddDescontoClick} type="button" className="text-sm font-medium text-orange-400 hover:text-orange-500 transition">
+                            + Adicionar Desconto/Taxa
+                        </button>
+                        <button onClick={onRecompraClick} type="button" className="text-sm font-medium text-green-400 hover:text-green-500 transition">
+                            + Adicionar Recompra
+                        </button>
+                    </div>
+                    {/* --- FIM DA MODIFICAÇÃO --- */}
                 </div>
 
                 <div className="bg-gray-700 p-4 rounded-lg space-y-3">
