@@ -193,7 +193,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
            //protesto: {
            // codigo_tipo_protesto: "1", // 01 = Protestar Dias Corridos
          //   quantidade_dias_protesto: "5",
-          },
+         // },
           recebimento_divergente: { codigo_tipo_autorizacao: "03" }, // 03 = Aceita qualquer valor
           desconto_expresso: false,
         },
