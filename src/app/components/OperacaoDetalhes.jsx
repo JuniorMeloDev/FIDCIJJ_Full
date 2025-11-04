@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { formatBRLNumber } from '@/app/utils/formatters';
+import { formatBRLNumber, formatDisplayConta } from '@/app/utils/formatters';
 
 export default function OperacaoDetalhes({
     notasFiscais,
@@ -148,11 +148,16 @@ export default function OperacaoDetalhes({
                             className="p-2 bg-gray-600 border-gray-500 rounded-md text-white"
                         >
                             <option value="">Selecione uma conta</option>
-                            {contasBancarias.map(conta => (
+                            {contasBancarias.map(conta => {
+                            // Monta a string da conta como ela está no DB
+                            const contaCompleta = `${conta.banco} - ${conta.agencia}/${conta.contaCorrente}`;
+                            return (
                                 <option key={conta.id} value={conta.id}>
-                                    {conta.banco} - {conta.agencia}/{conta.contaCorrente}
+                                    {/* Formata a string apenas para exibição */}
+                                    {formatDisplayConta(contaCompleta)}
                                 </option>
-                            ))}
+                            );
+                        })}
                         </select>
                     </div>
 

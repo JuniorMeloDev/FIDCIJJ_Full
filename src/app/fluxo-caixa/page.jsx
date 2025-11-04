@@ -7,7 +7,6 @@ import EditLancamentoModal from "@/app/components/EditLancamentoModal";
 import Notification from "@/app/components/Notification";
 import ConfirmacaoModal from "@/app/components/ConfirmacaoModal";
 import EmailModal from "@/app/components/EmailModal";
-// IMPORTA A NOVA FUNÇÃO DE FORMATAÇÃO
 import { formatBRLNumber, formatDate, formatDisplayConta } from "@/app/utils/formatters";
 import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";

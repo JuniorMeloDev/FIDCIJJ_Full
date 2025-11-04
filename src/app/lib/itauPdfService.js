@@ -81,12 +81,9 @@ function modulo11(bloco) {
 const getAgenciaContaDAC = (agencia, conta) => modulo10(`${agencia}${conta}`);
 
 export const getNossoNumeroDAC = (agencia, conta, carteira, nossoNumero) => {
-     let sequencia;
-    if (['109', '112', '126', '131', '146', '196', '198'].includes(carteira)) {
-        sequencia = `${agencia}${conta}${nossoNumero}`;
-    } else {
-        sequencia = `${agencia}${conta}${carteira}${nossoNumero}`;
-    }
+
+    const sequencia = `${agencia}${conta}${carteira}${nossoNumero}`;
+    
     return modulo10(sequencia);
 };
 
@@ -130,8 +127,10 @@ function gerarLinhaDigitavelECodigoBarras(dados) {
         const agenciaPad = agencia.padStart(4, '0');
         console.log(`[LOG LINHA/BARRA] Agencia: ${agenciaPad}, ContaSemDac: ${contaSemDac}, NossoNumeroSemDac: ${nossoNumeroSemDac}`);
 
-        const dacNossoNumero = getNossoNumeroDAC(agenciaPad, contaSemDac, carteira, nossoNumeroSemDac);
-        console.log(`[LOG LINHA/BARRA] DAC Nosso Numero: ${dacNossoNumero}`);
+        // AGORA ESTA FUNÇÃO USARÁ A LÓGICA CORRIGIDA
+        const dacNossoNumero = getNossoNumeroDAC(agenciaPad, contaSemDac, carteira, nossoNumeroSemDac); 
+        
+        console.log(`[LOG LINHA/BARRA] DAC Nosso Numero (Corrigido): ${dacNossoNumero}`);
         const dacAgenciaConta = getAgenciaContaDAC(agenciaPad, contaSemDac);
         console.log(`[LOG LINHA/BARRA] DAC Agencia/Conta: ${dacAgenciaConta}`);
 
@@ -228,6 +227,7 @@ export async function gerarPdfBoletoItau(listaBoletos) {
             const valorFinalBoleto = dadosBoleto.valor_bruto - (dadosBoleto.abatimento || 0);
 
             // --- PONTO CRÍTICO ---
+            // Esta função agora usará a lógica de cálculo corrigida
             const linhaBarrasResult = gerarLinhaDigitavelECodigoBarras({
                 agencia: dadosBoleto.agencia,
                 conta: dadosBoleto.conta, // Conta COM dígito para ser tratada dentro da função
@@ -248,6 +248,9 @@ export async function gerarPdfBoletoItau(listaBoletos) {
             // --- FIM DO PONTO CRÍTICO ---
 
             const vencimentoDate = new Date(dadosBoleto.data_vencimento + 'T12:00:00Z');
+            
+            // ATENÇÃO: dadosBoleto.dac_nosso_numero VEM DO BANCO DE DADOS.
+            // Veja a "Ação Adicional" abaixo.
             const nossoNumeroImpresso = `${dadosBoleto.carteira}/${dadosBoleto.nosso_numero}-${dadosBoleto.dac_nosso_numero}`;
 
             const drawSection = (yOffset) => {

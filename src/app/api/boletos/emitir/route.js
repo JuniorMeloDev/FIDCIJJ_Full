@@ -61,8 +61,8 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
      const nossoNumeroUnico = `${duplicata.operacao.id}${duplicata.id}`.slice(-9).padStart(9, "0");
      return {
         // ... (objeto de dados do Safra - sem alterações)
-        agencia: "02900",
-        conta: "005860430",
+        agencia: process.env.SAFRA_AGENCIA,
+        conta: process.env.SAFRA_CONTA,
         documento: {
           numero: nossoNumeroUnico,
           numeroCliente: duplicata.nf_cte.substring(0, 10),
@@ -188,7 +188,11 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
           },
           juros: { 
             codigo_tipo_juros: tipoOperacao.taxa_juros_mora > 0 ? "90" : "0", // 90 = Percentual ao Mês
-            percentual_juros: formatPercent(tipoOperacao.taxa_juros_mora), 
+            percentual_juros: formatPercent(tipoOperacao.taxa_juros_mora),
+          },
+           protesto: {
+            codigo_tipo_protesto: "01", // 01 = Protestar Dias Corridos
+            quantidade_dias_protesto: 5,
           },
           recebimento_divergente: { codigo_tipo_autorizacao: "03" }, // 03 = Aceita qualquer valor
           desconto_expresso: false,
@@ -289,3 +293,4 @@ export async function POST(request) {
     return NextResponse.json({ message: apiErrorMessage }, { status: 500 });
   }
 }
+
