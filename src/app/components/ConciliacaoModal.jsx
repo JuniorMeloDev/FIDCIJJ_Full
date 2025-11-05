@@ -2,14 +2,20 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { formatBRLNumber, formatDate, formatBRLInput, parseBRL } from '@/app/utils/formatters';
+import { formatBRLNumber, formatDate, formatDisplayConta, parseBRL } from '@/app/utils/formatters';
 
-export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao, searchDuplicatas }) {
+// 1. Recebe 'contasInternas' (dos seus 'saldos') e 'contaApi' (dos 'filters.contaExterna')
+export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao, searchDuplicatas, contasInternas = [], contaApi = '' }) {
     const [searchResults, setSearchResults] = useState([]);
     const [selectedItemsData, setSelectedItemsData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [busca, setBusca] = useState('');
+    
+    // 2. Novo state para a conta selecionada
+    const [contaDestino, setContaDestino] = useState('');
+
+    const isOfxImport = !contaApi; // Determina se é OFX (se não houver conta da API)
 
     const selectedIds = useMemo(() => new Set(selectedItemsData.map(item => item.id)), [selectedItemsData]);
 
@@ -25,6 +31,7 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
             setSelectedItemsData([]);
             setBusca('');
             setError('');
+            setContaDestino(''); // Limpa a conta ao fechar
         }
     }, [isOpen]);
 
@@ -67,24 +74,59 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
             setError(`O valor final (${formatBRLNumber(valorFinalCalculado)}) não corresponde ao valor recebido. Diferença: ${formatBRLNumber(saldoRestante)}`);
             return;
         }
+
+        // 3. Validação da conta para OFX
+        if (isOfxImport && !contaDestino) {
+            setError('Por favor, selecione a conta de destino para este lançamento.');
+            return;
+        }
+
         const itemsPayload = selectedItemsData.map(({ id, juros, desconto }) => ({ id, juros, desconto }));
-        onConfirm({ items: itemsPayload, detalhesTransacao: transacao });
+        
+        // 4. Envia a 'contaDestino' no payload de confirmação
+        onConfirm({ 
+            items: itemsPayload, 
+            detalhesTransacao: transacao,
+            contaDestino: isOfxImport ? contaDestino : contaApi // Envia a conta selecionada (OFX) ou a da API
+        });
         onClose();
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[60] p-4" onClick={onClose}>
             <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-4xl text-white flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-xl font-bold mb-4 flex-shrink-0">Conciliar Recebimento</h2>
+                <h2 className="text-xl font-bold mb-4 flex-shrink-0">Conciliar Recebimento (com Duplicatas)</h2>
                 
-                <div className="bg-gray-700 p-3 rounded-md mb-4 grid grid-cols-3 gap-4 text-sm flex-shrink-0">
+                <div className="bg-gray-700 p-3 rounded-md mb-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm flex-shrink-0">
                     <div><strong>Data:</strong> {formatDate(transacao.data)}</div>
-                    <div><strong>Descrição:</strong> {transacao.descricao}</div>
+                    <div className="truncate"><strong>Descrição:</strong> {transacao.descricao}</div>
                     <div className="text-right"><strong>Valor Recebido:</strong> <span className="font-bold text-green-400">{formatBRLNumber(transacao.valor)}</span></div>
                 </div>
 
+                {/* 5. Seletor de Conta (apenas para OFX) */}
+                {isOfxImport && (
+                    <div className="mb-4 flex-shrink-0">
+                        <label htmlFor="contaDestino" className="block text-sm font-semibold text-gray-300 mb-1">
+                            Selecionar Conta de Destino (Interna)
+                        </label>
+                        <select
+                            id="contaDestino"
+                            value={contaDestino}
+                            onChange={(e) => setContaDestino(e.target.value)}
+                            className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
+                        >
+                            <option value="">-- Escolha a conta --</option>
+                            {contasInternas.map((conta) => (
+                                <option key={conta.contaBancaria} value={conta.contaBancaria}>
+                                    {formatDisplayConta(conta.contaBancaria)}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-grow overflow-y-hidden">
-                    {/* COLUNA DA ESQUERDA (BUSCA) - COM CORREÇÃO */}
+                    {/* COLUNA DA ESQUERDA (BUSCA) */}
                     <div className="flex flex-col h-full min-h-0">
                         <div className="flex gap-2 mb-2 flex-shrink-0">
                             <input type="text" value={busca} onChange={(e) => setBusca(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} placeholder="Buscar Sacado ou NF/CTe..." className="flex-grow bg-gray-700 border-gray-600 rounded-md p-2 text-sm" />
@@ -105,7 +147,7 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
                         </div>
                     </div>
 
-                    {/* COLUNA DA DIREITA (SELECIONADOS) - COM CORREÇÃO */}
+                    {/* COLUNA DA DIREITA (SELECIONADOS) */}
                     <div className="flex flex-col h-full min-h-0">
                         <h3 className="text-md font-semibold mb-2 flex-shrink-0">Duplicatas Selecionadas para Baixa</h3>
                         <div className="flex-grow space-y-2 overflow-y-auto border border-gray-700 p-2 rounded-md">
