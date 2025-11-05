@@ -95,8 +95,19 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[60] p-4" onClick={onClose}>
             <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-4xl text-white flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-xl font-bold mb-4 flex-shrink-0">Conciliar Recebimento (com Duplicatas)</h2>
-                
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold">Conciliar Recebimento</h2>
+                    <button 
+                        onClick={() => {
+                            onClose();
+                            setIsLancamentoManualOpen(true);
+                        }}
+                        className="bg-blue-600 text-sm px-3 py-1 rounded hover:bg-blue-700"
+                    >
+                        Fazer Lançamento Manual
+                    </button>
+                </div>
+
                 <div className="bg-gray-700 p-3 rounded-md mb-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm flex-shrink-0">
                     <div><strong>Data:</strong> {formatDate(transacao.data)}</div>
                     <div className="truncate"><strong>Descrição:</strong> {transacao.descricao}</div>

@@ -5,7 +5,16 @@ import { FaUpload } from 'react-icons/fa'; // Importa o ícone
 import { useRef } from 'react'; // Importa o useRef
 
 // Adiciona as novas props onOfxUpload e ofxExtrato
-export default function FiltroLateral({ filters, onFilterChange, onClear, saldos, contasMaster, onOfxUpload, ofxExtrato }) {
+export default function FiltroLateral({ 
+    filters, 
+    onFilterChange, 
+    onClear, 
+    saldos, 
+    contasMaster, 
+    onOfxUpload, 
+    ofxExtrato,
+    onOfxClear  // Nova prop
+}) {
 
     const fileInputRef = useRef(null); // Ref para o input de arquivo
 
@@ -25,6 +34,14 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
         if (e.target.files && e.target.files[0]) {
             onOfxUpload(e.target.files[0]);
             e.target.value = null; // Reseta o input
+        }
+    };
+
+    // Modifique o botão de limpar para chamar também o onOfxClear
+    const handleClearAll = () => {
+        onClear();
+        if (onOfxClear) {
+            onOfxClear();
         }
     };
 
@@ -122,7 +139,12 @@ export default function FiltroLateral({ filters, onFilterChange, onClear, saldos
             </div>
 
             <div className="flex-shrink-0 p-4 border-t border-gray-700 bg-gray-800 rounded-b-lg">
-                <button onClick={onClear} className="w-full bg-orange-500 text-white font-semibold py-2 rounded-md hover:bg-orange-600 transition">Limpar</button>
+                <button 
+                    onClick={handleClearAll} 
+                    className="w-full bg-orange-500 text-white font-semibold py-2 rounded-md hover:bg-orange-600 transition"
+                >
+                    Limpar
+                </button>
             </div>
         </div>
     );

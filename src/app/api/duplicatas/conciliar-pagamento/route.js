@@ -9,20 +9,18 @@ export async function POST(request) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        // O corpo da requisição agora espera um array de 'items'
-        const { items, detalhesTransacao, contaBancaria } = await request.json();
+        const body = await request.json();
+        
+        // MODIFICAÇÃO: Aceita 'contaBancaria' (da API Inter) ou 'contaDestino' (do OFX via ConciliacaoModal)
+        const { items, detalhesTransacao } = body;
+        const contaBancaria = body.contaBancaria || body.contaDestino; 
 
         if (!items || items.length === 0 || !detalhesTransacao || !contaBancaria) {
             return NextResponse.json({ message: 'Dados insuficientes para conciliação.' }, { status: 400 });
         }
 
-        const { data: contaInfo, error: contaError } = await supabase
-            .from('contas_bancarias')
-            .select('banco, agencia, conta_corrente')
-            .eq('conta_corrente', contaBancaria)
-            .single();
-        if (contaError) throw new Error(`Conta de destino com número ${contaBancaria} não encontrada.`);
-        const nomeContaCompleto = `${contaInfo.banco} - ${contaInfo.agencia}/${contaInfo.conta_corrente}`;
+        const nomeContaCompleto = contaBancaria;
+
 
         const duplicataIds = items.map(item => item.id);
         const { data: duplicatasInfo, error: dupError } = await supabase
@@ -40,38 +38,38 @@ export async function POST(request) {
             const ramo = dup.operacao?.cliente?.ramo_de_atividade;
             const docType = ramo === 'Transportes' ? 'CTe' : 'NF';
             const docNumber = dup.nf_cte.split('.')[0];
-            const nfCteCompleto = dup.nf_cte; // Mantém a parcela para NF
+            const nfCteCompleto = dup.nf_cte;
 
             // Lançamento principal (valor da duplicata)
             lancamentosParaInserir.push({
                 data_movimento: detalhesTransacao.data,
                 descricao: `Recebimento ${ramo === 'Transportes' ? docType + ' ' + docNumber : nfCteCompleto}`,
                 valor: dup.valor_bruto,
-                conta_bancaria: nomeContaCompleto,
+                conta_bancaria: nomeContaCompleto, // Usa a variável
                 categoria: 'Recebimento',
-                transaction_id: detalhesTransacao.id,
+                transaction_id: detalhesTransacao.id, // Usa o ID da transação OFX/API
                 duplicata_id: dup.id
             });
 
-            // Lançamento de Juros (se houver para este item)
+            // Lançamento de Juros
             if (itemPayload.juros > 0) {
                 lancamentosParaInserir.push({
                     data_movimento: detalhesTransacao.data,
                     descricao: `Juros/Multa Receb. ref. ${docType} ${docNumber}`,
                     valor: itemPayload.juros,
-                    conta_bancaria: nomeContaCompleto,
+                    conta_bancaria: nomeContaCompleto, // Usa a variável
                     categoria: 'Receita Avulsa',
                     transaction_id: detalhesTransacao.id,
                 });
             }
 
-            // Lançamento de Desconto (se houver para este item)
+            // Lançamento de Desconto
             if (itemPayload.desconto > 0) {
                 lancamentosParaInserir.push({
                     data_movimento: detalhesTransacao.data,
                     descricao: `Desconto Concedido ref. ${docType} ${docNumber}`,
                     valor: -Math.abs(itemPayload.desconto),
-                    conta_bancaria: nomeContaCompleto,
+                    conta_bancaria: nomeContaCompleto, // Usa a variável
                     categoria: 'Despesa Avulsa',
                     transaction_id: detalhesTransacao.id,
                 });
@@ -86,7 +84,7 @@ export async function POST(request) {
             .update({ 
                 status_recebimento: 'Recebido', 
                 data_liquidacao: detalhesTransacao.data,
-                conta_liquidacao: nomeContaCompleto
+                conta_liquidacao: nomeContaCompleto // Usa a variável
             })
             .in('id', duplicataIds);
         if (updateError) throw updateError;

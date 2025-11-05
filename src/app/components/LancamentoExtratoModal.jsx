@@ -4,109 +4,119 @@
 import { useState, useEffect } from 'react';
 import { formatBRLNumber, formatDisplayConta } from '@/app/utils/formatters';
 
-export default function LancamentoExtratoModal({ isOpen, onClose, onSave, transacao, contasInternas = [] }) {
+export default function LancamentoExtratoModal({ 
+    isOpen, 
+    onClose, 
+    onSave, 
+    transacao, 
+    contasInternas = [],
+    showNotification // Agora vamos usar esta prop
+}) {
     const [descricao, setDescricao] = useState('');
     const [contaBancaria, setContaBancaria] = useState('');
     const [categoria, setCategoria] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [isDespesa, setIsDespesa] = useState(false); // Novo state
 
-    const isDespesa = transacao?.valor < 0;
-
-    // Categorias com base no seu LancamentoModal.jsx original
-    const categoriasOpcoes = isDespesa 
-        ? ["Despesa Avulsa", "Pagamento PIX", "Tarifa Bancária", "Impostos"]
-        : ["Receita Avulsa", "Crédito PIX", "Outras Entradas"];
+    const isDebito = transacao?.valor < 0;
 
     useEffect(() => {
         if (isOpen && transacao) {
-            // Preenche o formulário com os dados da transação
-            setDescricao(transacao.descricao);
-            setCategoria(isDespesa ? 'Despesa Avulsa' : 'Receita Avulsa');
-            setContaBancaria(''); // Força o usuário a escolher
+            setDescricao(transacao.descricao || '');
+            setContaBancaria('');
+            setCategoria(isDebito ? 'Despesa Avulsa' : 'Receita Avulsa');
+            setIsDespesa(isDebito); // Define automaticamente baseado no valor
             setError('');
-        } else {
-            setLoading(false);
         }
-    }, [isOpen, transacao, isDespesa]);
+    }, [isOpen, transacao]);
 
     const handleSave = async () => {
         if (!contaBancaria) {
             setError('Por favor, selecione a conta interna.');
             return;
         }
-        if (!categoria) {
-            setError('Por favor, selecione uma categoria.');
-            return;
-        }
 
         setLoading(true);
         setError('');
 
+        // Modifica o payload para incluir a data correta
         const payload = {
-            dataMovimento: transacao.data, // Usa a data do extrato
+            data_movimento: transacao.dataEntrada || transacao.dataMovimento,
             descricao: descricao,
-            valor: transacao.valor, // Já está positivo ou negativo
-            contaBancaria: contaBancaria,
+            valor: parseFloat(transacao.valor), // Garante que seja número
+            conta_bancaria: contaBancaria,
             categoria: categoria,
-            // Adiciona o transaction_id para marcar como conciliado
-            transaction_id: transacao.id, 
+            transaction_id: transacao.idTransacao || transacao.id, // Garante compatibilidade
+            isDespesa: isDebito ? isDespesa : false
         };
 
-        // A função 'onSave' é a 'handleSaveLancamento' da página de fluxo de caixa
-        const success = await onSave(payload); 
-        
-        setLoading(false);
-        if (success) {
+        try {
+            const response = await fetch('/api/lancamentos/conciliar-manual', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeader()
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Erro ao salvar lançamento');
+            }
+
+            const data = await response.json();
+            showNotification('Lançamento salvo com sucesso!', 'success');
             onClose();
-        } else {
-            setError('Falha ao salvar o lançamento. Verifique o console.');
+            return true;
+        } catch (err) {
+            const errorMessage = err.message || 'Erro ao salvar lançamento';
+            setError(errorMessage);
+            console.error('Erro ao salvar:', err);
+            return false;
+        } finally {
+            setLoading(false);
         }
     };
 
     if (!isOpen || !transacao) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[70] p-4" onClick={onClose}>
-            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg text-white flex flex-col" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-xl font-bold mb-4">Lançamento Manual do Extrato</h2>
-                
-                <div className="bg-gray-700 p-3 rounded-md mb-4 grid grid-cols-3 gap-4 text-sm">
-                    <div><strong>Data:</strong> {formatDate(transacao.data)}</div>
-                    <div className="col-span-2 text-right">
-                        <strong>Valor:</strong> 
-                        <span className={`font-bold ml-2 ${isDespesa ? 'text-red-400' : 'text-green-400'}`}>
-                            {formatBRLNumber(transacao.valor)}
-                        </span>
-                    </div>
-                </div>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[70]" onClick={onClose}>
+            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                <h2 className="text-xl font-bold mb-4 text-white">Conciliação Manual</h2>
 
                 <div className="space-y-4">
+                    <div className="bg-gray-700 p-4 rounded-md">
+                        <p className="text-sm text-gray-300">Data: {transacao.data}</p>
+                        <p className="text-sm text-gray-300">Valor: 
+                            <span className={`font-bold ml-2 ${isDebito ? 'text-red-400' : 'text-green-400'}`}>
+                                {formatBRLNumber(transacao.valor)}
+                            </span>
+                        </p>
+                    </div>
+
                     <div>
-                        <label htmlFor="descricao" className="block text-sm font-semibold text-gray-300 mb-1">
-                            Descrição
-                        </label>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
                         <input
-                            id="descricao"
                             type="text"
                             value={descricao}
                             onChange={(e) => setDescricao(e.target.value)}
-                            className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
+                            className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                            placeholder="Descrição do lançamento..."
                         />
                     </div>
-                    
+
                     <div>
-                        <label htmlFor="contaBancaria" className="block text-sm font-semibold text-gray-300 mb-1">
-                            Lançar na Conta Interna
-                        </label>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Conta Interna</label>
                         <select
-                            id="contaBancaria"
                             value={contaBancaria}
                             onChange={(e) => setContaBancaria(e.target.value)}
-                            className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
+                            className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
                         >
-                            <option value="">-- Selecione a conta --</option>
-                            {contasInternas.map((conta) => (
+                            <option value="">Selecione uma conta...</option>
+                            {contasInternas.map(conta => (
                                 <option key={conta.contaBancaria} value={conta.contaBancaria}>
                                     {formatDisplayConta(conta.contaBancaria)}
                                 </option>
@@ -115,172 +125,64 @@ export default function LancamentoExtratoModal({ isOpen, onClose, onSave, transa
                     </div>
 
                     <div>
-                        <label htmlFor="categoria" className="block text-sm font-semibold text-gray-300 mb-1">
-                            Categoria (para Resumo)
-                        </label>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Categoria</label>
                         <select
-                            id="categoria"
                             value={categoria}
                             onChange={(e) => setCategoria(e.target.value)}
-                            className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
+                            className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
                         >
-                            {categoriasOpcoes.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
+                            {isDebito ? (
+                                <>
+                                    <option value="Despesa Avulsa">Despesa Avulsa</option>
+                                    <option value="Pagamento PIX">Pagamento PIX</option>
+                                    <option value="Movimentação Avulsa">Movimentação Avulsa</option>
+                                    <option value="Tarifa Bancária">Tarifa Bancária</option>
+                                </>
+                            ) : (
+                                <>
+                                    <option value="Receita Avulsa">Receita Avulsa</option>
+                                    <option value="Crédito PIX">Crédito PIX</option>
+                                    <option value="Outras Entradas">Outras Entradas</option>
+                                </>
+                            )}
                         </select>
                     </div>
+
+                    {/* Adicione o checkbox de despesa antes do botão de confirmar */}
+                    {isDebito && (
+                        <div className="pt-2">
+                            <label className="flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={isDespesa}
+                                    onChange={(e) => setIsDespesa(e.target.checked)}
+                                    className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
+                                />
+                                <span className="ml-2 text-sm text-gray-200">
+                                    É uma despesa? (Contabilizar no resumo)
+                                </span>
+                            </label>
+                        </div>
+                    )}
                 </div>
-                
-                {error && <p className="text-red-400 text-sm mt-3 text-center">{error}</p>}
+
+                {error && (
+                    <p className="mt-4 text-sm text-red-400 text-center">{error}</p>
+                )}
 
                 <div className="mt-6 flex justify-end gap-4">
-                    <button onClick={onClose} className="bg-gray-600 font-semibold py-2 px-4 rounded-md hover:bg-gray-500">Cancelar</button>
-                    <button onClick={handleSave} disabled={loading} className="bg-green-600 font-semibold py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50">
-                        {loading ? 'Salvando...' : 'Confirmar Lançamento'}
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500"
+                    >
+                        Cancelar
                     </button>
-                </div>
-            </div>
-        </div>
-    );
-}// src/app/components/LancamentoExtratoModal.jsx
-'use client';
-
-import { useState, useEffect } from 'react';
-import { formatBRLNumber, formatDisplayConta } from '@/app/utils/formatters';
-
-export default function LancamentoExtratoModal({ isOpen, onClose, onSave, transacao, contasInternas = [] }) {
-    const [descricao, setDescricao] = useState('');
-    const [contaBancaria, setContaBancaria] = useState('');
-    const [categoria, setCategoria] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-
-    const isDespesa = transacao?.valor < 0;
-
-    // Categorias com base no seu LancamentoModal.jsx original
-    const categoriasOpcoes = isDespesa 
-        ? ["Despesa Avulsa", "Pagamento PIX", "Tarifa Bancária", "Impostos"]
-        : ["Receita Avulsa", "Crédito PIX", "Outras Entradas"];
-
-    useEffect(() => {
-        if (isOpen && transacao) {
-            // Preenche o formulário com os dados da transação
-            setDescricao(transacao.descricao);
-            setCategoria(isDespesa ? 'Despesa Avulsa' : 'Receita Avulsa');
-            setContaBancaria(''); // Força o usuário a escolher
-            setError('');
-        } else {
-            setLoading(false);
-        }
-    }, [isOpen, transacao, isDespesa]);
-
-    const handleSave = async () => {
-        if (!contaBancaria) {
-            setError('Por favor, selecione a conta interna.');
-            return;
-        }
-        if (!categoria) {
-            setError('Por favor, selecione uma categoria.');
-            return;
-        }
-
-        setLoading(true);
-        setError('');
-
-        const payload = {
-            dataMovimento: transacao.data, // Usa a data do extrato
-            descricao: descricao,
-            valor: transacao.valor, // Já está positivo ou negativo
-            contaBancaria: contaBancaria,
-            categoria: categoria,
-            // Adiciona o transaction_id para marcar como conciliado
-            transaction_id: transacao.id, 
-        };
-
-        // A função 'onSave' é a 'handleSaveLancamento' da página de fluxo de caixa
-        const success = await onSave(payload); 
-        
-        setLoading(false);
-        if (success) {
-            onClose();
-        } else {
-            setError('Falha ao salvar o lançamento. Verifique o console.');
-        }
-    };
-
-    if (!isOpen || !transacao) return null;
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[70] p-4" onClick={onClose}>
-            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg text-white flex flex-col" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-xl font-bold mb-4">Lançamento Manual do Extrato</h2>
-                
-                <div className="bg-gray-700 p-3 rounded-md mb-4 grid grid-cols-3 gap-4 text-sm">
-                    <div><strong>Data:</strong> {formatDate(transacao.data)}</div>
-                    <div className="col-span-2 text-right">
-                        <strong>Valor:</strong> 
-                        <span className={`font-bold ml-2 ${isDespesa ? 'text-red-400' : 'text-green-400'}`}>
-                            {formatBRLNumber(transacao.valor)}
-                        </span>
-                    </div>
-                </div>
-
-                <div className="space-y-4">
-                    <div>
-                        <label htmlFor="descricao" className="block text-sm font-semibold text-gray-300 mb-1">
-                            Descrição
-                        </label>
-                        <input
-                            id="descricao"
-                            type="text"
-                            value={descricao}
-                            onChange={(e) => setDescricao(e.target.value)}
-                            className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
-                        />
-                    </div>
-                    
-                    <div>
-                        <label htmlFor="contaBancaria" className="block text-sm font-semibold text-gray-300 mb-1">
-                            Lançar na Conta Interna
-                        </label>
-                        <select
-                            id="contaBancaria"
-                            value={contaBancaria}
-                            onChange={(e) => setContaBancaria(e.target.value)}
-                            className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
-                        >
-                            <option value="">-- Selecione a conta --</option>
-                            {contasInternas.map((conta) => (
-                                <option key={conta.contaBancaria} value={conta.contaBancaria}>
-                                    {formatDisplayConta(conta.contaBancaria)}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label htmlFor="categoria" className="block text-sm font-semibold text-gray-300 mb-1">
-                            Categoria (para Resumo)
-                        </label>
-                        <select
-                            id="categoria"
-                            value={categoria}
-                            onChange={(e) => setCategoria(e.target.value)}
-                            className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
-                        >
-                            {categoriasOpcoes.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-                
-                {error && <p className="text-red-400 text-sm mt-3 text-center">{error}</p>}
-
-                <div className="mt-6 flex justify-end gap-4">
-                    <button onClick={onClose} className="bg-gray-600 font-semibold py-2 px-4 rounded-md hover:bg-gray-500">Cancelar</button>
-                    <button onClick={handleSave} disabled={loading} className="bg-green-600 font-semibold py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50">
-                        {loading ? 'Salvando...' : 'Confirmar Lançamento'}
+                    <button
+                        onClick={handleSave}
+                        disabled={loading}
+                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                    >
+                        {loading ? 'Salvando...' : 'Confirmar'}
                     </button>
                 </div>
             </div>
