@@ -17,11 +17,12 @@ import { format as formatDateFns, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ConciliacaoModal from "@/app/components/ConciliacaoModal";
 import PixReceiptModal from "@/app/components/PixReceiptModal";
+// NOVO: Importa o modal de lançamento manual do extrato
 import LancamentoExtratoModal from "@/app/components/LancamentoExtratoModal";
 
 const ITEMS_PER_PAGE = 8;
-const INTER_ITEMS_PER_PAGE = 3;
-// NOVO: paginação do OFX
+const INTER_ITEMS_PER_PAGE = 2;
+// NOVO: Constante para paginação OFX
 const OFX_ITEMS_PER_PAGE = 6;
 
 export default function FluxoDeCaixaPage() {
@@ -36,7 +37,6 @@ export default function FluxoDeCaixaPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [interCurrentPage, setInterCurrentPage] = useState(1);
   const [contasMaster, setContasMaster] = useState([]);
-  const [isLancamentoManualOpen, setIsLancamentoManualOpen] = useState(false);
   const [clienteMasterInfo, setClienteMasterInfo] = useState({
     nome: "",
     cnpj: "",
@@ -81,13 +81,15 @@ export default function FluxoDeCaixaPage() {
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
 
-  // Novos estados para OFX
+  // --- NOVOS ESTADOS PARA OFX ---
+  const [isLancamentoManualOpen, setIsLancamentoManualOpen] = useState(false);
   const [ofxExtrato, setOfxExtrato] = useState(null);
   const [isLoadingOfx, setIsLoadingOfx] = useState(false);
   const [ofxError, setOfxError] = useState(null);
   const [ofxPage, setOfxPage] = useState(1); // paginação OFX
+  // --- FIM DOS NOVOS ESTADOS ---
 
-  // Handler para upload/processamento do arquivo OFX
+  // --- NOVA FUNÇÃO: UPLOAD OFX ---
   const handleOfxUpload = async (file) => {
     setIsLoadingOfx(true);
     setOfxError(null);
@@ -127,6 +129,7 @@ export default function FluxoDeCaixaPage() {
       setMovimentacoes([]);
       setInterExtrato(null);
       setInterSaldo(null);
+      setFilters(prev => ({ ...prev, contaExterna: "" })); // Limpa filtro Inter
       setCurrentPage(1);
       setInterCurrentPage(1);
     } catch (err) {
@@ -136,6 +139,7 @@ export default function FluxoDeCaixaPage() {
       setIsLoadingOfx(false);
     }
   };
+  // --- FIM DA FUNÇÃO OFX ---
 
   const getAuthHeader = () => ({
     Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
@@ -157,8 +161,11 @@ export default function FluxoDeCaixaPage() {
   const fetchMovimentacoes = async (currentFilters, currentSortConfig) => {
     setLoading(true);
     setError(null);
+    // Limpa extratos de API/OFX ao buscar movimentações manuais
     setInterExtrato(null);
     setInterSaldo(null);
+    // setOfxExtrato(null); // Não limpe o OFX aqui, o useEffect controla isso
+    
     const params = new URLSearchParams();
     if (currentFilters.dataInicio)
       params.append("dataInicio", currentFilters.dataInicio);
@@ -215,6 +222,7 @@ export default function FluxoDeCaixaPage() {
     setMovimentacoes([]);
     setInterExtrato(null);
     setInterSaldo(null);
+    // setOfxExtrato(null); // Controlado pelo useEffect
     try {
       const [saldoRes, extratoRes] = await Promise.all([
         fetch(`/api/inter/saldo?contaCorrente=${conta}`, {
@@ -244,7 +252,8 @@ export default function FluxoDeCaixaPage() {
 
       setInterSaldo(saldoData);
       setInterExtrato(extratoData);
-    } catch (err) {
+    } catch (err) 
+    {
       setError(err.message);
     } finally {
       setLoading(false);
@@ -304,9 +313,13 @@ export default function FluxoDeCaixaPage() {
     fetchStaticData();
   }, []);
 
+  // --- useEffect PRINCIPAL MODIFICADO ---
   useEffect(() => {
     fetchSaldos(filters);
+    
     if (filters.contaExterna) {
+      // Se selecionou conta Externa (Inter), limpa o OFX
+      setOfxExtrato(null);
       if (filters.dataInicio && filters.dataFim) {
         fetchExtratoInter(
           filters.contaExterna,
@@ -317,10 +330,19 @@ export default function FluxoDeCaixaPage() {
         setLoading(false);
         setMovimentacoes([]);
       }
+    } else if (ofxExtrato) {
+      // Se OFX está ativo, limpa os outros e não faz nada (dados já estão em 'ofxExtrato')
+      setLoading(true);
+      setMovimentacoes([]);
+      setInterExtrato(null);
+      setInterSaldo(null);
+      setLoading(false);
     } else {
+      // Senão, busca movimentações manuais
       fetchMovimentacoes(filters, sortConfig);
     }
-  }, [filters, sortConfig]);
+  }, [filters, sortConfig, ofxExtrato]); // Adicionado ofxExtrato como dependência
+  // --- FIM DO useEffect MODIFICADO ---
 
   useEffect(() => {
     const handleClick = () =>
@@ -344,6 +366,8 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
+  // --- handleConciliarTransacao MODIFICADO ---
+  // Abre o modal de lançamento manual
   const handleConciliarTransacao = (transacao) => {
     if (reconciledTransactionIds.has(transacao.idTransacao)) {
         showNotification(
@@ -361,7 +385,10 @@ export default function FluxoDeCaixaPage() {
     // Abre direto o modal de lançamento manual ao invés do modal de conciliação
     setIsLancamentoManualOpen(true);
   };
+  // --- FIM DA MODIFICAÇÃO ---
 
+  // --- handleConfirmarConciliacao SUBSTITUÍDO ---
+  // Lógica complexa que decide entre conciliar manual ou duplicata
   const handleConfirmarConciliacao = async ({ items, detalhesTransacao, contaDestino }) => {
     try {
       const contaSelecionada = filters.contaExterna || contaDestino;
@@ -392,7 +419,7 @@ export default function FluxoDeCaixaPage() {
         showNotification("Lançamento manual conciliado com sucesso!", "success");
         fetchMovimentacoes(filters, sortConfig);
         fetchSaldos(filters);
-        // se for OFX, remove a transação conciliada da lista local (opcional)
+        // se for OFX, remove a transação conciliada da lista local
         if (ofxExtrato) {
           setOfxExtrato(prev => {
             if (!prev) return prev;
@@ -443,6 +470,7 @@ export default function FluxoDeCaixaPage() {
       showNotification(err.message || "Erro na conciliação.", "error");
     }
   };
+  // --- FIM DA SUBSTITUIÇÃO ---
 
   const interExtratoProcessado = useMemo(() => {
     if (!interExtrato?.transacoes || !interSaldo) return [];
@@ -499,12 +527,16 @@ export default function FluxoDeCaixaPage() {
       categoria: "Todos",
       contaExterna: "",
     });
+    setOfxExtrato(null); // Limpa OFX ao limpar filtros
     setCurrentPage(1);
+    setInterCurrentPage(1);
+    setOfxPage(1);
   };
 
   const handleFilterChange = (e) => {
     setCurrentPage(1);
     setInterCurrentPage(1);
+    setOfxPage(1);
     setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
@@ -747,6 +779,46 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
+  // --- NOVA FUNÇÃO: SALVAR LANÇAMENTO MANUAL DO EXTRATO ---
+  const handleSaveLancamentoManual = async (payload) => {
+    try {
+      const response = await fetch('/api/lancamentos/conciliar-manual', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
+        body: JSON.stringify(payload)
+      });
+  
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Erro ao salvar lançamento');
+      }
+  
+      // Mostra notificação de sucesso usando showNotification
+      showNotification('Lançamento manual realizado com sucesso!', 'success');
+  
+      // Atualiza a lista de movimentações
+      fetchMovimentacoes(filters, sortConfig);
+      fetchSaldos(filters);
+      
+      // Remove a transação do extrato OFX se estiver usando
+      if (ofxExtrato) {
+          setOfxExtrato(prev => ({
+              ...prev,
+              transacoes: prev.transacoes.filter(t => t.idTransacao !== payload.transaction_id)
+          }));
+      }
+  
+      return true;
+    } catch (err) {
+      showNotification(err.message || 'Erro ao salvar lançamento', 'error');
+      return false;
+    }
+  };
+  // --- FIM DA NOVA FUNÇÃO ---
+
   const handleAbrirComprovantePix = async () => {
     if (!contextMenu.selectedItem) return;
     const item = contextMenu.selectedItem;
@@ -807,49 +879,7 @@ export default function FluxoDeCaixaPage() {
         recebedor: recebedorData
     });
     setIsReceiptModalOpen(true);
-};
-
-const handleSaveLancamentoManual = async (payload) => {
-  try {
-    const response = await fetch('/api/lancamentos/conciliar-manual', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeader()
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Erro ao salvar lançamento');
-    }
-
-    // Mostra notificação de sucesso usando showNotification
-    showNotification('Lançamento manual realizado com sucesso!', 'success');
-
-    // Atualiza a lista de movimentações
-    fetchMovimentacoes(filters, sortConfig);
-    fetchSaldos(filters);
-    
-    // Remove a transação do extrato OFX se estiver usando
-    if (ofxExtrato) {
-        setOfxExtrato(prev => ({
-            ...prev,
-            transacoes: prev.transacoes.filter(t => t.idTransacao !== payload.transaction_id)
-        }));
-    }
-
-    return true;
-  } catch (err) {
-    showNotification(err.message || 'Erro ao salvar lançamento', 'error');
-    return false;
-  }
-};
-  // Paginação OFX
-  const ofxTotalPages = ofxExtrato ? Math.ceil((ofxExtrato.transacoes.length || 0) / OFX_ITEMS_PER_PAGE) : 0;
-  const ofxStartIndex = (ofxPage - 1) * OFX_ITEMS_PER_PAGE;
-  const ofxCurrentItems = ofxExtrato ? ofxExtrato.transacoes.slice(ofxStartIndex, ofxStartIndex + OFX_ITEMS_PER_PAGE) : [];
+  };
 
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
@@ -859,12 +889,19 @@ const handleSaveLancamentoManual = async (payload) => {
       ? "Resultado do Período"
       : "Saldos Atuais";
 
+  // Paginação Inter (baseado no extrato processado e agrupado)
   const interIndexOfLastItem = interCurrentPage * INTER_ITEMS_PER_PAGE;
   const interIndexOfFirstItem = interIndexOfLastItem - INTER_ITEMS_PER_PAGE;
   const currentInterItems = interExtratoProcessado.slice(
     interIndexOfFirstItem,
     interIndexOfLastItem
   );
+
+  // --- NOVA LÓGICA: Paginação OFX ---
+  const ofxTotalPages = ofxExtrato ? Math.ceil((ofxExtrato.transacoes.length || 0) / OFX_ITEMS_PER_PAGE) : 0;
+  const ofxStartIndex = (ofxPage - 1) * OFX_ITEMS_PER_PAGE;
+  const ofxCurrentItems = ofxExtrato ? ofxExtrato.transacoes.slice(ofxStartIndex, ofxStartIndex + OFX_ITEMS_PER_PAGE) : [];
+  // --- FIM DA LÓGICA OFX ---
 
   return (
     <>
@@ -880,14 +917,15 @@ const handleSaveLancamentoManual = async (payload) => {
         contasMaster={contasMaster}
         clienteMasterNome={clienteMasterInfo.nome}
       />
+      {/* MODAL DE CONCILIAÇÃO MODIFICADO (para usar a lógica complexa) */}
       <ConciliacaoModal
         isOpen={isConciliacaoModalOpen}
         onClose={() => setIsConciliacaoModalOpen(false)}
         onConfirm={handleConfirmarConciliacao}
         transacao={transacaoParaConciliar}
         searchDuplicatas={searchDuplicatasParaConciliacao}
-        contasInternas={saldos} // Adicione esta prop
-        contaApi={filters.contaExterna} // Adicione esta prop
+        contasInternas={saldos} // Prop necessária para o modal
+        contaApi={filters.contaExterna} // Prop necessária para o modal
       />
       <EditLancamentoModal
         isOpen={isEditModalOpen}
@@ -929,15 +967,17 @@ const handleSaveLancamentoManual = async (payload) => {
         onClose={() => setIsReceiptModalOpen(false)}
         receiptData={receiptData}
       />
-
+      
+      {/* --- NOVO MODAL --- */}
       <LancamentoExtratoModal
         isOpen={isLancamentoManualOpen}
         onClose={() => setIsLancamentoManualOpen(false)}
         onSave={handleSaveLancamentoManual}
         transacao={transacaoParaConciliar}
         contasInternas={saldos}
-        showNotification={showNotification} // Certifique-se que esta linha existe
+        showNotification={showNotification}
       />
+      {/* --- FIM DO NOVO MODAL --- */}
 
       <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
         <div className="flex-shrink-0">
@@ -978,7 +1018,6 @@ const handleSaveLancamentoManual = async (payload) => {
                     className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"
                   >
                     <p className="text-sm text-gray-400 truncate">
-                      {/* --- MODIFICAÇÃO APLICADA --- */}
                       {formatDisplayConta(saldo.contaBancaria)}
                     </p>
                     <p
@@ -992,6 +1031,8 @@ const handleSaveLancamentoManual = async (payload) => {
                 ))}
               </div>
             </motion.div>
+            
+            {/* FILTRO LATERAL MODIFICADO (para incluir props OFX) */}
             <FiltroLateral
               filters={filters}
               saldos={saldos}
@@ -1000,88 +1041,176 @@ const handleSaveLancamentoManual = async (payload) => {
               onClear={clearFilters}
               onOfxUpload={handleOfxUpload}
               ofxExtrato={ofxExtrato}
-              onOfxClear={() => setOfxExtrato(null)} // Adicione esta prop
+              onOfxClear={() => setOfxExtrato(null)}
             />
           </div>
 
           <div className="w-full flex-grow bg-gray-800 p-4 rounded-lg shadow-md flex flex-col min-w-0">
-            {error && <p className="text-red-400 text-center py-10">{error}</p>}
-            {loading && (
+            {(error || ofxError) && <p className="text-red-400 text-center py-10">{error || ofxError}</p>}
+            {(loading || isLoadingOfx) && (
               <p className="text-center py-10 text-gray-400">A carregar...</p>
             )}
 
-            {!loading && !error && (
+            {!loading && !isLoadingOfx && !error && !ofxError && (
               <>
+                {/* --- LÓGICA DE EXIBIÇÃO PRINCIPAL MODIFICADA --- */}
+                {/* Mostra esta visualização se for API Inter OU OFX */}
                 {filters.contaExterna || ofxExtrato ? (
                   <>
                     <div className="flex-grow overflow-y-auto">
-                      {((filters.contaExterna && currentInterItems.length > 0) || 
-                        (ofxExtrato && ofxExtrato.transacoes.length > 0)) ? (
-                        <div className="space-y-4">
-                          {(ofxExtrato ? ofxCurrentItems : currentInterItems).map((t, index) => (
-                            <li
-                              key={t.idTransacao || index}
-                              className={`py-2 flex justify-between items-center text-sm ${
-                                reconciledTransactionIds.has(t.idTransacao)
-                                  ? "cursor-not-allowed opacity-50"
-                                  : "cursor-pointer hover:bg-gray-600/50"
-                              }`}
-                              onContextMenu={(e) => {
-                                e.preventDefault();
-                                // permite conciliar crédito e débito
-                                handleConciliarTransacao(t);
-                              }}
-                            >
-                              <div>
-                                <p className={`font-semibold ${
-                                  t.tipoOperacao === "C" ? "text-green-400" : "text-red-400"
-                                }`}>
-                                  {t.descricao}
-                                </p>
-                                <div className="text-xs text-gray-300">
-                                  {/* Mostra data do OFX */}
-                                  {t.dataEntrada || t.dataMovimento ? formatDate(t.dataEntrada || t.dataMovimento) : "Data N/D"}
+                      {/* Se for OFX, renderiza a lista OFX */}
+                      {ofxExtrato ? (
+                        <>
+                          {ofxCurrentItems.length > 0 ? (
+                            <div className="space-y-4">
+                              {ofxCurrentItems.map((t, index) => (
+                                <li
+                                  key={t.idTransacao || index}
+                                  className={`py-2 px-2 rounded flex justify-between items-center text-sm list-none ${
+                                    reconciledTransactionIds.has(t.idTransacao)
+                                      ? "cursor-not-allowed opacity-50 bg-gray-700/50"
+                                      : "cursor-pointer hover:bg-gray-600/50"
+                                  }`}
+                                  onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    handleConciliarTransacao(t);
+                                  }}
+                                >
+                                  <div>
+                                    <p className={`font-semibold ${
+                                      t.tipoOperacao === "C" ? "text-green-400" : "text-red-400"
+                                    }`}>
+                                      {t.descricao}
+                                    </p>
+                                    <div className="text-xs text-gray-300">
+                                      {t.dataEntrada || t.dataMovimento ? formatDate(t.dataEntrada || t.dataMovimento) : "Data N/D"}
+                                    </div>
+                                  </div>
+                                  <span className={`font-bold ${
+                                    t.tipoOperacao === "C" ? "text-green-400" : "text-red-400"
+                                  }`}>
+                                    {t.tipoOperacao === "D" ? "-" : "+"}
+                                    {formatBRLNumber(parseFloat(t.valor))}
+                                  </span>
+                                </li>
+                              ))}
+                               {/* Paginação OFX (dentro da lista) */}
+                              {ofxTotalPages > 1 && (
+                                <div className="flex items-center justify-center gap-2 pt-3">
+                                  <button
+                                    disabled={ofxPage <= 1}
+                                    onClick={() => setOfxPage(p => Math.max(1, p - 1))}
+                                    className="px-3 py-1 bg-gray-700 rounded disabled:opacity-50"
+                                  >
+                                    Anterior
+                                  </button>
+                                  <span className="text-xs text-gray-300">
+                                    Página {ofxPage} de {ofxTotalPages}
+                                  </span>
+                                  <button
+                                    disabled={ofxPage >= ofxTotalPages}
+                                    onClick={() => setOfxPage(p => Math.min(ofxTotalPages, p + 1))}
+                                    className="px-3 py-1 bg-gray-700 rounded disabled:opacity-50"
+                                  >
+                                    Próxima
+                                  </button>
                                 </div>
-                              </div>
-                              <span className={`font-bold ${
-                                t.tipoOperacao === "C" ? "text-green-400" : "text-red-400"
-                              }`}>
-                                {t.tipoOperacao === "D" ? "-" : "+"}
-                                {formatBRLNumber(parseFloat(t.valor))}
-                              </span>
-                            </li>
-                          ))}
-                          {/* Paginação OFX */}
-                          {ofxExtrato && ofxTotalPages > 1 && (
-                            <div className="flex items-center justify-center gap-2 pt-3">
-                              <button
-                                disabled={ofxPage <= 1}
-                                onClick={() => setOfxPage(p => Math.max(1, p - 1))}
-                                className="px-3 py-1 bg-gray-700 rounded disabled:opacity-50"
-                              >
-                                Anterior
-                              </button>
-                              <span className="text-xs text-gray-300">
-                                Página {ofxPage} de {ofxTotalPages}
-                              </span>
-                              <button
-                                disabled={ofxPage >= ofxTotalPages}
-                                onClick={() => setOfxPage(p => Math.min(ofxTotalPages, p + 1))}
-                                className="px-3 py-1 bg-gray-700 rounded disabled:opacity-50"
-                              >
-                                Próxima
-                              </button>
+                              )}
                             </div>
+                          ) : (
+                            <p className="text-center py-10 text-gray-400">
+                              Nenhuma transação encontrada no arquivo OFX.
+                            </p>
                           )}
-                        </div>
+                        </>
                       ) : (
-                        <p className="text-center py-10 text-gray-400">
-                          Nenhuma transação encontrada.
-                        </p>
+                        /* Senão (é API Inter), renderiza a lista agrupada por data */
+                        <>
+                          {currentInterItems.length > 0 ? (
+                            <div className="space-y-4">
+                              {currentInterItems.map((group) => (
+                                <div key={group.date}>
+                                  <div className="flex justify-between items-center bg-gray-600 p-2 rounded-t-md sticky top-0 z-10">
+                                    <h3 className="font-semibold text-sm capitalize">
+                                      {formatHeaderDate(group.date)}
+                                    </h3>
+                                    <span className="text-sm text-gray-300">
+                                      Saldo do dia:{" "}
+                                      <span className="font-bold text-white">
+                                        {formatBRLNumber(group.dailyBalance)}
+                                      </span>
+                                    </span>
+                                  </div>
+                                  <ul className="divide-y divide-gray-700 bg-gray-700/50 p-2 rounded-b-md">
+                                    {group.transactions.map((t, index) => (
+                                      <li
+                                        key={t.idTransacao || index}
+                                        className={`py-2 flex justify-between items-center text-sm ${
+                                          reconciledTransactionIds.has(
+                                            t.idTransacao
+                                          )
+                                            ? "cursor-not-allowed opacity-50"
+                                            : "cursor-pointer hover:bg-gray-600/50"
+                                        }`}
+                                        onContextMenu={(e) => {
+                                          // Permite conciliar Crédito e Débito com a nova função
+                                          e.preventDefault();
+                                          handleConciliarTransacao(t);
+                                        }}
+                                      >
+                                        <div>
+                                          <p
+                                            className={`font-semibold ${
+                                              t.tipoOperacao === "C"
+                                                ? "text-green-400"
+                                                : "text-red-400"
+                                            }`}
+                                          >
+                                            {t.descricao}
+                                          </p>
+                                          <p className="text-gray-400 text-xs">
+                                            {t.titulo}
+                                          </p>
+                                        </div>
+                                        <span
+                                          className={`font-bold ${
+                                            t.tipoOperacao === "C"
+                                              ? "text-green-400"
+                                              : "text-red-400"
+                                          }`}
+                                        >
+                                          {t.tipoOperacao === "D" ? "-" : "+"}
+                                          {formatBRLNumber(parseFloat(t.valor))}
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-center py-10 text-gray-400">
+                              Nenhuma transação encontrada para o período e conta
+                              selecionada.
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    {/* Paginação (Mostra apenas a do Inter, pois a do OFX é interna) */}
+                    <div className="flex-shrink-0 pt-4">
+                      {filters.contaExterna && !ofxExtrato && (
+                        <Pagination
+                          totalItems={interExtratoProcessado.length}
+                          itemsPerPage={INTER_ITEMS_PER_PAGE}
+                          currentPage={interCurrentPage}
+                          onPageChange={(page) => setInterCurrentPage(page)}
+                        />
                       )}
                     </div>
                   </>
                 ) : (
+                  /* Senão (não é Inter nem OFX), mostra Lançamentos Manuais */
                   <>
                     <div className="flex-grow overflow-auto">
                       <table className="min-w-full divide-y divide-gray-700">
@@ -1131,7 +1260,6 @@ const handleSaveLancamentoManual = async (payload) => {
                                   {mov.descricao}
                                 </td>
                                 <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
-                                  {/* --- MODIFICAÇÃO APLICADA --- */}
                                   {formatDisplayConta(mov.contaBancaria)}
                                 </td>
                                 <td
@@ -1168,12 +1296,14 @@ const handleSaveLancamentoManual = async (payload) => {
                     </div>
                   </>
                 )}
+                {/* --- FIM DA LÓGICA DE EXIBIÇÃO --- */}
               </>
             )}
           </div>
         </div>
 
-        {contextMenu.visible && !filters.contaExterna && (
+        {/* Menu de contexto (só aparece se não for Inter ou OFX) */}
+        {contextMenu.visible && !filters.contaExterna && !ofxExtrato && (
           <div
             ref={menuRef}
             style={{ top: contextMenu.y, left: contextMenu.x }}
