@@ -4,20 +4,30 @@
 import { useState, useEffect } from 'react';
 import { formatBRLNumber, formatDisplayConta } from '@/app/utils/formatters';
 
+// Helper para formatar a data de YYYY-MM-DD para DD/MM/YYYY (apenas para exibição)
+const formatarDataParaDisplay = (dataISO) => {
+    if (!dataISO || typeof dataISO !== 'string') return '';
+    const partes = dataISO.split('-'); // ["2025", "10", "29"]
+    if (partes.length === 3) {
+        return `${partes[2]}/${partes[1]}/${partes[0]}`; // "29/10/2025"
+    }
+    return dataISO; // Retorna o original se não for o formato esperado
+};
+
 export default function LancamentoExtratoModal({ 
     isOpen, 
     onClose, 
     onSave, 
     transacao, 
     contasInternas = [],
-    showNotification // Agora vamos usar esta prop
+    showNotification 
 }) {
     const [descricao, setDescricao] = useState('');
     const [contaBancaria, setContaBancaria] = useState('');
     const [categoria, setCategoria] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [isDespesa, setIsDespesa] = useState(false); // Novo state
+    const [isDespesa, setIsDespesa] = useState(false);
 
     const isDebito = transacao?.valor < 0;
 
@@ -26,7 +36,7 @@ export default function LancamentoExtratoModal({
             setDescricao(transacao.descricao || '');
             setContaBancaria('');
             setCategoria(isDebito ? 'Despesa Avulsa' : 'Receita Avulsa');
-            setIsDespesa(isDebito); // Define automaticamente baseado no valor
+            setIsDespesa(isDebito);
             setError('');
         }
     }, [isOpen, transacao]);
@@ -40,24 +50,38 @@ export default function LancamentoExtratoModal({
         setLoading(true);
         setError('');
 
-        // Modifica o payload para incluir a data correta
+        const dataISO = transacao.data;
+        if (!dataISO || typeof dataISO !== 'string') {
+            setError('Data da transação inválida ou não encontrada.');
+            setLoading(false);
+            return;
+        }
+
         const payload = {
-            data_movimento: transacao.dataEntrada || transacao.dataMovimento,
+            data_movimento: dataISO,
             descricao: descricao,
-            valor: parseFloat(transacao.valor), // Garante que seja número
+            valor: parseFloat(transacao.valor), 
             conta_bancaria: contaBancaria,
             categoria: categoria,
-            transaction_id: transacao.idTransacao || transacao.id, // Garante compatibilidade
+            transaction_id: transacao.idTransacao || transacao.id, 
             isDespesa: isDebito ? isDespesa : false
         };
 
         try {
+            // --- INÍCIO DA CORREÇÃO ---
+            // 1. Pegar o token do 'sessionStorage' igual ao 'LancamentoModal.jsx'
+            const token = sessionStorage.getItem('authToken');
+            
+            // 2. Criar os headers de autenticação
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+            };
+            // --- FIM DA CORREÇÃO ---
+
             const response = await fetch('/api/lancamentos/conciliar-manual', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...getAuthHeader()
-                },
+                headers: headers, // 3. Usar os headers corrigidos
                 body: JSON.stringify(payload)
             });
 
@@ -89,7 +113,7 @@ export default function LancamentoExtratoModal({
 
                 <div className="space-y-4">
                     <div className="bg-gray-700 p-4 rounded-md">
-                        <p className="text-sm text-gray-300">Data: {transacao.data}</p>
+                        <p className="text-sm text-gray-300">Data: {formatarDataParaDisplay(transacao.data)}</p> 
                         <p className="text-sm text-gray-300">Valor: 
                             <span className={`font-bold ml-2 ${isDebito ? 'text-red-400' : 'text-green-400'}`}>
                                 {formatBRLNumber(transacao.valor)}
@@ -97,6 +121,7 @@ export default function LancamentoExtratoModal({
                         </p>
                     </div>
 
+                    {/* Restante do formulário... (inputs, selects, etc.) */}
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
                         <input
@@ -148,7 +173,6 @@ export default function LancamentoExtratoModal({
                         </select>
                     </div>
 
-                    {/* Adicione o checkbox de despesa antes do botão de confirmar */}
                     {isDebito && (
                         <div className="pt-2">
                             <label className="flex items-center cursor-pointer">

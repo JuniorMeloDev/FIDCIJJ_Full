@@ -1,60 +1,67 @@
 // src/app/api/lancamentos/conciliar-manual/route.js
+import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
 export async function POST(request) {
-    try {
-        const token = request.headers.get('Authorization')?.split(' ')[1];
-        if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
-        jwt.verify(token, process.env.JWT_SECRET);
+    const token = request.headers.get('Authorization')?.split(' ')[1];
+    if (!token) {
+        return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
+    }
 
+    try {
+        jwt.verify(token, process.env.JWT_SECRET);
+        
         const body = await request.json();
 
-        // Validação dos campos obrigatórios
-        const requiredFields = ['data_movimento', 'descricao', 'valor', 'conta_bancaria', 'categoria'];
-        for (const field of requiredFields) {
-            if (!body[field]) {
-                return NextResponse.json({ 
-                    message: `Campo obrigatório ausente: ${field}` 
-                }, { status: 400 });
-            }
-        }
+        const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_KEY 
+        );
 
-        // Formata o payload para inserção
         const lancamento = {
             data_movimento: body.data_movimento,
             descricao: body.descricao,
-            valor: Number(body.valor), // Garante que seja número
+            valor: body.valor,
             conta_bancaria: body.conta_bancaria,
             categoria: body.categoria,
-            transaction_id: body.transaction_id || null,
-            is_despesa: body.isDespesa || false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            transaction_id: body.transaction_id
         };
 
-        // Insere o lançamento no banco
+        console.log('[CONCILIAR-MANUAL] Payload final (para insert):', JSON.stringify(lancamento, null, 2));
+
+        // --- INÍCIO DA CORREÇÃO ---
+        // Trocando .upsert() por .insert(), para ser igual ao pix/route.js
         const { data, error } = await supabase
-            .from('movimentacoes_caixa')
-            .insert([lancamento])
-            .select()
-            .single();
+            .from('movimentacoes_caixa') 
+            .insert(lancamento); // <-- MUDANÇA AQUI
+        // --- FIM DA CORREÇÃO ---
 
         if (error) {
-            console.error('Erro ao salvar lançamento:', error);
-            throw new Error('Falha ao salvar o lançamento.');
+            // Agora, se o 'transaction_id' já existir (e tiver uma constraint UNIQUE que não vimos),
+            // o erro será pego aqui. Mas se não tiver, ele apenas inserirá.
+            console.error('### ERRO NO OBJETO DE RETORNO [Supabase] ###');
+            console.error(JSON.stringify(error, null, 2));
+            throw error; 
         }
 
-        return NextResponse.json({ 
-            message: 'Lançamento manual salvo com sucesso!',
-            lancamento: data
-        }, { status: 201 });
+        return NextResponse.json(data);
 
     } catch (error) {
-        console.error('Erro na API /conciliar-manual:', error);
-        return NextResponse.json({ 
-            message: error.message || 'Erro interno do servidor' 
-        }, { status: 500 });
+        console.error('### ERRO NO CATCH PRINCIPAL ###');
+        console.error('Mensagem:', error.message);
+        console.error('Objeto de Erro Completo:', error);
+
+        // Se o erro for de duplicidade (agora que estamos usando INSERT)
+        if (error.code === '23505') { // 'unique_violation'
+             return NextResponse.json({ message: 'Esta transação já foi salva anteriormente.' }, { status: 409 }); // 409 Conflict
+        }
+        
+        if (error.name === 'JsonWebTokenError') {
+            return NextResponse.json({ message: 'Token inválido' }, { status: 401 });
+        }
+        
+        const errorMessage = error.message || error.details || 'Erro interno do servidor';
+        return NextResponse.json({ message: errorMessage }, { status: 500 });
     }
 }
