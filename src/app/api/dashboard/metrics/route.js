@@ -57,12 +57,11 @@ export async function GET(request) {
     if (sacadoNome) vencimentosQuery = vencimentosQuery.ilike('cliente_sacado', `%${sacadoNome}%`);
     
     // --- INÍCIO DA CORREÇÃO ---
-
+    // (Esta seção é do seu código original, está correta)
     // Busca os créditos de recompra separadamente
     let recompraQuery = supabase
       .from('descontos')
       .select('valor, operacao:operacoes!inner(data_operacao, tipo_operacao_id, cliente_id)')
-      // CORREÇÃO: Usando 'ilike' para ser case-insensitive e o texto correto "Crédito Juros Recompra%"
       .ilike('descricao', 'Crédito Juros Recompra%'); 
 
     // Aplica os mesmos filtros de data, tipo de operação e cliente à busca de recompras
@@ -78,6 +77,7 @@ export async function GET(request) {
       totaisFinanceirosRes,
       vencimentosProximosRes,
       recompraCreditsRes,
+      jurosMoraRes // --- ADIÇÃO DA LINHA 1 ---
     ] = await Promise.all([
       supabase.rpc('get_valor_operado', rpcParams),
       supabase.rpc('get_top_clientes', topNParams),
@@ -85,6 +85,7 @@ export async function GET(request) {
       supabase.rpc('get_totais_financeiros', rpcParams),
       vencimentosQuery,
       recompraQuery,
+      supabase.rpc('get_total_juros_mora_no_periodo', rpcParams) // --- ADIÇÃO DA LINHA 2 ---
     ]);
 
     const errors = [
@@ -94,6 +95,7 @@ export async function GET(request) {
       totaisFinanceirosRes.error,
       vencimentosProximosRes.error,
       recompraCreditsRes.error,
+      jurosMoraRes.error // --- ADIÇÃO DA LINHA 3 ---
     ].filter(Boolean);
 
     if (errors.length > 0) {
@@ -102,11 +104,15 @@ export async function GET(request) {
     }
 
     const totalCreditosRecompra = recompraCreditsRes.data?.reduce((sum, item) => sum + item.valor, 0) || 0;
+    
+    // --- ADIÇÃO DA LINHA 4 ---
+    const totalJurosMora = jurosMoraRes.data || 0;
 
     const totais = totaisFinanceirosRes.data?.[0] || { total_juros: 0, total_despesas: 0 };
     const totalJurosBruto = totais.total_juros || 0;
     
-    const totalJurosAjustado = totalJurosBruto + totalCreditosRecompra;
+    // --- ADIÇÃO DA LINHA 5 (MODIFICAÇÃO) ---
+    const totalJurosAjustado = totalJurosBruto + totalCreditosRecompra + totalJurosMora;
     const lucroLiquido = totalJurosAjustado - (totais.total_despesas || 0);
 
     // --- FIM DA CORREÇÃO ---
@@ -124,7 +130,7 @@ export async function GET(request) {
         clienteSacado: v.cliente_sacado,
         operacao: v.operacao
       })),
-      totalJuros: totalJurosAjustado,
+      totalJuros: totalJurosAjustado, // <-- Valor agora corrigido
       totalDespesas: totais.total_despesas || 0,
       lucroLiquido: lucroLiquido
     };
