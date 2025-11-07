@@ -12,27 +12,38 @@ export default function OperacaoDetalhes({
     isSaving,
     onAddDescontoClick,
     onRemoveDesconto,
-    onRecompraClick, // <-- 1. PROP ADICIONADA
+    onRecompraClick, 
     contasBancarias,
     contaBancariaId,
     setContaBancariaId,
     cedenteRamo,
+    
+    // --- INÍCIO DA MODIFICAÇÃO (Props Atualizadas) ---
     isPartialDebit,
-    setIsPartialDebit,
+    handlePartialDebitChange, // <-- Recebe a função handler
+    
     jurosPre,
     setjurosPre,
+    
     isPagarComPix,
-    setIsPagarComPix,
+    handlePixChange, // <-- Recebe a função handler
+    
     pixData,
     setPixData,
     cedenteSelecionado 
+    // --- FIM DA MODIFICAÇÃO ---
 }) {
     const docType = cedenteRamo === 'Transportes' ? 'CT-e' : 'NF-e';
 
+    // Verifica se a conta selecionada é Inter ou Itaú para habilitar o PIX
     const contaSelecionada = contasBancarias.find(c => String(c.id) === String(contaBancariaId));
-    const isContaInter = contaSelecionada?.banco.toLowerCase().includes('inter');
+    const isPixEnabled = useMemo(() => {
+        if (!contaSelecionada) return false;
+        const banco = contaSelecionada.banco.toLowerCase();
+        return banco.includes('inter') || banco.includes('itaú') || banco.includes('itau');
+    }, [contaSelecionada]);
     
-    // --- LÓGICA PARA EXTRAIR AS CHAVES PIX DO CLIENTE ---
+    // Lógica para extrair as chaves PIX do cliente
     const chavesPixDisponiveis = useMemo(() => {
         if (!cedenteSelecionado || !Array.isArray(cedenteSelecionado.contasBancarias)) {
             return [];
@@ -49,8 +60,8 @@ export default function OperacaoDetalhes({
 
     return (
         <section className="bg-gray-800 p-4 rounded-lg shadow-md mt-4">
+            {/* Tabela de Duplicatas */}
             <h2 className="text-2xl font-semibold mb-4 text-gray-100">Duplicatas da Operação</h2>
-
             <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-700">
                     <thead className="bg-gray-700">
@@ -83,20 +94,20 @@ export default function OperacaoDetalhes({
                 </table>
             </div>
 
+            {/* Grid de Descontos e Totais */}
             <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+                {/* Coluna de Descontos */}
                 <div className="md:col-span-2 space-y-3">
                     <h3 className="text-lg font-semibold text-gray-200">Outros Descontos / Taxas</h3>
                     {descontos.length > 0 ? (
                         <ul className="border border-gray-700 rounded-md divide-y divide-gray-700">
                             {descontos.map(d => (
                                 <li key={d.id} className="p-3 flex justify-between items-center text-sm">
-                                    {/* --- CORREÇÃO DE COR PARA RECOMPRA --- */}
                                     <span className={`text-gray-300 ${d.valor < 0 ? 'text-green-400' : ''}`}>
                                         {d.descricao}
                                     </span>
                                     <div className="flex items-center gap-3">
                                         <span className={`font-medium ${d.valor < 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                            {/* Se o valor for negativo (crédito), mostra com sinal de + */}
                                             {d.valor < 0 ? `+${formatBRLNumber(Math.abs(d.valor))}` : `-${formatBRLNumber(d.valor)}`}
                                         </span>
                                         <button onClick={() => onRemoveDesconto(d.id)} className="text-gray-500 hover:text-red-400">&times;</button>
@@ -107,7 +118,7 @@ export default function OperacaoDetalhes({
                     ) : (
                         <p className="text-sm text-gray-400 italic">Nenhum desconto adicionado.</p>
                     )}
-                    {/* --- 2. BOTÃO ADICIONADO AQUI --- */}
+                    {/* Botões de Adicionar Desconto / Recompra */}
                     <div className="flex items-center gap-4">
                         <button onClick={onAddDescontoClick} type="button" className="text-sm font-medium text-orange-400 hover:text-orange-500 transition">
                             + Adicionar Desconto/Taxa
@@ -116,10 +127,11 @@ export default function OperacaoDetalhes({
                             + Adicionar Recompra
                         </button>
                     </div>
-                    {/* --- FIM DA MODIFICAÇÃO --- */}
                 </div>
 
+                {/* Coluna de Totais e Ações */}
                 <div className="bg-gray-700 p-4 rounded-lg space-y-3">
+                    {/* Totais */}
                     <div className="flex justify-between text-sm font-medium text-gray-300">
                         <span>Valor Total dos Títulos:</span>
                         <span>{formatBRLNumber(totais.valorTotalBruto)}</span>
@@ -138,6 +150,7 @@ export default function OperacaoDetalhes({
                         <span className="text-orange-400">{formatBRLNumber(totais.liquidoOperacao)}</span>
                     </div>
 
+                    {/* Conta Bancária */}
                     <div className="flex flex-col gap-2 pt-2">
                         <label htmlFor="contaBancaria" className="text-sm font-medium text-gray-300">Conta Bancária para Débito:</label>
                         <select
@@ -149,11 +162,9 @@ export default function OperacaoDetalhes({
                         >
                             <option value="">Selecione uma conta</option>
                             {contasBancarias.map(conta => {
-                            // Monta a string da conta como ela está no DB
                             const contaCompleta = `${conta.banco} - ${conta.agencia}/${conta.contaCorrente}`;
                             return (
                                 <option key={conta.id} value={conta.id}>
-                                    {/* Formata a string apenas para exibição */}
                                     {formatDisplayConta(contaCompleta)}
                                 </option>
                             );
@@ -161,16 +172,20 @@ export default function OperacaoDetalhes({
                         </select>
                     </div>
 
+                    {/* Checkboxes */}
                     <div className="pt-2 space-y-2">
+                        {/* --- INÍCIO DA MODIFICAÇÃO (Checkbox Parcial) --- */}
                         <label className="flex items-center cursor-pointer">
                             <input
                                 type="checkbox"
                                 checked={isPartialDebit}
-                                onChange={(e) => setIsPartialDebit(e.target.checked)}
+                                onChange={(e) => handlePartialDebitChange(e.target.checked)} // <-- USA O NOVO HANDLER
                                 className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
                             />
                             <span className="ml-2 text-sm text-gray-200">Debitar Valor Parcial</span>
                         </label>
+                        {/* --- FIM DA MODIFICAÇÃO --- */}
+
                          <label className="flex items-center cursor-pointer">
                             <input
                                 type="checkbox"
@@ -180,19 +195,24 @@ export default function OperacaoDetalhes({
                             />
                             <span className="ml-2 text-sm text-gray-200">Juros Pré</span>
                         </label>
-                        {isContaInter && (
+
+                        {/* --- INÍCIO DA MODIFICAÇÃO (Checkbox PIX) --- */}
+                        {isPixEnabled && (
                           <label className="flex items-center cursor-pointer pt-2 border-t border-gray-600 mt-2">
                             <input
                               type="checkbox"
                               checked={isPagarComPix}
-                              onChange={(e) => setIsPagarComPix(e.target.checked)}
+                              onChange={(e) => handlePixChange(e.target.checked)} // <-- USA O NOVO HANDLER
                               className="h-4 w-4 rounded text-green-500 bg-gray-600 border-gray-500 focus:ring-green-500"
                             />
                             <span className="ml-2 text-sm font-semibold text-green-300">Pagar com PIX</span>
                           </label>
                         )}
+                        {/* --- FIM DA MODIFICAÇÃO --- */}
                     </div>
-                    {isPagarComPix && isContaInter && (
+                    
+                    {/* Seleção de Chave PIX */}
+                    {isPagarComPix && isPixEnabled && (
                         <div className="space-y-2 pt-2 border-t border-gray-600">
                             <label className="text-xs font-bold text-gray-300">Chave PIX do Favorecido</label>
                             {chavesPixDisponiveis.length > 0 ? (
@@ -219,7 +239,8 @@ export default function OperacaoDetalhes({
                     )}
                 </div>
             </div>
-
+            
+            {/* Botões de Salvar/Limpar */}
             <div className="mt-8 flex justify-end gap-4">
                 <button type="button" onClick={handleLimparTudo} className="bg-gray-600 text-gray-100 font-semibold py-2 px-6 rounded-md hover:bg-gray-500 transition">
                     Limpar

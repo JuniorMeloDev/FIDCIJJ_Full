@@ -21,6 +21,7 @@ export async function POST(request) {
       empresaAssociada,
       pix,
       operacao_id,
+      skipSave // <-- 1. ADICIONA A NOVA FLAG
     } = body;
 
     console.log(
@@ -219,6 +220,19 @@ export async function POST(request) {
     }
 
     // 3. Lógica de salvar no banco de dados
+    
+    // --- INÍCIO DA MODIFICAÇÃO ---
+    // Se skipSave=true (veio do borderô), não salva aqui.
+    // O borderô salvará a movimentação depois com o ID da operação.
+    if (skipSave) {
+      console.log("[LOG PIX] skipSave=true. Pulando inserção em movimentacoes_caixa.");
+      return NextResponse.json(
+        { success: true, pixResult: resultadoPix },
+        { status: 201 } // Retorna 201 (Created) pois o PIX foi criado
+      );
+    }
+    // --- FIM DA MODIFICAÇÃO ---
+
 
     let descricaoLancamento = `${descricao}`;
     const complementMatch = descricao.match(/^Complemento Borderô #(\d+)$/);
@@ -287,6 +301,7 @@ export async function POST(request) {
       { status: 201 }
     );
   } catch (error) {
+    // ... (bloco catch permanece o mesmo) ...
     console.error("Erro na API de Lançamento PIX:", error);
 
     let errorMessage = error.message || "Erro interno do servidor";

@@ -9,8 +9,7 @@ import { jsPDF } from 'jspdf';
 
 export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
     
-    // --- INÍCIO DA CORREÇÃO ---
-    // A lógica para determinar os dados do pagador agora fica centralizada aqui
+    // --- LÓGICA DO PAGADOR (COMO VOCÊ ENVIOU) ---
     const pagadorInfo = useMemo(() => {
         if (!isOpen || !receiptData) return null;
 
@@ -20,8 +19,8 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
         // Se for Inter, tenta usar as variáveis de ambiente. Se não existirem, usa o padrão.
         if (isInter) {
             return {
-                nome: process.env.INTER_EMITENTE_NOME || receiptData.pagador.nome,
-                cnpj: process.env.INTER_EMITENTE_CNPJ || receiptData.pagador.cnpj,
+                nome: process.env.NEXT_PUBLIC_INTER_EMITENTE_NOME || receiptData.pagador.nome,
+                cnpj: process.env.NEXT_PUBLIC_INTER_EMITENTE_CNPJ || receiptData.pagador.cnpj,
                 conta: receiptData.pagador.conta
             };
         }
@@ -30,15 +29,17 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
         return receiptData.pagador;
 
     }, [isOpen, receiptData]);
-    // --- FIM DA CORREÇÃO ---
+    // --- FIM DA LÓGICA ---
     
     if (!isOpen || !receiptData) return null;
 
     const formatarDataTransacao = (date) => {
-      if (!date || !(date instanceof Date) || isNaN(date)) {
+      // Garante que 'date' seja um objeto Date antes de formatar
+      const dataObj = typeof date === 'string' ? new Date(date) : date;
+      if (!dataObj || !(dataObj instanceof Date) || isNaN(dataObj)) {
         return "Data inválida";
       }
-      return formatDateFns(date, "EEEE, dd/MM/yyyy", { locale: ptBR });
+      return formatDateFns(dataObj, "EEEE, dd/MM/yyyy", { locale: ptBR });
     };
 
     const handleDownload = () => {
@@ -86,8 +87,10 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(100, 100, 100); 
 
-            const dataFormatada = receiptData.data 
-                ? formatDateFns(receiptData.data, "dd MMM. yyyy, HH:mm:ss", { locale: ptBR }) 
+            // Usa a data (que é um new Date()) para formatar
+            const dataObj = typeof receiptData.data === 'string' ? new Date(receiptData.data) : receiptData.data;
+            const dataFormatada = dataObj 
+                ? formatDateFns(dataObj, "dd MMM. yyyy, HH:mm:ss", { locale: ptBR }) 
                 : "Data inválida";
             doc.text(`${dataFormatada}, via API`, 14, y);
 
@@ -214,7 +217,10 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
                         <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-600 pb-1">Sobre a transação</h3>
                         <div className="space-y-1">
                             <p><strong>Data:</strong> {formatarDataTransacao(receiptData.data)}</p>
-                            <p><strong>Horário:</strong> {receiptData.data ? formatDateFns(receiptData.data, "HH:mm") : '00:00'}</p>
+                            {/* O 'receiptData.data' (que é o new Date()) é usado aqui para a hora.
+                              Está correto.
+                            */}
+                            <p><strong>Horário:</strong> {receiptData.data ? formatDateFns(new Date(receiptData.data), "HH:mm:ss") : '00:00'}</p>
                             <p className="break-all"><strong>ID da transação:</strong> {receiptData.transactionId}</p>
                             <p><strong>Mensagem:</strong> {receiptData.descricao}</p>
                         </div>

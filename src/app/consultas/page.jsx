@@ -13,6 +13,7 @@ import FiltroLateralConsultas from "@/app/components/FiltroLateralConsultas";
 import SelectionActionsBar from "@/app/components/SelectionActionsBar";
 import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
 import EmissaoBoletoModal from "@/app/components/EmissaoBoletoModal";
+import EmitirBoletoConfirmModal from "@/app/components/EmitirBoletoConfirmModal";
 
 const ITEMS_PER_PAGE = 5;
 
@@ -60,6 +61,10 @@ export default function ConsultasPage() {
   const [isEmissaoBoletoModalOpen, setIsEmissaoBoletoModalOpen] =
     useState(false);
   const [duplicatasParaBoleto, setDuplicatasParaBoleto] = useState([]);
+  const [showEmitirModal, setShowEmitirModal] = useState(false);
+  const [duplicataParaEmitir, setDuplicataParaEmitir] = useState(null);
+  const [todasDuplicatasOperacao, setTodasDuplicatasOperacao] = useState([]);
+
 
   const getAuthHeader = () => ({
     Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
@@ -398,37 +403,27 @@ export default function ConsultasPage() {
   };
 
   const handleEmitirBoleto = async () => {
-    if (!contextMenu.selectedItem) return;
-    const operacaoId = contextMenu.selectedItem.operacaoId;
-    try {
-      showNotification(
-        `Buscando todas as parcelas da operação #${operacaoId}...`,
-        "info"
-      );
-      const response = await fetch(`/api/duplicatas/operacao/${operacaoId}`, {
-        headers: getAuthHeader(),
-      });
-      if (!response.ok)
-        throw new Error(
-          "Não foi possível encontrar todas as parcelas da operação."
-        );
-      const todasDuplicatas = await response.json();
-      const duplicatasPendentes = todasDuplicatas.filter(
-        (d) => d.statusRecebimento !== "Recebido"
-      );
-      if (duplicatasPendentes.length === 0) {
-        showNotification(
-          "Todas as duplicatas desta operação já foram liquidadas.",
-          "info"
-        );
-        return;
-      }
-      setDuplicatasParaBoleto(duplicatasPendentes);
-      setIsEmissaoBoletoModalOpen(true);
-    } catch (err) {
-      showNotification(err.message, "error");
-    }
-  };
+  if (!contextMenu.selectedItem) return;
+  const duplicataSelecionada = contextMenu.selectedItem;
+  const operacaoId = duplicataSelecionada.operacaoId;
+
+  try {
+    showNotification(`Buscando duplicatas da operação #${operacaoId}...`, "info");
+
+    const response = await fetch(`/api/duplicatas/operacao/${operacaoId}`, {
+      headers: getAuthHeader(),
+    });
+    if (!response.ok) throw new Error("Erro ao buscar duplicatas.");
+
+    const todasDuplicatas = await response.json();
+    setTodasDuplicatasOperacao(todasDuplicatas);
+    setDuplicataParaEmitir(duplicataSelecionada);
+    setShowEmitirModal(true); // 👈 abre o modal de escolha
+
+  } catch (err) {
+    showNotification(err.message, "error");
+  }
+};
 
   const handleDownloadBoletoJson = async () => {
     const duplicataId = contextMenu.selectedItem?.id;
@@ -539,6 +534,75 @@ export default function ConsultasPage() {
         onSucesso={() => fetchDuplicatas(filters, sortConfig)}
       />
 
+      <EmitirBoletoConfirmModal
+  open={showEmitirModal}
+  onClose={() => setShowEmitirModal(false)}
+  nfNumero={duplicataParaEmitir?.numeroNotaFiscal}
+  duplicataNumero={duplicataParaEmitir?.numeroDuplicata}
+  onEmitirUma={() => {
+    const pendentes = [duplicataParaEmitir].filter(
+      (d) => d.statusRecebimento !== "Recebido"
+    );
+    setDuplicatasParaBoleto(pendentes);
+    setIsEmissaoBoletoModalOpen(true);
+    setShowEmitirModal(false);
+  }}
+  onEmitirTodas={() => {
+  try {
+    // Função que extrai a NF base (antes do ponto)
+    const getNfBase = (valor) => {
+      if (!valor) return "";
+      return String(valor).split(".")[0].trim();
+    };
+
+    // NF base da duplicata selecionada
+    const nfAtual = getNfBase(duplicataParaEmitir.nfCte);
+    console.log("Emitir todas da NF (base):", nfAtual);
+
+    // Filtra apenas duplicatas da mesma NF (prefixo igual)
+    const daMesmaNF = todasDuplicatasOperacao.filter((d) => {
+      const nfDup = getNfBase(d.nfCte);
+      return nfDup === nfAtual && d.statusRecebimento !== "Recebido";
+    });
+
+    if (daMesmaNF.length === 0) {
+      showNotification(
+        `Nenhuma duplicata pendente encontrada para a NF ${nfAtual}.`,
+        "info"
+      );
+      setShowEmitirModal(false);
+      return;
+    }
+
+    // ✅ Ordenar duplicatas da mesma NF:
+    // 1️⃣ Por número de parcela (após o ponto, ex: 2438.2 -> 2)
+    // 2️⃣ Se não tiver número, usa data de vencimento como critério secundário
+    const ordenadas = [...daMesmaNF].sort((a, b) => {
+      const numA = parseInt(String(a.nfCte).split(".")[1] || "0");
+      const numB = parseInt(String(b.nfCte).split(".")[1] || "0");
+
+      if (numA !== numB) return numA - numB;
+
+      // fallback: ordenar por data de vencimento
+      const dataA = new Date(a.dataVencimento);
+      const dataB = new Date(b.dataVencimento);
+      return dataA - dataB;
+    });
+
+    console.log("Duplicatas ordenadas:", ordenadas.map(d => d.nfCte));
+
+    // Define duplicatas para emissão na ordem correta
+    setDuplicatasParaBoleto(ordenadas);
+    setIsEmissaoBoletoModalOpen(true);
+    setShowEmitirModal(false);
+  } catch (err) {
+    console.error("Erro ao filtrar/ordenar duplicatas da mesma NF:", err);
+    showNotification("Erro ao preparar duplicatas da mesma NF.", "error");
+    setShowEmitirModal(false);
+  }
+}}
+
+/>
       <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
         <div className="flex-shrink-0 px-6 pt-6">
           <motion.header
@@ -760,6 +824,8 @@ export default function ConsultasPage() {
         onGeneratePdf={handleGeneratePdf}
         onClear={clearSelection}
       />
+
+      
 
       {contextMenu.visible && (
         <div

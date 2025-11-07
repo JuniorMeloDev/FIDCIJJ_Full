@@ -13,8 +13,8 @@ import EmailModal from "@/app/components/EmailModal";
 import PartialDebitModal from "@/app/components/PartialDebitModal";
 import PixConfirmationModal from "@/app/components/PixConfirmationModal";
 import PixReceiptModal from "@/app/components/PixReceiptModal";
-import RecompraModal from "@/app/components/RecompraModal"; // <-- 1. IMPORTADO
-import { formatBRLInput, parseBRL } from "@/app/utils/formatters";
+import RecompraModal from "@/app/components/RecompraModal";
+import { formatBRLInput, parseBRL, formatDisplayConta } from "@/app/utils/formatters";
 
 export default function OperacaoBorderoPage() {
   const [dataOperacao, setDataOperacao] = useState(
@@ -64,11 +64,13 @@ export default function OperacaoBorderoPage() {
   const [pixPayload, setPixPayload] = useState(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
-  const [clienteMasterNome, setClienteMasterNome] = useState("");
-
-  // --- 2. NOVO STATE ADICIONADO ---
   const [isRecompraModalOpen, setIsRecompraModalOpen] = useState(false);
+  const [valorParcialPendente, setValorParcialPendente] = useState(null);
+  const [dataParcialPendente, setDataParcialPendente] = useState(null);
 
+  // --- 1. PRIMEIRA ALTERAÇÃO: MUDAR STATE DO PAGADOR ---
+  // State antigo: const [clienteMasterNome, setClienteMasterNome] = useState("");
+  const [clienteMasterInfo, setClienteMasterInfo] = useState({ nome: "", cnpj: "" });
 
   const getAuthHeader = () => {
     const token = sessionStorage.getItem("authToken");
@@ -114,16 +116,17 @@ export default function OperacaoBorderoPage() {
       setContasBancarias(formattedContas);
       if (formattedContas.length > 0) setContaBancariaId(formattedContas[0].id);
 
-      // Tenta buscar o cliente master pelo ID, se não, usa o primeiro
       const masterClientId = parseInt(process.env.NEXT_PUBLIC_MASTER_CLIENT_ID, 10);
       let clientePagador;
       if (masterClientId) {
           clientePagador = clientesData.find(c => c.id === masterClientId);
       }
+      
+      // --- 2. SEGUNDA ALTERAÇÃO: PREENCHER O OBJETO COMPLETO DO PAGADOR ---
       if (clientePagador) {
-        setClienteMasterNome(clientePagador.nome);
+        setClienteMasterInfo({ nome: clientePagador.nome, cnpj: clientePagador.cnpj });
       } else if (clientesData.length > 0) {
-        setClienteMasterNome(clientesData[0].nome);
+        setClienteMasterInfo({ nome: clientesData[0].nome, cnpj: clientesData[0].cnpj });
       }
     };
     fetchInitialData();
@@ -134,6 +137,7 @@ export default function OperacaoBorderoPage() {
   const fetchSacados = (query) =>
     fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
 
+  // ... (demais funções handleXmlUpload, preencherFormularioComXml, etc. permanecem iguais)
   const handleXmlUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -173,7 +177,6 @@ export default function OperacaoBorderoPage() {
       ? data.parcelas.map((p) => {
           const d1 = new Date(data.dataEmissao);
           const d2 = new Date(p.dataVencimento);
-          // Adiciona 1 dia para corrigir o cálculo de diferença
           return Math.ceil(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24)) +1;
         })
       : [];
@@ -202,7 +205,7 @@ export default function OperacaoBorderoPage() {
     setEmpresaCedente(data.emitente.nome || "");
     setEmpresaCedenteId(data.emitente.id || null);
     setCedenteRamo(data.emitente.ramo_de_atividade || "");
-    setCedenteSelecionado(data.emitente); // Armazena o objeto do cedente
+    setCedenteSelecionado(data.emitente); 
     setSacadoSelecionado(data.sacado); 
     const condicoes = data.sacado.condicoes_pagamento || [];
     setCondicoesSacado(condicoes);
@@ -238,7 +241,6 @@ export default function OperacaoBorderoPage() {
           ...xmlDataPendente.emitente,
           id: novoClienteCriado.id,
           ramo_de_atividade: data.ramoDeAtividade,
-          // Adiciona contas bancárias do payload para o cedenteSelecionado
           contasBancarias: data.contasBancarias || [], 
         },
         emitenteExiste: true,
@@ -278,7 +280,6 @@ export default function OperacaoBorderoPage() {
         sacado: { 
             ...xmlDataPendente.sacado, 
             id: novoSacadoCriado.id,
-            // Adiciona condições de pagamento do payload
             condicoes_pagamento: data.condicoesPagamento || []
         },
         sacadoExiste: true,
@@ -297,14 +298,14 @@ export default function OperacaoBorderoPage() {
     setEmpresaCedente(cliente.nome);
     setEmpresaCedenteId(cliente.id);
     setCedenteRamo(cliente.ramo_de_atividade || "");
-    setCedenteSelecionado(cliente); // <-- ARMAZENA O OBJETO COMPLETO
+    setCedenteSelecionado(cliente); 
   };
 
   const handleCedenteChange = (newName) => {
     setEmpresaCedente(newName);
     setEmpresaCedenteId(null);
     setCedenteRamo("");
-    setCedenteSelecionado(null); // <-- LIMPA O OBJETO
+    setCedenteSelecionado(null); 
   };
 
   const handleSelectSacado = (sacado) => {
@@ -408,32 +409,29 @@ export default function OperacaoBorderoPage() {
     }
   };
   
-  // --- 3. NOVA FUNÇÃO HANDLER ---
   const handleConfirmRecompra = async (data) => {
     if (data && data.credito !== null && data.principal !== null) {
-      // 1. Adiciona os lançamentos de débito (principal) e crédito (juros)
       setDescontos(prev => [
         ...prev,
         {
           id: `recompra-debito-${Date.now()}`,
-          descricao: `Débito Recompra ${data.descricao.split(' ').pop()}`, // Pega só o N° da NF
-          valor: Math.abs(data.principal) // Valor positivo para ser subtraído
+          descricao: `Débito Recompra ${data.descricao.split(' ').pop()}`, 
+          valor: Math.abs(data.principal) 
         },
         {
           id: `recompra-credito-${Date.now() + 1}`,
           descricao: `Crédito Juros Recompra ${data.descricao.split(' ').pop()}`,
-          valor: -Math.abs(data.credito) // Valor negativo para somar ao líquido
+          valor: -Math.abs(data.credito) 
         }
       ]);
 
-      // 2. Chama a API para liquidar as duplicatas antigas
       try {
         const response = await fetch('/api/duplicatas/liquidar-recompra', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
           body: JSON.stringify({
             duplicataIds: data.duplicataIds,
-            dataLiquidacao: dataOperacao // Usa a data da operação atual
+            dataLiquidacao: dataOperacao 
           }),
         });
 
@@ -445,16 +443,12 @@ export default function OperacaoBorderoPage() {
         showNotification("Recompra adicionada e duplicatas originais liquidadas!", "success");
       
       } catch (err) {
-        // Se a baixa falhar, o usuário é notificado, mas os descontos permanecem
-        // para que a operação atual seja processada corretamente.
         showNotification(`Erro ao liquidar duplicatas: ${err.message}`, "error");
       }
-
-      // 3. Fecha o modal
       setIsRecompraModalOpen(false);
     }
   };
-
+  
   const handleSalvarOperacao = () => {
     if (notasFiscais.length === 0 || !contaBancariaId) {
       showNotification(
@@ -470,37 +464,48 @@ export default function OperacaoBorderoPage() {
       );
       return;
     }
+    if (isPagarComPix && !pixData.chave) {
+        showNotification("Por favor, selecione uma Chave PIX para o pagamento.", "error");
+        return;
+    }
 
-    if(isPagarComPix) {
-      if (!pixData.chave) {
-          showNotification("A Chave PIX do cedente é obrigatória para esta opção.", "error");
+    if (isPagarComPix && !isPartialDebit) {
+      const contaOrigemObj = contasBancarias.find(c => c.id === parseInt(contaBancariaId));
+      setPixPayload({
+        valor: totais.liquidoOperacao,
+        contaOrigem: contaOrigemObj ? formatDisplayConta(`${contaOrigemObj.banco} - ${contaOrigemObj.agencia}/${contaOrigemObj.contaCorrente}`) : 'N/A',
+        favorecido: empresaCedente,
+        chave: pixData.chave,
+        tipo_chave_pix: pixData.tipo_chave_pix
+      });
+      setIsPixConfirmOpen(true);
+    } 
+    else if (isPagarComPix && isPartialDebit) {
+      if (!valorParcialPendente) {
+          showNotification("Por favor, confirme o valor do débito parcial.", "info");
+          setIsPartialDebitModalOpen(true);
           return;
       }
       const contaOrigemObj = contasBancarias.find(c => c.id === parseInt(contaBancariaId));
-      if (!contaOrigemObj) {
-          showNotification("Conta de origem para o PIX não encontrada.", "error");
+      setPixPayload({
+        valor: valorParcialPendente,
+        contaOrigem: contaOrigemObj ? formatDisplayConta(`${contaOrigemObj.banco} - ${contaOrigemObj.agencia}/${contaOrigemObj.contaCorrente}`) : 'N/A',
+        favorecido: empresaCedente,
+        chave: pixData.chave,
+        tipo_chave_pix: pixData.tipo_chave_pix
+      });
+      setIsPixConfirmOpen(true);
+    }
+    else if (isPartialDebit && !isPagarComPix) {
+       if (!valorParcialPendente) {
+          showNotification("Por favor, confirme o valor e data do débito parcial.", "info");
+          setIsPartialDebitModalOpen(true);
           return;
       }
-      
-      const payload = {
-        valor: totais.liquidoOperacao,
-        descricao: `Pagamento Borderô`, // A API irá enriquecer isso
-        contaOrigem: contaOrigemObj.contaCorrente,
-        empresaAssociada: empresaCedente,
-        destinatario: {
-            tipo: pixData.tipo_chave_pix,
-            chave: pixData.chave
-        }
-      };
-      setPixPayload(payload);
-      setIsPixConfirmOpen(true);
-      return;
-    }
-
-    if (isPartialDebit) {
-      setIsPartialDebitModalOpen(true);
-    } else {
-      confirmarSalvamento();
+      confirmarSalvamento(valorParcialPendente, dataParcialPendente, false);
+    } 
+    else {
+      confirmarSalvamento(null, null, false);
     }
   };
 
@@ -525,8 +530,8 @@ export default function OperacaoBorderoPage() {
       descontos: todosOsDescontos.map(({ id, ...rest }) => rest),
       notasFiscais,
       cedenteRamo,
-      valorDebito: valorDebito,
-      dataDebito: dataDebito,
+      valorDebito,
+      dataDebito,
       efetuar_pix: isPix,
       pixEndToEndId: isPix ? pixResultData?.transactionId : null,
     };
@@ -546,19 +551,28 @@ export default function OperacaoBorderoPage() {
       const operacaoId = await response.json();
       setSavedOperacaoInfo({ id: operacaoId, clienteId: empresaCedenteId });
 
+      // --- 3. TERCEIRA ALTERAÇÃO: MONTAR O RECIBO COMPLETO ---
       if (isPix) {
         showNotification("Operação salva e PIX enviado com sucesso!", "success");
+
+        // Busca os dados da conta do recebedor (cedente) que foi usada
+        const recebedorConta = (cedenteSelecionado.contasBancarias || []).find(c => c.chave_pix === pixPayload.chave) || (cedenteSelecionado.contasBancarias || [])[0] || {};
+
         setReceiptData({
           valor: pixPayload.valor,
-          data: new Date(),
+          data: new Date(), // <-- Hora exata da transação, como solicitado
           transactionId: pixResultData.transactionId,
           descricao: `Pagamento Borderô #${operacaoId}`,
           pagador: {
-              nome: clienteMasterNome,
-              conta: contasBancarias.find(c => c.id === parseInt(contaBancariaId))?.contaBancaria || 'N/A',
+              nome: clienteMasterInfo.nome,
+              cnpj: clienteMasterInfo.cnpj,
+              conta: pixPayload.contaOrigem || 'N/A',
           },
           recebedor: {
-             nome: empresaCedente
+             nome: empresaCedente,
+             cnpj: cedenteSelecionado.cnpj,
+             instituicao: recebedorConta.banco,
+             chavePix: pixPayload.chave
           }
         });
         setIsReceiptModalOpen(true);
@@ -575,66 +589,54 @@ export default function OperacaoBorderoPage() {
 
   const confirmarSalvamentoEPIX = async () => {
     setIsSaving(true);
-    
-    const finalLiquidoOperacao = totais.liquidoOperacao;
-    let valorDebitado = finalLiquidoOperacao;
-    
+    setIsPixConfirmOpen(false);
+
     const contaOrigemObj = contasBancarias.find(c => c.id === parseInt(contaBancariaId));
     
-    // Determina qual API de PIX usar (Inter ou Itaú)
-    const bancoOrigem = contaOrigemObj.banco.toLowerCase();
-    let apiEndpoint = '';
-    let dadosPixParaEnvio = {};
-    
-    if (bancoOrigem.includes('inter')) {
-        apiEndpoint = '/api/inter/enviar-pix';
-        dadosPixParaEnvio = {
-            valor: parseFloat(valorDebitado.toFixed(2)),
-            dataPagamento: new Date().toISOString().split('T')[0],
-            descricao: `Pagamento Borderô`,
-            destinatario: {
-                tipo: 'CHAVE',
-                chave: pixData.chave,
-            },
-        };
-    } else if (bancoOrigem.includes('itaú') || bancoOrigem.includes('itau')) {
-        apiEndpoint = '/api/itau/enviar-pix';
-        dadosPixParaEnvio = {
-            valor_pagamento: valorDebitado.toFixed(2),
-            data_pagamento: new Date().toISOString().split('T')[0],
-            tipo_chave: pixData.tipo_chave_pix,
-            chave: pixData.chave,
-            referencia_empresa: 'Pagto Borderô'
-        };
-    } else {
-        showNotification('O banco selecionado não está configurado para PIX.', 'error');
-        setIsSaving(false);
-        setIsPixConfirmOpen(false);
-        return;
-    }
+    const valorDebitado = pixPayload.valor; 
+    const dataPagamento = (isPartialDebit && dataParcialPendente) 
+                          ? dataParcialPendente 
+                          : new Date().toISOString().split("T")[0];
 
+    const payloadParaApiPix = {
+        valor: valorDebitado,
+        descricao: `Pagamento Borderô #${empresaCedenteId}`,
+        contaOrigem: contaOrigemObj.contaCorrente,
+        empresaAssociada: empresaCedente,
+        pix: {
+            tipo: pixData.tipo_chave_pix,
+            chave: pixData.chave
+        },
+        skipSave: true 
+    };
 
     try {
-      const pixResponse = await fetch(apiEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-          body: JSON.stringify({ dadosPix: dadosPixParaEnvio, contaCorrente: contaOrigemObj.contaCorrente }),
-      });
+        const pixResponse = await fetch('/api/lancamentos/pix', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify(payloadParaApiPix),
+        });
 
-      const pixResult = await pixResponse.json();
-      if (!pixResponse.ok) throw new Error(pixResult.message || 'Falha ao enviar o PIX.');
-      
-      const transactionId = pixResult.cod_pagamento || pixResult.transacaoPix?.endToEnd; 
-      
-      await confirmarSalvamento(null, null, true, { transactionId });
+        const pixResult = await pixResponse.json();
+        
+        if (!pixResponse.ok || !pixResult.success) {
+            throw new Error(pixResult.message || 'Falha ao enviar o PIX.');
+        }
+        
+        const pixApiResultData = pixResult.pixResult;
+        const transactionId = pixApiResultData.cod_pagamento || pixApiResultData.transacaoPix?.endToEnd; 
+
+        if (!transactionId) {
+            console.warn("Resposta PIX OK, mas 'transaction_id' não foi encontrado.", pixApiResultData);
+        }
+
+        await confirmarSalvamento(valorDebitado, dataPagamento, true, { transactionId });
 
     } catch (error) {
         showNotification(error.message, "error");
         setIsSaving(false);
-        setIsPixConfirmOpen(false);
     }
   };
-
 
   const finalizarOperacao = () => {
     if (savedOperacaoInfo) {
@@ -699,6 +701,9 @@ export default function OperacaoBorderoPage() {
     setIsPagarComPix(false);
     setPixData({ tipo_chave_pix: 'CPF/CNPJ', chave: '' });
     setjurosPre(true);
+    setValorParcialPendente(null);
+    setDataParcialPendente(null);
+    
     if (showMsg) showNotification("Formulário limpo.", "success");
   };
 
@@ -735,8 +740,6 @@ export default function OperacaoBorderoPage() {
       0
     );
     
-    // --- CÁLCULO DE DESCONTOS ATUALIZADO ---
-    // Agora soma valores positivos (débitos) e subtrai negativos (créditos)
     const totalOutrosDescontos = todosOsDescontos.reduce(
       (acc, d) => acc + d.valor, 
       0
@@ -758,12 +761,58 @@ export default function OperacaoBorderoPage() {
     if (idToRemove === "despesas-bancarias") {
       setIgnoreDespesasBancarias(true);
     } else {
-      // Impede a remoção de descontos de recompra
       if (String(idToRemove).startsWith('recompra-')) {
           showNotification("Não é possível remover itens de recompra. Limpe o borderô para cancelar.", "error");
           return;
       }
       setDescontos(descontos.filter((d) => d.id !== idToRemove));
+    }
+  };
+  
+  const handlePartialDebitChange = (isChecked) => {
+    if (isChecked) {
+      setIsPartialDebitModalOpen(true); 
+    } else {
+      setIsPartialDebit(false);
+      setValorParcialPendente(null);
+      setDataParcialPendente(null);
+    }
+  };
+
+  const handlePartialDebitConfirm = (valor, data) => {
+    const valorParcialNum = parseFloat(valor);
+    
+    setIsPartialDebit(true);
+    setValorParcialPendente(valorParcialNum);
+    setDataParcialPendente(data);
+    setIsPartialDebitModalOpen(false);
+
+    if (isPagarComPix) {
+      const contaOrigemObj = contasBancarias.find(c => c.id === parseInt(contaBancariaId));
+      setPixPayload({
+        valor: valorParcialNum,
+        contaOrigem: contaOrigemObj ? formatDisplayConta(`${contaOrigemObj.banco} - ${contaOrigemObj.agencia}/${contaOrigemObj.contaCorrente}`) : 'N/A',
+        favorecido: empresaCedente,
+        chave: pixData.chave,
+        tipo_chave_pix: pixData.tipo_chave_pix
+      });
+      setIsPixConfirmOpen(true);
+    }
+  };
+  
+  const handlePixChange = (isChecked) => {
+    setIsPagarComPix(isChecked);
+
+    if (isChecked && isPartialDebit && valorParcialPendente) {
+      const contaOrigemObj = contasBancarias.find(c => c.id === parseInt(contaBancariaId));
+      setPixPayload({
+        valor: valorParcialPendente,
+        contaOrigem: contaOrigemObj ? formatDisplayConta(`${contaOrigemObj.banco} - ${contaOrigemObj.agencia}/${contaOrigemObj.contaCorrente}`) : 'N/A',
+        favorecido: empresaCedente,
+        chave: pixData.chave,
+        tipo_chave_pix: pixData.tipo_chave_pix
+      });
+      setIsPixConfirmOpen(true);
     }
   };
 
@@ -801,7 +850,7 @@ export default function OperacaoBorderoPage() {
       <PartialDebitModal
         isOpen={isPartialDebitModalOpen}
         onClose={() => setIsPartialDebitModalOpen(false)}
-        onConfirm={confirmarSalvamento}
+        onConfirm={handlePartialDebitConfirm}
         totalValue={totais.liquidoOperacao}
       />
       <PixConfirmationModal
@@ -884,17 +933,17 @@ export default function OperacaoBorderoPage() {
           isSaving={isSaving}
           onAddDescontoClick={() => setIsDescontoModalOpen(true)}
           onRemoveDesconto={handleRemoveDesconto}
-          onRecompraClick={() => setIsRecompraModalOpen(true)} // <-- 5. PROP PASSADA
+          onRecompraClick={() => setIsRecompraModalOpen(true)}
           contasBancarias={contasBancarias}
           contaBancariaId={contaBancariaId}
           setContaBancariaId={setContaBancariaId}
           cedenteRamo={cedenteRamo}
           isPartialDebit={isPartialDebit}
-          setIsPartialDebit={setIsPartialDebit}
+          handlePartialDebitChange={handlePartialDebitChange}
           jurosPre={jurosPre}
           setjurosPre={setjurosPre}
           isPagarComPix={isPagarComPix}
-          setIsPagarComPix={setIsPagarComPix}
+          handlePixChange={handlePixChange}
           pixData={pixData}
           setPixData={setPixData}
           cedenteSelecionado={cedenteSelecionado}
