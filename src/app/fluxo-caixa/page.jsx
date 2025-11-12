@@ -17,12 +17,10 @@ import { format as formatDateFns, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ConciliacaoModal from "@/app/components/ConciliacaoModal";
 import PixReceiptModal from "@/app/components/PixReceiptModal";
-// NOVO: Importa o modal de lançamento manual do extrato
 import LancamentoExtratoModal from "@/app/components/LancamentoExtratoModal";
 
 const ITEMS_PER_PAGE = 8;
 const INTER_ITEMS_PER_PAGE = 2;
-// NOVO: Constante para paginação OFX
 const OFX_ITEMS_PER_PAGE = 6;
 
 export default function FluxoDeCaixaPage() {
@@ -81,15 +79,12 @@ export default function FluxoDeCaixaPage() {
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
 
-  // --- NOVOS ESTADOS PARA OFX ---
   const [isLancamentoManualOpen, setIsLancamentoManualOpen] = useState(false);
   const [ofxExtrato, setOfxExtrato] = useState(null);
   const [isLoadingOfx, setIsLoadingOfx] = useState(false);
   const [ofxError, setOfxError] = useState(null);
   const [ofxPage, setOfxPage] = useState(1); // paginação OFX
-  // --- FIM DOS NOVOS ESTADOS ---
 
-  // --- NOVA FUNÇÃO: UPLOAD OFX ---
   const handleOfxUpload = async (file) => {
     setIsLoadingOfx(true);
     setOfxError(null);
@@ -1012,7 +1007,9 @@ export default function FluxoDeCaixaPage() {
                 {saldosTitle}
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 pr-2">
-                {saldos.map((saldo, index) => (
+                {saldos
+                  .filter(saldo => saldo.saldo !== 0) // Adiciona o filtro aqui
+                  .map((saldo, index) => (
                   <div
                     key={index}
                     className="bg-gray-800 p-3 rounded-lg shadow-lg border-l-4 border-orange-500"

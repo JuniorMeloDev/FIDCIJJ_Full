@@ -311,7 +311,9 @@ export default function ResumoPage() {
           <div className="transition-opacity duration-300 opacity-100">
             {/* Contas Bancárias */}
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {saldos.map((conta, index) => {
+              {saldos
+                .filter(conta => conta.saldo !== 0) // Filtra contas com saldo zero
+                .map((conta, index) => {
                 const cores = [
                   "bg-blue-700 border-blue-400",
                   "bg-green-700 border-green-400",
