@@ -29,12 +29,15 @@ export async function GET(request) {
 
     const limite_total = clienteData?.limite_credito || 0;
 
-    // 2. Calcular o limite utilizado somando as duplicatas pendentes
+    // 2. Calcular o limite utilizado
+    // Soma duplicatas PENDENTES de operações APROVADAS
     const { data: duplicatasPendentes, error: duplicatasError } = await supabase
       .from('duplicatas')
-      .select('valor_bruto, operacao:operacoes!inner(cliente_id)')
+      // --- CORREÇÃO AQUI ---
+      .select('valor_bruto, operacao:operacoes!inner(cliente_id, status)') // Puxa o status da operação
       .eq('operacao.cliente_id', clienteId)
-      .eq('status_recebimento', 'Pendente');
+      .eq('operacao.status', 'Aprovada')          // Filtra pela OPERAÇÃO Aprovada
+      .eq('status_recebimento', 'Pendente');   // E pela DUPLICATA Pendente
     
     if (duplicatasError) {
       console.error('Erro ao buscar duplicatas pendentes:', duplicatasError);

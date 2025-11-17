@@ -10,44 +10,66 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // 1. FAZ UMA CONSULTA MAIS SIMPLES E ABRANGENTE
-        let { data: duplicatas, error } = await supabase
-            .from('duplicatas')
-            .select(`
-                *,
-                operacao:operacoes (
-                    cliente_id,
-                    tipo_operacao_id,
-                    cliente:clientes ( nome ),
-                    tipo_operacao:tipos_operacao ( nome )
-                )
-            `)
-            // --- ALTERAÇÃO AQUI: Adicionada ordenação pela data da operação ---
-            .order('data_operacao', { ascending: true });
-
-        if (error) throw error;
-
-        // 2. APLICA OS FILTROS EM JAVASCRIPT
+        // 1. PEGA OS FILTROS DA URL
+        const statusFilter = searchParams.get('status'); // 'Pendente', 'Recebido' ou 'todos'
         const sacadoFilter = searchParams.get('sacado');
-        const statusFilter = searchParams.get('status');
         const dataInicio = searchParams.get('dataInicio');
         const dataFim = searchParams.get('dataFim');
         const clienteIdFilter = searchParams.get('clienteId');
         const tipoOperacaoIdFilter = searchParams.get('tipoOperacaoId');
 
-        const filteredData = duplicatas.filter(dup => {
-            if (!dup.operacao) return false;
-            if (sacadoFilter && !dup.cliente_sacado.toLowerCase().includes(sacadoFilter.toLowerCase())) return false;
-            if (statusFilter && statusFilter !== 'Todos' && dup.status_recebimento !== statusFilter) return false;
-            if (dataInicio && dup.data_operacao < dataInicio) return false;
-            if (dataFim && dup.data_operacao > dataFim) return false;
-            if (clienteIdFilter && String(dup.operacao.cliente_id) !== clienteIdFilter) return false;
-            if (tipoOperacaoIdFilter && String(dup.operacao.tipo_operacao_id) !== tipoOperacaoIdFilter) return false;
-            return true;
-        });
+        // 2. CONSTRÓI A CONSULTA BASE DO SUPABASE
+        let query = supabase
+            .from('duplicatas')
+            .select(`
+                *,
+                operacao:operacoes!inner (
+                    cliente_id,
+                    tipo_operacao_id,
+                    status,
+                    cliente:clientes ( nome ),
+                    tipo_operacao:tipos_operacao ( nome )
+                )
+            `)
+            // --- CORREÇÃO AQUI ---
+            // Adiciona o filtro BASE para trazer apenas duplicatas de OPERAÇÕES APROVADAS
+            .eq('operacao.status', 'Aprovada'); 
+            // ---------------------------------
 
-        // 3. FORMATA OS DADOS PARA O RELATÓRIO
-        let formattedData = filteredData.map(d => ({
+        // 3. APLICA OS FILTROS DA URL
+        
+        // Filtro de status da DUPLICATA (Pendente, Recebido, etc.)
+        if (statusFilter && statusFilter !== 'todos') { 
+            query = query.eq('status_recebimento', statusFilter);
+        }
+
+        // Outros filtros
+        if (sacadoFilter) {
+            query = query.ilike('cliente_sacado', `%${sacadoFilter}%`);
+        }
+        if (dataInicio) {
+            query = query.gte('data_operacao', dataInicio);
+        }
+        if (dataFim) {
+            query = query.lte('data_operacao', dataFim);
+        }
+         if (clienteIdFilter) {
+            query = query.eq('operacao.cliente_id', clienteIdFilter);
+        }
+        if (tipoOperacaoIdFilter) {
+            query = query.eq('operacao.tipo_operacao_id', tipoOperacaoIdFilter);
+        }
+
+        // Adiciona ordenação
+        query = query.order('data_operacao', { ascending: true });
+
+        // 4. EXECUTA A CONSULTA
+        let { data: duplicatas, error } = await query;
+
+        if (error) throw error;
+        
+        // 5. FORMATA OS DADOS (A filtragem extra de JS não é mais necessária)
+        let formattedData = duplicatas.map(d => ({
             id: d.id,
             operacao_id: d.operacao_id,
             cliente_id: d.operacao?.cliente_id,
@@ -62,7 +84,7 @@ export async function GET(request) {
             status_recebimento: d.status_recebimento,
         }));
 
-        // 4. LÓGICA DE DEDUPLICAÇÃO FINAL
+        // 6. LÓGICA DE DEDUPLICAÇÃO FINAL
         const uniqueData = Array.from(new Map(formattedData.map(item => [
             `${item.data_operacao}-${item.nf_cte}-${item.valor_bruto}`, item
         ])).values());
