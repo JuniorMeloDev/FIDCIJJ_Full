@@ -3,10 +3,16 @@
 import { useState, useEffect } from 'react';
 // IMPORTA A NOVA FUNÇÃO DE FORMATAÇÃO
 import { formatBRLInput, parseBRL, formatDisplayConta } from '@/app/utils/formatters';
-import PixConfirmationModal from './PixConfirmationModal'; // Importa o novo modal
-import PixReceiptModal from './PixReceiptModal'; // IMPORTA O MODAL DE RECIBO
+// REMOVIDO: Imports dos modais de PIX que foram movidos para a página
 
-export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster, clienteMasterNome }) {
+export default function LancamentoModal({ 
+    isOpen, 
+    onClose, 
+    onSave, 
+    onPixSubmit, // <-- NOVA PROP
+    contasMaster, 
+    clienteMasterNome 
+}) {
     const [tipo, setTipo] = useState('DEBITO');
     const [data, setData] = useState(new Date().toISOString().split('T')[0]);
     const [descricao, setDescricao] = useState('');
@@ -18,13 +24,11 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
     const [isDespesa, setIsDespesa] = useState(true);
     const [pixData, setPixData] = useState({ tipo_chave_pix: 'CPF/CNPJ', chave: '' });
 
-    // States para o modal de confirmação
-    const [isPixConfirmOpen, setIsPixConfirmOpen] = useState(false);
-    const [pixPayload, setPixPayload] = useState(null);
-
-    // STATES PARA O MODAL DE RECIBO
-    const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
-    const [receiptData, setReceiptData] = useState(null);
+    // REMOVIDO: States dos modais de PIX (agora são gerenciados pela página)
+    // const [isPixConfirmOpen, setIsPixConfirmOpen] = useState(false);
+    // const [pixPayload, setPixPayload] = useState(null);
+    // const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+    // const [receiptData, setReceiptData] = useState(null);
 
     const contasPix = Array.isArray(contasMaster) ? contasMaster.filter(
         c => c.banco.toLowerCase().includes('inter') || c.banco.toLowerCase().includes('itaú')
@@ -47,67 +51,12 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
         setError('');
         setIsDespesa(true);
         setPixData({ tipo_chave_pix: 'CPF/CNPJ', chave: '' });
-        setPixPayload(null);
-        setIsPixConfirmOpen(false);
-        setIsReceiptModalOpen(false); // Adicionado
-        setReceiptData(null); // Adicionado
+        // REMOVIDO: Resets dos states que foram movidos
     };
 
     if (!isOpen) return null;
 
-    // ATUALIZA O 'handleConfirmAndSendPix' PARA GERAR O RECIBO
-    const handleConfirmAndSendPix = async () => {
-        setIsSaving(true);
-        setError('');
-        try {
-            const response = await fetch('/api/lancamentos/pix', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('authToken')}` },
-                body: JSON.stringify(pixPayload)
-            });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.message || 'Falha ao processar pagamento PIX.');
-
-            // PIX ENVIADO COM SUCESSO!
-            await onSave(); // Salva o lançamento no banco
-
-            // --- INÍCIO DA LÓGICA DO RECIBO ---
-            const apiResponse = result.pixResult;
-
-            const contaOrigemCompleta = contasMaster.find(c => c.contaCorrente === pixPayload.contaOrigem)?.contaBancaria || pixPayload.contaOrigem;
-
-            const newReceiptData = {
-                valor: parseFloat(apiResponse.valor_pagamento || pixPayload.valor),
-                data: new Date(apiResponse.data_pagamento), // Converte a string ISO para Date
-                transactionId: apiResponse.cod_pagamento || apiResponse.transacaoPix?.endToEnd,
-                descricao: apiResponse.informacoes_entre_usuarios || pixPayload.descricao,
-
-                pagador: {
-                    nome: pixPayload.empresaAssociada || clienteMasterNome,
-                    cnpj: apiResponse.pagador?.documento, // <-- VEM DA API
-                    conta: contaOrigemCompleta,
-                },
-
-                recebedor: apiResponse.recebedor ? { // Verifica se 'recebedor' existe (padrão Itaú)
-                    nome: apiResponse.recebedor.nome,
-                    cnpj: apiResponse.recebedor.documento,
-                    instituicao: apiResponse.recebedor.banco,
-                    chavePix: apiResponse.recebedor.identificacao_chave
-                } : null
-            };
-
-            setReceiptData(newReceiptData);    // Define os dados do recibo
-            setIsPixConfirmOpen(false);        // Fecha o modal de confirmação
-            setIsReceiptModalOpen(true);       // ABRE O MODAL DE RECIBO
-            // --- FIM DA LÓGICA DO RECIBO ---
-
-        } catch (err) {
-            setError(err.message);
-            setIsPixConfirmOpen(false);
-        } finally {
-            setIsSaving(false);
-        }
-    };
+    // REMOVIDO: handleConfirmAndSendPix (movido para a página)
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -118,20 +67,14 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
             return;
         }
 
-        // --- INÍCIO DA MODIFICAÇÃO PARA DEBITO/CREDITO ---
-        // Lê as variáveis de ambiente
+        // --- Lógica de formatação de conta (permanece a mesma) ---
         const contaNoDb = process.env.NEXT_PUBLIC_ITAU_CONTA_DB;
         const contaDisplay = process.env.NEXT_PUBLIC_ITAU_CONTA_DISPLAY;
-
-        // Determina qual valor da conta usar no payload
         let contaOrigemParaSalvar = contaOrigem;
         let contaDestinoParaSalvar = contaDestino;
-
-        // Se for Débito ou Crédito e a conta selecionada for a mascarada (DB), usa a de display
         if ((tipo === 'DEBITO' || tipo === 'CREDITO') && contaNoDb && contaDisplay && contaOrigem.endsWith(contaNoDb)) {
             contaOrigemParaSalvar = contasMaster.find(c => c.contaBancaria.endsWith(contaNoDb))?.contaBancaria.replace(contaNoDb, contaDisplay) || contaOrigem;
         }
-        // Se for Transferência, ajusta origem e destino se necessário
         else if (tipo === 'TRANSFERENCIA' && contaNoDb && contaDisplay) {
             if (contaOrigem.endsWith(contaNoDb)) {
                contaOrigemParaSalvar = contasMaster.find(c => c.contaBancaria.endsWith(contaNoDb))?.contaBancaria.replace(contaNoDb, contaDisplay) || contaOrigem;
@@ -140,11 +83,13 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
                 contaDestinoParaSalvar = contasMaster.find(c => c.contaBancaria.endsWith(contaNoDb))?.contaBancaria.replace(contaNoDb, contaDisplay) || contaDestino;
             }
         }
-        // --- FIM DA MODIFICAÇÃO ---
+        // --- Fim da lógica de formatação ---
 
 
         if (tipo === 'PIX') {
-            // A lógica do PIX permanece a mesma, pois usa contaCorrente (sem formatação)
+            // --- CORREÇÃO AQUI ---
+            // Em vez de abrir o modal, chama a nova prop 'onPixSubmit'
+            // e passa o payload para a página pai gerenciar.
             const payload = {
                 valor: parseBRL(valor),
                 descricao: descricao,
@@ -154,25 +99,25 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
                     tipo: pixData.tipo_chave_pix,
                     chave: pixData.chave
                 },
-                chavePix: pixData.chave, // Mantido para compatibilidade, se necessário
-                tipoChave: pixData.tipo_chave_pix // Mantido para compatibilidade, se necessário
+                chavePix: pixData.chave,
+                tipoChave: pixData.tipo_chave_pix
             };
 
-            setPixPayload(payload);
-            setIsPixConfirmOpen(true);
+            onPixSubmit(payload); // Chama a função da página pai
             return;
+            // --- FIM DA CORREÇÃO ---
         }
 
         setIsSaving(true);
-        // USA AS VARIÁVEIS AJUSTADAS (contaOrigemParaSalvar, contaDestinoParaSalvar)
+        // Payload para lançamentos normais (Débito, Crédito, Transferência)
         const payload = {
             tipo,
             data,
             descricao,
             valor: parseBRL(valor),
-            contaOrigem: contaOrigemParaSalvar, // <--- Modificado
+            contaOrigem: contaOrigemParaSalvar, 
             empresaAssociada: clienteMasterNome,
-            contaDestino: tipo === 'TRANSFERENCIA' ? contaDestinoParaSalvar : null, // <--- Modificado
+            contaDestino: tipo === 'TRANSFERENCIA' ? contaDestinoParaSalvar : null, 
             empresaDestino: tipo === 'TRANSFERENCIA' ? clienteMasterNome : null,
             isDespesa: tipo === 'DEBITO' ? isDespesa : null,
         };
@@ -187,153 +132,132 @@ export default function LancamentoModal({ isOpen, onClose, onSave, contasMaster,
     };
 
     return (
-         <>
-            <PixConfirmationModal
-                isOpen={isPixConfirmOpen}
-                onClose={() => setIsPixConfirmOpen(false)}
-                onConfirm={handleConfirmAndSendPix}
-                data={pixPayload}
-                isSending={isSaving}
-            />
-            <PixReceiptModal
-                isOpen={isReceiptModalOpen}
-                onClose={() => {
-                    setIsReceiptModalOpen(false);
-                    onClose();
-                }}
-                receiptData={receiptData}
-            />
-
-            <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50" onClick={isReceiptModalOpen ? () => {} : onClose}>
-                <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
-                    <h2 className="text-xl font-bold mb-6">Novo Lançamento Manual</h2>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Tipo de Lançamento</label>
-                            <div className="flex flex-wrap gap-4">
-                                <label className="flex items-center"><input type="radio" name="tipo" value="DEBITO" checked={tipo === 'DEBITO'} onChange={(e) => setTipo(e.target.value)} className="h-4 w-4 text-orange-500 border-gray-600"/> <span className="ml-2 text-sm">Saída (Débito)</span></label>
-                                <label className="flex items-center"><input type="radio" name="tipo" value="CREDITO" checked={tipo === 'CREDITO'} onChange={(e) => setTipo(e.target.value)} className="h-4 w-4 text-orange-500 border-gray-600"/> <span className="ml-2 text-sm">Entrada (Crédito)</span></label>
-                                <label className="flex items-center"><input type="radio" name="tipo" value="TRANSFERENCIA" checked={tipo === 'TRANSFERENCIA'} onChange={(e) => setTipo(e.target.value)} className="h-4 w-4 text-orange-500 border-gray-600"/> <span className="ml-2 text-sm">Transferência</span></label>
-                                <label className="flex items-center"><input type="radio" name="tipo" value="PIX" checked={tipo === 'PIX'} onChange={(e) => setTipo(e.target.value)} className="h-4 w-4 text-orange-500 border-gray-600"/> <span className="ml-2 text-sm font-bold text-orange-300">Pagamento (PIX)</span></label>
-                            </div>
+         // REMOVIDO: O <React.Fragment> e os modais de PIX
+         // O 'onClick' do backdrop agora é apenas 'onClose'
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50" onClick={onClose}>
+            <div className="bg-gray-800 text-white p-6 rounded-lg shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                <h2 className="text-xl font-bold mb-6">Novo Lançamento Manual</h2>
+                
+                {/* O formulário permanece o mesmo */}
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Tipo de Lançamento</label>
+                        <div className="flex flex-wrap gap-4">
+                            <label className="flex items-center"><input type="radio" name="tipo" value="DEBITO" checked={tipo === 'DEBITO'} onChange={(e) => setTipo(e.target.value)} className="h-4 w-4 text-orange-500 border-gray-600"/> <span className="ml-2 text-sm">Saída (Débito)</span></label>
+                            <label className="flex items-center"><input type="radio" name="tipo" value="CREDITO" checked={tipo === 'CREDITO'} onChange={(e) => setTipo(e.target.value)} className="h-4 w-4 text-orange-500 border-gray-600"/> <span className="ml-2 text-sm">Entrada (Crédito)</span></label>
+                            <label className="flex items-center"><input type="radio" name="tipo" value="TRANSFERENCIA" checked={tipo === 'TRANSFERENCIA'} onChange={(e) => setTipo(e.target.value)} className="h-4 w-4 text-orange-500 border-gray-600"/> <span className="ml-2 text-sm">Transferência</span></label>
+                            <label className="flex items-center"><input type="radio" name="tipo" value="PIX" checked={tipo === 'PIX'} onChange={(e) => setTipo(e.target.value)} className="h-4 w-4 text-orange-500 border-gray-600"/> <span className="ml-2 text-sm font-bold text-orange-300">Pagamento (PIX)</span></label>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label htmlFor="data" className="block text-sm font-medium text-gray-300">Data</label>
-                                <input type="date" id="data" value={data} onChange={e => setData(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2" disabled={tipo === 'PIX'}/>
-                            </div>
-                            <div>
-                                <label htmlFor="valor" className="block text-sm font-medium text-gray-300">Valor</label>
-                                <input type="text" id="valor" value={valor} onChange={e => setValor(formatBRLInput(e.target.value))} required placeholder="R$ 0,00" className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"/>
-                            </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="data" className="block text-sm font-medium text-gray-300">Data</label>
+                            <input type="date" id="data" value={data} onChange={e => setData(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2" disabled={tipo === 'PIX'}/>
                         </div>
                         <div>
-                            <label htmlFor="descricao" className="block text-sm font-medium text-gray-300">Descrição</label>
-                            <input type="text" id="descricao" value={descricao} onChange={e => setDescricao(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"/>
+                            <label htmlFor="valor" className="block text-sm font-medium text-gray-300">Valor</label>
+                            <input type="text" id="valor" value={valor} onChange={e => setValor(formatBRLInput(e.target.value))} required placeholder="R$ 0,00" className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"/>
                         </div>
+                    </div>
+                    <div>
+                        <label htmlFor="descricao" className="block text-sm font-medium text-gray-300">Descrição</label>
+                        <input type="text" id="descricao" value={descricao} onChange={e => setDescricao(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"/>
+                    </div>
 
+                    { (tipo === 'DEBITO' || tipo === 'CREDITO') && (
+                         <div>
+                           <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Conta</label>
+                           <select id="contaOrigem" name="contaOrigem" value={contaOrigem} onChange={e => setContaOrigem(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
+                                <option value="">Selecione...</option>
+                                {Array.isArray(contasMaster) && contasMaster.map(c =>
+                                    <option key={c.contaBancaria} value={c.contaBancaria}>
+                                        {formatDisplayConta(c.contaBancaria)}
+                                    </option>
+                                )}
+                           </select>
+                        </div>
+                    )}
 
-                        {/* Dropdowns de conta continuam usando formatDisplayConta para a exibição */}
-                        { (tipo === 'DEBITO' || tipo === 'CREDITO') && (
+                    {tipo === 'TRANSFERENCIA' && (
+                        <div className="space-y-4 border-t border-gray-700 pt-4">
                              <div>
-                               <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Conta</label>
-                               {/* O VALOR INTERNO DO SELECT SERÁ O VALOR DO DB (...99359-8) */}
-                               <select id="contaOrigem" name="contaOrigem" value={contaOrigem} onChange={e => setContaOrigem(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
+                                <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Conta de Origem</label>
+                                <select id="contaOrigem" name="contaOrigem" value={contaOrigem} onChange={e => setContaOrigem(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
                                     <option value="">Selecione...</option>
                                     {Array.isArray(contasMaster) && contasMaster.map(c =>
-                                        <option key={c.contaBancaria} value={c.contaBancaria}>
-                                            {/* Exibe o valor formatado (...99359-6) */}
+                                        <option key={c.contaBancaria + '-origem'} value={c.contaBancaria}>
                                             {formatDisplayConta(c.contaBancaria)}
                                         </option>
                                     )}
-                               </select>
+                                </select>
+                             </div>
+                             <div>
+                                <label htmlFor="contaDestino" className="block text-sm font-medium text-gray-300">Conta de Destino</label>
+                                <select id="contaDestino" name="contaDestino" value={contaDestino} onChange={e => setContaDestino(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
+                                    <option value="">Selecione...</option>
+                                    {Array.isArray(contasMaster) && contasMaster.map(c =>
+                                        <option key={c.contaBancaria + '-destino'} value={c.contaBancaria}>
+                                            {formatDisplayConta(c.contaBancaria)}
+                                        </option>
+                                    )}
+                                </select>
                             </div>
-                        )}
+                        </div>
+                    )}
 
-                        {tipo === 'TRANSFERENCIA' && (
-                            <div className="space-y-4 border-t border-gray-700 pt-4">
-                                 <div>
-                                    <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Conta de Origem</label>
-                                    <select id="contaOrigem" name="contaOrigem" value={contaOrigem} onChange={e => setContaOrigem(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
-                                        <option value="">Selecione...</option>
-                                        {Array.isArray(contasMaster) && contasMaster.map(c =>
-                                            <option key={c.contaBancaria + '-origem'} value={c.contaBancaria}>
-                                                {formatDisplayConta(c.contaBancaria)}
-                                            </option>
-                                        )}
-                                    </select>
-                                 </div>
-                                 <div>
-                                    <label htmlFor="contaDestino" className="block text-sm font-medium text-gray-300">Conta de Destino</label>
-                                    <select id="contaDestino" name="contaDestino" value={contaDestino} onChange={e => setContaDestino(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
-                                        <option value="">Selecione...</option>
-                                        {Array.isArray(contasMaster) && contasMaster.map(c =>
-                                            <option key={c.contaBancaria + '-destino'} value={c.contaBancaria}>
-                                                {formatDisplayConta(c.contaBancaria)}
-                                            </option>
-                                        )}
+                    {tipo === 'PIX' && (
+                        <div className="space-y-4 border-t border-orange-500/50 pt-4">
+                             <div>
+                                <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Selecione a conta</label>
+                                <select id="contaOrigem" name="contaOrigem" value={contaOrigem} onChange={e => setContaOrigem(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
+                                    <option value="">Selecione uma conta</option>
+                                    {contasPix.map(c =>
+                                        <option key={c.id} value={c.contaCorrente}>
+                                            {formatDisplayConta(c.contaBancaria)}
+                                        </option>
+                                    )}
+                                </select>
+                             </div>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300">Tipo da Chave</label>
+                                    <select value={pixData.tipo_chave_pix} onChange={e => setPixData(p => ({...p, tipo_chave_pix: e.target.value}))} className="mt-1 block w-full bg-gray-700 p-2 rounded">
+                                        <option value="CPF/CNPJ">CPF/CNPJ</option>
+                                        <option value="Email">Email</option>
+                                        <option value="Telefone">Telefone</option>
+                                        <option value="Aleatória">Aleatória</option>
                                     </select>
                                 </div>
-                            </div>
-                        )}
-
-                        {tipo === 'PIX' && (
-                            <div className="space-y-4 border-t border-orange-500/50 pt-4">
-                                 <div>
-                                    <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Selecione a conta</label>
-                                    {/* O VALOR INTERNO DO SELECT SERÁ O contaCorrente (...993598) */}
-                                    <select id="contaOrigem" name="contaOrigem" value={contaOrigem} onChange={e => setContaOrigem(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
-                                        <option value="">Selecione uma conta</option>
-                                        {contasPix.map(c =>
-                                            <option key={c.id} value={c.contaCorrente}>
-                                                {/* Exibe o valor formatado (...99359-6) */}
-                                                {formatDisplayConta(c.contaBancaria)}
-                                            </option>
-                                        )}
-                                    </select>
-                                 </div>
-                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-300">Tipo da Chave</label>
-                                        <select value={pixData.tipo_chave_pix} onChange={e => setPixData(p => ({...p, tipo_chave_pix: e.target.value}))} className="mt-1 block w-full bg-gray-700 p-2 rounded">
-                                            <option value="CPF/CNPJ">CPF/CNPJ</option>
-                                            <option value="Email">Email</option>
-                                            <option value="Telefone">Telefone</option>
-                                            <option value="Aleatória">Aleatória</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-300">Chave PIX</label>
-                                        <input type="text" value={pixData.chave} onChange={e => setPixData(p => ({...p, chave: e.target.value}))} required className="mt-1 block w-full bg-gray-700 p-2 rounded"/>
-                                    </div>
-                                 </div>
-                            </div>
-                        )}
-
-                         {tipo === 'DEBITO' && (
-                            <div className="pt-2">
-                                <label className="flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={isDespesa}
-                                        onChange={(e) => setIsDespesa(e.target.checked)}
-                                        className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
-                                    />
-                                    <span className="ml-2 text-sm text-gray-200">É uma despesa? (Contabilizar no resumo)</span>
-                                </label>
-                            </div>
-                         )}
-                        {error && <p className="text-sm text-red-400 mt-2 text-center">{error}</p>}
-                        <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
-                            <button type="button" onClick={onClose} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition">Cancelar</button>
-                            <button type="submit" disabled={isSaving} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition disabled:bg-orange-400">
-                                {isSaving ? 'Processando...' : (tipo === 'PIX' ? 'Avançar para Confirmação' : 'Salvar Lançamento')}
-                            </button>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300">Chave PIX</label>
+                                    <input type="text" value={pixData.chave} onChange={e => setPixData(p => ({...p, chave: e.target.value}))} required className="mt-1 block w-full bg-gray-700 p-2 rounded"/>
+                                </div>
+                             </div>
                         </div>
-                    </form>
-                </div>
+                    )}
+
+                     {tipo === 'DEBITO' && (
+                        <div className="pt-2">
+                            <label className="flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={isDespesa}
+                                    onChange={(e) => setIsDespesa(e.target.checked)}
+                                    className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
+                                />
+                                <span className="ml-2 text-sm text-gray-200">É uma despesa? (Contabilizar no resumo)</span>
+                            </label>
+                        </div>
+                     )}
+                    {error && <p className="text-sm text-red-400 mt-2 text-center">{error}</p>}
+                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
+                        <button type="button" onClick={onClose} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition">Cancelar</button>
+                        <button type="submit" disabled={isSaving} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition disabled:bg-orange-400">
+                            {isSaving ? 'Processando...' : (tipo === 'PIX' ? 'Avançar para Confirmação' : 'Salvar Lançamento')}
+                        </button>
+                    </div>
+                </form>
             </div>
-        </>
+        </div>
     );
 }

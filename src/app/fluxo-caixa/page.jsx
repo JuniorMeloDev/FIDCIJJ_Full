@@ -18,6 +18,8 @@ import { ptBR } from "date-fns/locale";
 import ConciliacaoModal from "@/app/components/ConciliacaoModal";
 import PixReceiptModal from "@/app/components/PixReceiptModal";
 import LancamentoExtratoModal from "@/app/components/LancamentoExtratoModal";
+// --- CORREÇÃO: Importar o PixConfirmationModal ---
+import PixConfirmationModal from "@/app/components/PixConfirmationModal";
 
 const ITEMS_PER_PAGE = 8;
 const INTER_ITEMS_PER_PAGE = 2;
@@ -76,15 +78,21 @@ export default function FluxoDeCaixaPage() {
     new Set()
   );
 
+  // --- CORREÇÃO: Adicionar states para os modais de PIX ---
+  const [isSaving, setIsSaving] = useState(false);
+  const [isPixConfirmOpen, setIsPixConfirmOpen] = useState(false);
+  const [pixPayload, setPixPayload] = useState(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
+  // --- FIM DA CORREÇÃO ---
 
   const [isLancamentoManualOpen, setIsLancamentoManualOpen] = useState(false);
   const [ofxExtrato, setOfxExtrato] = useState(null);
   const [isLoadingOfx, setIsLoadingOfx] = useState(false);
   const [ofxError, setOfxError] = useState(null);
-  const [ofxPage, setOfxPage] = useState(1); // paginação OFX
+  const [ofxPage, setOfxPage] = useState(1);
 
+  // ... (handleOfxUpload, getAuthHeader, showNotification, fetchApiData, fetchMovimentacoes, fetchSaldos, fetchExtratoInter, useEffect estático... permanecem iguais) ...
   const handleOfxUpload = async (file) => {
     setIsLoadingOfx(true);
     setOfxError(null);
@@ -134,7 +142,6 @@ export default function FluxoDeCaixaPage() {
       setIsLoadingOfx(false);
     }
   };
-  // --- FIM DA FUNÇÃO OFX ---
 
   const getAuthHeader = () => ({
     Authorization: `Bearer ${sessionStorage.getItem("authToken")}`,
@@ -156,10 +163,8 @@ export default function FluxoDeCaixaPage() {
   const fetchMovimentacoes = async (currentFilters, currentSortConfig) => {
     setLoading(true);
     setError(null);
-    // Limpa extratos de API/OFX ao buscar movimentações manuais
     setInterExtrato(null);
     setInterSaldo(null);
-    // setOfxExtrato(null); // Não limpe o OFX aqui, o useEffect controla isso
     
     const params = new URLSearchParams();
     if (currentFilters.dataInicio)
@@ -217,7 +222,6 @@ export default function FluxoDeCaixaPage() {
     setMovimentacoes([]);
     setInterExtrato(null);
     setInterSaldo(null);
-    // setOfxExtrato(null); // Controlado pelo useEffect
     try {
       const [saldoRes, extratoRes] = await Promise.all([
         fetch(`/api/inter/saldo?contaCorrente=${conta}`, {
@@ -275,32 +279,23 @@ export default function FluxoDeCaixaPage() {
           contaBancaria: `${c.banco} - ${c.agencia}/${c.conta_corrente}`,
         }));
         setContasMaster(masterContasFormatadas);
-
-        // --- INÍCIO DA MODIFICAÇÃO (Variável de Ambiente) ---
-        // Lê o ID do cliente master do .env.local
         const masterClientId = parseInt(process.env.NEXT_PUBLIC_MASTER_CLIENT_ID, 10);
-
         let clientePagador;
         if (masterClientId) {
             clientePagador = clientesData.find(c => c.id === masterClientId);
         }
-
         if (clientePagador) {
-          // Se encontrou o cliente pelo ID do .env, usa ele
           setClienteMasterInfo({
             nome: clientePagador.nome,
             cnpj: clientePagador.cnpj,
           });
         } else if (clientesData.length > 0) {
-           // Fallback: Se não achou ou a var não existe, usa o primeiro cliente da lista
            setClienteMasterInfo({
             nome: clientesData[0].nome,
             cnpj: clientesData[0].cnpj,
           });
            console.warn(`Cliente master com ID (${masterClientId}) não encontrado. Usando fallback (primeiro cliente).`);
         }
-        // --- FIM DA MODIFICAÇÃO ---
-
       } catch (err) {
         console.error(err.message);
       }
@@ -308,12 +303,10 @@ export default function FluxoDeCaixaPage() {
     fetchStaticData();
   }, []);
 
-  // --- useEffect PRINCIPAL MODIFICADO ---
   useEffect(() => {
     fetchSaldos(filters);
     
     if (filters.contaExterna) {
-      // Se selecionou conta Externa (Inter), limpa o OFX
       setOfxExtrato(null);
       if (filters.dataInicio && filters.dataFim) {
         fetchExtratoInter(
@@ -326,18 +319,15 @@ export default function FluxoDeCaixaPage() {
         setMovimentacoes([]);
       }
     } else if (ofxExtrato) {
-      // Se OFX está ativo, limpa os outros e não faz nada (dados já estão em 'ofxExtrato')
       setLoading(true);
       setMovimentacoes([]);
       setInterExtrato(null);
       setInterSaldo(null);
       setLoading(false);
     } else {
-      // Senão, busca movimentações manuais
       fetchMovimentacoes(filters, sortConfig);
     }
-  }, [filters, sortConfig, ofxExtrato]); // Adicionado ofxExtrato como dependência
-  // --- FIM DO useEffect MODIFICADO ---
+  }, [filters, sortConfig, ofxExtrato]);
 
   useEffect(() => {
     const handleClick = () =>
@@ -345,7 +335,8 @@ export default function FluxoDeCaixaPage() {
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, []);
-
+  
+  // ... (searchDuplicatasParaConciliacao, handleConciliarTransacao, handleConfirmarConciliacao, interExtratoProcessado, formatHeaderDate, handleSort, getSortIcon, clearFilters, handleFilterChange... permanecem iguais) ...
   const searchDuplicatasParaConciliacao = async (query) => {
     if (!query) return [];
     try {
@@ -361,8 +352,6 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
-  // --- handleConciliarTransacao MODIFICADO ---
-  // Abre o modal de lançamento manual
   const handleConciliarTransacao = (transacao) => {
     if (reconciledTransactionIds.has(transacao.idTransacao)) {
         showNotification(
@@ -377,20 +366,13 @@ export default function FluxoDeCaixaPage() {
         descricao: transacao.descricao,
         valor: parseFloat(transacao.valor),
     });
-    // Abre direto o modal de lançamento manual ao invés do modal de conciliação
     setIsLancamentoManualOpen(true);
   };
-  // --- FIM DA MODIFICAÇÃO ---
 
-  // --- handleConfirmarConciliacao SUBSTITUÍDO ---
-  // Lógica complexa que decide entre conciliar manual ou duplicata
   const handleConfirmarConciliacao = async ({ items, detalhesTransacao, contaDestino }) => {
     try {
       const contaSelecionada = filters.contaExterna || contaDestino;
-
-      // Se for débito (valor negativo) ou não houver duplicatas selecionadas, cria lançamento manual
       if ((!items || items.length === 0) || (detalhesTransacao.valor < 0)) {
-        // Monta payload para a rota /api/lancamentos/conciliar-manual
         const payload = {
           data_movimento: detalhesTransacao.data,
           descricao: detalhesTransacao.descricao || (detalhesTransacao.valor < 0 ? "Despesa OFX" : "Receita OFX"),
@@ -414,7 +396,6 @@ export default function FluxoDeCaixaPage() {
         showNotification("Lançamento manual conciliado com sucesso!", "success");
         fetchMovimentacoes(filters, sortConfig);
         fetchSaldos(filters);
-        // se for OFX, remove a transação conciliada da lista local
         if (ofxExtrato) {
           setOfxExtrato(prev => {
             if (!prev) return prev;
@@ -428,7 +409,6 @@ export default function FluxoDeCaixaPage() {
         return;
       }
 
-      // Caso padrão: conciliar duplicatas (recebimento)
       const response = await fetch(`/api/duplicatas/conciliar-pagamento`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
@@ -449,7 +429,6 @@ export default function FluxoDeCaixaPage() {
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
 
-      // Limpa o extrato OFX se estiver sendo usado
       if (!filters.contaExterna && ofxExtrato) {
         setOfxExtrato(prev => {
           if (!prev) return prev;
@@ -465,7 +444,6 @@ export default function FluxoDeCaixaPage() {
       showNotification(err.message || "Erro na conciliação.", "error");
     }
   };
-  // --- FIM DA SUBSTITUIÇÃO ---
 
   const interExtratoProcessado = useMemo(() => {
     if (!interExtrato?.transacoes || !interSaldo) return [];
@@ -535,7 +513,68 @@ export default function FluxoDeCaixaPage() {
     setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  // --- CORREÇÃO: Nova função para abrir o modal de confirmação ---
+  const handleOpenPixConfirm = (payload) => {
+    setPixPayload(payload);
+    setIsModalOpen(false); // Fecha o modal de lançamento
+    setIsPixConfirmOpen(true); // Abre o modal de confirmação
+  };
+
+  // --- CORREÇÃO: Nova função para lidar com a confirmação do PIX ---
+  const handleConfirmAndSendPix = async () => {
+    setIsSaving(true);
+    setError('');
+    try {
+        const response = await fetch('/api/lancamentos/pix', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify(pixPayload)
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || 'Falha ao processar pagamento PIX.');
+
+        // PIX ENVIADO COM SUCESSO!
+        // Chama onSave(null) para indicar que o PIX foi salvo (a API /api/lancamentos/pix já salva)
+        await handleSaveLancamento(null); 
+
+        // Lógica do Recibo
+        const apiResponse = result.pixResult;
+        const contaOrigemCompleta = contasMaster.find(c => c.contaCorrente === pixPayload.contaOrigem)?.contaBancaria || pixPayload.contaOrigem;
+
+        const newReceiptData = {
+            valor: parseFloat(apiResponse.valor_pagamento || pixPayload.valor),
+            data: new Date(apiResponse.data_pagamento || new Date()), // Usa a data da resposta ou 'agora'
+            transactionId: apiResponse.cod_pagamento || apiResponse.transacaoPix?.endToEnd,
+            descricao: apiResponse.informacoes_entre_usuarios || pixPayload.descricao,
+            pagador: {
+                nome: pixPayload.empresaAssociada || clienteMasterInfo.nome,
+                cnpj: apiResponse.pagador?.documento,
+                conta: contaOrigemCompleta,
+            },
+            recebedor: apiResponse.recebedor ? {
+                nome: apiResponse.recebedor.nome,
+                cnpj: apiResponse.recebedor.documento,
+                instituicao: apiResponse.recebedor.banco,
+                chavePix: apiResponse.recebedor.identificacao_chave
+            } : null
+        };
+
+        setReceiptData(newReceiptData);
+        setIsPixConfirmOpen(false);
+        setIsReceiptModalOpen(true); // Abre o modal de recibo
+
+    } catch (err) {
+        showNotification(err.message, "error");
+        setIsPixConfirmOpen(false);
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
+
   const handleSaveLancamento = async (payload) => {
+    // Se o payload for null, significa que o PIX já foi salvo pela API /api/lancamentos/pix
+    // e só precisamos atualizar a UI.
     if (!payload) {
       showNotification("PIX enviado e lançamento registrado!", "success");
       fetchMovimentacoes(filters, sortConfig);
@@ -543,6 +582,7 @@ export default function FluxoDeCaixaPage() {
       return true;
     }
 
+    // Se houver payload, é um lançamento manual (Débito, Crédito, Transferência)
     try {
       const response = await fetch(`/api/lancamentos`, {
         method: "POST",
@@ -563,6 +603,7 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
+  // ... (O restante das funções: handleUpdateLancamento, handleEditRequest, handleDeleteRequest, handleConfirmDelete, handleEstornarRequest, confirmarEstorno, handleAbrirEmailModal, handleSendEmail, handleGeneratePdf, handleContextMenu, handleAbrirModalComplemento, handleSaveComplemento, handleSaveLancamentoManual, handleAbrirComprovantePix, e os 'useMemo' de paginação permanecem os mesmos) ...
   const handleUpdateLancamento = async (payload) => {
     try {
       const response = await fetch(`/api/movimentacoes-caixa/${payload.id}`, {
@@ -774,7 +815,6 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
-  // --- NOVA FUNÇÃO: SALVAR LANÇAMENTO MANUAL DO EXTRATO ---
   const handleSaveLancamentoManual = async (payload) => {
     try {
       const response = await fetch('/api/lancamentos/conciliar-manual', {
@@ -791,14 +831,10 @@ export default function FluxoDeCaixaPage() {
         throw new Error(error.message || 'Erro ao salvar lançamento');
       }
   
-      // Mostra notificação de sucesso usando showNotification
       showNotification('Lançamento manual realizado com sucesso!', 'success');
-  
-      // Atualiza a lista de movimentações
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
       
-      // Remove a transação do extrato OFX se estiver usando
       if (ofxExtrato) {
           setOfxExtrato(prev => ({
               ...prev,
@@ -812,7 +848,6 @@ export default function FluxoDeCaixaPage() {
       return false;
     }
   };
-  // --- FIM DA NOVA FUNÇÃO ---
 
   const handleAbrirComprovantePix = async () => {
     if (!contextMenu.selectedItem) return;
@@ -828,24 +863,18 @@ export default function FluxoDeCaixaPage() {
     if (isOperacaoPix && item.operacao) {
         const op = item.operacao;
         const valorFormatado = formatBRLNumber(Math.abs(item.valor)).replace(/\s/g, '');
-
         const { data: duplicatas } = await fetchApiData(`/api/duplicatas/operacao/${item.operacaoId}`);
-
         let numerosDoc = 'N/A';
         if (duplicatas && duplicatas.length > 0) {
             numerosDoc = [...new Set(duplicatas.map(d => d.nfCte.split('.')[0]))].join('_');
         }
-
         const docType = op?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const prefixo = item.descricao.toLowerCase().includes('complemento') ? 'Complemento Borderô' : 'Borderô';
-
         filename = `${prefixo} ${docType} ${numerosDoc} - ${valorFormatado}.pdf`;
         mensagem = `Pagamento ref. Operação #${item.operacaoId}`;
-
         if (op && op.cliente) {
             const recebedorContas = op.cliente.contas_bancarias || [];
             const contaRecebedor = recebedorContas.find(c => c.chave_pix) || recebedorContas[0] || {};
-
             recebedorData = {
                 nome: op.cliente.nome,
                 cnpj: op.cliente.cnpj,
@@ -884,7 +913,6 @@ export default function FluxoDeCaixaPage() {
       ? "Resultado do Período"
       : "Saldos Atuais";
 
-  // Paginação Inter (baseado no extrato processado e agrupado)
   const interIndexOfLastItem = interCurrentPage * INTER_ITEMS_PER_PAGE;
   const interIndexOfFirstItem = interIndexOfLastItem - INTER_ITEMS_PER_PAGE;
   const currentInterItems = interExtratoProcessado.slice(
@@ -892,11 +920,9 @@ export default function FluxoDeCaixaPage() {
     interIndexOfLastItem
   );
 
-  // --- NOVA LÓGICA: Paginação OFX ---
   const ofxTotalPages = ofxExtrato ? Math.ceil((ofxExtrato.transacoes.length || 0) / OFX_ITEMS_PER_PAGE) : 0;
   const ofxStartIndex = (ofxPage - 1) * OFX_ITEMS_PER_PAGE;
   const ofxCurrentItems = ofxExtrato ? ofxExtrato.transacoes.slice(ofxStartIndex, ofxStartIndex + OFX_ITEMS_PER_PAGE) : [];
-  // --- FIM DA LÓGICA OFX ---
 
   return (
     <>
@@ -909,18 +935,33 @@ export default function FluxoDeCaixaPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveLancamento}
+        onPixSubmit={handleOpenPixConfirm} 
         contasMaster={contasMaster}
         clienteMasterNome={clienteMasterInfo.nome}
       />
-      {/* MODAL DE CONCILIAÇÃO MODIFICADO (para usar a lógica complexa) */}
+      {/* --- CORREÇÃO: Renderizar os modais de PIX aqui --- */}
+      <PixConfirmationModal
+          isOpen={isPixConfirmOpen}
+          onClose={() => setIsPixConfirmOpen(false)}
+          onConfirm={handleConfirmAndSendPix}
+          data={pixPayload}
+          isSending={isSaving}
+      />
+      <PixReceiptModal
+          isOpen={isReceiptModalOpen}
+          onClose={() => setIsReceiptModalOpen(false)}
+          receiptData={receiptData}
+      />
+      {/* --- FIM DA CORREÇÃO --- */}
+
       <ConciliacaoModal
         isOpen={isConciliacaoModalOpen}
         onClose={() => setIsConciliacaoModalOpen(false)}
         onConfirm={handleConfirmarConciliacao}
         transacao={transacaoParaConciliar}
         searchDuplicatas={searchDuplicatasParaConciliacao}
-        contasInternas={saldos} // Prop necessária para o modal
-        contaApi={filters.contaExterna} // Prop necessária para o modal
+        contasInternas={saldos} 
+        contaApi={filters.contaExterna}
       />
       <EditLancamentoModal
         isOpen={isEditModalOpen}
@@ -956,14 +997,7 @@ export default function FluxoDeCaixaPage() {
         lancamentoOriginal={lancamentoParaComplemento}
         contasMaster={contasMaster}
         clienteMasterNome={clienteMasterInfo.nome}
-      />
-      <PixReceiptModal
-        isOpen={isReceiptModalOpen}
-        onClose={() => setIsReceiptModalOpen(false)}
-        receiptData={receiptData}
-      />
-      
-      {/* --- NOVO MODAL --- */}
+      />      
       <LancamentoExtratoModal
         isOpen={isLancamentoManualOpen}
         onClose={() => setIsLancamentoManualOpen(false)}
@@ -972,9 +1006,9 @@ export default function FluxoDeCaixaPage() {
         contasInternas={saldos}
         showNotification={showNotification}
       />
-      {/* --- FIM DO NOVO MODAL --- */}
 
       <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+        {/* ... (o restante do JSX da página permanece o mesmo) ... */}
         <div className="flex-shrink-0">
           <motion.header
             className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
@@ -1029,7 +1063,6 @@ export default function FluxoDeCaixaPage() {
               </div>
             </motion.div>
             
-            {/* FILTRO LATERAL MODIFICADO (para incluir props OFX) */}
             <FiltroLateral
               filters={filters}
               saldos={saldos}
@@ -1050,12 +1083,9 @@ export default function FluxoDeCaixaPage() {
 
             {!loading && !isLoadingOfx && !error && !ofxError && (
               <>
-                {/* --- LÓGICA DE EXIBIÇÃO PRINCIPAL MODIFICADA --- */}
-                {/* Mostra esta visualização se for API Inter OU OFX */}
                 {filters.contaExterna || ofxExtrato ? (
                   <>
                     <div className="flex-grow overflow-y-auto">
-                      {/* Se for OFX, renderiza a lista OFX */}
                       {ofxExtrato ? (
                         <>
                           {ofxCurrentItems.length > 0 ? (
@@ -1091,7 +1121,6 @@ export default function FluxoDeCaixaPage() {
                                   </span>
                                 </li>
                               ))}
-                               {/* Paginação OFX (dentro da lista) */}
                               {ofxTotalPages > 1 && (
                                 <div className="flex items-center justify-center gap-2 pt-3">
                                   <button
@@ -1121,7 +1150,6 @@ export default function FluxoDeCaixaPage() {
                           )}
                         </>
                       ) : (
-                        /* Senão (é API Inter), renderiza a lista agrupada por data */
                         <>
                           {currentInterItems.length > 0 ? (
                             <div className="space-y-4">
@@ -1150,7 +1178,6 @@ export default function FluxoDeCaixaPage() {
                                             : "cursor-pointer hover:bg-gray-600/50"
                                         }`}
                                         onContextMenu={(e) => {
-                                          // Permite conciliar Crédito e Débito com a nova função
                                           e.preventDefault();
                                           handleConciliarTransacao(t);
                                         }}
@@ -1194,7 +1221,6 @@ export default function FluxoDeCaixaPage() {
                         </>
                       )}
                     </div>
-                    {/* Paginação (Mostra apenas a do Inter, pois a do OFX é interna) */}
                     <div className="flex-shrink-0 pt-4">
                       {filters.contaExterna && !ofxExtrato && (
                         <Pagination
@@ -1207,7 +1233,6 @@ export default function FluxoDeCaixaPage() {
                     </div>
                   </>
                 ) : (
-                  /* Senão (não é Inter nem OFX), mostra Lançamentos Manuais */
                   <>
                     <div className="flex-grow overflow-auto">
                       <table className="min-w-full divide-y divide-gray-700">
@@ -1293,13 +1318,11 @@ export default function FluxoDeCaixaPage() {
                     </div>
                   </>
                 )}
-                {/* --- FIM DA LÓGICA DE EXIBIÇÃO --- */}
               </>
             )}
           </div>
         </div>
 
-        {/* Menu de contexto (só aparece se não for Inter ou OFX) */}
         {contextMenu.visible && !filters.contaExterna && !ofxExtrato && (
           <div
             ref={menuRef}
