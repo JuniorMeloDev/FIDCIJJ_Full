@@ -14,7 +14,7 @@ import PartialDebitModal from "@/app/components/PartialDebitModal";
 import PixConfirmationModal from "@/app/components/PixConfirmationModal";
 import PixReceiptModal from "@/app/components/PixReceiptModal";
 import RecompraModal from "@/app/components/RecompraModal";
-import { formatBRLInput, parseBRL, formatDisplayConta } from "@/app/utils/formatters";
+import { formatBRLInput, parseBRL, formatDisplayConta, formatDate } from "../utils/formatters.jsx"; // Caminho corrigido
 
 export default function OperacaoBorderoPage() {
   const [dataOperacao, setDataOperacao] = useState(
@@ -68,8 +68,6 @@ export default function OperacaoBorderoPage() {
   const [valorParcialPendente, setValorParcialPendente] = useState(null);
   const [dataParcialPendente, setDataParcialPendente] = useState(null);
 
-  // --- 1. PRIMEIRA ALTERAÇÃO: MUDAR STATE DO PAGADOR ---
-  // State antigo: const [clienteMasterNome, setClienteMasterNome] = useState("");
   const [clienteMasterInfo, setClienteMasterInfo] = useState({ nome: "", cnpj: "" });
 
   const getAuthHeader = () => {
@@ -122,7 +120,6 @@ export default function OperacaoBorderoPage() {
           clientePagador = clientesData.find(c => c.id === masterClientId);
       }
       
-      // --- 2. SEGUNDA ALTERAÇÃO: PREENCHER O OBJETO COMPLETO DO PAGADOR ---
       if (clientePagador) {
         setClienteMasterInfo({ nome: clientePagador.nome, cnpj: clientePagador.cnpj });
       } else if (clientesData.length > 0) {
@@ -137,7 +134,6 @@ export default function OperacaoBorderoPage() {
   const fetchSacados = (query) =>
     fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
 
-  // ... (demais funções handleXmlUpload, preencherFormularioComXml, etc. permanecem iguais)
   const handleXmlUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -409,43 +405,75 @@ export default function OperacaoBorderoPage() {
     }
   };
   
+  // <-- CORREÇÃO: Atualizado para o modal de recompra avançado
   const handleConfirmRecompra = async (data) => {
+    // data = { credito, principal, jurosAdicionais, abatimentos, duplicataIds, descricao }
     if (data && data.credito !== null && data.principal !== null) {
-      setDescontos(prev => [
-        ...prev,
-        {
-          id: `recompra-debito-${Date.now()}`,
-          descricao: `Débito Recompra ${data.descricao.split(' ').pop()}`, 
-          valor: Math.abs(data.principal) 
-        },
-        {
-          id: `recompra-credito-${Date.now() + 1}`,
-          descricao: `Crédito Juros Recompra ${data.descricao.split(' ').pop()}`,
-          valor: -Math.abs(data.credito) 
-        }
-      ]);
+        
+        let descontosRecompra = [];
 
-      try {
-        const response = await fetch('/api/duplicatas/liquidar-recompra', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-          body: JSON.stringify({
-            duplicataIds: data.duplicataIds,
-            dataLiquidacao: dataOperacao 
-          }),
+        // 1. Adiciona o Débito do Principal
+        descontosRecompra.push({
+            id: `recompra-debito-${Date.now()}`,
+            descricao: `Débito Recompra ${data.descricao}`, 
+            valor: Math.abs(data.principal) 
         });
 
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.message || 'Falha ao dar baixa nas duplicatas de recompra.');
+        // 2. Adiciona o Crédito dos Juros (estorno)
+        if (data.credito > 0) {
+            descontosRecompra.push({
+                id: `recompra-credito-${Date.now() + 1}`,
+                descricao: `Crédito Juros Recompra ${data.descricao}`,
+                valor: -Math.abs(data.credito) 
+            });
         }
         
-        showNotification("Recompra adicionada e duplicatas originais liquidadas!", "success");
-      
-      } catch (err) {
-        showNotification(`Erro ao liquidar duplicatas: ${err.message}`, "error");
-      }
-      setIsRecompraModalOpen(false);
+        // 3. Adiciona Juros Adicionais (se houver)
+        if (data.jurosAdicionais > 0) {
+            descontosRecompra.push({
+                id: `recompra-juros-${Date.now() + 2}`,
+                descricao: `Juros/Taxas Recompra ${data.descricao}`,
+                valor: Math.abs(data.jurosAdicionais)
+            });
+        }
+        
+        // 4. Adiciona Abatimentos Adicionais (se houver)
+        if (data.abatimentos > 0) {
+            descontosRecompra.push({
+                id: `recompra-abatimento-${Date.now() + 3}`,
+                descricao: `Abatimento Recompra ${data.descricao}`,
+                valor: -Math.abs(data.abatimentos)
+            });
+        }
+
+        // Adiciona todos os itens gerados aos descontos do borderô
+        setDescontos(prev => [ ...prev, ...descontosRecompra ]);
+
+        // <-- CORREÇÃO: Bloco try...catch...finally corrigido
+        try {
+          const response = await fetch('/api/duplicatas/liquidar-recompra', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify({
+              duplicataIds: data.duplicataIds,
+              dataLiquidacao: dataOperacao 
+            }),
+          });
+
+          if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.message || 'Falha ao dar baixa nas duplicatas de recompra.');
+          }
+          
+          showNotification("Recompra adicionada e duplicatas originais liquidadas!", "success");
+        
+        } catch (err) {
+            showNotification(`Erro ao liquidar duplicatas: ${err.message}`, "error");
+            // Rollback: remove os descontos adicionados em caso de falha
+            setDescontos(prev => prev.filter(d => !d.id.startsWith('recompra-')));
+        } finally {
+            setIsRecompraModalOpen(false);
+        }
     }
   };
   
@@ -551,16 +579,14 @@ export default function OperacaoBorderoPage() {
       const operacaoId = await response.json();
       setSavedOperacaoInfo({ id: operacaoId, clienteId: empresaCedenteId });
 
-      // --- 3. TERCEIRA ALTERAÇÃO: MONTAR O RECIBO COMPLETO ---
       if (isPix) {
         showNotification("Operação salva e PIX enviado com sucesso!", "success");
 
-        // Busca os dados da conta do recebedor (cedente) que foi usada
         const recebedorConta = (cedenteSelecionado.contasBancarias || []).find(c => c.chave_pix === pixPayload.chave) || (cedenteSelecionado.contasBancarias || [])[0] || {};
 
         setReceiptData({
           valor: pixPayload.valor,
-          data: new Date(), // <-- Hora exata da transação, como solicitado
+          data: new Date(), 
           transactionId: pixResultData.transactionId,
           descricao: `Pagamento Borderô #${operacaoId}`,
           pagador: {
@@ -870,6 +896,7 @@ export default function OperacaoBorderoPage() {
         onClose={() => setIsRecompraModalOpen(false)}
         onConfirm={handleConfirmRecompra}
         dataNovaOperacao={dataOperacao}
+        clienteId={empresaCedenteId} // <-- CORREÇÃO: Passa o clienteId
       />
 
       <main className="h-full overflow-y-auto p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">

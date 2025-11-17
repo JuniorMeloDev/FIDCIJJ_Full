@@ -11,6 +11,7 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const nfCte = searchParams.get('nfCte');
         const sacadoNome = searchParams.get('sacadoNome');
+        const clienteId = searchParams.get('clienteId'); // <-- CORREÇÃO: Adicionado filtro de clienteId
 
         // Validação básica: pelo menos um filtro deve ser usado
         if (!nfCte && !sacadoNome) {
@@ -19,7 +20,7 @@ export async function GET(request) {
 
         let query = supabase
             .from('duplicatas')
-            .select('*')
+            .select('*, operacao:operacoes!inner(cliente_id)') // <-- CORREÇÃO: Faz join com operacoes
             // REGRA DE NEGÓCIO CORRETA: Apenas duplicatas "Em Aberto"
             .eq('status_recebimento', 'Pendente'); 
 
@@ -29,6 +30,10 @@ export async function GET(request) {
         }
         if (sacadoNome) {
             query = query.ilike('cliente_sacado', `%${sacadoNome}%`);
+        }
+        // <-- CORREÇÃO: Aplica o filtro de clienteId
+        if (clienteId) {
+            query = query.eq('operacao.cliente_id', clienteId);
         }
 
         // Limita os resultados para não sobrecarregar

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { formatBRLNumber, formatDate } from '../utils/formatters';
+import { formatBRLNumber, formatDate } from '../utils/formatters.jsx'; // Caminho corrigido
 import Notification from '@/app/components/Notification';
 import AprovacaoOperacaoModal from '@/app/components/AprovacaoOperacaoModal';
 import EmailModal from '@/app/components/EmailModal';
@@ -76,26 +76,52 @@ export default function AnalisePage() {
         setIsModalOpen(true);
     };
     
+    // <-- CORREÇÃO: Atualizado para o modal de recompra avançado
     const handleConfirmRecompra = (data) => {
+        // data = { credito, principal, jurosAdicionais, abatimentos, duplicataIds, descricao }
         if (data && data.credito !== null && data.principal !== null) {
             setRecompraData({ 
                 ids: data.duplicataIds, 
                 dataLiquidacao: operacaoSelecionada.data_operacao 
             });
 
-            setDescontosAdicionais(prev => [
-                ...prev,
-                {
-                    id: `recompra-debito-${Date.now()}`,
-                    descricao: `Débito Recompra NF ${data.descricao.split(' ').pop()}`,
-                    valor: Math.abs(data.principal)
-                },
-                {
+            let descontosRecompra = [];
+
+            // 1. Adiciona o Débito do Principal
+            descontosRecompra.push({
+                id: `recompra-debito-${Date.now()}`,
+                descricao: `Débito Recompra ${data.descricao}`,
+                valor: Math.abs(data.principal)
+            });
+
+            // 2. Adiciona o Crédito dos Juros (estorno)
+            if (data.credito > 0) {
+                descontosRecompra.push({
                     id: `recompra-credito-${Date.now() + 1}`,
-                    descricao: `Crédito Juros Recompra NF ${data.descricao.split(' ').pop()}`,
+                    descricao: `Crédito Juros Recompra ${data.descricao}`,
                     valor: -Math.abs(data.credito)
-                }
-            ]);
+                });
+            }
+
+            // 3. Adiciona Juros Adicionais (se houver)
+            if (data.jurosAdicionais > 0) {
+                descontosRecompra.push({
+                    id: `recompra-juros-${Date.now() + 2}`,
+                    descricao: `Juros/Taxas Recompra ${data.descricao}`,
+                    valor: Math.abs(data.jurosAdicionais)
+                });
+            }
+            
+            // 4. Adiciona Abatimentos Adicionais (se houver)
+            if (data.abatimentos > 0) {
+                descontosRecompra.push({
+                    id: `recompra-abatimento-${Date.now() + 3}`,
+                    descricao: `Abatimento Recompra ${data.descricao}`,
+                    valor: -Math.abs(data.abatimentos)
+                });
+            }
+            
+            setDescontosAdicionais(prev => [ ...prev, ...descontosRecompra ]);
             showNotification("Itens de recompra adicionados à operação.", "success");
         }
     };
@@ -105,7 +131,7 @@ export default function AnalisePage() {
         try {
             const finalPayload = { 
                 ...payload, 
-                descontos: descontosAdicionais,
+                descontos: descontosAdicionais, // Já inclui os itens de recompra
                 valor_debito_parcial: partialData?.valorDebito || null,
                 data_debito_parcial: partialData?.dataDebito || null,
                 recompraData: recompraData
@@ -128,8 +154,7 @@ export default function AnalisePage() {
             setIsModalOpen(false);
             setIsPartialDebitModalOpen(false);
 
-            // --- CORREÇÃO APLICADA AQUI ---
-            // A condição `!payload.efetuar_pix` foi removida.
+            // --- CORREÇÃO APLICADA (já estava no seu código) ---
             if (payload.status === 'Aprovada') {
                 setOperacaoParaEmail({
                     id: operacaoId,
@@ -195,6 +220,7 @@ export default function AnalisePage() {
                 onClose={() => setIsRecompraModalOpen(false)}
                 onConfirm={handleConfirmRecompra}
                 dataNovaOperacao={operacaoSelecionada?.data_operacao}
+                clienteId={operacaoSelecionada?.cliente?.id} // <-- CORREÇÃO: Passa o clienteId
             />
 
             <AprovacaoOperacaoModal 

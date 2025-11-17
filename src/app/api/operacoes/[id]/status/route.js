@@ -6,181 +6,197 @@ import { getInterAccessToken, enviarPixInter } from "@/app/lib/interService";
 import { format } from 'date-fns';
 
 export async function PUT(request, { params }) {
-  try {
-    const token = request.headers.get("Authorization")?.split(" ")[1];
-    if (!token)
-      return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
+  try {
+    const token = request.headers.get("Authorization")?.split(" ")[1];
+    if (!token)
+      return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userRoles = decoded.roles || [];
-    if (!userRoles.includes("ROLE_ADMIN")) {
-      return NextResponse.json({ message: "Acesso negado" }, { status: 403 });
-    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userRoles = decoded.roles || [];
+    if (!userRoles.includes("ROLE_ADMIN")) {
+      return NextResponse.json({ message: "Acesso negado" }, { status: 403 });
+    }
 
-    const { id } = params;
-    const { status, conta_bancaria_id, descontos, valor_debito_parcial, data_debito_parcial, efetuar_pix, recompraData } = await request.json();
+    const { id } = params;
+    const { status, conta_bancaria_id, descontos, valor_debito_parcial, data_debito_parcial, efetuar_pix, recompraData } = await request.json();
 
-    const { data: operacao, error: fetchError } = await supabase
-      .from("operacoes")
-      .select("*, cliente:clientes(id, nome, email, ramo_de_atividade)")
-      .eq("id", id)
-      .single();
+    const { data: operacao, error: fetchError } = await supabase
+      .from("operacoes")
+      .select("*, cliente:clientes(id, nome, email, ramo_de_atividade)")
+      .eq("id", id)
+      .single();
 
-    if (fetchError || !operacao) {
-      throw new Error("Operação a ser atualizada não foi encontrada.");
-    }
+    if (fetchError || !operacao) {
+      throw new Error("Operação a ser atualizada não foi encontrada.");
+    }
 
-    if (status === "Aprovada") {
-      if (!conta_bancaria_id) {
-        return NextResponse.json(
-          { message: "Conta bancária é obrigatória para aprovação." },
-          { status: 400 }
-        );
-      }
+    if (status === "Aprovada") {
+      if (!conta_bancaria_id) {
+        return NextResponse.json(
+          { message: "Conta bancária é obrigatória para aprovação." },
+          { status: 400 }
+        );
+      }
 
-      const totalDescontosAdicionais = descontos?.reduce((acc, d) => acc + d.valor, 0) || 0;
-      const novoValorLiquido = operacao.valor_liquido - totalDescontosAdicionais;
-      
-      let valorDebitado = novoValorLiquido;
-      if (valor_debito_parcial && Number(valor_debito_parcial) > 0) {
-          valorDebitado = Number(valor_debito_parcial);
-      }
+        // --- CORREÇÃO AQUI ---
+        // Se data_debito_parcial for fornecida, usa ela.
+        // Senão, usa a data/hora de AGORA (o momento da aprovação), e não a data da operação.
+        const dataEfetivaDebito = data_debito_parcial || new Date().toISOString();
+        // --------------------
 
-      if (descontos && descontos.length > 0) {
-        const descontosToInsert = descontos.map(d => ({
-            operacao_id: id,
-            descricao: d.descricao,
-            valor: d.valor
-        }));
-        await supabase.from('descontos').insert(descontosToInsert);
-      }
+      const totalDescontosAdicionais = descontos?.reduce((acc, d) => acc + d.valor, 0) || 0;
+      const novoValorLiquido = operacao.valor_liquido - totalDescontosAdicionais;
+      
+      let valorDebitado = novoValorLiquido;
+      if (valor_debito_parcial && Number(valor_debito_parcial) > 0) {
+          valorDebitado = Number(valor_debito_parcial);
+      }
 
-      const { data: conta } = await supabase
-        .from("contas_bancarias")
-        .select("*")
-        .eq("id", conta_bancaria_id)
-        .single();
-      
-      let pixEndToEndId = null;
-      if (efetuar_pix && conta.banco.toLowerCase().includes('inter')) {
-          const { data: contasCliente } = await supabase.from('contas_bancarias').select('*').eq('cliente_id', operacao.cliente.id);
-          const contaDestino = contasCliente.find(c => c.chave_pix);
+      if (descontos && descontos.length > 0) {
+        const descontosToInsert = descontos.map(d => ({
+            operacao_id: id,
+            descricao: d.descricao,
+            valor: d.valor
+        }));
+        await supabase.from('descontos').insert(descontosToInsert);
+      }
 
-          if (!contaDestino || !contaDestino.chave_pix) {
-              throw new Error(`Cliente ${operacao.cliente.nome} não possui chave PIX cadastrada para recebimento.`);
-          }
+      const { data: conta } = await supabase
+        .from("contas_bancarias")
+        .select("*")
+        .eq("id", conta_bancaria_id)
+        .single();
+      
+      let pixEndToEndId = null;
+      if (efetuar_pix && conta.banco.toLowerCase().includes('inter')) {
+          const { data: contasCliente } = await supabase.from('contas_bancarias').select('*').eq('cliente_id', operacao.cliente.id);
+          const contaDestino = contasCliente.find(c => c.chave_pix);
 
-          const dadosPix = {
-              valor: parseFloat(valorDebitado.toFixed(2)),
-              dataPagamento: format(new Date(), 'yyyy-MM-dd'),
-              descricao: `Pagamento Borderô #${id}`,
-              destinatario: {
-                  tipo: "CHAVE",
-                  chave: contaDestino.chave_pix
-              }
-          };
-          
-          const tokenInter = await getInterAccessToken();
-          const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, conta.conta_corrente);
-          
-          pixEndToEndId = resultadoPix.transacaoPix?.endToEnd; 
+          if (!contaDestino || !contaDestino.chave_pix) {
+              throw new Error(`Cliente ${operacao.cliente.nome} não possui chave PIX cadastrada para recebimento.`);
+          }
 
-          if (!pixEndToEndId) {
-            console.warn("[AVISO] O campo 'endToEnd' não foi encontrado em 'transacaoPix' na resposta da API do Inter.");
-          }
-      }
+            // --- CORREÇÃO AQUI ---
+            // Usa a dataEfetivaDebito formatada (se for agendada) ou a data de hoje
+            const dataPix = data_debito_parcial ? format(new Date(data_debito_parcial), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+            // --------------------
 
-      let descricaoLancamento = `Borderô #${id}`;
-      const { data: duplicatas } = await supabase
-        .from("duplicatas")
-        .select("nf_cte")
-        .eq("operacao_id", id);
-      if (duplicatas && duplicatas.length > 0 && operacao.cliente) {
-        const docType =
-          operacao.cliente.ramo_de_atividade === "Transportes" ? "CTe" : "NF";
-        const numerosDoc = [
-          ...new Set(duplicatas.map((d) => d.nf_cte.split(".")[0])),
-        ].join(", ");
-        descricaoLancamento = `Borderô ${docType} ${numerosDoc}`;
-      }
-      
-      // O prefixo "PIX Enviado" foi removido daqui
-      
-      await supabase.from("movimentacoes_caixa").insert({
-        operacao_id: id,
-        data_movimento: data_debito_parcial || operacao.data_operacao,
-        descricao: descricaoLancamento,
-        valor: -Math.abs(valorDebitado),
-        categoria: "Pagamento de Borderô",
-        conta_bancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
-        empresa_associada: operacao.cliente.nome, // <-- CORREÇÃO APLICADA
-        transaction_id: pixEndToEndId
-      });
+          const dadosPix = {
+              valor: parseFloat(valorDebitado.toFixed(2)),
+              dataPagamento: dataPix, // <-- Data Corrigida
+              descricao: `Pagamento Borderô #${id}`,
+              destinatario: {
+                  tipo: "CHAVE",
+                  chave: contaDestino.chave_pix
+              }
+          };
+          
+          const tokenInter = await getInterAccessToken();
+          const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, conta.conta_corrente);
+          
+          pixEndToEndId = resultadoPix.transacaoPix?.endToEnd; 
 
-      await supabase
-        .from("operacoes")
-        .update({ 
-            status: "Aprovada", 
-            conta_bancaria_id,
-            valor_liquido: novoValorLiquido,
-            valor_total_descontos: operacao.valor_total_descontos + totalDescontosAdicionais
-        })
-        .eq("id", id);
+          if (!pixEndToEndId) {
+            console.warn("[AVISO] O campo 'endToEnd' não foi encontrado em 'transacaoPix' na resposta da API do Inter.");
+          }
+      }
 
-      if (recompraData && recompraData.ids && recompraData.ids.length > 0) {
-          const { error: recompraError } = await supabase
-              .from('duplicatas')
-              .update({
-                  status_recebimento: 'Recebido',
-                  data_liquidacao: recompraData.dataLiquidacao
-              })
-              .in('id', recompraData.ids);
-          
-          if (recompraError) {
-              console.error("AVISO: Operação salva, mas falhou ao dar baixa nas duplicatas de recompra. Erro:", recompraError);
-          }
-      }
+      let descricaoLancamento = `Borderô #${id}`;
+      const { data: duplicatas } = await supabase
+        .from("duplicatas")
+        .select("nf_cte")
+        .eq("operacao_id", id);
+      if (duplicatas && duplicatas.length > 0 && operacao.cliente) {
+        const docType =
+          operacao.cliente.ramo_de_atividade === "Transportes" ? "CTe" : "NF";
+        const numerosDoc = [
+          ...new Set(duplicatas.map((d) => d.nf_cte.split(".")[0])),
+        ].join(", ");
+        descricaoLancamento = `Borderô ${docType} ${numerosDoc}`;
+      }
+      
+      await supabase.from("movimentacoes_caixa").insert({
+        operacao_id: id,
+        // --- CORREÇÃO AQUI ---
+        data_movimento: dataEfetivaDebito, // <-- Estava 'data_debito_parcial || operacao.data_operacao'
+        // --------------------
+        descricao: descricaoLancamento,
+        valor: -Math.abs(valorDebitado),
+        categoria: "Pagamento de Borderô",
+        conta_bancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
+        empresa_associada: operacao.cliente.nome,
+        transaction_id: pixEndToEndId
+      });
 
-    } else {
-      await supabase.from("duplicatas").delete().eq("operacao_id", id);
-      await supabase.from("operacoes").update({ status: status }).eq("id", id);
-    }
+      await supabase
+        .from("operacoes")
+        .update({ 
+            status: "Aprovada", 
+            conta_bancaria_id,
+            valor_liquido: novoValorLiquido,
+            valor_total_descontos: operacao.valor_total_descontos + totalDescontosAdicionais,
+            // --- CORREÇÃO AQUI ---
+            data_aprovacao: dataEfetivaDebito // <-- Gravando a data efetiva na operação
+            // --------------------
+        })
+        .eq("id", id);
 
-    const { data: clienteUser } = await supabase
-      .from("users")
-      .select("id")
-      .eq("cliente_id", operacao.cliente.id)
-      .single();
-      
-    if (clienteUser) {
-      await supabase.from("notifications").insert({
-        user_id: clienteUser.id,
-        title: `Sua Operação #${id} foi ${status}`,
-        message: `A operação no valor de R$ ${operacao.valor_liquido.toFixed(
-          2
-        )} foi ${status.toLowerCase()} pela nossa equipe.`,
-        link: "/portal/dashboard",
-      });
+      if (recompraData && recompraData.ids && recompraData.ids.length > 0) {
+          const { error: recompraError } = await supabase
+              .from('duplicatas')
+              .update({
+                  status_recebimento: 'Recebido',
+                  data_liquidacao: recompraData.dataLiquidacao
+              })
+              .in('id', recompraData.ids);
+          
+          if (recompraError) {
+              console.error("AVISO: Operação salva, mas falhou ao dar baixa nas duplicatas de recompra. Erro:", recompraError);
+          }
+      }
 
-      if (operacao.cliente.email) {
-        await sendOperationStatusEmail({
-          clienteNome: operacao.cliente.nome,
-          operacaoId: id,
-          status: status,
-          recipientEmail: operacao.cliente.email,
-        });
-      }
-    }
+    } else {
+      // Se for 'Rejeitada' ou outro status
+      await supabase.from("duplicatas").delete().eq("operacao_id", id);
+      await supabase.from("operacoes").update({ status: status }).eq("id", id);
+// Nota: Nenhuma movimentação de caixa é criada, o que está correto.
+    }
 
-    return NextResponse.json(
-      { message: `Operação ${status.toLowerCase()} com sucesso.` },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("Erro ao atualizar status da operação:", error);
-    return NextResponse.json(
-      { message: error.message || "Erro interno do servidor" },
-      { status: 500 }
-    );
-  }
+    const { data: clienteUser } = await supabase
+      .from("users")
+      .select("id")
+      .eq("cliente_id", operacao.cliente.id)
+      .single();
+      
+    if (clienteUser) {
+      await supabase.from("notifications").insert({
+        user_id: clienteUser.id,
+        title: `Sua Operação #${id} foi ${status}`,
+        message: `A operação no valor de R$ ${operacao.valor_liquido.toFixed(
+          2
+        )} foi ${status.toLowerCase()} pela nossa equipe.`,
+        link: "/portal/dashboard",
+      });
+
+      if (operacao.cliente.email) {
+        await sendOperationStatusEmail({
+          clienteNome: operacao.cliente.nome,
+          operacaoId: id,
+          status: status,
+          recipientEmail: operacao.cliente.email,
+        });
+      }
+    }
+
+    return NextResponse.json(
+      { message: `Operação ${status.toLowerCase()} com sucesso.` },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("Erro ao atualizar status da operação:", error);
+    return NextResponse.json(
+      { message: error.message || "Erro interno do servidor" },
+      { status: 500 }
+    );
+  }
 }
