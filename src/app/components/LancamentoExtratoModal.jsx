@@ -141,11 +141,14 @@ export default function LancamentoExtratoModal({
                             className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
                         >
                             <option value="">Selecione uma conta...</option>
-                            {contasInternas.map(conta => (
-                                <option key={conta.contaBancaria} value={conta.contaBancaria}>
-                                    {formatDisplayConta(conta.contaBancaria)}
-                                </option>
-                            ))}
+                            {contasInternas
+                                .filter(conta => conta.saldo !== 0) // Filtra apenas contas com saldo diferente de zero
+                                .map(conta => (
+                                    <option key={conta.contaBancaria} value={conta.contaBancaria}>
+                                        {formatDisplayConta(conta.contaBancaria)}
+                                    </option>
+                                ))
+                            }
                         </select>
                     </div>
 

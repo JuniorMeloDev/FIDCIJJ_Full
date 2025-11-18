@@ -366,7 +366,7 @@ export default function FluxoDeCaixaPage() {
         descricao: transacao.descricao,
         valor: parseFloat(transacao.valor),
     });
-    setIsLancamentoManualOpen(true);
+    setIsConciliacaoModalOpen(true);
   };
 
   const handleConfirmarConciliacao = async ({ items, detalhesTransacao, contaDestino }) => {
@@ -962,6 +962,7 @@ export default function FluxoDeCaixaPage() {
         searchDuplicatas={searchDuplicatasParaConciliacao}
         contasInternas={saldos} 
         contaApi={filters.contaExterna}
+        onManualEntry={() => setIsLancamentoManualOpen(true)}
       />
       <EditLancamentoModal
         isOpen={isEditModalOpen}

@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { formatBRLNumber, formatDate, formatDisplayConta, parseBRL } from '@/app/utils/formatters';
 
 // 1. Recebe 'contasInternas' (dos seus 'saldos') e 'contaApi' (dos 'filters.contaExterna')
-export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao, searchDuplicatas, contasInternas = [], contaApi = '' }) {
+export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao, searchDuplicatas, contasInternas = [], contaApi = '', onManualEntry }) {
     const [searchResults, setSearchResults] = useState([]);
     const [selectedItemsData, setSelectedItemsData] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -100,7 +100,8 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
                     <button 
                         onClick={() => {
                             onClose();
-                            setIsLancamentoManualOpen(true);
+                            // 2. Chame a função recebida via prop
+                            if (onManualEntry) onManualEntry();
                         }}
                         className="bg-blue-600 text-sm px-3 py-1 rounded hover:bg-blue-700"
                     >
