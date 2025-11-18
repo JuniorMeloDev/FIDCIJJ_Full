@@ -1,10 +1,9 @@
-// src/app/components/FiltroLateral.jsx
 'use client';
-import { formatDisplayConta } from '@/app/utils/formatters';
-import { FaUpload } from 'react-icons/fa'; // Importa o ícone
-import { useRef } from 'react'; // Importa o useRef
 
-// Adiciona as novas props onOfxUpload e ofxExtrato
+import { formatDisplayConta } from '@/app/utils/formatters';
+import { FaUpload } from 'react-icons/fa'; 
+import { useRef } from 'react'; 
+
 export default function FiltroLateral({ 
     filters, 
     onFilterChange, 
@@ -13,31 +12,28 @@ export default function FiltroLateral({
     contasMaster, 
     onOfxUpload, 
     ofxExtrato,
-    onOfxClear  // Nova prop
+    onOfxClear 
 }) {
 
-    const fileInputRef = useRef(null); // Ref para o input de arquivo
+    const fileInputRef = useRef(null); 
 
     const contasInter = Array.isArray(contasMaster)
         ? contasMaster.filter(c => c.contaBancaria.toLowerCase().includes('inter'))
         : [];
 
-    // Handler para o clique no botão
     const handleUploadClick = () => {
         if (fileInputRef.current) {
             fileInputRef.current.click();
         }
     };
     
-    // Handler para a seleção do arquivo
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             onOfxUpload(e.target.files[0]);
-            e.target.value = null; // Reseta o input
+            e.target.value = null; 
         }
     };
 
-    // Modifique o botão de limpar para chamar também o onOfxClear
     const handleClearAll = () => {
         onClear();
         if (onOfxClear) {
@@ -60,11 +56,10 @@ export default function FiltroLateral({
                             value={filters.contaExterna || ''}
                             onChange={onFilterChange}
                             className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
-                            disabled={!!ofxExtrato} // Desabilita se OFX estiver carregado
+                            disabled={!!ofxExtrato} 
                         >
                             <option value="">-- Nenhum --</option>
                             {contasInter.map(conta => (
-                                // O value aqui deve ser o número da conta que a API do Inter espera
                                 <option key={conta.id} value={conta.contaBancaria.split('/')[1]}> 
                                     {formatDisplayConta(conta.contaBancaria)}
                                 </option>
@@ -72,7 +67,6 @@ export default function FiltroLateral({
                         </select>
                     </div>
 
-                    {/* --- SEÇÃO DE UPLOAD OFX ADICIONADA --- */}
                     <div className="pt-4 border-t border-gray-600">
                         <label className="block text-sm font-semibold text-gray-300 mb-1">Importar Extrato OFX</label>
                         <input
@@ -80,17 +74,16 @@ export default function FiltroLateral({
                             accept=".ofx, .OFX"
                             ref={fileInputRef}
                             onChange={handleFileChange}
-                            className="hidden" // Oculta o input real
+                            className="hidden" 
                         />
                         <button
                             onClick={handleUploadClick}
-                            disabled={!!filters.contaExterna} // Desabilita se API estiver selecionada
+                            disabled={!!filters.contaExterna} 
                             className="w-full bg-blue-600 text-white font-semibold py-2 px-3 rounded-md hover:bg-blue-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
                         >
                             <FaUpload /> Carregar Arquivo OFX
                         </button>
                     </div>
-                    {/* --- FIM DA SEÇÃO --- */}
 
                     <div className="border-t border-gray-600 my-4"></div>
                     <p className="text-sm font-semibold text-gray-300">Filtros Internos</p>
@@ -102,15 +95,18 @@ export default function FiltroLateral({
                             value={filters.contaBancaria}
                             onChange={onFilterChange}
                             className="w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white"
-                            disabled={!!filters.contaExterna || !!ofxExtrato} // Desabilita se API ou OFX estiverem em uso
+                            disabled={!!filters.contaExterna || !!ofxExtrato} 
                         >
                             <option value="">Todas as Contas</option>
-                            {Array.isArray(saldos) && saldos.map(conta => (
-                                // --- ESTA É A CORREÇÃO PARA O ERRO DA IMAGEM ---
-                                <option key={conta.contaBancaria} value={conta.contaBancaria}>
-                                    {formatDisplayConta(conta.contaBancaria)}
-                                </option>
-                            ))}
+                            {/* --- LÓGICA APLICADA AQUI: Filtra saldo !== 0 --- */}
+                            {Array.isArray(saldos) && saldos
+                                .filter(conta => conta.saldo !== 0)
+                                .map(conta => (
+                                    <option key={conta.contaBancaria} value={conta.contaBancaria}>
+                                        {formatDisplayConta(conta.contaBancaria)}
+                                    </option>
+                                ))
+                            }
                         </select>
                     </div>
 
@@ -132,7 +128,7 @@ export default function FiltroLateral({
                             value={filters.descricao} 
                             onChange={onFilterChange} 
                             className="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white" 
-                            disabled={!!filters.contaExterna || !!ofxExtrato} // Desabilita se API ou OFX
+                            disabled={!!filters.contaExterna || !!ofxExtrato} 
                         />
                     </div>
                 </div>

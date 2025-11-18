@@ -31,7 +31,6 @@ export async function GET(request) {
     }
 }
 
-// POST (sem alterações, mas incluído para facilitar a substituição do arquivo)
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -39,9 +38,12 @@ export async function POST(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const body = await request.json();
-        const { condicoesPagamento, ...sacadoData } = body;
+
+        const { condicoesPagamento, condicoes_pagamento, filiais, ...sacadoData } = body;
+        
         const cleanCnpj = sacadoData.cnpj?.replace(/\D/g, '');
 
+        // Verifica se já existe sacado com este CNPJ
         const { data: existingSacado } = await supabase
             .from('sacados')
             .select('id, matriz_id')
@@ -53,12 +55,12 @@ export async function POST(request) {
                 return NextResponse.json({ message: 'Este CNPJ já está vinculado a outra matriz.' }, { status: 409 });
             }
             
-            const { condicoes_pagamento, filiais, ...dataToUpdate } = sacadoData;
-            delete dataToUpdate.id;
+            // Remove ID para não tentar atualizar a PK
+            delete sacadoData.id;
 
             const { data: updatedSacado, error: updateError } = await supabase
                 .from('sacados')
-                .update({ ...dataToUpdate, cnpj: cleanCnpj })
+                .update({ ...sacadoData, cnpj: cleanCnpj })
                 .eq('id', existingSacado.id)
                 .select()
                 .single();
@@ -67,8 +69,10 @@ export async function POST(request) {
             return NextResponse.json(updatedSacado, { status: 200 });
         }
 
+        // Remove ID caso venha null ou undefined para criar um novo
         delete sacadoData.id;
 
+        // Agora o sacadoData está limpo e não contém 'condicoes_pagamento'
         const { data: newSacado, error: insertError } = await supabase
             .from('sacados')
             .insert({ ...sacadoData, cnpj: cleanCnpj })
@@ -77,6 +81,7 @@ export async function POST(request) {
 
         if (insertError) throw insertError;
 
+        // Insere as condições na tabela filha correta
         if (condicoesPagamento && condicoesPagamento.length > 0) {
             const condicoesToInsert = condicoesPagamento.map(cond => ({
                 parcelas: cond.parcelas,
