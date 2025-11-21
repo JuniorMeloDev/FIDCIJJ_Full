@@ -1,3 +1,6 @@
+// type: uploaded file
+// fileName: app/api/movimentacoes-caixa/route.js
+
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
@@ -10,6 +13,7 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
         
+        // --- 1. Consulta Principal (Movimentações) ---
         let query = supabase.from('movimentacoes_caixa').select(`
             *, 
             operacao:operacoes ( 
@@ -22,26 +26,24 @@ export async function GET(request) {
             duplicata:duplicatas!liquidacao_mov_id ( id, nf_cte )
         `);
 
-        if (searchParams.get('dataInicio')) query = query.gte('data_movimento', searchParams.get('dataInicio'));
-        if (searchParams.get('dataFim')) query = query.lte('data_movimento', searchParams.get('dataFim'));
+        const dataInicio = searchParams.get('dataInicio');
+        const dataFim = searchParams.get('dataFim');
+        const conta = searchParams.get('conta');
+
+        if (dataInicio) query = query.gte('data_movimento', dataInicio);
+        if (dataFim) query = query.lte('data_movimento', dataFim);
         if (searchParams.get('descricao')) query = query.ilike('descricao', `%${searchParams.get('descricao')}%`);
-        if (searchParams.get('conta')) query = query.eq('conta_bancaria', searchParams.get('conta'));
+        if (conta) query = query.eq('conta_bancaria', conta);
         if (searchParams.get('categoria') && searchParams.get('categoria') !== 'Todos') {
             query = query.eq('categoria', searchParams.get('categoria'));
         }
 
-        // --- LÓGICA DE ORDENAÇÃO CORRIGIDA ---
         const sortKey = searchParams.get('sort') || 'data_movimento';
         const sortDirection = searchParams.get('direction') || 'DESC';
         const isAscending = sortDirection === 'ASC';
 
-        // 1. Ordena pela coluna principal escolhida pelo usuário (ex: data_movimento)
         query = query.order(sortKey, { ascending: isAscending });
-        
-        // 2. Adiciona uma segunda ordenação pelo ID para garantir uma ordem estável e previsível
         query = query.order('id', { ascending: isAscending });
-        // --- FIM DA CORREÇÃO ---
-
 
         const { data, error } = await query;
         if (error) {
@@ -59,7 +61,33 @@ export async function GET(request) {
             duplicata: m.duplicata
         }));
 
-        return NextResponse.json(formattedData, { status: 200 });
+        // --- 2. Cálculo do Saldo Anterior ---
+        // Soma tudo que veio ANTES da data de início para compor o saldo inicial do extrato
+        let saldoAnterior = 0;
+        if (dataInicio) {
+            let saldoQuery = supabase.from('movimentacoes_caixa').select('valor');
+            
+            // O saldo anterior deve respeitar a conta selecionada, mas NÃO os outros filtros (descrição/categoria),
+            // para que represente o saldo real disponível na conta.
+            saldoQuery = saldoQuery.lt('data_movimento', dataInicio);
+            
+            if (conta) {
+                saldoQuery = saldoQuery.eq('conta_bancaria', conta);
+            }
+
+            const { data: saldoData, error: saldoError } = await saldoQuery;
+            
+            if (!saldoError && saldoData) {
+                saldoAnterior = saldoData.reduce((acc, cur) => acc + (cur.valor || 0), 0);
+            }
+        }
+
+        // Retorna objeto com dados e o saldo inicial
+        return NextResponse.json({ 
+            data: formattedData, 
+            saldoAnterior: saldoAnterior 
+        }, { status: 200 });
+
     } catch (error) {
         console.error("Erro no endpoint de movimentações de caixa:", error.message);
         return NextResponse.json({ message: error.message || 'Erro interno do servidor' }, { status: 500 });

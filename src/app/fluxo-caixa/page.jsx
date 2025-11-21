@@ -1,3 +1,6 @@
+// type: uploaded file
+// fileName: app/fluxo-caixa/page.jsx
+
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -14,7 +17,7 @@ import {
 } from "@/app/utils/formatters";
 import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
-import { FaSort, FaSortUp, FaSortDown } from "react-icons/fa";
+import { FaSort, FaSortUp, FaSortDown, FaWallet } from "react-icons/fa";
 import ComplementModal from "@/app/components/ComplementModal";
 import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal";
 import { format as formatDateFns, startOfMonth } from "date-fns";
@@ -30,6 +33,7 @@ const INTER_ITEMS_PER_PAGE = 2;
 
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
+  const [saldoAnterior, setSaldoAnterior] = useState(0); // Novo state para saldo inicial
   const [saldos, setSaldos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -120,7 +124,6 @@ export default function FluxoDeCaixaPage() {
 
       const data = await response.json();
 
-      // Normaliza os dados recebidos
       const normalized = (data.transacoes || data).map((t) => ({
         id: t.idTransacao || t.FITID || `${t.DTPOSTED}-${t.TRNAMT}`, 
         idTransacao: t.idTransacao || t.FITID,
@@ -146,7 +149,6 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
-  // --- Handlers para o Modal de OFX ---
   const handleConciliarManual = async (ofxItem, sysItem) => {
     showNotification(
       `Item conciliado visualmente: ${ofxItem.descricao}`,
@@ -155,31 +157,21 @@ export default function FluxoDeCaixaPage() {
     setReconciledTransactionIds((prev) => new Set(prev).add(ofxItem.id));
   };
 
-  // app/fluxo-caixa/page.jsx
-
   const handleCriarLancamentoDoOfx = (ofxItem, contaId) => {
-
-    // --- CORREÇÃO: Encontra o NOME da conta ---
     let nomeConta = '';
     if (contaId) {
-        // Força conversão para string para garantir comparação
         const contaObj = contasMaster.find(c => String(c.id) === String(contaId));
-        
-        if (contaObj) {
-            nomeConta = contaObj.contaBancaria;
-        } else {
-        }
+        if (contaObj) nomeConta = contaObj.contaBancaria;
     }
 
     const novoLancamento = {
       data: ofxItem.data,
       descricao: ofxItem.descricao,
       valor: ofxItem.valor,
-      conta_bancaria: nomeConta, // Passa o NOME da conta
+      conta_bancaria: nomeConta, 
       categoria: "Movimentação Avulsa",
       transaction_id: ofxItem.id,
     };
-
 
     setItemOfxParaCriar(novoLancamento);
     setIsLancamentoManualOpen(true);
@@ -193,7 +185,16 @@ export default function FluxoDeCaixaPage() {
     setTimeout(() => setNotification({ message: "", type: "" }), 5000);
   };
 
-  // ... (fetchMovimentacoes, fetchSaldos, fetchExtratoInter mantidos iguais) ...
+  const fetchApiData = async (url) => {
+    try {
+      const res = await fetch(url, { headers: getAuthHeader() });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
+    }
+  };
+
   const fetchMovimentacoes = async (currentFilters, currentSortConfig) => {
     setLoading(true);
     setError(null);
@@ -201,16 +202,11 @@ export default function FluxoDeCaixaPage() {
     setInterSaldo(null);
 
     const params = new URLSearchParams();
-    if (currentFilters.dataInicio)
-      params.append("dataInicio", currentFilters.dataInicio);
-    if (currentFilters.dataFim)
-      params.append("dataFim", currentFilters.dataFim);
-    if (currentFilters.descricao)
-      params.append("descricao", currentFilters.descricao);
-    if (currentFilters.contaBancaria)
-      params.append("conta", currentFilters.contaBancaria);
-    if (currentFilters.categoria && currentFilters.categoria !== "Todos")
-      params.append("categoria", currentFilters.categoria);
+    if (currentFilters.dataInicio) params.append("dataInicio", currentFilters.dataInicio);
+    if (currentFilters.dataFim) params.append("dataFim", currentFilters.dataFim);
+    if (currentFilters.descricao) params.append("descricao", currentFilters.descricao);
+    if (currentFilters.contaBancaria) params.append("conta", currentFilters.contaBancaria);
+    if (currentFilters.categoria && currentFilters.categoria !== "Todos") params.append("categoria", currentFilters.categoria);
     params.append("sort", currentSortConfig.key);
     params.append("direction", currentSortConfig.direction);
 
@@ -220,11 +216,20 @@ export default function FluxoDeCaixaPage() {
         { headers: getAuthHeader() }
       );
       if (!response.ok) throw new Error("Falha ao carregar movimentações.");
-      const data = await response.json();
-      setMovimentacoes(data);
-      setReconciledTransactionIds(
-        new Set(data.map((m) => m.transaction_id).filter(Boolean))
-      );
+      
+      const result = await response.json();
+      
+      // Verifica se veio no formato novo { data, saldoAnterior } ou antigo [data]
+      if (Array.isArray(result)) {
+          setMovimentacoes(result);
+          setSaldoAnterior(0);
+          setReconciledTransactionIds(new Set(result.map((m) => m.transaction_id).filter(Boolean)));
+      } else {
+          setMovimentacoes(result.data || []);
+          setSaldoAnterior(result.saldoAnterior || 0);
+          setReconciledTransactionIds(new Set((result.data || []).map((m) => m.transaction_id).filter(Boolean)));
+      }
+
     } catch (err) {
       setError(err.message);
     } finally {
@@ -353,6 +358,8 @@ export default function FluxoDeCaixaPage() {
     return () => document.removeEventListener("click", handleClick);
   }, []);
 
+  // ... (Funções auxiliares searchDuplicatasParaConciliacao, handleConciliarTransacao, handleConfirmarConciliacao, interExtratoProcessado, formatHeaderDate mantidas iguais) ...
+  
   const searchDuplicatasParaConciliacao = async (query) => {
     if (!query) return [];
     try {
@@ -491,6 +498,8 @@ export default function FluxoDeCaixaPage() {
     setIsPixConfirmOpen(true);
   };
 
+  // ... (handleConfirmAndSendPix, handleSaveLancamento, handleSaveLancamentoManual, etc. mantidas iguais) ...
+  
   const handleConfirmAndSendPix = async () => {
     setIsSaving(true);
     setError("");
@@ -675,7 +684,22 @@ export default function FluxoDeCaixaPage() {
     setIsEmailModalOpen(false);
   };
   const handleGeneratePdf = async () => {
-    // ... Lógica PDF ...
+    const operacaoId = contextMenu.selectedItem?.operacaoId;
+    if (!operacaoId) return;
+    try {
+      const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, { headers: getAuthHeader() });
+      if (!response.ok) throw new Error("Erro ao gerar PDF");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bordero-${operacaoId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      alert(err.message);
+    }
   };
   const handleContextMenu = (event, item) => {
     event.preventDefault();
@@ -693,16 +717,91 @@ export default function FluxoDeCaixaPage() {
     }
   };
   const handleSaveComplemento = async (payload, pixResult) => {
-    // ... Lógica Complemento ...
-    return true;
+    if (!payload) return false;
+    try {
+        const response = await fetch('/api/operacoes/complemento', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error("Falha ao salvar complemento.");
+        showNotification("Complemento salvo!", "success");
+        fetchMovimentacoes(filters, sortConfig);
+        fetchSaldos(filters);
+        return true;
+    } catch (err) {
+        showNotification(err.message, "error");
+        return false;
+    }
   };
   const handleAbrirComprovantePix = async () => {
     setIsReceiptModalOpen(true);
   };
 
+  // --- NOVA LÓGICA: Processar linhas de "Saldo Total Disponível" ---
+  const movimentacoesProcessadas = useMemo(() => {
+    if (!movimentacoes || movimentacoes.length === 0) return [];
+
+    // 1. Clona e ordena por data CRESCENTE para calcular o acumulado corretamente
+    const sorted = [...movimentacoes].sort((a, b) => new Date(a.dataMovimento) - new Date(b.dataMovimento));
+    
+    const groupedByDate = {};
+    
+    // 2. Agrupa por data
+    sorted.forEach(item => {
+        const date = item.dataMovimento.split('T')[0];
+        if (!groupedByDate[date]) groupedByDate[date] = [];
+        groupedByDate[date].push(item);
+    });
+
+    const finalIds = [];
+    let runningBalance = saldoAnterior || 0; // Começa do saldo anterior vindo do backend
+
+    // 3. Processa dia a dia
+    Object.keys(groupedByDate).sort().forEach(date => {
+        const itemsDoDia = groupedByDate[date];
+        
+        // Adiciona os itens do dia
+        itemsDoDia.forEach(item => {
+            runningBalance += parseFloat(item.valor);
+            finalIds.push(item);
+        });
+
+        // Adiciona a linha de saldo
+        finalIds.push({
+            id: `saldo-${date}`,
+            isBalanceRow: true,
+            dataMovimento: date, // Garante que a data seja a mesma para ordenação
+            descricao: 'Saldo Total Disponível',
+            valor: runningBalance,
+            contaBancaria: '', // Não precisa exibir conta
+            categoria: 'Saldo'
+        });
+    });
+
+    // 4. Re-ordena conforme a escolha do usuário
+    const isAsc = sortConfig.direction === 'ASC';
+    return finalIds.sort((a, b) => {
+        const dateA = new Date(a.dataMovimento);
+        const dateB = new Date(b.dataMovimento);
+        if (dateA - dateB !== 0) return isAsc ? dateA - dateB : dateB - dateA;
+        
+        // Se as datas forem iguais, o saldo deve sempre ficar "no final" do dia (para ASC) ou "no começo" (para DESC)
+        // Mas na visualização de extrato, o saldo do dia geralmente é a última linha do dia.
+        if (a.isBalanceRow) return isAsc ? 1 : -1; 
+        if (b.isBalanceRow) return isAsc ? -1 : 1;
+        
+        return 0;
+    });
+
+  }, [movimentacoes, saldoAnterior, sortConfig]);
+
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-  const currentItems = movimentacoes.slice(indexOfFirstItem, indexOfLastItem);
+  
+  // Usa a lista processada para paginação
+  const currentItems = movimentacoesProcessadas.slice(indexOfFirstItem, indexOfLastItem);
+  
   const saldosTitle =
     filters.dataInicio && filters.dataFim
       ? "Resultado do Período"
@@ -717,6 +816,7 @@ export default function FluxoDeCaixaPage() {
 
   return (
     <>
+      {/* ... (Modais permanecem iguais) ... */}
       <Notification
         message={notification.message}
         type={notification.type}
@@ -755,7 +855,6 @@ export default function FluxoDeCaixaPage() {
         onManualEntry={() => setIsLancamentoManualOpen(true)}
       />
 
-      {/* --- NOVO MODAL DE CONCILIAÇÃO OFX --- */}
       <ConciliacaoOFXModal
         isOpen={isOfxModalOpen}
         onClose={() => setIsOfxModalOpen(false)}
@@ -766,7 +865,6 @@ export default function FluxoDeCaixaPage() {
         lancamentosDoGrid={movimentacoes}
       />
 
-      {/* Modal de Edição / Criação Manual (Usado pelo OFX também) */}
       <LancamentoExtratoModal
         isOpen={isLancamentoManualOpen}
         onClose={() => {
@@ -774,9 +872,8 @@ export default function FluxoDeCaixaPage() {
           setItemOfxParaCriar(null);
         }}
         onSave={handleSaveLancamentoManual}
-        // Aqui passamos o item do OFX ou a transação do ConciliacaoModal
-        transacao={itemOfxParaCriar || transacaoParaConciliar}
-        contasInternas={contasMaster} // CORREÇÃO: Adicionada a prop contasInternas
+        lancamento={itemOfxParaCriar || transacaoParaConciliar}
+        contasInternas={contasMaster} 
         showNotification={showNotification}
       />
 
@@ -817,8 +914,7 @@ export default function FluxoDeCaixaPage() {
       />
 
       <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
-        {/* ... (restante do layout da página, cabeçalho, filtros, grid) ... */}
-        {/* O restante do JSX da página permanece igual */}
+        {/* Cabeçalho e Botão Novo Lançamento */}
         <div className="flex-shrink-0">
           <motion.header
             className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
@@ -899,7 +995,7 @@ export default function FluxoDeCaixaPage() {
               <>
                 {filters.contaExterna ? (
                   <>
-                    {/* VISUALIZAÇÃO EXTRATO INTER API */}
+                    {/* VISUALIZAÇÃO EXTRATO INTER API (Mantida igual) */}
                     <div className="flex-grow overflow-y-auto">
                       {currentInterItems.length > 0 ? (
                         <div className="space-y-4">
@@ -973,7 +1069,7 @@ export default function FluxoDeCaixaPage() {
                   </>
                 ) : (
                   <>
-                    {/* TABELA PADRÃO DO SISTEMA */}
+                    {/* TABELA PADRÃO DO SISTEMA - COM LINHAS DE SALDO */}
                     <div className="flex-grow overflow-auto">
                       <table className="min-w-full divide-y divide-gray-700">
                         <thead className="bg-gray-700 sticky top-0 z-10">
@@ -1009,32 +1105,53 @@ export default function FluxoDeCaixaPage() {
                         </thead>
                         <tbody className="bg-gray-800 divide-y divide-gray-700">
                           {currentItems.length > 0 ? (
-                            currentItems.map((mov) => (
-                              <tr
-                                key={mov.id}
-                                onContextMenu={(e) => handleContextMenu(e, mov)}
-                                className="hover:bg-gray-700 cursor-pointer"
-                              >
-                                <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
-                                  {formatDate(mov.dataMovimento)}
-                                </td>
-                                <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle">
-                                  {mov.descricao}
-                                </td>
-                                <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
-                                  {formatDisplayConta(mov.contaBancaria)}
-                                </td>
-                                <td
-                                  className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${
-                                    mov.valor >= 0
-                                      ? "text-green-400"
-                                      : "text-red-400"
-                                  }`}
+                            currentItems.map((mov) => {
+                              // Renderização especial para a linha de Saldo
+                              if (mov.isBalanceRow) {
+                                return (
+                                    <tr key={mov.id} className="bg-gray-900/80 font-bold border-t border-gray-600">
+                                        <td className="px-3 py-2 text-sm text-gray-300 align-middle">
+                                            {formatDate(mov.dataMovimento)}
+                                        </td>
+                                        <td className="px-3 py-2 text-sm text-orange-400 uppercase tracking-wider align-middle flex items-center gap-2">
+                                            <FaWallet /> {mov.descricao}
+                                        </td>
+                                        <td className="px-3 py-2"></td>
+                                        <td className={`px-3 py-2 text-sm text-right align-middle ${mov.valor >= 0 ? "text-blue-400" : "text-red-400"}`}>
+                                            {formatBRLNumber(mov.valor)}
+                                        </td>
+                                    </tr>
+                                );
+                              }
+
+                              // Renderização normal
+                              return (
+                                <tr
+                                  key={mov.id}
+                                  onContextMenu={(e) => handleContextMenu(e, mov)}
+                                  className="hover:bg-gray-700 cursor-pointer"
                                 >
-                                  {formatBRLNumber(mov.valor)}
-                                </td>
-                              </tr>
-                            ))
+                                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
+                                    {formatDate(mov.dataMovimento)}
+                                  </td>
+                                  <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle">
+                                    {mov.descricao}
+                                  </td>
+                                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
+                                    {formatDisplayConta(mov.contaBancaria)}
+                                  </td>
+                                  <td
+                                    className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${
+                                      mov.valor >= 0
+                                        ? "text-green-400"
+                                        : "text-red-400"
+                                    }`}
+                                  >
+                                    {formatBRLNumber(mov.valor)}
+                                  </td>
+                                </tr>
+                              );
+                            })
                           ) : (
                             <tr>
                               <td
@@ -1050,7 +1167,7 @@ export default function FluxoDeCaixaPage() {
                     </div>
                     <div className="flex-shrink-0 pt-4">
                       <Pagination
-                        totalItems={movimentacoes.length}
+                        totalItems={movimentacoesProcessadas.length}
                         itemsPerPage={ITEMS_PER_PAGE}
                         currentPage={currentPage}
                         onPageChange={setCurrentPage}
