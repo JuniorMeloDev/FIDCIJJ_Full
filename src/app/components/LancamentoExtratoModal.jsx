@@ -32,14 +32,20 @@ export default function LancamentoExtratoModal({
     const isDebito = transacao?.valor < 0;
 
     useEffect(() => {
+
         if (isOpen && transacao) {
+            
             setDescricao(transacao.descricao || '');
-            setContaBancaria('');
+            
+            // Inicializa com o nome da conta vindo do objeto 'transacao'
+            const contaInicial = transacao.conta_bancaria || '';
+            setContaBancaria(contaInicial);
+            
             setCategoria(isDebito ? 'Despesa Avulsa' : 'Receita Avulsa');
             setIsDespesa(isDebito);
             setError('');
         }
-    }, [isOpen, transacao]);
+    }, [isOpen, transacao]); // Removido isDebito para evitar loops, mantendo apenas o essencial
 
     const handleSave = async () => {
         if (!contaBancaria) {
@@ -63,25 +69,20 @@ export default function LancamentoExtratoModal({
             valor: parseFloat(transacao.valor), 
             conta_bancaria: contaBancaria,
             categoria: categoria,
-            transaction_id: transacao.idTransacao || transacao.id, 
+            transaction_id: transacao.idTransacao || transacao.transaction_id, 
             isDespesa: isDebito ? isDespesa : false
         };
 
         try {
-            // --- INÍCIO DA CORREÇÃO ---
-            // 1. Pegar o token do 'sessionStorage' igual ao 'LancamentoModal.jsx'
             const token = sessionStorage.getItem('authToken');
-            
-            // 2. Criar os headers de autenticação
             const headers = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}` 
             };
-            // --- FIM DA CORREÇÃO ---
 
             const response = await fetch('/api/lancamentos/conciliar-manual', {
                 method: 'POST',
-                headers: headers, // 3. Usar os headers corrigidos
+                headers: headers,
                 body: JSON.stringify(payload)
             });
 
@@ -90,7 +91,6 @@ export default function LancamentoExtratoModal({
                 throw new Error(error.message || 'Erro ao salvar lançamento');
             }
 
-            const data = await response.json();
             showNotification('Lançamento salvo com sucesso!', 'success');
             onClose();
             return true;
@@ -121,7 +121,6 @@ export default function LancamentoExtratoModal({
                         </p>
                     </div>
 
-                    {/* Restante do formulário... (inputs, selects, etc.) */}
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
                         <input
@@ -142,9 +141,9 @@ export default function LancamentoExtratoModal({
                         >
                             <option value="">Selecione uma conta...</option>
                             {contasInternas
-                                .filter(conta => conta.saldo !== 0) // Filtra apenas contas com saldo diferente de zero
+                                .filter(conta => conta.saldo !== 0) 
                                 .map(conta => (
-                                    <option key={conta.contaBancaria} value={conta.contaBancaria}>
+                                    <option key={conta.id} value={conta.contaBancaria}>
                                         {formatDisplayConta(conta.contaBancaria)}
                                     </option>
                                 ))

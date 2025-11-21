@@ -86,14 +86,14 @@ export async function POST(request) {
     const emitCnpj = getVal(emitNode, 'CNPJ');
     const sacadoCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
 
+    // --- CORREÇÃO AQUI: Buscamos também as contas bancárias ---
     const { data: emitenteData } = await supabase
       .from('clientes')
-      .select('id, nome, ramo_de_atividade')
+      .select('id, nome, ramo_de_atividade, contas_bancarias(*)') 
       .eq('cnpj', emitCnpj)
       .single();
 
-    // --- LÓGICA CORRIGIDA ---
-    // Busca todos os dados do sacado, incluindo matriz_id, uf e condições de pagamento
+    // Busca dados do sacado
     const { data: sacadoData } = await supabase
       .from('sacados')
       .select('*, condicoes_pagamento(*)')
@@ -109,12 +109,15 @@ export async function POST(request) {
       parcelas,
       emitente: {
         id: emitenteData?.id || null,
-        nome: getVal(emitNode, 'xNome'),
+        // Prioriza o nome do banco de dados
+        nome: emitenteData?.nome || getVal(emitNode, 'xNome'), 
         cnpj: emitCnpj,
-        ramo_de_atividade: emitenteData?.ramo_de_atividade
+        ramo_de_atividade: emitenteData?.ramo_de_atividade,
+        // --- Mapeia as contas bancárias para o formato que o front espera ---
+        contasBancarias: emitenteData?.contas_bancarias || [] 
       },
       emitenteExiste: !!emitenteData,
-      // Se o sacado existe no banco, usa os dados do banco. Senão, usa os dados do XML.
+      
       sacado: sacadoData ? {
         id: sacadoData.id,
         nome: sacadoData.nome,
@@ -144,7 +147,6 @@ export async function POST(request) {
       },
       sacadoExiste: !!sacadoData
     };
-    // --- FIM DA CORREÇÃO ---
 
     return NextResponse.json(responseData, { status: 200 });
 

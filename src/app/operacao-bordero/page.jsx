@@ -14,7 +14,7 @@ import PartialDebitModal from "@/app/components/PartialDebitModal";
 import PixConfirmationModal from "@/app/components/PixConfirmationModal";
 import PixReceiptModal from "@/app/components/PixReceiptModal";
 import RecompraModal from "@/app/components/RecompraModal";
-import { formatBRLInput, parseBRL, formatDisplayConta, formatDate } from "../utils/formatters.jsx"; // Caminho corrigido
+import { formatBRLInput, parseBRL, formatDisplayConta, formatDate } from "../utils/formatters.jsx";
 
 export default function OperacaoBorderoPage() {
   const [dataOperacao, setDataOperacao] = useState(
@@ -134,6 +134,7 @@ export default function OperacaoBorderoPage() {
   const fetchSacados = (query) =>
     fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
 
+  // --- ATUALIZAÇÃO IMPORTANTE AQUI ---
   const handleXmlUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -150,8 +151,32 @@ export default function OperacaoBorderoPage() {
         const errorText = await response.json();
         throw new Error(errorText.message || "Falha ao ler o ficheiro XML.");
       }
-      const data = await response.json();
+      
+      let data = await response.json(); // Usando let para permitir mutação
+
+      // Se o emitente já existe (identificado por CNPJ no back), buscamos os dados completos (incluindo chaves PIX)
+      if (data.emitenteExiste && data.emitente.id) {
+        try {
+            const clientFullRes = await fetch(`/api/cadastros/clientes/${data.emitente.id}`, {
+                headers: getAuthHeader()
+            });
+            if (clientFullRes.ok) {
+                const clientFullData = await clientFullRes.json();
+                // Sobrescrevemos o emitente do XML com os dados oficiais do banco
+                data.emitente = {
+                    ...data.emitente,
+                    ...clientFullData, // Traz contas bancárias, chaves pix, etc.
+                    nome: clientFullData.nome // Garante o nome oficial
+                };
+            }
+        } catch (fetchErr) {
+            console.error("Erro ao buscar detalhes completos do cliente:", fetchErr);
+            // Continua com os dados do XML se falhar
+        }
+      }
+
       setXmlDataPendente(data);
+      
       if (!data.emitenteExiste) {
         setClienteParaCriar(data.emitente);
         setIsClienteModalOpen(true);
@@ -167,6 +192,7 @@ export default function OperacaoBorderoPage() {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
+  // --- FIM DA ATUALIZAÇÃO ---
 
   const preencherFormularioComXml = (data) => {
     const prazosArray = data.parcelas
@@ -198,10 +224,12 @@ export default function OperacaoBorderoPage() {
       peso: "",
     });
 
+    // Aqui garantimos que o nome e o objeto completo (com chaves pix) sejam usados
     setEmpresaCedente(data.emitente.nome || "");
     setEmpresaCedenteId(data.emitente.id || null);
     setCedenteRamo(data.emitente.ramo_de_atividade || "");
     setCedenteSelecionado(data.emitente); 
+    
     setSacadoSelecionado(data.sacado); 
     const condicoes = data.sacado.condicoes_pagamento || [];
     setCondicoesSacado(condicoes);
@@ -236,8 +264,9 @@ export default function OperacaoBorderoPage() {
         emitente: {
           ...xmlDataPendente.emitente,
           id: novoClienteCriado.id,
+          nome: novoClienteCriado.nome, // Garante nome atualizado
           ramo_de_atividade: data.ramoDeAtividade,
-          contasBancarias: data.contasBancarias || [], 
+          contasBancarias: data.contasBancarias || [], // Garante chaves pix
         },
         emitenteExiste: true,
       };
@@ -405,52 +434,69 @@ export default function OperacaoBorderoPage() {
     }
   };
   
-  // <-- CORREÇÃO: Atualizado para o modal de recompra avançado
+  // 1. Adicionamos a flag 'isPrincipal' para diferenciar o Débito dos demais itens
   const handleConfirmRecompra = async (data) => {
-    // data = { credito, principal, jurosAdicionais, abatimentos, duplicataIds, descricao }
     if (data && data.credito !== null && data.principal !== null) {
         
+        const batchId = Date.now(); 
+        const duplicataIds = data.duplicataIds || [];
+
         let descontosRecompra = [];
 
-        // 1. Adiciona o Débito do Principal
-        descontosRecompra.push({
-            id: `recompra-debito-${Date.now()}`,
-            descricao: `Débito Recompra ${data.descricao}`, 
-            valor: Math.abs(data.principal) 
-        });
+        // Item de Débito (Principal) - Esse segura a operação
+        if (data.principal > 0) {
+            descontosRecompra.push({
+                id: `recompra-debito-${batchId}`,
+                descricao: `Débito Recompra ${data.descricao || ''}`, 
+                valor: Math.abs(data.principal),
+                tipo: 'recompra',
+                batchId: batchId,
+                duplicataIds: duplicataIds,
+                isPrincipal: true // <--- Identifica que este é o principal
+            });
+        }
 
-        // 2. Adiciona o Crédito dos Juros (estorno)
+        // Item de Crédito (Juros) - Acessório
         if (data.credito > 0) {
             descontosRecompra.push({
-                id: `recompra-credito-${Date.now() + 1}`,
-                descricao: `Crédito Juros Recompra ${data.descricao}`,
-                valor: -Math.abs(data.credito) 
+                id: `recompra-credito-${batchId}`,
+                descricao: `Crédito Juros Recompra ${data.descricao || ''}`,
+                valor: -Math.abs(data.credito),
+                tipo: 'recompra',
+                batchId: batchId,
+                duplicataIds: duplicataIds,
+                isPrincipal: false
             });
         }
         
-        // 3. Adiciona Juros Adicionais (se houver)
+        // Juros Adicionais - Acessório
         if (data.jurosAdicionais > 0) {
             descontosRecompra.push({
-                id: `recompra-juros-${Date.now() + 2}`,
-                descricao: `Juros/Taxas Recompra ${data.descricao}`,
-                valor: Math.abs(data.jurosAdicionais)
+                id: `recompra-juros-${batchId}`,
+                descricao: `Juros/Taxas Recompra ${data.descricao || ''}`,
+                valor: Math.abs(data.jurosAdicionais),
+                tipo: 'recompra',
+                batchId: batchId,
+                duplicataIds: duplicataIds,
+                isPrincipal: false
             });
         }
         
-        // 4. Adiciona Abatimentos Adicionais (se houver)
+        // Abatimentos - Acessório
         if (data.abatimentos > 0) {
             descontosRecompra.push({
-                id: `recompra-abatimento-${Date.now() + 3}`,
-                descricao: `Abatimento Recompra ${data.descricao}`,
-                valor: -Math.abs(data.abatimentos)
+                id: `recompra-abatimento-${batchId}`,
+                descricao: `Abatimento Recompra ${data.descricao || ''}`,
+                valor: -Math.abs(data.abatimentos),
+                tipo: 'recompra',
+                batchId: batchId,
+                duplicataIds: duplicataIds,
+                isPrincipal: false
             });
         }
 
-        // Adiciona todos os itens gerados aos descontos do borderô
-        setDescontos(prev => [ ...prev, ...descontosRecompra ]);
-
-        // <-- CORREÇÃO: Bloco try...catch...finally corrigido
         try {
+          // Executa a baixa das duplicatas no banco
           const response = await fetch('/api/duplicatas/liquidar-recompra', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
@@ -465,15 +511,73 @@ export default function OperacaoBorderoPage() {
             throw new Error(errData.message || 'Falha ao dar baixa nas duplicatas de recompra.');
           }
           
-          showNotification("Recompra adicionada e duplicatas originais liquidadas!", "success");
+          setDescontos(prev => [ ...prev, ...descontosRecompra ]);
+          showNotification("Recompra realizada com sucesso!", "success");
         
         } catch (err) {
-            showNotification(`Erro ao liquidar duplicatas: ${err.message}`, "error");
-            // Rollback: remove os descontos adicionados em caso de falha
-            setDescontos(prev => prev.filter(d => !d.id.startsWith('recompra-')));
+            showNotification(`Erro ao processar recompra: ${err.message}`, "error");
         } finally {
             setIsRecompraModalOpen(false);
         }
+    }
+  };
+
+  // 2. Função de estorno (só será chamada se excluir o Principal)
+  const handleEstornarRecompra = async (itemRecompra) => {
+    if (!itemRecompra.duplicataIds || itemRecompra.duplicataIds.length === 0) {
+        setDescontos(prev => prev.filter(d => d.batchId !== itemRecompra.batchId));
+        return;
+    }
+
+    setIsLoading(true);
+    try {
+        const promises = itemRecompra.duplicataIds.map(id => 
+            fetch(`/api/duplicatas/${id}/estornar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+                body: JSON.stringify({ motivo: 'Cancelamento de Recompra na tela de Operação' })
+            })
+        );
+
+        await Promise.all(promises);
+
+        // Remove TUDO do lote visualmente, pois o principal foi deletado
+        setDescontos(prev => prev.filter(d => d.batchId !== itemRecompra.batchId));
+        
+        showNotification("Recompra cancelada e duplicatas estornadas.", "success");
+
+    } catch (error) {
+        console.error("Erro ao estornar recompra:", error);
+        showNotification("Erro ao estornar as duplicatas. Verifique o console.", "error");
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  // 3. Nova lógica de remoção: se não for Principal, apenas tira da tela
+  const handleRemoveDesconto = (idToRemove) => {
+    if (idToRemove === "despesas-bancarias") {
+      setIgnoreDespesasBancarias(true);
+      return;
+    } 
+
+    const itemToRemove = descontos.find(d => d.id === idToRemove);
+
+    if (itemToRemove && String(idToRemove).startsWith('recompra-')) {
+        
+        // Se for o item PRINCIPAL (Débito), estorna tudo
+        if (itemToRemove.isPrincipal) {
+             // Sem confirm(), direto para o estorno
+             handleEstornarRecompra(itemToRemove);
+        } else {
+            // Se for Acessório (Crédito, Juros, etc), APENAS remove da tela
+            // Mantém as duplicatas baixadas e o débito principal ativo
+            setDescontos(prev => prev.filter(d => d.id !== idToRemove));
+        }
+
+    } else {
+        // Remoção normal de outros descontos manuais
+        setDescontos(descontos.filter((d) => d.id !== idToRemove));
     }
   };
   
@@ -596,7 +700,7 @@ export default function OperacaoBorderoPage() {
           },
           recebedor: {
              nome: empresaCedente,
-             cnpj: cedenteSelecionado.cnpj,
+             cnpj: cedenteSelecionado?.cnpj,
              instituicao: recebedorConta.banco,
              chavePix: pixPayload.chave
           }
@@ -702,6 +806,12 @@ export default function OperacaoBorderoPage() {
     finalizarOperacao();
   };
 
+  // Função que cria a ponte: Fecha Comprovante -> Abre Email
+  const handleCloseReceiptModal = () => {
+    setIsReceiptModalOpen(false); // Fecha o comprovante
+    setIsEmailModalOpen(true);    // Abre o modal de e-mail imediatamente
+  };
+
   const handleLimparTudo = (showMsg = true) => {
     setDataOperacao(new Date().toISOString().split("T")[0]);
     setTipoOperacaoId("");
@@ -782,18 +892,6 @@ export default function OperacaoBorderoPage() {
       liquidoOperacao,
     };
   }, [notasFiscais, todosOsDescontos, jurosPre]);
-
-  const handleRemoveDesconto = (idToRemove) => {
-    if (idToRemove === "despesas-bancarias") {
-      setIgnoreDespesasBancarias(true);
-    } else {
-      if (String(idToRemove).startsWith('recompra-')) {
-          showNotification("Não é possível remover itens de recompra. Limpe o borderô para cancelar.", "error");
-          return;
-      }
-      setDescontos(descontos.filter((d) => d.id !== idToRemove));
-    }
-  };
   
   const handlePartialDebitChange = (isChecked) => {
     if (isChecked) {
@@ -888,7 +986,7 @@ export default function OperacaoBorderoPage() {
       />
       <PixReceiptModal
         isOpen={isReceiptModalOpen}
-        onClose={() => setIsReceiptModalOpen(false)}
+        onClose={handleCloseReceiptModal}
         receiptData={receiptData}
        />
       <RecompraModal
@@ -896,7 +994,7 @@ export default function OperacaoBorderoPage() {
         onClose={() => setIsRecompraModalOpen(false)}
         onConfirm={handleConfirmRecompra}
         dataNovaOperacao={dataOperacao}
-        clienteId={empresaCedenteId} // <-- CORREÇÃO: Passa o clienteId
+        clienteId={empresaCedenteId} 
       />
 
       <main className="h-full overflow-y-auto p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">

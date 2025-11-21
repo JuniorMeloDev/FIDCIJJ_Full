@@ -135,3 +135,35 @@ export async function DELETE(request, { params }) {
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
 }
+
+// Adicione isso ao final de src/app/api/cadastros/clientes/[id]/route.js
+
+export async function GET(request, { params }) {
+    try {
+        const token = request.headers.get('Authorization')?.split(' ')[1];
+        if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
+        jwt.verify(token, process.env.JWT_SECRET);
+
+        const { id } = params;
+
+        const { data: cliente, error } = await supabase
+            .from('clientes')
+            .select('*, contas_bancarias(*), cliente_emails(*), cliente_tipos_operacao(*)')
+            .eq('id', id)
+            .single();
+
+        if (error) throw error;
+
+        // Formata para o padrão esperado pelo front (camelCase no array de contas)
+        const clienteFormatado = {
+            ...cliente,
+            contasBancarias: cliente.contas_bancarias || [],
+            emails: cliente.cliente_emails?.map(e => e.email) || [],
+            tiposOperacao: cliente.cliente_tipos_operacao?.map(t => t.tipo_operacao_id) || []
+        };
+
+        return NextResponse.json(clienteFormatado);
+    } catch (error) {
+        return NextResponse.json({ message: error.message }, { status: 500 });
+    }
+}

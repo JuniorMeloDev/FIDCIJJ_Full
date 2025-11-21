@@ -6,7 +6,8 @@ import { differenceInDays } from 'date-fns';
 
 export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOperacao, clienteId }) {
     const [searchTerm, setSearchTerm] = useState({ nfCte: '', sacadoNome: '' });
-    const [duplicatasEncontradas, setDuplicatasEncontradas] = useState([]);
+    // Alterado: duplicatasEncontradas agora acumula resultados
+    const [duplicatasEncontradas, setDuplicatasEncontradas] = useState([]); 
     const [selectedDuplicatas, setSelectedDuplicatas] = useState(new Set());
     
     const [jurosAdicionais, setJurosAdicionais] = useState('');
@@ -26,6 +27,14 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         setError('');
         onClose();
     };
+    
+    // Função auxiliar para limpar a busca atual sem perder os itens já selecionados (opcional, mas útil)
+    const handleClearSearch = () => {
+        setSearchTerm({ nfCte: '', sacadoNome: '' });
+        // Se quiser manter na tela apenas os selecionados ao limpar, pode filtrar aqui.
+        // Por enquanto, vamos manter a lista acumulada.
+        setError('');
+    };
 
     if (!isOpen) return null;
 
@@ -43,15 +52,15 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
 
         setLoading(true);
         setError('');
-        setDuplicatasEncontradas([]);
-        setSelectedDuplicatas(new Set());
+        // NÃO limpamos mais duplicatasEncontradas aqui para permitir acumulação
+        // setDuplicatasEncontradas([]); 
         setCalculo(null);
         
         try {
             const params = new URLSearchParams({
                 nfCte: searchTerm.nfCte,
                 sacadoNome: searchTerm.sacadoNome,
-                clienteId: clienteId // Filtra pelo cliente atual
+                clienteId: clienteId
             });
             const response = await fetch(`/api/duplicatas/search-pendentes?${params.toString()}`, { headers: getAuthHeader() });
             
@@ -62,15 +71,24 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
             
             const data = await response.json();
             
-            // --- CORREÇÃO AQUI: Ordena os resultados por data de vencimento ---
+            // Ordena os novos resultados
             const sortedData = data.sort((a, b) => {
                 const dateA = new Date(a.data_vencimento.split('/').reverse().join('-'));
                 const dateB = new Date(b.data_vencimento.split('/').reverse().join('-'));
                 return dateA - dateB;
             });
-            // -----------------------------------------------------------------
             
-            setDuplicatasEncontradas(sortedData);
+            // LÓGICA DE ACUMULAÇÃO (CORREÇÃO PRINCIPAL)
+            setDuplicatasEncontradas(prev => {
+                // Cria um Map com os itens anteriores para busca rápida por ID
+                const existingIds = new Set(prev.map(item => item.id));
+                
+                // Filtra os novos itens que ainda não estão na lista
+                const newItems = sortedData.filter(item => !existingIds.has(item.id));
+                
+                // Retorna a lista antiga + novos itens únicos
+                return [...prev, ...newItems];
+            });
             
         } catch (err) {
             setError(err.message);
@@ -79,13 +97,11 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         }
     };
 
-    // --- CORREÇÃO AQUI: Adiciona handler para a tecla 'Enter' ---
     const handleKeyDown = (event) => {
         if (event.key === 'Enter') {
             handleSearch();
         }
     };
-    // ----------------------------------------------------------
 
     const handleToggleDuplicata = (id) => {
         const newSelection = new Set(selectedDuplicatas);
@@ -95,12 +111,14 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
             newSelection.add(id);
         }
         setSelectedDuplicatas(newSelection);
-        setCalculo(null); // Reseta cálculo ao mudar seleção
+        setCalculo(null);
     };
 
     const handleCalculate = () => {
         setError('');
+        // Calcula apenas sobre os itens que estão no array duplicatasEncontradas E no Set selectedDuplicatas
         const parcelasSelecionadas = duplicatasEncontradas.filter(d => selectedDuplicatas.has(d.id));
+        
         if (parcelasSelecionadas.length === 0) {
             setError('Selecione ao menos uma parcela para calcular.');
             return;
@@ -115,7 +133,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         parcelasSelecionadas.forEach(p => {
             totalJurosOriginais += p.valor_juros;
             totalPrincipal += p.valor_bruto;
-            nfCtes.add(p.nf_cte.split('.')[0]); // Adiciona o número base da NF/CTe
+            nfCtes.add(p.nf_cte.split('.')[0]);
 
             const dataOperacaoOriginal = new Date(p.data_operacao + 'T12:00:00Z');
             const diasCorridos = differenceInDays(dataOperacaoNova, dataOperacaoOriginal);
@@ -155,11 +173,17 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         handleClose();
     };
 
+    // Calcula quantas estão selecionadas para mostrar no botão (UX Extra)
+    const countSelected = selectedDuplicatas.size;
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[60] p-4" onClick={handleClose}>
             <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-3xl text-white max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                 
-                <h2 className="text-xl font-bold mb-4 flex-shrink-0">Recompra de Duplicatas</h2>
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold">Recompra de Duplicatas</h2>
+                    <span className="text-sm text-gray-400">{countSelected} itens selecionados</span>
+                </div>
                 
                 {/* --- SEÇÃO DE BUSCA --- */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 flex-shrink-0">
@@ -167,7 +191,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
                         type="text"
                         value={searchTerm.nfCte}
                         onChange={(e) => setSearchTerm(prev => ({ ...prev, nfCte: e.target.value, sacadoNome: '' }))}
-                        onKeyDown={handleKeyDown} // <-- CORREÇÃO ADICIONADA
+                        onKeyDown={handleKeyDown}
                         placeholder="N° NF/CTe"
                         className="md:col-span-1 bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
                     />
@@ -175,33 +199,40 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
                         type="text"
                         value={searchTerm.sacadoNome}
                         onChange={(e) => setSearchTerm(prev => ({ ...prev, sacadoNome: e.target.value, nfCte: '' }))}
-                        onKeyDown={handleKeyDown} // <-- CORREÇÃO ADICIONADA
+                        onKeyDown={handleKeyDown}
                         placeholder="Nome do Sacado"
                         className="md:col-span-1 bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
                     />
-                    <button onClick={handleSearch} disabled={loading} className="md:col-span-1 bg-blue-600 font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50">
-                        {loading ? 'Buscando...' : 'Buscar'}
-                    </button>
+                    <div className="md:col-span-1 flex gap-2">
+                         <button onClick={handleSearch} disabled={loading} className="flex-grow bg-blue-600 font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50">
+                            {loading ? '...' : 'Adicionar à Lista'}
+                        </button>
+                        {duplicatasEncontradas.length > 0 && (
+                            <button onClick={() => setDuplicatasEncontradas([])} title="Limpar Lista" className="bg-gray-600 px-3 rounded-md hover:bg-gray-500">
+                                🗑️
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {error && <p className="text-red-400 text-sm mb-4 flex-shrink-0">{error}</p>}
 
                 {/* --- SEÇÃO DE RESULTADOS (SCROLLABLE) --- */}
-                <div className="flex-grow space-y-2 max-h-64 overflow-y-auto border border-gray-700 p-2 rounded-md">
+                <div className="flex-grow space-y-2 max-h-64 overflow-y-auto border border-gray-700 p-2 rounded-md bg-gray-900">
                     {duplicatasEncontradas.length > 0 ? (
                         duplicatasEncontradas.map(d => (
-                            <label key={d.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-700 cursor-pointer">
+                            <label key={d.id} className={`flex items-center gap-3 p-2 rounded-md cursor-pointer border ${selectedDuplicatas.has(d.id) ? 'bg-gray-700 border-orange-500' : 'hover:bg-gray-800 border-transparent'}`}>
                                 <input type="checkbox" checked={selectedDuplicatas.has(d.id)} onChange={() => handleToggleDuplicata(d.id)} className="h-4 w-4 rounded text-orange-500" />
                                 <div className="flex-grow grid grid-cols-4 text-sm">
-                                    <span className="font-semibold" title={d.cliente_sacado}>{d.cliente_sacado.substring(0, 15)}...</span>
+                                    <span className="font-semibold truncate" title={d.cliente_sacado}>{d.cliente_sacado}</span>
                                     <span>NF/CTe: <strong>{d.nf_cte}</strong></span>
                                     <span>Venc: {formatDate(d.data_vencimento)}</span>
-                                    <span className="text-right">Valor: {formatBRLNumber(d.valor_bruto)}</span>
+                                    <span className="text-right">{formatBRLNumber(d.valor_bruto)}</span>
                                 </div>
                             </label>
                         ))
                     ) : (
-                        <p className="text-gray-400 text-sm text-center p-4">Nenhum resultado para a busca.</p>
+                        <p className="text-gray-500 text-sm text-center p-4">Utilize a busca acima para adicionar itens à lista de recompra.</p>
                     )}
                 </div>
                 
@@ -224,7 +255,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
                                 className="bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
                             />
                             <button onClick={handleCalculate} className="bg-orange-500 font-semibold py-2 px-4 rounded-md hover:bg-orange-600">
-                                Calcular Crédito/Débito
+                                Calcular Valores
                             </button>
                         </div>
                     )}
@@ -232,12 +263,12 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
                     {calculo !== null && (
                         <div className="mt-4 p-4 bg-gray-700 rounded-md grid grid-cols-2 gap-4">
                             <div>
-                                <h3 className="font-semibold text-sm text-gray-300">Débito (Valor Principal):</h3>
-                                <p className="text-2xl font-bold text-red-400">{formatBRLNumber(calculo.principal)}</p>
+                                <h3 className="font-semibold text-sm text-gray-300">Débito (Valor Principal Recomprado):</h3>
+                                <p className="text-xl font-bold text-red-400">{formatBRLNumber(calculo.principal)}</p>
                             </div>
                             <div>
                                 <h3 className="font-semibold text-sm text-gray-300">Crédito (Juros a Estornar):</h3>
-                                <p className="text-2xl font-bold text-green-400">{formatBRLNumber(calculo.credito)}</p>
+                                <p className="text-xl font-bold text-green-400">{formatBRLNumber(calculo.credito)}</p>
                             </div>
                         </div>
                     )}
