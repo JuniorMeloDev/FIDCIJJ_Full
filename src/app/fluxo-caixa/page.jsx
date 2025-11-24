@@ -734,7 +734,45 @@ export default function FluxoDeCaixaPage() {
         return false;
     }
   };
-  const handleAbrirComprovantePix = async () => {
+  // app/fluxo-caixa/page.jsx
+
+  const handleAbrirComprovantePix = () => {
+    const item = contextMenu.selectedItem;
+    if (!item) return;
+
+    // Tenta reconstruir os dados do recebedor baseando-se na operação vinculada
+    let recebedorData = null;
+    
+    // Se tiver operação e cliente (trazidos pelo join da API movimentacoes-caixa)
+    if (item.operacao && item.operacao.cliente) {
+        const cliente = item.operacao.cliente;
+        
+        // Tenta encontrar a conta usada (geralmente a que tem chave PIX)
+        // Como o histórico não salva qual conta exata do cliente recebeu, pegamos a primeira com chave ou deixamos genérico
+        const contaPix = cliente.contas_bancarias?.find(c => c.chave_pix) || {};
+        
+        recebedorData = {
+            nome: cliente.nome,
+            cnpj: cliente.cnpj,
+            instituicao: contaPix.banco || 'Não informado', // Banco do recebedor
+            chavePix: contaPix.chave_pix || 'Não informada'
+        };
+    }
+
+    // Preenche o state que o Modal de Recibo usa
+    setReceiptData({
+      valor: Math.abs(item.valor), // Garante positivo
+      data: item.dataMovimento, // Data do banco
+      transactionId: item.transaction_id,
+      descricao: item.descricao,
+      pagador: {
+        nome: clienteMasterInfo.nome, // Nome da sua empresa (já carregado no state)
+        cnpj: clienteMasterInfo.cnpj, // CNPJ da sua empresa
+        conta: item.contaBancaria,    // Conta de saída salva no lançamento
+      },
+      recebedor: recebedorData
+    });
+
     setIsReceiptModalOpen(true);
   };
 
