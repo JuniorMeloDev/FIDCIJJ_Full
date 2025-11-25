@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
-// POST: Cria um novo lançamento manual (Débito, Crédito ou Transferência)
 export async function POST(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -20,19 +19,24 @@ export async function POST(request) {
                     valor: -Math.abs(body.valor),
                     conta_bancaria: body.contaOrigem,
                     empresa_associada: body.empresaAssociada,
-                    categoria: body.isDespesa ? 'Despesa Avulsa' : 'Movimentação Avulsa'
+                    // ALTERAÇÃO: Removemos a dependência de body.isDespesa
+                    categoria: 'Movimentação Avulsa', 
+                    natureza: body.natureza || 'Outras Despesas'
                 });
                 break;
             case 'CREDITO':
+                // ... (igual ao anterior)
                 movements.push({
                     data_movimento: body.data,
                     descricao: body.descricao,
                     valor: Math.abs(body.valor),
                     conta_bancaria: body.contaOrigem,
                     empresa_associada: body.empresaAssociada,
-                    categoria: 'Receita Avulsa'
+                    categoria: 'Receita Avulsa',
+                    natureza: 'Receitas Financeiras'
                 });
                 break;
+            // ... (TRANSFERENCIA igual)
             case 'TRANSFERENCIA':
                 movements.push({
                     data_movimento: body.data,
@@ -40,7 +44,8 @@ export async function POST(request) {
                     valor: -Math.abs(body.valor),
                     conta_bancaria: body.contaOrigem,
                     empresa_associada: body.empresaAssociada,
-                    categoria: 'Transferencia Enviada'
+                    categoria: 'Transferencia Enviada',
+                    natureza: 'Transferência Entre Contas'
                 });
                 movements.push({
                     data_movimento: body.data,
@@ -48,7 +53,8 @@ export async function POST(request) {
                     valor: Math.abs(body.valor),
                     conta_bancaria: body.contaDestino,
                     empresa_associada: body.empresaDestino,
-                    categoria: 'Transferencia Recebida'
+                    categoria: 'Transferencia Recebida',
+                    natureza: 'Transferência Entre Contas'
                 });
                 break;
             default:

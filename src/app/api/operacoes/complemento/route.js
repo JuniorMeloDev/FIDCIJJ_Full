@@ -15,44 +15,36 @@ export async function POST(request) {
             return NextResponse.json({ message: 'Dados insuficientes para criar o complemento.' }, { status: 400 });
         }
         
-        // --- LÓGICA CORRIGIDA PARA BUSCAR O TIPO DE DOCUMENTO ---
-        let descricaoLancamento = `Complemento Borderô #${operacao_id}`; // Fallback
+        let descricaoLancamento = `Complemento Borderô #${operacao_id}`; 
 
-        // 1. Busca a operação e o cliente associado para descobrir o ramo de atividade
+        // Busca dados para melhorar a descrição (CTe/NF)
         const { data: operacaoData, error: operacaoError } = await supabase
             .from('operacoes')
             .select('*, cliente:clientes(ramo_de_atividade)')
             .eq('id', operacao_id)
             .single();
 
-        if (operacaoError) {
-             console.error("Erro ao buscar operação para complemento:", operacaoError);
-        } else if (operacaoData) {
-            // 2. Busca as duplicatas para pegar os números
+        if (!operacaoError && operacaoData) {
             const { data: duplicatas, error: dupError } = await supabase
                 .from('duplicatas')
                 .select('nf_cte')
                 .eq('operacao_id', operacao_id);
 
-            if (dupError) {
-                console.error("Erro ao buscar duplicatas para descrição do complemento:", dupError);
-            } else if (duplicatas && duplicatas.length > 0) {
-                // 3. Define o tipo de documento com base no ramo de atividade
+            if (!dupError && duplicatas && duplicatas.length > 0) {
                 const docType = operacaoData.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
                 const numerosDoc = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join(', ');
-                
-                // 4. Monta a descrição correta
                 descricaoLancamento = `Complemento Borderô ${docType} ${numerosDoc}`;
             }
         }
-        // --- FIM DA CORREÇÃO ---
 
+        // INSERÇÃO NO BANCO COM NATUREZA CORRETA
         const { error } = await supabase.from('movimentacoes_caixa').insert({
             data_movimento: data,
             descricao: descricaoLancamento,
             valor: -Math.abs(valor),
             conta_bancaria: conta_bancaria,
             categoria: 'Pagamento de Borderô',
+            natureza: 'Aquisição de Direitos Creditórios',
             operacao_id: operacao_id,
             empresa_associada: empresa_associada,
         });

@@ -21,6 +21,7 @@ export async function PUT(request, { params }) {
                 valor: body.valor,
                 conta_bancaria: body.conta_bancaria,
                 categoria: body.categoria,
+                natureza: body.natureza // <--- Agora atualiza a natureza
             })
             .eq('id', id);
 
@@ -45,7 +46,6 @@ export async function DELETE(request, { params }) {
 
         const { id } = params;
 
-        // --- CORREÇÃO APLICADA AQUI ---
         // 1. Busca o lançamento para verificar a categoria antes de excluir.
         const { data: lancamento, error: fetchError } = await supabase
             .from('movimentacoes_caixa')
@@ -60,7 +60,6 @@ export async function DELETE(request, { params }) {
         if (categoriasProtegidas.includes(lancamento.categoria)) {
             return NextResponse.json({ message: 'Este lançamento foi gerado automaticamente e não pode ser excluído manualmente.' }, { status: 403 });
         }
-        // --- FIM DA CORREÇÃO ---
 
         // 3. Se não for protegido, prossegue com a exclusão.
         const { error } = await supabase.from('movimentacoes_caixa').delete().eq('id', id);

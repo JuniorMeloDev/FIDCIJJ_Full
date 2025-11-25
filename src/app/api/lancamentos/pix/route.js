@@ -21,7 +21,8 @@ export async function POST(request) {
       empresaAssociada,
       pix,
       operacao_id,
-      skipSave // <-- 1. ADICIONA A NOVA FLAG
+      skipSave,
+      natureza
     } = body;
 
     console.log(
@@ -268,6 +269,7 @@ export async function POST(request) {
       valor: -Math.abs(valor),
       conta_bancaria: nomeContaCompletoParaSalvar,
       categoria: "Pagamento PIX",
+      natureza: natureza || 'Despesas Financeiras',
       empresa_associada: empresaAssociada,
       transaction_id: pixEndToEndId,
       operacao_id: operacao_id || (complementMatch ? complementMatch[1] : null),

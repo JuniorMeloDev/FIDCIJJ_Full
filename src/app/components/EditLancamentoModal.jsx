@@ -1,14 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-// IMPORTA A NOVA FUNÇÃO DE FORMATAÇÃO
 import { formatBRLInput, parseBRL, formatDisplayConta } from '@/app/utils/formatters';
 
 export default function EditLancamentoModal({ isOpen, onClose, onSave, lancamento, contasMaster }) {
     const [formData, setFormData] = useState({});
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
-    const [isDespesa, setIsDespesa] = useState(true);
 
     useEffect(() => {
         if (isOpen && lancamento) {
@@ -16,9 +14,9 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
                 ...lancamento,
                 data_movimento: lancamento.dataMovimento ? new Date(lancamento.dataMovimento).toISOString().split('T')[0] : '',
                 valor: formatBRLInput(String(Math.abs(lancamento.valor) * 100)),
-                conta_bancaria: lancamento.contaBancaria || ''
+                conta_bancaria: lancamento.contaBancaria || '',
+                natureza: lancamento.natureza || 'Despesas Administrativas'
             });
-            setIsDespesa(lancamento.categoria === 'Despesa Avulsa');
         }
     }, [isOpen, lancamento]);
 
@@ -47,9 +45,9 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
             descricao: formData.descricao,
             valor: valorFinal,
             conta_bancaria: formData.conta_bancaria,
-            categoria: lancamento.valor < 0 
-                ? (isDespesa ? 'Despesa Avulsa' : 'Movimentação Avulsa') 
-                : lancamento.categoria
+            // Categoria agora é automática para despesas manuais
+            categoria: lancamento.valor < 0 ? 'Movimentação Avulsa' : lancamento.categoria,
+            natureza: (lancamento.valor < 0) ? formData.natureza : null
         };
 
         const success = await onSave(payload);
@@ -61,7 +59,6 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
         setIsSaving(false);
     };
 
-    // --- LÓGICA DE BLOQUEIO CORRIGIDA ---
     const isReadOnly = ['Pagamento de Borderô', 'Recebimento', 'Transferencia Enviada', 'Transferencia Recebida'].includes(lancamento.categoria);
 
     return (
@@ -78,6 +75,7 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        {/* ... Campos de Data e Valor (iguais ao anterior) ... */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label htmlFor="data_movimento" className="block text-sm font-medium text-gray-300">Data</label>
@@ -98,26 +96,32 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
                            <label htmlFor="conta_bancaria" className="block text-sm font-medium text-gray-300">Conta</label>
                            <select id="conta_bancaria" name="conta_bancaria" value={formData.conta_bancaria || ''} onChange={handleChange} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
                                 <option value="">Selecione...</option>
-                                {/* --- MODIFICAÇÃO APLICADA --- */}
                                 {Array.isArray(contasMaster) && contasMaster.map(c => 
-                                    <option key={c.contaBancaria} value={c.contaBancaria}>
-                                        {formatDisplayConta(c.contaBancaria)}
-                                    </option>
+                                    <option key={c.contaBancaria} value={c.contaBancaria}>{formatDisplayConta(c.contaBancaria)}</option>
                                 )}
                            </select>
                         </div>
-
+                        
+                        {/* CHECKBOX REMOVIDO. CAMPO NATUREZA MANTIDO */}
                         {lancamento.valor < 0 && (
-                            <div className="pt-2">
-                                <label className="flex items-center cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={isDespesa} 
-                                        onChange={(e) => setIsDespesa(e.target.checked)} 
-                                        className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
-                                    />
-                                    <span className="ml-2 text-sm text-gray-200">É uma despesa? (Contabilizar no resumo)</span>
-                                </label>
+                            <div className="mt-2">
+                                <label className="block text-sm font-medium text-orange-400 mb-1">Natureza (Classificação DRE)</label>
+                                <select 
+                                    name="natureza"
+                                    value={formData.natureza} 
+                                    onChange={handleChange}
+                                    className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-white"
+                                >
+                                    <option value="Despesas Administrativas">Despesas Administrativas</option>
+                                    <option value="Despesas Financeiras">Despesas Financeiras</option>
+                                    <option value="Despesas Tributárias">Despesas Tributárias</option>
+                                    <option value="Serviços de Terceiros (FIDC)">Serviços de Terceiros</option>
+                                    <option value="Aquisição de Direitos Creditórios">Aquisição de Direitos Creditórios</option>
+                                    <option value="Distribuição de Lucros / Amortização">Distribuição de Lucros / Amortização</option>
+                                    <option value="Transferência Entre Contas">Transferência Entre Contas</option>
+                                    <option value="Empréstimos / Mútuos">Empréstimos / Mútuos</option>
+                                    <option value="Outras Despesas">Outras Despesas</option>
+                                </select>
                             </div>
                         )}
 
