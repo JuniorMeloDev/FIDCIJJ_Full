@@ -4,14 +4,13 @@
 import { useState, useEffect } from 'react';
 import { formatBRLNumber, formatDisplayConta } from '@/app/utils/formatters';
 
-// Helper para formatar a data de YYYY-MM-DD para DD/MM/YYYY (apenas para exibição)
 const formatarDataParaDisplay = (dataISO) => {
     if (!dataISO || typeof dataISO !== 'string') return '';
-    const partes = dataISO.split('-'); // ["2025", "10", "29"]
+    const partes = dataISO.split('-'); 
     if (partes.length === 3) {
-        return `${partes[2]}/${partes[1]}/${partes[0]}`; // "29/10/2025"
+        return `${partes[2]}/${partes[1]}/${partes[0]}`; 
     }
-    return dataISO; // Retorna o original se não for o formato esperado
+    return dataISO; 
 };
 
 export default function LancamentoExtratoModal({ 
@@ -32,29 +31,33 @@ export default function LancamentoExtratoModal({
     const isDebito = transacao?.valor < 0;
 
     useEffect(() => {
-
         if (isOpen && transacao) {
-            
             setDescricao(transacao.descricao || '');
-            
-            // Inicializa com o nome da conta vindo do objeto 'transacao'
             const contaInicial = transacao.conta_bancaria || '';
             setContaBancaria(contaInicial);
-            
             setCategoria(isDebito ? 'Despesa Avulsa' : 'Receita Avulsa');
             setIsDespesa(isDebito);
             setError('');
         }
-    }, [isOpen, transacao]); // Removido isDebito para evitar loops, mantendo apenas o essencial
+    }, [isOpen, transacao]);
 
     const handleSave = async () => {
+        setError('');
+
         if (!contaBancaria) {
-            setError('Por favor, selecione a conta interna.');
+            setError('Por favor, selecione a conta interna para vincular este lançamento.');
+            return;
+        }
+        if (!descricao || descricao.trim() === '') {
+            setError('A descrição é obrigatória.');
+            return;
+        }
+        if (!categoria) {
+            setError('A categoria é obrigatória.');
             return;
         }
 
         setLoading(true);
-        setError('');
 
         const dataISO = transacao.data;
         if (!dataISO || typeof dataISO !== 'string') {
@@ -73,42 +76,24 @@ export default function LancamentoExtratoModal({
             isDespesa: isDebito ? isDespesa : false
         };
 
-        try {
-            const token = sessionStorage.getItem('authToken');
-            const headers = {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}` 
-            };
-
-            const response = await fetch('/api/lancamentos/conciliar-manual', {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Erro ao salvar lançamento');
+        const success = await onSave(payload);
+        
+        if (success) {
+            // --- MENSAGEM DE SUCESSO ADICIONADA AQUI ---
+            if (showNotification) {
+                showNotification('Movimento Criado com Sucesso', 'success');
             }
-
-            showNotification('Lançamento salvo com sucesso!', 'success');
-            onClose();
-            return true;
-        } catch (err) {
-            const errorMessage = err.message || 'Erro ao salvar lançamento';
-            setError(errorMessage);
-            console.error('Erro ao salvar:', err);
-            return false;
-        } finally {
-            setLoading(false);
+            onClose(); 
         }
+        
+        setLoading(false);
     };
 
     if (!isOpen || !transacao) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[70]" onClick={onClose}>
-            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[80]" onClick={onClose}>
+            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg border border-gray-600" onClick={e => e.stopPropagation()}>
                 <h2 className="text-xl font-bold mb-4 text-white">Conciliação Manual</h2>
 
                 <div className="space-y-4">
@@ -122,41 +107,41 @@ export default function LancamentoExtratoModal({
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Descrição <span className="text-red-400">*</span></label>
                         <input
                             type="text"
                             value={descricao}
-                            onChange={(e) => setDescricao(e.target.value)}
-                            className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                            onChange={(e) => {
+                                setDescricao(e.target.value);
+                                if (error) setError('');
+                            }}
+                            className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:border-orange-500 focus:outline-none"
                             placeholder="Descrição do lançamento..."
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Conta Interna</label>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Conta Interna <span className="text-red-400">*</span></label>
                         <select
                             value={contaBancaria}
                             onChange={(e) => setContaBancaria(e.target.value)}
-                            className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                            className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:border-orange-500 focus:outline-none"
                         >
                             <option value="">Selecione uma conta...</option>
-                            {contasInternas
-                                .filter(conta => conta.saldo !== 0) 
-                                .map(conta => (
-                                    <option key={conta.id} value={conta.contaBancaria}>
-                                        {formatDisplayConta(conta.contaBancaria)}
-                                    </option>
-                                ))
-                            }
+                            {contasInternas.map(conta => (
+                                <option key={conta.id} value={conta.contaBancaria}>
+                                    {formatDisplayConta(conta.contaBancaria)}
+                                </option>
+                            ))}
                         </select>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Categoria</label>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Categoria <span className="text-red-400">*</span></label>
                         <select
                             value={categoria}
                             onChange={(e) => setCategoria(e.target.value)}
-                            className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                            className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:border-orange-500 focus:outline-none"
                         >
                             {isDebito ? (
                                 <>
@@ -193,20 +178,22 @@ export default function LancamentoExtratoModal({
                 </div>
 
                 {error && (
-                    <p className="mt-4 text-sm text-red-400 text-center">{error}</p>
+                    <div className="mt-4 p-2 bg-red-900/50 border border-red-500 rounded text-sm text-red-200 text-center">
+                        {error}
+                    </div>
                 )}
 
                 <div className="mt-6 flex justify-end gap-4">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500"
+                        className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 transition-colors"
                     >
                         Cancelar
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={loading}
-                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 transition-colors"
                     >
                         {loading ? 'Salvando...' : 'Confirmar'}
                     </button>

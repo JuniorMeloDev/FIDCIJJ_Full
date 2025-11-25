@@ -102,6 +102,7 @@ export default function FluxoDeCaixaPage() {
   const [isOfxModalOpen, setIsOfxModalOpen] = useState(false);
   const [ofxData, setOfxData] = useState([]);
   const [itemOfxParaCriar, setItemOfxParaCriar] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // --- Upload OFX Atualizado ---
   const handleOfxUpload = async (file) => {
@@ -590,12 +591,16 @@ export default function FluxoDeCaixaPage() {
         throw new Error(error.message || "Erro ao salvar lançamento");
       }
 
-      showNotification("Lançamento criado com sucesso!", "success");
+      // Atualiza a lista principal
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
 
+      // --- ALTERAÇÃO: Força a atualização do Modal OFX ---
+      setRefreshKey(prev => prev + 1);
+      // ---------------------------------------------------
+
       setItemOfxParaCriar(null);
-      return true;
+      return true; // Retorna sucesso para o modal exibir a notificação e fechar
     } catch (err) {
       showNotification(err.message, "error");
       return false;
@@ -901,6 +906,8 @@ export default function FluxoDeCaixaPage() {
         onCriarLancamento={handleCriarLancamentoDoOfx}
         contas={contasMaster}
         lancamentosDoGrid={movimentacoes}
+        saldoInicial={saldoAnterior}
+        refreshKey={refreshKey}
       />
 
       <LancamentoExtratoModal
@@ -910,7 +917,7 @@ export default function FluxoDeCaixaPage() {
           setItemOfxParaCriar(null);
         }}
         onSave={handleSaveLancamentoManual}
-        lancamento={itemOfxParaCriar || transacaoParaConciliar}
+        transacao={itemOfxParaCriar || transacaoParaConciliar}
         contasInternas={contasMaster} 
         showNotification={showNotification}
       />

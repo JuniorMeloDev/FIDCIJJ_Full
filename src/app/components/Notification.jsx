@@ -1,9 +1,11 @@
+
 'use client';
 
 export default function Notification({ message, type, onClose }) {
     if (!message) return null;
 
-    const baseClasses = "fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white flex justify-between items-center z-50";
+    // ALTERAÇÃO: Mudei z-50 para z-[100]
+    const baseClasses = "fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white flex justify-between items-center z-[100]";
     
     const typeClasses = {
         success: "bg-green-500",

@@ -1,12 +1,23 @@
-// app/components/ConciliacaoOFXModal.jsx
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { formatBRLNumber, formatDate } from '../utils/formatters';
+import { FaWallet } from 'react-icons/fa';
 
-export default function ConciliacaoOFXModal({ isOpen, onClose, ofxData, onConciliar, onCriarLancamento, contas = [], lancamentosDoGrid = [] }) {
+export default function ConciliacaoOFXModal({ 
+    isOpen, 
+    onClose, 
+    ofxData, 
+    onConciliar, 
+    onCriarLancamento, 
+    contas = [], 
+    lancamentosDoGrid = [], 
+    saldoInicial = 0,
+    refreshKey = 0 
+}) {
   const [contaSelecionada, setContaSelecionada] = useState('');
   const [lancamentosSistema, setLancamentosSistema] = useState([]);
+  const [saldoInicialLocal, setSaldoInicialLocal] = useState(0);
   const [loadingSistema, setLoadingSistema] = useState(false);
   const [matches, setMatches] = useState({});
 
@@ -18,83 +29,148 @@ export default function ConciliacaoOFXModal({ isOpen, onClose, ofxData, onConcil
   useEffect(() => {
     if (isOpen) {
       setMatches({});
-      setLancamentosSistema([]);
-      
-      // Define datas padrão (Mês Atual)
-      const hoje = new Date();
-      const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-      
-      // Ajuste para garantir formato YYYY-MM-DD correto
-      const formatDateIso = (date) => date.toISOString().split('T')[0];
-      
-      setDataInicio(formatDateIso(primeiroDia));
-      setDataFim(formatDateIso(hoje));
+      // Se já tivermos dados carregados e for apenas uma reabertura (ou refresh), 
+      // mantemos as datas. Se for a primeira vez, definimos o padrão.
+      if (!dataInicio) {
+          const hoje = new Date();
+          const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+          
+          const formatDateIso = (date) => date.toISOString().split('T')[0];
+          
+          setDataInicio(formatDateIso(primeiroDia));
+          setDataFim(formatDateIso(hoje));
+      }
 
-      // Se só tiver uma conta, seleciona ela. 
-      // Se tiver lançamentos no grid, tenta pegar a conta do primeiro item para facilitar.
+      // Tenta selecionar a primeira conta automaticamente se não houver seleção
       if (contas && contas.length === 1) {
           setContaSelecionada(contas[0].id);
-      } else if (contas.length > 0 && lancamentosDoGrid.length > 0) {
-          const item = lancamentosDoGrid[0];
-          // Tenta encontrar um ID, mas geralmente o grid só tem o nome. 
-          // Nesse caso, deixamos o usuário selecionar ou mantemos vazio.
-          const idContaGrid = item.contaBancariaId || item.conta_bancaria_id || item.conta_id;
-          if (idContaGrid) setContaSelecionada(idContaGrid);
+      } else if (contas.length > 0 && !contaSelecionada) {
+          setContaSelecionada(contas[0].id);
       }
     }
-  }, [isOpen, contas, lancamentosDoGrid]);
+  }, [isOpen, contas]);
 
-  // Carrega dados quando Conta ou Data mudam
+  // Carrega dados quando Conta, Data ou refreshKey mudam
   useEffect(() => {
-    if (dataInicio && dataFim) {
+    if (isOpen && dataInicio && dataFim && contaSelecionada) {
       carregarDadosSistema();
     }
-  }, [contaSelecionada, dataInicio, dataFim, lancamentosDoGrid]);
+  }, [contaSelecionada, dataInicio, dataFim, isOpen, refreshKey]);
 
   const carregarDadosSistema = async () => {
     setLoadingSistema(true);
 
-    // --- CORREÇÃO: Prepara o nome da conta para filtragem ---
-    // O dropdown retorna um ID, mas o grid muitas vezes exibe o nome formatado (ex: "Itaú - Ag...").
-    // Precisamos encontrar o nome correspondente ao ID selecionado para filtrar corretamente.
+    // Precisamos do nome da conta formatado (ex: "ITAÚ ...") para filtrar na API
     let nomeContaSelecionada = '';
     if (contaSelecionada) {
         const contaObj = contas.find(c => String(c.id) === String(contaSelecionada));
         if (contaObj) {
-            // Usa a propriedade contaBancaria que já vem formatada ("Banco - Ag / CC")
             nomeContaSelecionada = contaObj.contaBancaria; 
         }
     }
 
-    // Filtra os lançamentos que já estão carregados na tela (lancamentosDoGrid)
-    const dadosLocaisFiltrados = lancamentosDoGrid.filter(item => {
-        // Pega a data do item
-        const rawDate = item.dataMovimento || item.data || item.data_movimento || '';
-        if (!rawDate) return false;
-        const dataItem = rawDate.split('T')[0];
-        
-        // Verifica Data
-        const dateMatch = (dataItem >= dataInicio && dataItem <= dataFim);
+    if (!nomeContaSelecionada) {
+        setLoadingSistema(false);
+        return;
+    }
 
-        // Verifica Conta (SE houver conta selecionada)
-        let accountMatch = true;
-        if (contaSelecionada && nomeContaSelecionada) {
-             // Compara a string salva no banco com a string da conta selecionada
-             // Verifica ambas as chaves possíveis (camelCase e snake_case)
-             const contaItem = item.contaBancaria || item.conta_bancaria;
-             accountMatch = (contaItem === nomeContaSelecionada);
+    try {
+        const token = sessionStorage.getItem('authToken');
+        const params = new URLSearchParams({
+            dataInicio,
+            dataFim,
+            conta: nomeContaSelecionada, // Filtra especificamente por esta conta
+            sort: 'data_movimento',
+            direction: 'ASC' // Trazemos ASC para facilitar cálculo, depois invertemos visualmente
+        });
+
+        const response = await fetch(`/api/movimentacoes-caixa?${params.toString()}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            
+            // A API retorna { data: [...], saldoAnterior: number }
+            // Isso garante que o saldoAnterior seja EXATO para esta conta antes da dataInicio
+            setLancamentosSistema(data.data || []);
+            setSaldoInicialLocal(data.saldoAnterior || 0); 
+
+            // Roda a auto-conciliação (match simples por valor e data)
+            if (ofxData && ofxData.length > 0) {
+                autoConciliar(ofxData, data.data || []);
+            }
         }
+    } catch (error) {
+        console.error("Erro ao buscar dados para conciliação:", error);
+    } finally {
+        setLoadingSistema(false);
+    }
+  };
 
-        return dateMatch && accountMatch;
+  // Processa a lista para inserir as linhas de "Saldo Total Disponível"
+  const lancamentosProcessados = useMemo(() => {
+    if (!lancamentosSistema) return [];
+
+    // 1. Garante ordenação por data CRESCENTE para o cálculo matemático
+    const sorted = [...lancamentosSistema].sort((a, b) => {
+        const dateA = new Date(a.dataMovimento || a.data);
+        const dateB = new Date(b.dataMovimento || b.data);
+        return dateA - dateB;
+    });
+    
+    const groupedByDate = {};
+    
+    // 2. Agrupa por data
+    sorted.forEach(item => {
+        const rawDate = item.dataMovimento || item.data;
+        const date = rawDate.split('T')[0];
+        if (!groupedByDate[date]) groupedByDate[date] = [];
+        groupedByDate[date].push(item);
     });
 
-    // Atualiza a lista e roda a auto-conciliação
-    setLancamentosSistema(dadosLocaisFiltrados);
-    if (ofxData && ofxData.length > 0) {
-        autoConciliar(ofxData, dadosLocaisFiltrados);
-    }
-    setLoadingSistema(false);
-  };
+    const finalIds = [];
+    
+    // Começa com o saldo anterior específico da conta (vindo da API)
+    let runningBalance = saldoInicialLocal; 
+
+    // 3. Processa dia a dia
+    Object.keys(groupedByDate).sort().forEach(date => {
+        const itemsDoDia = groupedByDate[date];
+        
+        // Adiciona os itens do dia e atualiza o saldo
+        itemsDoDia.forEach(item => {
+            runningBalance += parseFloat(item.valor);
+            finalIds.push(item);
+        });
+
+        // Adiciona a linha de saldo no final do dia
+        finalIds.push({
+            id: `saldo-${date}`,
+            isBalanceRow: true,
+            dataMovimento: date,
+            descricao: 'Saldo Total Disponível',
+            valor: runningBalance,
+            contaBancaria: '',
+            categoria: 'Saldo'
+        });
+    });
+
+    // 4. Re-ordena por data DECRESCENTE para a visualização do usuário (mais recente no topo)
+    return finalIds.sort((a, b) => {
+        const dateA = new Date(a.dataMovimento || a.data);
+        const dateB = new Date(b.dataMovimento || b.data);
+        
+        if (dateA - dateB !== 0) return dateB - dateA; // DESC
+        
+        // Se datas iguais, a linha de Saldo deve ficar no TOPO do dia na visualização DESC
+        if (a.isBalanceRow) return -1; 
+        if (b.isBalanceRow) return 1;
+        
+        return 0;
+    });
+
+  }, [lancamentosSistema, saldoInicialLocal]);
 
   const autoConciliar = (ofxItems, sysItems) => {
     const newMatches = {};
@@ -116,7 +192,6 @@ export default function ConciliacaoOFXModal({ isOpen, onClose, ofxData, onConcil
   };
 
   const handleCriarNovo = (ofxItem) => {
-
       onCriarLancamento(ofxItem, contaSelecionada || null);
   };
 
@@ -140,10 +215,9 @@ export default function ConciliacaoOFXModal({ isOpen, onClose, ofxData, onConcil
                     onChange={e => setContaSelecionada(e.target.value)}
                     className="bg-gray-800 border border-gray-500 rounded p-1 text-sm w-64 focus:ring-orange-500 text-white h-9"
                 >
-                    <option value="">-- Todas as Contas --</option>
+                    <option value="">-- Selecione uma Conta --</option>
                     {contas.map(c => (
                         <option key={c.id} value={c.id}>
-                             {/* Exibe formatado: Banco - Ag: XXX (Descricao) */}
                              {c.banco} - Ag: {c.agencia} ({c.descricao || c.contaCorrente})
                         </option>
                     ))}
@@ -198,24 +272,38 @@ export default function ConciliacaoOFXModal({ isOpen, onClose, ofxData, onConcil
             </div>
         </div>
 
-        {/* Lado Direito: Sistema */}
+        {/* Lado Direito: Sistema (Com Saldo Corrigido e Refresh) */}
         <div className="w-1/2 flex flex-col bg-gray-900">
             <div className="p-3 bg-gray-700 font-bold text-center border-b border-gray-600 sticky top-0">
                 SISTEMA (FLUXO DE CAIXA)
-                <span className="block text-xs text-gray-400 font-normal">{loadingSistema ? 'Carregando...' : `${lancamentosSistema.length} registros visíveis`}</span>
+                <span className="block text-xs text-gray-400 font-normal">{loadingSistema ? 'Carregando...' : `${lancamentosProcessados.length} registros visíveis`}</span>
             </div>
             <div className="flex-grow overflow-y-auto p-2 space-y-2">
-                {/* Mensagens de estado vazio */}
-                {!loadingSistema && lancamentosSistema.length === 0 && (
+                {!loadingSistema && lancamentosProcessados.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full text-gray-500 p-6 text-center">
-                        <p>Nenhum lançamento encontrado no sistema neste período.</p>
-                        {contaSelecionada && <p className="text-xs mt-2 text-orange-400">(Filtrando pela conta selecionada)</p>}
+                        <p>Nenhum lançamento encontrado.</p>
+                        {!contaSelecionada && <p className="text-yellow-400 mt-2">Selecione uma conta para ver os dados.</p>}
                     </div>
                 )}
                 
-                {lancamentosSistema.map((sysItem) => {
+                {lancamentosProcessados.map((sysItem) => {
+                    // Renderização Especial da Linha de Saldo
+                    if (sysItem.isBalanceRow) {
+                        return (
+                            <div key={sysItem.id} className="bg-gray-900/80 border-t border-b border-gray-600 p-2 flex justify-between items-center">
+                                <div className="flex items-center gap-2 text-orange-400 text-sm font-bold uppercase">
+                                    <FaWallet /> {sysItem.descricao} ({formatDate(sysItem.dataMovimento)})
+                                </div>
+                                <div className={`font-bold text-sm ${sysItem.valor >= 0 ? "text-blue-400" : "text-red-400"}`}>
+                                    {formatBRLNumber(sysItem.valor)}
+                                </div>
+                            </div>
+                        );
+                    }
+
                     const matchedOfxId = Object.keys(matches).find(key => matches[key] === sysItem.id);
                     const isMatched = !!matchedOfxId;
+                    
                     return (
                         <div key={sysItem.id} className={`p-3 rounded border flex justify-between items-center ${isMatched ? 'bg-green-900/20 border-green-600 opacity-80' : 'bg-gray-800 border-gray-600'}`}>
                              <div className="flex-grow mr-2 overflow-hidden">
