@@ -11,10 +11,9 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
     const [busca, setBusca] = useState('');
     
     // Estado para a conta selecionada e lista de contas
-    const [contaDestino, setContaDestino] = useState('');
+    const [contaDestinoId, setContaDestinoId] = useState(''); // Alterado nome para Id para ficar claro
     const [listaContas, setListaContas] = useState([]);
 
-    // Verifica se é OFX (apenas para lógica de validação, se necessário)
     const isOfxImport = !contaApi;
 
     const selectedIds = useMemo(() => new Set(selectedItemsData.map(item => item.id)), [selectedItemsData]);
@@ -33,17 +32,12 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
             setBusca('');
             setError('');
             
-            // CORREÇÃO: Busca as contas SEMPRE (para API e OFX)
             fetchContas();
 
-            // Se já tiver uma conta definida (API), preenche o estado
-            if (contaApi) {
-                setContaDestino(contaApi);
-            } else {
-                setContaDestino('');
-            }
+            // Se já tiver uma conta definida (API), tenta pré-selecionar se possível
+            // Mas aqui precisamos do ID, então a lógica de pré-seleção depende de carregarmos a lista primeiro
         }
-    }, [isOpen, contaApi]);
+    }, [isOpen]);
 
     const fetchContas = async () => {
         try {
@@ -54,9 +48,15 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
             const data = await response.json();
             setListaContas(data || []);
             
-            // Se for OFX e não tiver contaApi, seleciona a primeira por padrão
-            if (!contaApi && data && data.length > 0) {
-                setContaDestino(data[0].id); 
+            // Tenta pré-selecionar se houver contaApi (número da conta) vindo do filtro
+            if (contaApi && data) {
+                const contaCorrespondente = data.find(c => c.conta_corrente.includes(contaApi));
+                if (contaCorrespondente) {
+                    setContaDestinoId(contaCorrespondente.id);
+                }
+            } else if (data && data.length > 0) {
+                // Seleciona a primeira por padrão se não tiver filtro
+                setContaDestinoId(data[0].id); 
             }
         } catch (err) {
             console.error("Erro ao buscar contas:", err);
@@ -104,9 +104,21 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
             return;
         }
 
-        // Validação da conta (Agora obrigatório para todos se o select estiver visível)
-        if (!contaDestino) {
+        // Validação da conta
+        if (!contaDestinoId) {
             setError('Por favor, selecione a conta de destino para este lançamento.');
+            return;
+        }
+
+        // --- CORREÇÃO AQUI: Formata o nome da conta antes de enviar ---
+        const contaObj = listaContas.find(c => String(c.id) === String(contaDestinoId));
+        let nomeContaFormatado = '';
+        
+        if (contaObj) {
+            // Formato padrão do sistema: BANCO - AG/CC
+            nomeContaFormatado = `${contaObj.banco} - ${contaObj.agencia}/${contaObj.conta_corrente}`;
+        } else {
+            setError('Erro ao identificar a conta selecionada.');
             return;
         }
 
@@ -115,8 +127,7 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
         onConfirm({ 
             items: itemsPayload, 
             detalhesTransacao: transacao,
-            // CORREÇÃO: Usa sempre a contaDestino (que pode ter sido alterada pelo usuário ou é a contaApi padrão)
-            contaBancariaId: contaDestino
+            contaBancaria: nomeContaFormatado // Envia o nome formatado (string), não o ID
         });
         onClose();
     };
@@ -146,15 +157,15 @@ export default function ConciliacaoModal({ isOpen, onClose, onConfirm, transacao
                     <div className="text-right"><strong>Valor Recebido:</strong> <span className="font-bold text-green-400">{formatBRLNumber(transacao.valor)}</span></div>
                 </div>
 
-                {/* --- SELETOR DE CONTA (Agora visível para TODOS os tipos) --- */}
+                {/* --- SELETOR DE CONTA --- */}
                 <div className="mb-4 flex-shrink-0 bg-gray-750 p-3 rounded border border-gray-600">
                     <label htmlFor="contaDestino" className="block text-xs font-bold text-orange-400 mb-1 uppercase">
                         Selecione a Conta de Entrada (Destino)
                     </label>
                     <select
                         id="contaDestino"
-                        value={contaDestino}
-                        onChange={(e) => setContaDestino(e.target.value)}
+                        value={contaDestinoId}
+                        onChange={(e) => setContaDestinoId(e.target.value)}
                         className="w-full bg-gray-900 border border-gray-500 rounded-md shadow-sm text-sm p-2 text-white focus:ring-orange-500 focus:border-orange-500"
                     >
                         <option value="">-- Escolha a conta --</option>

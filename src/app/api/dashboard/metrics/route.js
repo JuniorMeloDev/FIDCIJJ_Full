@@ -49,6 +49,7 @@ export async function GET(request) {
           cliente:clientes(nome), tipo_operacao:tipos_operacao(nome)
         )
       `)
+      .eq('operacao.status', 'Aprovada')
       .eq('status_recebimento', 'Pendente')
       .lte('data_vencimento', format(dataLimite, 'yyyy-MM-dd'));
 

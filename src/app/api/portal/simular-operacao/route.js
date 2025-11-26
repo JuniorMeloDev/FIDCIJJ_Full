@@ -52,8 +52,7 @@ const parseXmlAndSimulate = async (xmlText, clienteCnpj, tipoOperacaoId) => {
             default:  sacadoNode = infCte.rem?.[0];
         }
         
-        // CT-e não tem duplicatas: cria parcela única à vista por padrão
-        parcelas = [{ dataVencimento: dataEmissao }];
+        parcelas = [];
     }
 
     if (!chaveNfe) throw new Error("Não foi possível extrair a Chave de Acesso do XML.");

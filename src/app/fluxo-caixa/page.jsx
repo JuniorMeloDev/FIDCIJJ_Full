@@ -220,7 +220,6 @@ export default function FluxoDeCaixaPage() {
       
       const result = await response.json();
       
-      // Verifica se veio no formato novo { data, saldoAnterior } ou antigo [data]
       if (Array.isArray(result)) {
           setMovimentacoes(result);
           setSaldoAnterior(0);
@@ -359,7 +358,6 @@ export default function FluxoDeCaixaPage() {
     return () => document.removeEventListener("click", handleClick);
   }, []);
 
-  // ... (Funções auxiliares searchDuplicatasParaConciliacao, handleConciliarTransacao, handleConfirmarConciliacao, interExtratoProcessado, formatHeaderDate mantidas iguais) ...
   
   const searchDuplicatasParaConciliacao = async (query) => {
     if (!query) return [];
@@ -392,10 +390,12 @@ export default function FluxoDeCaixaPage() {
   const handleConfirmarConciliacao = async ({
     items,
     detalhesTransacao,
-    contaDestino,
+    contaBancaria,
+    contaDestino, // (Legado)
   }) => {
     try {
-      const contaSelecionada = filters.contaExterna || contaDestino;
+      const contaSelecionada = contaBancaria || filters.contaExterna;
+
       if (!items || items.length === 0 || detalhesTransacao.valor < 0) {
         const payload = {
           data_movimento: detalhesTransacao.data,
@@ -499,8 +499,6 @@ export default function FluxoDeCaixaPage() {
     setIsPixConfirmOpen(true);
   };
 
-  // ... (handleConfirmAndSendPix, handleSaveLancamento, handleSaveLancamentoManual, etc. mantidas iguais) ...
-  
   const handleConfirmAndSendPix = async () => {
     setIsSaving(true);
     setError("");
@@ -591,16 +589,11 @@ export default function FluxoDeCaixaPage() {
         throw new Error(error.message || "Erro ao salvar lançamento");
       }
 
-      // Atualiza a lista principal
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
-
-      // --- ALTERAÇÃO: Força a atualização do Modal OFX ---
       setRefreshKey(prev => prev + 1);
-      // ---------------------------------------------------
-
       setItemOfxParaCriar(null);
-      return true; // Retorna sucesso para o modal exibir a notificação e fechar
+      return true; 
     } catch (err) {
       showNotification(err.message, "error");
       return false;
@@ -739,41 +732,34 @@ export default function FluxoDeCaixaPage() {
         return false;
     }
   };
-  // app/fluxo-caixa/page.jsx
 
   const handleAbrirComprovantePix = () => {
     const item = contextMenu.selectedItem;
     if (!item) return;
 
-    // Tenta reconstruir os dados do recebedor baseando-se na operação vinculada
     let recebedorData = null;
     
-    // Se tiver operação e cliente (trazidos pelo join da API movimentacoes-caixa)
     if (item.operacao && item.operacao.cliente) {
         const cliente = item.operacao.cliente;
-        
-        // Tenta encontrar a conta usada (geralmente a que tem chave PIX)
-        // Como o histórico não salva qual conta exata do cliente recebeu, pegamos a primeira com chave ou deixamos genérico
         const contaPix = cliente.contas_bancarias?.find(c => c.chave_pix) || {};
         
         recebedorData = {
             nome: cliente.nome,
             cnpj: cliente.cnpj,
-            instituicao: contaPix.banco || 'Não informado', // Banco do recebedor
+            instituicao: contaPix.banco || 'Não informado', 
             chavePix: contaPix.chave_pix || 'Não informada'
         };
     }
 
-    // Preenche o state que o Modal de Recibo usa
     setReceiptData({
-      valor: Math.abs(item.valor), // Garante positivo
-      data: item.dataMovimento, // Data do banco
+      valor: Math.abs(item.valor), 
+      data: item.dataMovimento, 
       transactionId: item.transaction_id,
       descricao: item.descricao,
       pagador: {
-        nome: clienteMasterInfo.nome, // Nome da sua empresa (já carregado no state)
-        cnpj: clienteMasterInfo.cnpj, // CNPJ da sua empresa
-        conta: item.contaBancaria,    // Conta de saída salva no lançamento
+        nome: clienteMasterInfo.nome, 
+        cnpj: clienteMasterInfo.cnpj, 
+        conta: item.contaBancaria,    
       },
       recebedor: recebedorData
     });
@@ -781,16 +767,13 @@ export default function FluxoDeCaixaPage() {
     setIsReceiptModalOpen(true);
   };
 
-  // --- NOVA LÓGICA: Processar linhas de "Saldo Total Disponível" ---
   const movimentacoesProcessadas = useMemo(() => {
     if (!movimentacoes || movimentacoes.length === 0) return [];
 
-    // 1. Clona e ordena por data CRESCENTE para calcular o acumulado corretamente
     const sorted = [...movimentacoes].sort((a, b) => new Date(a.dataMovimento) - new Date(b.dataMovimento));
     
     const groupedByDate = {};
     
-    // 2. Agrupa por data
     sorted.forEach(item => {
         const date = item.dataMovimento.split('T')[0];
         if (!groupedByDate[date]) groupedByDate[date] = [];
@@ -798,39 +781,33 @@ export default function FluxoDeCaixaPage() {
     });
 
     const finalIds = [];
-    let runningBalance = saldoAnterior || 0; // Começa do saldo anterior vindo do backend
+    let runningBalance = saldoAnterior || 0; 
 
-    // 3. Processa dia a dia
     Object.keys(groupedByDate).sort().forEach(date => {
         const itemsDoDia = groupedByDate[date];
         
-        // Adiciona os itens do dia
         itemsDoDia.forEach(item => {
             runningBalance += parseFloat(item.valor);
             finalIds.push(item);
         });
 
-        // Adiciona a linha de saldo
         finalIds.push({
             id: `saldo-${date}`,
             isBalanceRow: true,
-            dataMovimento: date, // Garante que a data seja a mesma para ordenação
+            dataMovimento: date, 
             descricao: 'Saldo Total Disponível',
             valor: runningBalance,
-            contaBancaria: '', // Não precisa exibir conta
+            contaBancaria: '', 
             categoria: 'Saldo'
         });
     });
 
-    // 4. Re-ordena conforme a escolha do usuário
     const isAsc = sortConfig.direction === 'ASC';
     return finalIds.sort((a, b) => {
         const dateA = new Date(a.dataMovimento);
         const dateB = new Date(b.dataMovimento);
         if (dateA - dateB !== 0) return isAsc ? dateA - dateB : dateB - dateA;
         
-        // Se as datas forem iguais, o saldo deve sempre ficar "no final" do dia (para ASC) ou "no começo" (para DESC)
-        // Mas na visualização de extrato, o saldo do dia geralmente é a última linha do dia.
         if (a.isBalanceRow) return isAsc ? 1 : -1; 
         if (b.isBalanceRow) return isAsc ? -1 : 1;
         
@@ -842,7 +819,6 @@ export default function FluxoDeCaixaPage() {
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
   
-  // Usa a lista processada para paginação
   const currentItems = movimentacoesProcessadas.slice(indexOfFirstItem, indexOfLastItem);
   
   const saldosTitle =
@@ -859,14 +835,12 @@ export default function FluxoDeCaixaPage() {
 
   return (
     <>
-      {/* ... (Modais permanecem iguais) ... */}
       <Notification
         message={notification.message}
         type={notification.type}
         onClose={() => setNotification({ message: "", type: "" })}
       />
 
-      {/* MODAIS */}
       <LancamentoModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -893,7 +867,6 @@ export default function FluxoDeCaixaPage() {
         onConfirm={handleConfirmarConciliacao}
         transacao={transacaoParaConciliar}
         searchDuplicatas={searchDuplicatasParaConciliacao}
-        contasInternas={saldos}
         contaApi={filters.contaExterna}
         onManualEntry={() => setIsLancamentoManualOpen(true)}
       />
@@ -959,7 +932,6 @@ export default function FluxoDeCaixaPage() {
       />
 
       <main className="h-full flex flex-col p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
-        {/* Cabeçalho e Botão Novo Lançamento */}
         <div className="flex-shrink-0">
           <motion.header
             className="mb-4 flex flex-col md:flex-row justify-between md:items-center border-b-2 border-orange-500 pb-4"
@@ -1040,7 +1012,6 @@ export default function FluxoDeCaixaPage() {
               <>
                 {filters.contaExterna ? (
                   <>
-                    {/* VISUALIZAÇÃO EXTRATO INTER API (Mantida igual) */}
                     <div className="flex-grow overflow-y-auto">
                       {currentInterItems.length > 0 ? (
                         <div className="space-y-4">
@@ -1114,7 +1085,6 @@ export default function FluxoDeCaixaPage() {
                   </>
                 ) : (
                   <>
-                    {/* TABELA PADRÃO DO SISTEMA - COM LINHAS DE SALDO */}
                     <div className="flex-grow overflow-auto">
                       <table className="min-w-full divide-y divide-gray-700">
                         <thead className="bg-gray-700 sticky top-0 z-10">
@@ -1265,6 +1235,21 @@ export default function FluxoDeCaixaPage() {
                     className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
                   >
                     Enviar Borderô por E-mail
+                  </a>
+                </>
+              )}
+              {contextMenu.selectedItem.categoria === "Recebimento" && (
+                <>
+                  <div className="border-t border-gray-600 my-1"></div>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleEstornarRequest();
+                    }}
+                    className="block px-4 py-2 text-sm text-red-400 hover:bg-gray-600"
+                  >
+                    Estornar Recebimento
                   </a>
                 </>
               )}

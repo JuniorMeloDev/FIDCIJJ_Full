@@ -19,11 +19,12 @@ export async function GET(request) {
         // Esta consulta busca duplicatas PENDENTES onde o nome do sacado OU o número da NF/CTe correspondem à busca
         const { data, error } = await supabase
             .from('duplicatas')
-            .select('*')
-            .eq('status_recebimento', 'Pendente')
+            .select('*, operacao:operacoes!inner(status)') 
+            .eq('status_recebimento', 'Pendente') // Apenas duplicatas em aberto
+            .eq('operacao.status', 'Aprovada')    // Apenas de operações APROVADAS
             .or(`cliente_sacado.ilike.%${query}%,nf_cte.ilike.%${query}%`)
             .order('data_vencimento', { ascending: true })
-            .limit(50); // Limita a 50 resultados para performance
+            .limit(50);
 
         if (error) throw error;
 
