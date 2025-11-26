@@ -263,13 +263,25 @@ export async function POST(request) {
       }
     }
 
+    let naturezaFinal = natureza;
+    
+    // Se não veio natureza e a descrição indica complemento, forçamos 'Aquisição'
+    if (!naturezaFinal && (descricaoLancamento.startsWith('Complemento Borderô') || descricao.startsWith('Complemento Borderô'))) {
+        naturezaFinal = 'Aquisição de Direitos Creditórios';
+    }
+    
+    // Se ainda estiver sem natureza, assume financeira (padrão para PIX)
+    if (!naturezaFinal) {
+        naturezaFinal = 'Despesas Financeiras';
+    }
+
     const movementPayload = {
       data_movimento: format(dataPagamentoHoje, "yyyy-MM-dd"), // Salva no banco só a data
       descricao: descricaoLancamento,
       valor: -Math.abs(valor),
       conta_bancaria: nomeContaCompletoParaSalvar,
       categoria: "Pagamento PIX",
-      natureza: natureza || 'Despesas Financeiras',
+      natureza: naturezaFinal,
       empresa_associada: empresaAssociada,
       transaction_id: pixEndToEndId,
       operacao_id: operacao_id || (complementMatch ? complementMatch[1] : null),
