@@ -23,10 +23,13 @@ export default function LancamentoExtratoModal({
 }) {
     const [descricao, setDescricao] = useState('');
     const [contaBancaria, setContaBancaria] = useState('');
+    // Categoria ainda existe no state para envio à API, mas não será mostrada
     const [categoria, setCategoria] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [isDespesa, setIsDespesa] = useState(false);
+    
+    // State para Natureza
+    const [natureza, setNatureza] = useState('Despesas Financeiras'); 
 
     const isDebito = transacao?.valor < 0;
 
@@ -35,11 +38,15 @@ export default function LancamentoExtratoModal({
             setDescricao(transacao.descricao || '');
             const contaInicial = transacao.conta_bancaria || '';
             setContaBancaria(contaInicial);
+            
+            // Define categoria automaticamente nos bastidores
             setCategoria(isDebito ? 'Despesa Avulsa' : 'Receita Avulsa');
-            setIsDespesa(isDebito);
+            
+            // Define padrão para natureza
+            setNatureza(isDebito ? 'Despesas Financeiras' : 'Receitas Financeiras');
             setError('');
         }
-    }, [isOpen, transacao]);
+    }, [isOpen, transacao, isDebito]);
 
     const handleSave = async () => {
         setError('');
@@ -52,8 +59,10 @@ export default function LancamentoExtratoModal({
             setError('A descrição é obrigatória.');
             return;
         }
+        
+        // A validação de categoria continua, mas como é automática, sempre passará
         if (!categoria) {
-            setError('A categoria é obrigatória.');
+            setError('Erro interno: Categoria não definida.');
             return;
         }
 
@@ -71,15 +80,15 @@ export default function LancamentoExtratoModal({
             descricao: descricao,
             valor: parseFloat(transacao.valor), 
             conta_bancaria: contaBancaria,
-            categoria: categoria,
-            transaction_id: transacao.idTransacao || transacao.transaction_id, 
-            isDespesa: isDebito ? isDespesa : false
+            categoria: categoria, // Envia o valor automático
+            transaction_id: transacao.idTransacao || transacao.transaction_id,
+            // Envia a natureza selecionada se for débito, senão nulo ou padrão de receita
+            natureza: isDebito ? natureza : 'Receitas Financeiras'
         };
 
         const success = await onSave(payload);
         
         if (success) {
-            // --- MENSAGEM DE SUCESSO ADICIONADA AQUI ---
             if (showNotification) {
                 showNotification('Movimento Criado com Sucesso', 'success');
             }
@@ -136,43 +145,27 @@ export default function LancamentoExtratoModal({
                         </select>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Categoria <span className="text-red-400">*</span></label>
-                        <select
-                            value={categoria}
-                            onChange={(e) => setCategoria(e.target.value)}
-                            className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white focus:border-orange-500 focus:outline-none"
-                        >
-                            {isDebito ? (
-                                <>
-                                    <option value="Despesa Avulsa">Despesa Avulsa</option>
-                                    <option value="Pagamento PIX">Pagamento PIX</option>
-                                    <option value="Movimentação Avulsa">Movimentação Avulsa</option>
-                                    <option value="Tarifa Bancária">Tarifa Bancária</option>
-                                </>
-                            ) : (
-                                <>
-                                    <option value="Receita Avulsa">Receita Avulsa</option>
-                                    <option value="Crédito PIX">Crédito PIX</option>
-                                    <option value="Outras Entradas">Outras Entradas</option>
-                                </>
-                            )}
-                        </select>
-                    </div>
+                    {/* O SELECT DE CATEGORIA FOI REMOVIDO DAQUI */}
 
+                    {/* --- CAMPO NATUREZA (Só aparece se for débito) --- */}
                     {isDebito && (
-                        <div className="pt-2">
-                            <label className="flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={isDespesa}
-                                    onChange={(e) => setIsDespesa(e.target.checked)}
-                                    className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
-                                />
-                                <span className="ml-2 text-sm text-gray-200">
-                                    É uma despesa? (Contabilizar no resumo)
-                                </span>
-                            </label>
+                        <div>
+                            <label className="block text-sm font-medium text-orange-400 mb-1">Natureza (Classificação DRE) <span className="text-red-400">*</span></label>
+                            <select 
+                                value={natureza} 
+                                onChange={(e) => setNatureza(e.target.value)}
+                                className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-white focus:border-orange-500 focus:outline-none"
+                            >
+                                <option value="Despesas Administrativas">Despesas Administrativas</option>
+                                <option value="Despesas Financeiras">Despesas Financeiras</option>
+                                <option value="Despesas Tributárias">Despesas Tributárias</option>
+                                <option value="Serviços de Terceiros (FIDC)">Serviços de Terceiros</option>
+                                <option value="Aquisição de Direitos Creditórios">Aquisição de Direitos Creditórios</option>
+                                <option value="Distribuição de Lucros / Amortização">Distribuição de Lucros / Amortização</option>
+                                <option value="Transferência Entre Contas">Transferência Entre Contas</option>
+                                <option value="Empréstimos / Mútuos">Empréstimos / Mútuos</option>
+                                <option value="Outras Despesas">Outras Despesas</option>
+                            </select>
                         </div>
                     )}
                 </div>

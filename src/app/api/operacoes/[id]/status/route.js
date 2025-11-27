@@ -1,6 +1,3 @@
-// type: uploaded file
-// fileName: app/api/operacoes/[id]/status/route.js
-
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/utils/supabaseClient";
 import jwt from "jsonwebtoken";
@@ -45,18 +42,13 @@ export async function PUT(request, props) {
         );
       }
 
-      // 1. Definição de Datas e Horários
-      // Data contábil (apenas data YYYY-MM-DD)
       const dataEfetivaDebito = data_debito_parcial 
           ? format(new Date(data_debito_parcial), 'yyyy-MM-dd') 
           : format(new Date(), 'yyyy-MM-dd');
       
-      // Horário Real (Timestamp completo ISO) - Inicializa com agora, atualiza se o banco retornar algo diferente
       let dataHoraRealTransacao = new Date().toISOString();
 
       const totalDescontosAdicionais = descontos?.reduce((acc, d) => acc + d.valor, 0) || 0;
-      // Se houver recompra via modal, subtrai. Se já estiver nos descontos, o cálculo deve ser ajustado conforme sua regra.
-      // Assumindo que 'descontos' já traz tudo, ou ajustando se recompraData trouxer valor separado.
       const valorTotalRecompra = recompraData?.valorTotal || 0; 
       const novoValorLiquido = operacao.valor_liquido - totalDescontosAdicionais - valorTotalRecompra;
       
@@ -65,7 +57,6 @@ export async function PUT(request, props) {
           valorDebitado = Number(valor_debito_parcial);
       }
 
-      // Inserir descontos na tabela
       if (descontos && descontos.length > 0) {
         const descontosToInsert = descontos.map(d => ({
             operacao_id: id,
@@ -81,9 +72,12 @@ export async function PUT(request, props) {
         .eq("id", conta_bancaria_id)
         .single();
       
+      if (!conta) {
+          throw new Error("Conta bancária selecionada não encontrada no banco de dados.");
+      }
+
       let pixEndToEndId = null;
 
-      // --- LÓGICA DE PAGAMENTO PIX ---
       if (efetuar_pix) {
           const nomeBanco = conta.banco.toLowerCase();
           const { data: contasCliente } = await supabase.from('contas_bancarias').select('*').eq('cliente_id', operacao.cliente.id);
@@ -93,7 +87,6 @@ export async function PUT(request, props) {
               throw new Error(`Cliente ${operacao.cliente.nome} não possui chave PIX cadastrada para recebimento.`);
           }
 
-          // INTER
           if (nomeBanco.includes('inter')) {
               const dadosPix = {
                   valor: parseFloat(valorDebitado.toFixed(2)),
@@ -108,21 +101,14 @@ export async function PUT(request, props) {
               const tokenInter = await getInterAccessToken();
               const resultadoPix = await enviarPixInter(tokenInter.access_token, dadosPix, conta.conta_corrente);
               
-              // Captura IDs e Data Real
               pixEndToEndId = resultadoPix.transacaoPix?.endToEnd || resultadoPix.endToEndId; 
               
-              // --- CORREÇÃO: Pega o horário exato do comprovante do Inter ---
               if (resultadoPix.transacaoPix?.dataHoraMovimento) {
                   dataHoraRealTransacao = resultadoPix.transacaoPix.dataHoraMovimento;
               } else if (resultadoPix.dataHoraSolicitacao) {
                   dataHoraRealTransacao = resultadoPix.dataHoraSolicitacao;
               }
 
-              if (!pixEndToEndId) {
-                console.warn("[AVISO] PIX Inter enviado, mas EndToEndID não retornado.");
-              }
-
-          // ITAÚ
           } else if (nomeBanco.includes('itaú') || nomeBanco.includes('itau')) {
                 const CONTA_REAL_ITAU = process.env.ITAU_PIX_CONTA_REAL;
                 const ID_CLIENTE_PAGADOR = process.env.ITAU_PIX_CLIENTE_ID_REAL;
@@ -154,37 +140,51 @@ export async function PUT(request, props) {
                 const tokenItau = await getItauAccessToken();
                 const resultadoPix = await enviarPixItau(tokenItau.access_token, dadosPixItau);
                 pixEndToEndId = resultadoPix.cod_pagamento || "ENVIADO_ITAU";
-                
-                // Itaú Sispag geralmente não retorna a hora exata da efetivação síncrona no mesmo objeto de request, 
-                // então mantemos o `new Date().toISOString()` gerado no início como o horário da transação.
           }
       }
 
-      // --- CRIAÇÃO DA MOVIMENTAÇÃO ---
       let descricaoLancamento = `Borderô #${id}`;
       const { data: duplicatas } = await supabase
         .from("duplicatas")
         .select("nf_cte")
         .eq("operacao_id", id);
       if (duplicatas && duplicatas.length > 0 && operacao.cliente) {
-        const docType = operacao.cliente.ramo_de_atividade === "Transportes" ? "CTe" : "NF";
-        const numerosDoc = [...new Set(duplicatas.map((d) => d.nf_cte.split(".")[0]))].join(", ");
+        const docType =
+          operacao.cliente.ramo_de_atividade === "Transportes" ? "CTe" : "NF";
+        const numerosDoc = [
+          ...new Set(duplicatas.map((d) => d.nf_cte.split(".")[0])),
+        ].join(", ");
         descricaoLancamento = `Borderô ${docType} ${numerosDoc}`;
       }
       
-      await supabase.from("movimentacoes_caixa").insert({
+      if(pixEndToEndId) {
+          descricaoLancamento = `PIX Enviado - ${descricaoLancamento}`;
+      }
+
+      // --- CORREÇÃO APLICADA AQUI ---
+      // Formata a conta bancária de forma segura para string
+      // Garante que agência e conta existam para evitar "undefined"
+      const agenciaFmt = conta.agencia || '';
+      const contaFmt = conta.conta_corrente || '';
+      const nomeContaFormatado = `${conta.banco} - ${agenciaFmt}/${contaFmt}`;
+
+      const { error: movError } = await supabase.from("movimentacoes_caixa").insert({
         operacao_id: id,
         data_movimento: dataEfetivaDebito,
-        // --- CORREÇÃO: Grava o horário exato no banco ---
         created_at: dataHoraRealTransacao, 
-        // ------------------------------------------------
         descricao: descricaoLancamento,
-        valor: -Math.abs(valorDebitado),
+        valor: -Math.abs(valorDebitado), // Garante que é negativo (Débito)
         categoria: "Pagamento de Borderô",
-        conta_bancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
+        conta_bancaria: nomeContaFormatado, // Usa a string formatada seguramente
         empresa_associada: operacao.cliente.nome,
         transaction_id: pixEndToEndId
       });
+
+      if (movError) {
+          console.error("Erro ao inserir movimentação financeira:", movError);
+          throw new Error("Falha ao registrar o débito no fluxo de caixa.");
+      }
+      // --- FIM DA CORREÇÃO ---
 
       await supabase
         .from("operacoes")
@@ -197,6 +197,16 @@ export async function PUT(request, props) {
         })
         .eq("id", id);
 
+      if (recompraData && recompraData.ids && recompraData.ids.length > 0) {
+          await supabase
+              .from('duplicatas')
+              .update({
+                  status_recebimento: 'Recebido',
+                  data_liquidacao: recompraData.dataLiquidacao
+              })
+              .in('id', recompraData.ids);
+      }
+
     } else {
       await supabase.from("duplicatas").delete().eq("operacao_id", id);
       await supabase.from("operacoes").update({ status: status }).eq("id", id);
@@ -207,7 +217,9 @@ export async function PUT(request, props) {
       await supabase.from("notifications").insert({
         user_id: clienteUser.id,
         title: `Sua Operação #${id} foi ${status}`,
-        message: `A operação no valor de R$ ${operacao.valor_liquido.toFixed(2)} foi ${status.toLowerCase()} pela nossa equipe.`,
+        message: `A operação no valor de R$ ${operacao.valor_liquido.toFixed(
+          2
+        )} foi ${status.toLowerCase()} pela nossa equipe.`,
         link: "/portal/dashboard",
       });
 
