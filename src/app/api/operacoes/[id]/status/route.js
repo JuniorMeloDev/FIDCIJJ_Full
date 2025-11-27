@@ -177,7 +177,8 @@ export async function PUT(request, props) {
         categoria: "Pagamento de Borderô",
         conta_bancaria: nomeContaFormatado, // Usa a string formatada seguramente
         empresa_associada: operacao.cliente.nome,
-        transaction_id: pixEndToEndId
+        transaction_id: pixEndToEndId,
+        natureza: "Aquisição de Direitos Creditórios" 
       });
 
       if (movError) {

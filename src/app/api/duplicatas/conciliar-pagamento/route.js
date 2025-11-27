@@ -47,6 +47,7 @@ export async function POST(request) {
                 valor: dup.valor_bruto,
                 conta_bancaria: nomeContaCompleto, // Usa a variável
                 categoria: 'Recebimento',
+                natureza: 'Recebimento de Duplicatas',
                 transaction_id: detalhesTransacao.id, // Usa o ID da transação OFX/API
                 duplicata_id: dup.id
             });
@@ -59,6 +60,7 @@ export async function POST(request) {
                     valor: itemPayload.juros,
                     conta_bancaria: nomeContaCompleto, // Usa a variável
                     categoria: 'Receita Avulsa',
+                    natureza: 'Receitas Financeiras',
                     transaction_id: detalhesTransacao.id,
                 });
             }
@@ -71,6 +73,7 @@ export async function POST(request) {
                     valor: -Math.abs(itemPayload.desconto),
                     conta_bancaria: nomeContaCompleto, // Usa a variável
                     categoria: 'Despesa Avulsa',
+                    natureza: 'Despesas Financeiras',
                     transaction_id: detalhesTransacao.id,
                 });
             }
