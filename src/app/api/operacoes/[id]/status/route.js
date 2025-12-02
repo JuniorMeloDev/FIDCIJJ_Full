@@ -158,7 +158,7 @@ export async function PUT(request, props) {
       }
       
       if(pixEndToEndId) {
-          descricaoLancamento = `PIX Enviado - ${descricaoLancamento}`;
+          descricaoLancamento = `${descricaoLancamento}`;
       }
 
       // --- CORREÇÃO APLICADA AQUI ---
