@@ -54,8 +54,6 @@ export default function LancamentoModal({
             setError('A conta de origem e destino não podem ser as mesmas.');
             return;
         }
-
-        // ... (Lógica de formatação de conta Itau permanece igual) ...
         const contaNoDb = process.env.NEXT_PUBLIC_ITAU_CONTA_DB;
         const contaDisplay = process.env.NEXT_PUBLIC_ITAU_CONTA_DISPLAY;
         let contaOrigemParaSalvar = contaOrigem;
@@ -98,7 +96,6 @@ export default function LancamentoModal({
             empresaAssociada: clienteMasterNome,
             contaDestino: tipo === 'TRANSFERENCIA' ? contaDestinoParaSalvar : null, 
             empresaDestino: tipo === 'TRANSFERENCIA' ? clienteMasterNome : null,
-            // ALTERAÇÃO: Removemos isDespesa. A categoria agora é fixa para saídas manuais.
             isDespesa: false, 
             natureza: (tipo === 'DEBITO') ? natureza : null
         };
@@ -158,7 +155,6 @@ export default function LancamentoModal({
 
                     {tipo === 'TRANSFERENCIA' && (
                         <div className="space-y-4 border-t border-gray-700 pt-4">
-                             {/* ... Campos de transferencia mantidos ... */}
                              <div>
                                 <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Conta de Origem</label>
                                 <select id="contaOrigem" name="contaOrigem" value={contaOrigem} onChange={e => setContaOrigem(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
@@ -178,7 +174,6 @@ export default function LancamentoModal({
 
                     {tipo === 'PIX' && (
                         <div className="space-y-4 border-t border-orange-500/50 pt-4">
-                             {/* ... Campos PIX mantidos ... */}
                              <div>
                                 <label htmlFor="contaOrigem" className="block text-sm font-medium text-gray-300">Selecione a conta</label>
                                 <select id="contaOrigem" name="contaOrigem" value={contaOrigem} onChange={e => setContaOrigem(e.target.value)} required className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2">
@@ -225,8 +220,6 @@ export default function LancamentoModal({
                             </select>
                         </div>
                     )}
-
-                    {/* CHECKBOX "É UMA DESPESA" REMOVIDO AQUI */}
 
                     {error && <p className="text-sm text-red-400 mt-2 text-center">{error}</p>}
                     

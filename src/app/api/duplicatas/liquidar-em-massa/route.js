@@ -94,13 +94,27 @@ export async function POST(request) {
                 });
 
                 if (rpcError) {
-                    console.error(`Erro ao liquidar duplicata ID ${item.id} via RPC:`, rpcError);
-                    // Mensagem de erro útil se a RPC não for atualizada
                     if (rpcError.message.includes("function liquidar_duplicata(") && rpcError.message.includes("does not exist")) {
                          throw new Error('A função RPC "liquidar_duplicata" no Supabase ainda não foi atualizada para aceitar o novo parâmetro "p_nome_conta_formatado". Verifique a função SQL.');
                     }
                     throw new Error(`Falha ao processar a baixa da duplicata ${duplicata.nf_cte || item.id} via RPC.`);
                 }
+
+                // --- FIX FOR BUG: INCORRECT NATURE ---
+                // The RPC liquidar_duplicata likely defaults to 'Outras Despesas'. We force an update here.
+                const { error: fixNaturezaError } = await supabase
+                    .from('movimentacoes_caixa')
+                    .update({ natureza: 'Recebimento de Duplicatas' })
+                    .eq('duplicata_id', item.id)
+                    .eq('categoria', 'Recebimento')
+                    .eq('natureza', 'Outras Despesas');
+                
+                if (fixNaturezaError) {
+                   console.error(`Erro ao corrigir natureza da duplicata ${item.id}:`, fixNaturezaError);
+                   // We don't throw here to avoid failing the whole batch if just the fix fails, 
+                   // but it's good to log.
+                }
+                // --- END FIX ---
             }
         } else {
              // <<<<<< LOG 4: CONFIRMAR QUE ENTROU NO 'ELSE' >>>>>>
