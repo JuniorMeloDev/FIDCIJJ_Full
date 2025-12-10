@@ -142,7 +142,7 @@ export default function AnalisePage() {
 
             // 2. DADOS DO PAGADOR (Sua Empresa/Conta Master)
             // Precisamos dos detalhes da conta para pegar o CNPJ do titular
-            let contaMasterFull = contasMaster.find(c => String(c.id) === String(payload.contaBancariaId));
+            let contaMasterFull = contasMaster.find(c => String(c.id) === String(payload.conta_bancaria_id));
             
             // Tenta buscar detalhes mais profundos se a conta estiver incompleta
             // (Assumindo que talvez exista um endpoint ou que o objeto conta tenha campos aninhados)
@@ -163,25 +163,45 @@ export default function AnalisePage() {
                 : (operacaoSelecionada?.valor_liquido || 0) - totalDescontos;
 
             // 4. PREPARA DADOS PARA O MODAL (Visualização)
-            const contaOrigemDisplay = dadosPagador.banco !== 'Banco'
-                ? formatDisplayConta(`${dadosPagador.banco} - ${dadosPagador.agencia}/${dadosPagador.conta}`)
-                : (dadosPagador.nome);
+            // Lógica melhorada para conta origem
+            let contaOrigemDisplay = 'Sua Empresa';
+            if (dadosPagador.banco) {
+                contaOrigemDisplay = formatDisplayConta(`${dadosPagador.banco} - ${dadosPagador.agencia}/${dadosPagador.conta}`);
+            } else if (dadosPagador.nome) {
+                contaOrigemDisplay = dadosPagador.nome;
+            }
 
-            const chavePix = clienteFull.chave_pix || clienteFull.chavePix || 
-                           (clienteFull.contasBancarias?.[0]?.chave_pix) || 'Chave não cadastrada';
+            // Lógica melhorada para chave pix
+            // Tenta achar a chave e o tipo correspondente na lista de contas do cliente se não tiver explícito
+            let chavePix = clienteFull.chave_pix || clienteFull.chavePix;
+            // Tenta achar nas contas
+            const contaComPix = clienteFull.contasBancarias?.find(c => c.chave_pix);
+            if (!chavePix && contaComPix) {
+                chavePix = contaComPix.chave_pix;
+            }
+
+            let tipoChavePix = clienteFull.tipo_chave_pix;
+            
+            // Se achou uma conta com PIX mas não tinha tipo definido no cliente, pega da conta
+            if (contaComPix && (!tipoChavePix || tipoChavePix === 'CPF/CNPJ')) {
+                 if (contaComPix.tipo_chave_pix) tipoChavePix = contaComPix.tipo_chave_pix;
+            }
+            if (!tipoChavePix) tipoChavePix = 'CPF/CNPJ'; // Fallback final
 
             const pixData = {
                 valor: valorFinal,
                 contaOrigem: contaOrigemDisplay, 
                 favorecido: clienteFull.razao_social || clienteFull.nome, 
-                chave: chavePix,
-                tipo_chave_pix: clienteFull.tipo_chave_pix || 'CPF/CNPJ'
+                chave: chavePix || 'Chave não cadastrada',
+                tipo_chave_pix: tipoChavePix
             };
 
             setPixConfirmData(pixData);
 
             // 5. TROCA DE MODAIS (Sem piscar a tela de fundo)
-            setIsModalOpen(false); // Fecha Aprovação
+            // Aqui fechamos o modal de parcial explicitamente quando tudo estiver pronto
+            setIsPartialDebitModalOpen(false); 
+            setIsModalOpen(false); // Garante que o de aprovação também esteja fechado
             setIsPixConfirmOpen(true); // Abre Confirmação PIX
 
         } catch (error) {
@@ -262,7 +282,7 @@ export default function AnalisePage() {
                     valor: valorFinal,
                     data: new Date(),
                     transactionId: result.transactionId || `OP-${operacaoSelecionada.id}-${Date.now()}`,
-                    descricao: `Pagamento Operação #${operacaoSelecionada.id}`,
+                    descricao: result.descricao || `Pagamento Operação #${operacaoSelecionada.id}`, // Usa a descrição vinda da API (ex: Borderô CTe 123, 456)
                     
                     pagador: {
                         nome: pagador.nome, 
@@ -365,7 +385,7 @@ export default function AnalisePage() {
                 setDescontosAdicionais={setDescontosAdicionais}
             />
 
-            <PartialDebitModal isOpen={isPartialDebitModalOpen} onClose={() => setIsPartialDebitModalOpen(false)} onConfirm={(valorDebito, dataDebito) => { prepareAndOpenPixConfirm(pendingApprovalPayload, { valorDebito, dataDebito }); setIsPartialDebitModalOpen(false); }} totalValue={valorLiq} />
+            <PartialDebitModal isOpen={isPartialDebitModalOpen} onClose={() => !isPreparingPix && setIsPartialDebitModalOpen(false)} onConfirm={(valorDebito, dataDebito) => { prepareAndOpenPixConfirm(pendingApprovalPayload, { valorDebito, dataDebito }); }} totalValue={valorLiq} isLoading={isPreparingPix} />
             <EmailModal isOpen={isEmailModalOpen} onClose={() => { setIsEmailModalOpen(false); setOperacaoParaEmail(null); }} onSend={handleSendEmail} isSending={isSendingEmail} clienteId={operacaoParaEmail?.clienteId} />
             <DescontoModal isOpen={isDescontoModalOpen} onClose={() => setIsDescontoModalOpen(false)} onSave={(novoDesconto) => { setDescontosAdicionais([...descontosAdicionais, novoDesconto]); setIsDescontoModalOpen(false); }} />
 

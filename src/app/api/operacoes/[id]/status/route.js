@@ -43,7 +43,7 @@ export async function PUT(request, props) {
       }
 
       const dataEfetivaDebito = data_debito_parcial 
-          ? format(new Date(data_debito_parcial), 'yyyy-MM-dd') 
+          ? data_debito_parcial 
           : format(new Date(), 'yyyy-MM-dd');
       
       let dataHoraRealTransacao = new Date().toISOString();
@@ -234,7 +234,11 @@ export async function PUT(request, props) {
       }
     }
 
-    return NextResponse.json({ message: `Operação ${status.toLowerCase()} com sucesso.` }, { status: 200 });
+    return NextResponse.json({ 
+        message: `Operação ${status.toLowerCase()} com sucesso.`,
+        transactionId: pixEndToEndId,
+        descricao: descricaoLancamento
+    }, { status: 200 });
   } catch (error) {
     console.error("Erro ao atualizar status da operação:", error);
     return NextResponse.json({ message: error.message || "Erro interno do servidor" }, { status: 500 });

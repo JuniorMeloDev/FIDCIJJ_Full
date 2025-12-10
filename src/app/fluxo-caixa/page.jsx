@@ -751,9 +751,16 @@ export default function FluxoDeCaixaPage() {
         };
     }
 
+    // Usa 'created_at' se disponível para pegar a hora exata. Senão, usa o ajuste de meio-dia.
+    const dataAjustada = item.created_at 
+        ? item.created_at
+        : (item.dataMovimento && typeof item.dataMovimento === 'string' && !item.dataMovimento.includes('T')
+            ? `${item.dataMovimento}T12:00:00`
+            : item.dataMovimento);
+
     setReceiptData({
       valor: Math.abs(item.valor), 
-      data: item.dataMovimento, 
+      data: dataAjustada, 
       transactionId: item.transaction_id,
       descricao: item.descricao,
       pagador: {

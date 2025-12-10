@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { formatBRLInput, parseBRL } from '@/app/utils/formatters';
 
-export default function PartialDebitModal({ isOpen, onClose, onConfirm, totalValue }) {
+export default function PartialDebitModal({ isOpen, onClose, onConfirm, totalValue, isLoading }) {
     const [valorParcial, setValorParcial] = useState('');
     const [dataDebito, setDataDebito] = useState(new Date().toISOString().split('T')[0]);
     const [error, setError] = useState('');
@@ -56,11 +56,11 @@ export default function PartialDebitModal({ isOpen, onClose, onConfirm, totalVal
                 {error && <p className="text-sm text-red-400 text-center mb-4">{error}</p>}
 
                 <div className="flex justify-end gap-4">
-                    <button onClick={onClose} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition">
+                    <button onClick={onClose} disabled={isLoading} className="bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-md hover:bg-gray-500 transition disabled:opacity-50">
                         Cancelar
                     </button>
-                    <button onClick={handleConfirmClick} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition">
-                        Confirmar e Salvar Operação
+                    <button onClick={handleConfirmClick} disabled={isLoading} className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        {isLoading ? 'Processando...' : 'Confirmar e Salvar Operação'}
                     </button>
                 </div>
             </div>
