@@ -38,12 +38,13 @@ export async function PUT(request, { params }) {
 
 
 // DELETE: Apaga uma movimentação de caixa
-export async function DELETE(request, { params }) {
+export async function DELETE(request, props) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
+        const params = await props.params;
         const { id } = params;
 
         // 1. Busca o lançamento para verificar a categoria antes de excluir.

@@ -659,9 +659,18 @@ export default function FluxoDeCaixaPage() {
   };
   const handleAbrirEmailModal = () => {
     if (contextMenu.selectedItem) {
+      const opId = contextMenu.selectedItem.operacaoId || contextMenu.selectedItem.operacao_id;
+      const cliId = contextMenu.selectedItem.operacao?.cliente?.id || contextMenu.selectedItem.operacao?.cliente_id;
+
+      if (!opId || !cliId) {
+          console.error('Falha ao identificar IDs para envio de email:', contextMenu.selectedItem);
+          showNotification("Não foi possível identificar a operação ou cliente deste lançamento.", "error");
+          return;
+      }
+
       setOperacaoParaEmail({
-        id: contextMenu.selectedItem.operacaoId,
-        clienteId: contextMenu.selectedItem.operacao?.cliente_id,
+        id: opId,
+        clienteId: cliId,
       });
       setIsEmailModalOpen(true);
     }

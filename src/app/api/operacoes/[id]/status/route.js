@@ -87,7 +87,8 @@ export async function PUT(request, props) {
               throw new Error(`Cliente ${operacao.cliente.nome} não possui chave PIX cadastrada para recebimento.`);
           }
 
-          if (nomeBanco.includes('inter')) {
+
+          if (nomeBanco.includes('inter') && !nomeBanco.includes('itau') && !nomeBanco.includes('itaú')) {
               const dadosPix = {
                   valor: parseFloat(valorDebitado.toFixed(2)),
                   dataPagamento: dataEfetivaDebito,
@@ -213,25 +214,31 @@ export async function PUT(request, props) {
       await supabase.from("operacoes").update({ status: status }).eq("id", id);
     }
 
-    const { data: clienteUser } = await supabase.from("users").select("id").eq("cliente_id", operacao.cliente.id).single();
-    if (clienteUser) {
-      await supabase.from("notifications").insert({
-        user_id: clienteUser.id,
-        title: `Sua Operação #${id} foi ${status}`,
-        message: `A operação no valor de R$ ${operacao.valor_liquido.toFixed(
-          2
-        )} foi ${status.toLowerCase()} pela nossa equipe.`,
-        link: "/portal/dashboard",
-      });
-
-      if (operacao.cliente.email) {
-        await sendOperationStatusEmail({
-          clienteNome: operacao.cliente.nome,
-          operacaoId: id,
-          status: status,
-          recipientEmail: operacao.cliente.email,
+    // --- Notificações com tratamento de erro independente ---
+    try {
+        const { data: clienteUser } = await supabase.from("users").select("id").eq("cliente_id", operacao.cliente.id).single();
+        if (clienteUser) {
+        await supabase.from("notifications").insert({
+            user_id: clienteUser.id,
+            title: `Sua Operação #${id} foi ${status}`,
+            message: `A operação no valor de R$ ${operacao.valor_liquido.toFixed(
+            2
+            )} foi ${status.toLowerCase()} pela nossa equipe.`,
+            link: "/portal/dashboard",
         });
-      }
+
+        if (operacao.cliente.email) {
+            await sendOperationStatusEmail({
+            clienteNome: operacao.cliente.nome,
+            operacaoId: id,
+            status: status,
+            recipientEmail: operacao.cliente.email,
+            });
+        }
+        }
+    } catch (notifError) {
+        console.error("Erro ao enviar notificações (email/push) - Operação salva com sucesso:", notifError);
+        // Não lançamos erro aqui para não invalidar a resposta de "Sucesso" da operação
     }
 
     return NextResponse.json({ 
