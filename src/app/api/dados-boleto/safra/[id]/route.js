@@ -20,7 +20,7 @@ export async function GET(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params;
+        const { id } = await params;
         const { searchParams } = new URL(request.url);
         const downloadJson = searchParams.get('json') === 'true';
 

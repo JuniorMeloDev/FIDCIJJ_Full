@@ -141,8 +141,14 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
         if (!operacaoId) return showNotification('ID da operação não encontrado.', 'error');
         const bancoEmissor = resultados[0]?.banco || duplicatas[0]?.banco_emissor_boleto || bancoSelecionado;
         if (!bancoEmissor) return showNotification('Não foi possível identificar o banco emissor.', 'error');
+        
+        // Coleta os IDs. Se já emitiu (resultados preenchido), usa os ids dos resultados. 
+        // Se ainda não (ex: reimpressão manual sem emissão agora), usa duplicatas inicial.
+        const ids = resultados.length > 0 
+            ? resultados.map(r => r.duplicataId) 
+            : duplicatas.map(d => d.id);
 
-        const endpoint = `/api/${bancoEmissor}/boleto-pdf/${operacaoId}`;
+        const endpoint = `/api/${bancoEmissor}/boleto-pdf/${operacaoId}?ids=${ids.join(',')}`;
         showNotification(`Gerando PDF do ${bancoEmissor.charAt(0).toUpperCase() + bancoEmissor.slice(1)}...`, 'info');
         
         try {

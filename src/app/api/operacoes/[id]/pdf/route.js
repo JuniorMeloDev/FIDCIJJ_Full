@@ -4,44 +4,24 @@ import jwt from 'jsonwebtoken';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
-// Removidos 'fs' e 'path'
+import fs from 'fs';
+import path from 'path';
 
-// NOVA FUNÇÃO HELPER
-const getBaseURL = () => {
-    // 1. Prioriza a URL de produção que você definiu
-    let baseURL = process.env.NEXT_PUBLIC_APP_URL; 
-
-    // 2. Se não estiver, tenta a URL automática da Vercel (para deploys de preview/dev)
-    if (!baseURL && process.env.VERCEL_URL) {
-        baseURL = `https://${process.env.VERCEL_URL}`;
-    }
-    
-    // 3. Se ainda não estiver, usa o localhost (ambiente local)
-    if (!baseURL) {
-        baseURL = 'http://localhost:3000';
-    }
-
-    // Remove barra final se houver
-    return baseURL.replace(/\/$/, '');
-};
-
-// Função atualizada para buscar logo via URL
+// Função atualizada para buscar logo do DISCO
 const getLogoBase64 = async () => {
     try {
-        const baseURL = getBaseURL();
-        const logoURL = `${baseURL}/Logo.png`;
+        const logoName = 'Logo.png';
+        const filePath = path.join(process.cwd(), 'public', logoName);
         
-        console.log(`[LOG LOGO PDF] Buscando logo de: ${logoURL}`);
-        
-        const response = await fetch(logoURL);
-        if (!response.ok) {
-             throw new Error(`Falha ao buscar logo (${response.status}): ${response.statusText} - URL: ${logoURL}`);
+        if (!fs.existsSync(filePath)) {
+            console.error(`[ERRO LOGO PDF] Arquivo não encontrado: ${filePath}`);
+            return null;
         }
-        
-        const imageBuffer = await response.arrayBuffer();
-        return `data:image/png;base64,${Buffer.from(imageBuffer).toString('base64')}`;
+
+        const imageBuffer = fs.readFileSync(filePath);
+        return `data:image/png;base64,${imageBuffer.toString('base64')}`;
     } catch (error) {
-        console.error("[ERRO LOGO PDF] Erro ao buscar/converter logo:", error);
+        console.error("[ERRO LOGO PDF] Erro ao ler logo do disco:", error);
         return null;
     }
 };
@@ -51,10 +31,9 @@ const getHeaderCell = (text) => ({
     styles: { fillColor: [31, 41, 55], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }
 });
 
-// Marcar como async
 const generatePdfBuffer = async (operacao) => {
     const doc = new jsPDF();
-    const logoBase64 = await getLogoBase64(); // Usar await
+    const logoBase64 = await getLogoBase64(); 
     const pageWidth = doc.internal.pageSize.getWidth();
 
     if (logoBase64) {
@@ -98,14 +77,14 @@ const generatePdfBuffer = async (operacao) => {
     return Buffer.from(doc.output('arraybuffer'));
 };
 
-// Marcar como async
 export async function GET(request, { params }) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params;
+        const { id } = await params;
+        if (!id) throw new Error("ID da operação não fornecido.");
 
         const { data: operacaoData, error: operacaoError } = await supabase
             .from('operacoes')
@@ -121,7 +100,7 @@ export async function GET(request, { params }) {
         if (duplicatasError) throw new Error("Erro ao buscar duplicatas da operação.");
 
         const operacao = { ...operacaoData, duplicatas: duplicatasData || [] };
-        const pdfBuffer = await generatePdfBuffer(operacao); // Usar await
+        const pdfBuffer = await generatePdfBuffer(operacao);
 
         const tipoDocumento = operacao.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const numeros = [...new Set(operacao.duplicatas.map(d => d.nf_cte.split('.')[0]))].join('_');

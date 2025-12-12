@@ -1,6 +1,8 @@
 import { jsPDF } from 'jspdf';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { formatBRLNumber, formatCnpjCpf } from '../utils/formatters';
+import fs from 'fs';
+import path from 'path';
 
 // Função HELPER para obter a URL base
 const getBaseURL = () => {
@@ -15,39 +17,27 @@ const getBaseURL = () => {
     return baseURL.replace(/\/$/, '');
 };
 
-// Função getItauLogoBase64 com mais logs
+// Função getItauLogoBase64 corrigida para ler do disco
 const getItauLogoBase64 = async () => {
-    const baseURL = getBaseURL();
-    const logoURL = `${baseURL}/itau.png`;
-    console.log(`[LOG ITAÚ PDF] Tentando buscar logo de: ${logoURL}`);
+    const logoName = 'itau.png';
+    console.log(`[LOG ITAÚ PDF] Tentando buscar logo do disco: ${logoName}`);
 
     try {
-        const response = await fetch(logoURL, { cache: 'no-store' });
-        console.log(`[LOG ITAÚ PDF] Fetch status: ${response.status}`);
+        const filePath = path.join(process.cwd(), 'public', logoName);
+        console.log(`[LOG ITAÚ PDF] Caminho do arquivo: ${filePath}`);
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`[ERRO ITAÚ PDF] Fetch falhou com status ${response.status}: ${errorText}`);
-            throw new Error(`Falha ao buscar logo Itaú (${response.status}) - URL: ${logoURL}`);
+        if (!fs.existsSync(filePath)) {
+            console.error(`[ERRO ITAÚ PDF] Arquivo de logo não encontrado em: ${filePath}`);
+            return null;
         }
 
-        const contentType = response.headers.get('content-type');
-        console.log(`[LOG ITAÚ PDF] Fetch content-type: ${contentType}`);
-        if (!contentType || !contentType.startsWith('image/')) {
-             throw new Error(`Tipo de conteúdo inesperado (${contentType}) recebido de ${logoURL}`);
-        }
+        const imageBuffer = fs.readFileSync(filePath);
+        console.log(`[LOG ITAÚ PDF] Arquivo lido. Tamanho: ${imageBuffer.byteLength} bytes`);
 
-        const imageBuffer = await response.arrayBuffer();
-        console.log(`[LOG ITAÚ PDF] Buffer da imagem recebido, tamanho: ${imageBuffer.byteLength} bytes`);
-        if (imageBuffer.byteLength === 0) {
-            throw new Error(`Buffer da imagem vazio recebido de ${logoURL}`);
-        }
-
-        const base64String = Buffer.from(imageBuffer).toString('base64');
-        console.log(`[LOG ITAÚ PDF] Logo convertido para base64 com sucesso.`);
+        const base64String = imageBuffer.toString('base64');
         return `data:image/png;base64,${base64String}`;
     } catch (error) {
-        console.error("[ERRO ITAÚ PDF] Exceção durante busca/conversão do logo:", error);
+        console.error("[ERRO ITAÚ PDF] Exceção durante leitura do logo do disco:", error);
         return null;
     }
 };

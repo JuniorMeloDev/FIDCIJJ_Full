@@ -9,18 +9,32 @@ export async function GET(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id: operacaoId } = params;
+        const { id: operacaoId } = await params;
         if (!operacaoId) {
             return NextResponse.json({ message: 'ID da Operação é obrigatório.' }, { status: 400 });
         }
         
         console.log(`[LOG PDF] Iniciando geração de PDF para Operação ID: ${operacaoId}`);
 
+        const { searchParams } = new URL(request.url);
+        const idsParam = searchParams.get('ids');
+        const ids = idsParam ? idsParam.split(',').filter(Boolean) : [];
+
         // Busca a operação completa, incluindo a linha_digitavel e as regras de juros/multa.
-        const { data: duplicatas, error: dupError } = await supabase
+        let query = supabase
             .from('duplicatas')
             .select('*, operacao:operacoes!inner(cliente:clientes!inner(*), tipo_operacao:tipos_operacao(*))')
             .eq('operacao_id', operacaoId);
+
+        if (ids.length > 0) {
+            query = query.in('id', ids);
+        }
+
+        query = query
+            .order('data_vencimento', { ascending: true })
+            .order('nf_cte', { ascending: true });
+
+        const { data: duplicatas, error: dupError } = await query;
 
         if (dupError) {
             console.error('[ERRO PDF] Erro ao buscar duplicatas no Supabase:', dupError);

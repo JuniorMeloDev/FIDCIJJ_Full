@@ -19,27 +19,23 @@ const getBaseURL = () => {
 const getItauLogoBase64 = async () => {
     const baseURL = getBaseURL();
     const logoURL = `${baseURL}/itau.png`;
-    console.log(`[LOG ITAÚ PDF] Tentando buscar logo de: ${logoURL}`);
+
     try {
         const response = await fetch(logoURL, { cache: 'no-store' });
-        console.log(`[LOG ITAÚ PDF] Fetch status: ${response.status}`);
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`[ERRO ITAÚ PDF] Fetch falhou com status ${response.status}: ${errorText}`);
             throw new Error(`Falha ao buscar logo Itaú (${response.status}) - URL: ${logoURL}`);
         }
         const contentType = response.headers.get('content-type');
-        console.log(`[LOG ITAÚ PDF] Fetch content-type: ${contentType}`);
         if (!contentType || !contentType.startsWith('image/')) {
              throw new Error(`Tipo de conteúdo inesperado (${contentType}) recebido de ${logoURL}`);
         }
         const imageBuffer = await response.arrayBuffer();
-        console.log(`[LOG ITAÚ PDF] Buffer da imagem recebido, tamanho: ${imageBuffer.byteLength} bytes`);
         if (imageBuffer.byteLength === 0) {
             throw new Error(`Buffer da imagem vazio recebido de ${logoURL}`);
         }
         const base64String = Buffer.from(imageBuffer).toString('base64');
-        console.log(`[LOG ITAÚ PDF] Logo convertido para base64 com sucesso.`);
         return `data:image/png;base64,${base64String}`;
     } catch (error) {
         console.error("[ERRO ITAÚ PDF] Exceção durante busca/conversão do logo:", error);
@@ -54,12 +50,11 @@ export async function GET(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id: operacaoId } = params;
+        const { id: operacaoId } = await params;
         if (!operacaoId) {
             return NextResponse.json({ message: 'ID da Operação é obrigatório.' }, { status: 400 });
         }
 
-        console.log(`[LOG PDF ITAÚ API] Iniciando PDF para Operação ID: ${operacaoId}`);
 
         // --- ACESSANDO VARIÁVEIS DE AMBIENTE ---
         const agencia = process.env.ITAU_AGENCIA;
@@ -74,10 +69,24 @@ export async function GET(request, { params }) {
         const contaSemDac = contaCompleta.split('-')[0].replace(/\D/g, '');
         // --- FIM VARIÁVEIS DE AMBIENTE ---
 
-        const { data: duplicatas, error: dupError } = await supabase
+        const { searchParams } = new URL(request.url);
+        const idsParam = searchParams.get('ids');
+        const ids = idsParam ? idsParam.split(',').filter(Boolean) : [];
+
+        let query = supabase
             .from('duplicatas')
             .select('*, operacao:operacoes!inner(cliente:clientes!inner(*), tipo_operacao:tipos_operacao(*))')
             .eq('operacao_id', operacaoId);
+
+        if (ids.length > 0) {
+            query = query.in('id', ids);
+        }
+
+        query = query
+            .order('data_vencimento', { ascending: true })
+            .order('nf_cte', { ascending: true }); // Desempate por NF
+
+        const { data: duplicatas, error: dupError } = await query;
 
         if (dupError) throw new Error('Falha ao consultar duplicatas: ' + dupError.message);
         if (!duplicatas || duplicatas.length === 0) throw new Error(`Nenhuma duplicata encontrada para a operação #${operacaoId}.`);
@@ -116,9 +125,7 @@ export async function GET(request, { params }) {
 
         if (listaBoletos.length === 0) throw new Error("Nenhum boleto válido para gerar PDF nesta operação.");
 
-        console.log(`[LOG PDF ITAÚ API] Gerando PDF para ${listaBoletos.length} boleto(s)...`);
         const pdfBuffer = await gerarPdfBoletoItau(listaBoletos); // Usar await
-        console.log(`[LOG PDF ITAÚ API] PDF Buffer gerado, tamanho: ${pdfBuffer.byteLength} bytes`);
 
         if (!pdfBuffer || pdfBuffer.byteLength < 100) {
              console.error("[ERRO PDF ITAÚ API] PDF Buffer gerado parece inválido ou vazio.");
@@ -133,7 +140,6 @@ export async function GET(request, { params }) {
         headers.append('Content-Type', 'application/pdf');
         headers.append('Content-Disposition', `attachment; filename="${filename}"`);
 
-        console.log(`[LOG PDF ITAÚ API] Enviando resposta PDF com nome: ${filename}`);
         return new Response(pdfBuffer, { headers });
 
     } catch (error) {

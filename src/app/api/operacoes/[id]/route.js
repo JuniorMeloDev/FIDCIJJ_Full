@@ -192,7 +192,7 @@ export async function DELETE(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params;
+        const { id } = await params;
 
         // 1. Verificar se alguma duplicata da operação já foi liquidada
         const { data: duplicatasLiquidadas, error: checkError } = await supabase

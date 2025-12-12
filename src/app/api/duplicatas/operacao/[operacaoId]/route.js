@@ -8,7 +8,7 @@ export async function GET(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { operacaoId } = params;
+        const { operacaoId } = await params;
 
         // Adicionado linha_digitavel e banco_emissor_boleto ao select
         const { data, error } = await supabase
