@@ -303,8 +303,71 @@ export default function AnalisePage() {
             }
 
         } catch (err) {
-            showNotification(err.message, "error");
-            setIsPixConfirmOpen(false);
+            // --- TENTATIVA DE RECUPERAÇÃO ---
+            // Se houve erro na resposta (500), mas a operação foi finalizada no banco (como no caso do erro do log anterior),
+            // verificamos o status real da operação para ver se devemos prosseguir.
+            console.error("Erro ao processar análise. Tentando verificar se houve sucesso parcial:", err);
+            
+            let recovered = false;
+            
+            // Só tenta recuperar se estivéssemos aprovando
+            if (pendingApprovalPayload && pendingApprovalPayload.status === 'Aprovada') {
+               try {
+                  const checkRes = await fetch(`/api/operacoes/${operacaoSelecionada.id}`, { headers: getAuthHeader() });
+                  if (checkRes.ok) {
+                      const opAtualizada = await checkRes.json();
+                      if (opAtualizada.status === 'Aprovada') {
+                           // SUCESSO CONFIRMADO! O erro foi apenas no retorno da API (ex: timeout ou bug no final).
+                           console.log("Recuperação bem sucedida! A operação consta como APROVADA no banco.");
+                           recovered = true;
+                           
+                           showNotification("Operação aprovada com aviso! (Erro no retorno da API, mas processamento concluído)", "warning");
+                           fetchPendentes();
+                           setIsPixConfirmOpen(false);
+
+                           // Monta dados do recibo manualmente com o que temos
+                           const cliente = cachedClientData || operacaoSelecionada.cliente || {};
+                           const pagador = cachedContaMasterData || {};
+                           
+                           const valorFinal = pendingPartialData?.valorDebito 
+                                ? parseFloat(pendingPartialData.valorDebito)
+                                : (operacaoSelecionada?.valor_liquido || 0) - descontosAdicionais.reduce((acc, d) => acc + d.valor, 0);
+
+                           const dadosComprovante = {
+                                valor: valorFinal,
+                                data: new Date(),
+                                transactionId: `REC-${Date.now()}`, // ID Gerado pois perdemos o original do retorno
+                                descricao: `Pagamento Operação #${operacaoSelecionada.id} (Recuperado)`,
+                                pagador: {
+                                    nome: pagador.nome || 'Sua Empresa', 
+                                    cnpj: pagador.cnpj || '', 
+                                    conta: formatDisplayConta(`${pagador.banco || ''} - ${pagador.agencia || ''}/${pagador.conta || ''}`)
+                                },
+                                recebedor: {
+                                    nome: cliente.razao_social || cliente.nome || 'Nome não informado',
+                                    cnpj: cliente.cnpj_cpf || cliente.cpf_cnpj || 'Não informado',
+                                    instituicao: cliente.banco || 'Banco Destino',
+                                    chavePix: cliente.chave_pix || cliente.chavePix || 'Chave não informada'
+                                }
+                           };
+                           
+                           setOperacaoParaEmail({
+                                id: operacaoSelecionada.id,
+                                clienteId: operacaoSelecionada?.cliente?.id
+                           });
+                           setPixReceiptData(dadosComprovante);
+                           setIsPixReceiptOpen(true);
+                      }
+                  }
+               } catch (recErr) {
+                   console.error("Falha na tentativa de recuperação:", recErr);
+               }
+            }
+
+            if (!recovered) {
+                showNotification(err.message || "Erro desconhecido", "error");
+                setIsPixConfirmOpen(false);
+            }
         } finally {
             setIsSaving(false);
             setRecompraData(null);

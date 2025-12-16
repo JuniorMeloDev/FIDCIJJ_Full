@@ -25,7 +25,8 @@ export async function POST(request) {
             valor: body.valor,
             conta_bancaria: body.conta_bancaria,
             categoria: body.categoria,
-            transaction_id: body.transaction_id
+            transaction_id: body.transaction_id,
+            natureza: body.natureza
         };
 
         console.log('[CONCILIAR-MANUAL] Payload final (para insert):', JSON.stringify(lancamento, null, 2));

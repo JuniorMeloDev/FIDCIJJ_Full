@@ -6,9 +6,15 @@ import { getInterAccessToken, enviarPixInter } from "@/app/lib/interService";
 import { getItauAccessToken, enviarPixItau } from "@/app/lib/itauService";
 import { format } from 'date-fns';
 
+// ... imports existing ...
+
 export async function PUT(request, props) {
   const params = await props.params;
   const { id } = params;
+
+  // Variáveis declaradas no escopo superior para evitar ReferenceError
+  let pixEndToEndId = null;
+  let descricaoLancamento = null;
 
   try {
     const token = request.headers.get("Authorization")?.split(" ")[1];
@@ -76,7 +82,7 @@ export async function PUT(request, props) {
           throw new Error("Conta bancária selecionada não encontrada no banco de dados.");
       }
 
-      let pixEndToEndId = null;
+      // Lógica PIX removida daqui e variáveis usadas no escopo superior
 
       if (efetuar_pix) {
           const nomeBanco = conta.banco.toLowerCase();
@@ -144,7 +150,7 @@ export async function PUT(request, props) {
           }
       }
 
-      let descricaoLancamento = `Borderô #${id}`;
+      descricaoLancamento = `Borderô #${id}`;
       const { data: duplicatas } = await supabase
         .from("duplicatas")
         .select("nf_cte")
@@ -158,10 +164,8 @@ export async function PUT(request, props) {
         descricaoLancamento = `Borderô ${docType} ${numerosDoc}`;
       }
       
-      if(pixEndToEndId) {
-          descricaoLancamento = `${descricaoLancamento}`;
-      }
-
+      // pixEndToEndId já está no escopo correto agora
+      
       // --- CORREÇÃO APLICADA AQUI ---
       // Formata a conta bancária de forma segura para string
       // Garante que agência e conta existam para evitar "undefined"
