@@ -46,7 +46,10 @@ export async function POST(request) {
         
         const { error: updateError } = await supabase
             .from('operacoes')
-            .update({ status: 'Aprovada' })
+            .update({ 
+                status: 'Aprovada',
+                juros_pre_fixado: body.jurosPre 
+            })
             .eq('id', operacaoId);
 
         if (updateError) throw new Error('Operação salva, mas falha ao definir o status como Aprovada.');

@@ -666,6 +666,7 @@ export default function OperacaoBorderoPage() {
       dataDebito,
       efetuar_pix: isPix,
       pixEndToEndId: isPix ? pixResultData?.transactionId : null,
+      jurosPre: jurosPre, // Envia o status do checkbox
     };
 
     try {
