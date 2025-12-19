@@ -144,15 +144,19 @@ export async function GET(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params;
+        const { id } = await params; // Aguarda params (Next.js 15+)
 
         const { data: cliente, error } = await supabase
             .from('clientes')
             .select('*, contas_bancarias(*), cliente_emails(*), cliente_tipos_operacao(*)')
             .eq('id', id)
-            .single();
+            .maybeSingle(); // Usar maybeSingle para evitar erro imediato se não encontrar
 
         if (error) throw error;
+        
+        if (!cliente) {
+             return NextResponse.json({ message: 'Cliente não encontrado.' }, { status: 404 });
+        }
 
         // Formata para o padrão esperado pelo front (camelCase no array de contas)
         const clienteFormatado = {
@@ -164,6 +168,7 @@ export async function GET(request, { params }) {
 
         return NextResponse.json(clienteFormatado);
     } catch (error) {
+        console.error(`Erro GET /api/cadastros/clientes/${params.id}:`, error);
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
 }

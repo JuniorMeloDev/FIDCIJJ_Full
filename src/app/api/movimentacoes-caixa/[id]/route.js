@@ -9,7 +9,7 @@ export async function PUT(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params;
+        const { id } = await params;
         const body = await request.json();
 
         // Apenas atualiza os campos permitidos

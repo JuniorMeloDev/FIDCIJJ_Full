@@ -338,15 +338,43 @@ export default function ConsultasPage() {
 
   const handleAbrirEmailModal = () => {
     if (!contextMenu.selectedItem) return;
+
+    // Tenta obter IDs de várias formas
+    const opId = contextMenu.selectedItem.operacaoId || contextMenu.selectedItem.operacao_id;
+    const cliId = contextMenu.selectedItem.clienteId || contextMenu.selectedItem.cliente_id || contextMenu.selectedItem.operacao?.cliente_id;
+
+    console.log('[Consultas] Abrir Email - Dados:', {
+      item: contextMenu.selectedItem,
+      opId,
+      cliId,
+      opIdType: typeof opId
+    });
+
+    // Check para nulidade e também para a string "undefined" que pode vir de algum lugar
+    if (!opId || opId === 'undefined' || !cliId || cliId === 'undefined') {
+      showNotification("Item não possui Operação ou Cliente vinculado (ID inválido).", "error");
+      return;
+    }
+
     setOperacaoParaEmail({
-      id: contextMenu.selectedItem.operacaoId,
-      clienteId: contextMenu.selectedItem.clienteId,
+      id: opId,
+      clienteId: cliId,
     });
     setIsEmailModalOpen(true);
   };
 
   const handleSendEmail = async (destinatarios) => {
     if (!operacaoParaEmail) return;
+
+    console.log("[Consultas] handleSendEmail iniciado.", { operacaoParaEmail, destinatarios });
+
+    // Proteção final contra ID inválido no momento do envio
+    if (!operacaoParaEmail?.id || operacaoParaEmail.id === 'undefined') {
+      console.error("[Consultas] Abortando envio: ID de operação inválido.", operacaoParaEmail);
+      showNotification("Erro interno: ID da operação inválido para envio.", "error");
+      return;
+    }
+
     setIsSendingEmail(true);
     try {
       const response = await fetch(
@@ -403,27 +431,27 @@ export default function ConsultasPage() {
   };
 
   const handleEmitirBoleto = async () => {
-  if (!contextMenu.selectedItem) return;
-  const duplicataSelecionada = contextMenu.selectedItem;
-  const operacaoId = duplicataSelecionada.operacaoId;
+    if (!contextMenu.selectedItem) return;
+    const duplicataSelecionada = contextMenu.selectedItem;
+    const operacaoId = duplicataSelecionada.operacaoId;
 
-  try {
-    showNotification(`Buscando duplicatas da operação #${operacaoId}...`, "info");
+    try {
+      showNotification(`Buscando duplicatas da operação #${operacaoId}...`, "info");
 
-    const response = await fetch(`/api/duplicatas/operacao/${operacaoId}`, {
-      headers: getAuthHeader(),
-    });
-    if (!response.ok) throw new Error("Erro ao buscar duplicatas.");
+      const response = await fetch(`/api/duplicatas/operacao/${operacaoId}`, {
+        headers: getAuthHeader(),
+      });
+      if (!response.ok) throw new Error("Erro ao buscar duplicatas.");
 
-    const todasDuplicatas = await response.json();
-    setTodasDuplicatasOperacao(todasDuplicatas);
-    setDuplicataParaEmitir(duplicataSelecionada);
-    setShowEmitirModal(true); // 👈 abre o modal de escolha
+      const todasDuplicatas = await response.json();
+      setTodasDuplicatasOperacao(todasDuplicatas);
+      setDuplicataParaEmitir(duplicataSelecionada);
+      setShowEmitirModal(true); // 👈 abre o modal de escolha
 
-  } catch (err) {
-    showNotification(err.message, "error");
-  }
-};
+    } catch (err) {
+      showNotification(err.message, "error");
+    }
+  };
 
   const handleDownloadBoletoJson = async () => {
     const duplicataId = contextMenu.selectedItem?.id;
@@ -535,74 +563,74 @@ export default function ConsultasPage() {
       />
 
       <EmitirBoletoConfirmModal
-  open={showEmitirModal}
-  onClose={() => setShowEmitirModal(false)}
-  nfNumero={duplicataParaEmitir?.numeroNotaFiscal}
-  duplicataNumero={duplicataParaEmitir?.numeroDuplicata}
-  onEmitirUma={() => {
-    const pendentes = [duplicataParaEmitir].filter(
-      (d) => d.statusRecebimento !== "Recebido"
-    );
-    setDuplicatasParaBoleto(pendentes);
-    setIsEmissaoBoletoModalOpen(true);
-    setShowEmitirModal(false);
-  }}
-  onEmitirTodas={() => {
-  try {
-    // Função que extrai a NF base (antes do ponto)
-    const getNfBase = (valor) => {
-      if (!valor) return "";
-      return String(valor).split(".")[0].trim();
-    };
+        open={showEmitirModal}
+        onClose={() => setShowEmitirModal(false)}
+        nfNumero={duplicataParaEmitir?.numeroNotaFiscal}
+        duplicataNumero={duplicataParaEmitir?.numeroDuplicata}
+        onEmitirUma={() => {
+          const pendentes = [duplicataParaEmitir].filter(
+            (d) => d.statusRecebimento !== "Recebido"
+          );
+          setDuplicatasParaBoleto(pendentes);
+          setIsEmissaoBoletoModalOpen(true);
+          setShowEmitirModal(false);
+        }}
+        onEmitirTodas={() => {
+          try {
+            // Função que extrai a NF base (antes do ponto)
+            const getNfBase = (valor) => {
+              if (!valor) return "";
+              return String(valor).split(".")[0].trim();
+            };
 
-    // NF base da duplicata selecionada
-    const nfAtual = getNfBase(duplicataParaEmitir.nfCte);
-    console.log("Emitir todas da NF (base):", nfAtual);
+            // NF base da duplicata selecionada
+            const nfAtual = getNfBase(duplicataParaEmitir.nfCte);
+            console.log("Emitir todas da NF (base):", nfAtual);
 
-    // Filtra apenas duplicatas da mesma NF (prefixo igual)
-    const daMesmaNF = todasDuplicatasOperacao.filter((d) => {
-      const nfDup = getNfBase(d.nfCte);
-      return nfDup === nfAtual && d.statusRecebimento !== "Recebido";
-    });
+            // Filtra apenas duplicatas da mesma NF (prefixo igual)
+            const daMesmaNF = todasDuplicatasOperacao.filter((d) => {
+              const nfDup = getNfBase(d.nfCte);
+              return nfDup === nfAtual && d.statusRecebimento !== "Recebido";
+            });
 
-    if (daMesmaNF.length === 0) {
-      showNotification(
-        `Nenhuma duplicata pendente encontrada para a NF ${nfAtual}.`,
-        "info"
-      );
-      setShowEmitirModal(false);
-      return;
-    }
+            if (daMesmaNF.length === 0) {
+              showNotification(
+                `Nenhuma duplicata pendente encontrada para a NF ${nfAtual}.`,
+                "info"
+              );
+              setShowEmitirModal(false);
+              return;
+            }
 
-    // ✅ Ordenar duplicatas da mesma NF:
-    // 1️⃣ Por número de parcela (após o ponto, ex: 2438.2 -> 2)
-    // 2️⃣ Se não tiver número, usa data de vencimento como critério secundário
-    const ordenadas = [...daMesmaNF].sort((a, b) => {
-      const numA = parseInt(String(a.nfCte).split(".")[1] || "0");
-      const numB = parseInt(String(b.nfCte).split(".")[1] || "0");
+            // ✅ Ordenar duplicatas da mesma NF:
+            // 1️⃣ Por número de parcela (após o ponto, ex: 2438.2 -> 2)
+            // 2️⃣ Se não tiver número, usa data de vencimento como critério secundário
+            const ordenadas = [...daMesmaNF].sort((a, b) => {
+              const numA = parseInt(String(a.nfCte).split(".")[1] || "0");
+              const numB = parseInt(String(b.nfCte).split(".")[1] || "0");
 
-      if (numA !== numB) return numA - numB;
+              if (numA !== numB) return numA - numB;
 
-      // fallback: ordenar por data de vencimento
-      const dataA = new Date(a.dataVencimento);
-      const dataB = new Date(b.dataVencimento);
-      return dataA - dataB;
-    });
+              // fallback: ordenar por data de vencimento
+              const dataA = new Date(a.dataVencimento);
+              const dataB = new Date(b.dataVencimento);
+              return dataA - dataB;
+            });
 
-    console.log("Duplicatas ordenadas:", ordenadas.map(d => d.nfCte));
+            console.log("Duplicatas ordenadas:", ordenadas.map(d => d.nfCte));
 
-    // Define duplicatas para emissão na ordem correta
-    setDuplicatasParaBoleto(ordenadas);
-    setIsEmissaoBoletoModalOpen(true);
-    setShowEmitirModal(false);
-  } catch (err) {
-    console.error("Erro ao filtrar/ordenar duplicatas da mesma NF:", err);
-    showNotification("Erro ao preparar duplicatas da mesma NF.", "error");
-    setShowEmitirModal(false);
-  }
-}}
+            // Define duplicatas para emissão na ordem correta
+            setDuplicatasParaBoleto(ordenadas);
+            setIsEmissaoBoletoModalOpen(true);
+            setShowEmitirModal(false);
+          } catch (err) {
+            console.error("Erro ao filtrar/ordenar duplicatas da mesma NF:", err);
+            showNotification("Erro ao preparar duplicatas da mesma NF.", "error");
+            setShowEmitirModal(false);
+          }
+        }}
 
-/>
+      />
       <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
         <div className="flex-shrink-0 px-6 pt-6">
           <motion.header
@@ -722,32 +750,28 @@ export default function ConsultasPage() {
                               </td>
                             )}
                             <td
-                              className={`px-4 py-2 text-sm ${
-                                isLiquidado ? "text-gray-500" : "text-gray-400"
-                              }`}
+                              className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"
+                                }`}
                             >
                               {formatDate(dup.dataOperacao)}
                             </td>
                             <td
-                              className={`px-4 py-2 font-medium ${
-                                isLiquidado ? "text-gray-500" : "text-gray-100"
-                              }`}
+                              className={`px-4 py-2 font-medium ${isLiquidado ? "text-gray-500" : "text-gray-100"
+                                }`}
                             >
                               {dup.cedenteRamoAtividade === "Transportes"
                                 ? dup.nfCte.split(".")[0]
                                 : dup.nfCte}
                             </td>
                             <td
-                              className={`px-4 py-2 text-sm ${
-                                isLiquidado ? "text-gray-500" : "text-gray-400"
-                              }`}
+                              className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"
+                                }`}
                             >
                               {dup.empresaCedente}
                             </td>
                             <td
-                              className={`px-4 py-2 text-sm ${
-                                isLiquidado ? "text-gray-500" : "text-gray-400"
-                              }`}
+                              className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"
+                                }`}
                             >
                               {dup.sacadoInfo?.matriz_id ? (
                                 <span className="flex items-center gap-2">
@@ -761,23 +785,20 @@ export default function ConsultasPage() {
                               )}
                             </td>
                             <td
-                              className={`px-4 py-2 text-sm text-right ${
-                                isLiquidado ? "text-gray-500" : "text-gray-100"
-                              }`}
+                              className={`px-4 py-2 text-sm text-right ${isLiquidado ? "text-gray-500" : "text-gray-100"
+                                }`}
                             >
                               {formatBRLNumber(dup.valorBruto)}
                             </td>
                             <td
-                              className={`px-4 py-2 text-sm text-right ${
-                                isLiquidado ? "text-gray-500" : "text-red-400"
-                              }`}
+                              className={`px-4 py-2 text-sm text-right ${isLiquidado ? "text-gray-500" : "text-red-400"
+                                }`}
                             >
                               {formatBRLNumber(dup.valorJuros)}
                             </td>
                             <td
-                              className={`px-4 py-2 text-sm ${
-                                isLiquidado ? "text-gray-500" : "text-gray-400"
-                              }`}
+                              className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"
+                                }`}
                             >
                               {formatDate(dup.dataVencimento)}
                               {isLiquidado && dup.dataLiquidacao && (
@@ -825,7 +846,7 @@ export default function ConsultasPage() {
         onClear={clearSelection}
       />
 
-      
+
 
       {contextMenu.visible && (
         <div

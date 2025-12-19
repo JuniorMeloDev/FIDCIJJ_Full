@@ -9,7 +9,7 @@ export async function PUT(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params;
+        const { id } = await params;
         const body = await request.json();
 
         const { error } = await supabase
@@ -31,7 +31,7 @@ export async function DELETE(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params;
+        const { id } = await params;
         const { error } = await supabase.from('anotacoes').delete().eq('id', id);
 
         if (error) throw error;

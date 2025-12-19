@@ -126,7 +126,7 @@ export default function FluxoDeCaixaPage() {
       const data = await response.json();
 
       const normalized = (data.transacoes || data).map((t) => ({
-        id: t.idTransacao || t.FITID || `${t.DTPOSTED}-${t.TRNAMT}`, 
+        id: t.idTransacao || t.FITID || `${t.DTPOSTED}-${t.TRNAMT}`,
         idTransacao: t.idTransacao || t.FITID,
         data: t.dataEntrada || t.DTPOSTED || t.data || null,
         descricao: t.descricao || t.MEMO || t.name || "",
@@ -161,15 +161,15 @@ export default function FluxoDeCaixaPage() {
   const handleCriarLancamentoDoOfx = (ofxItem, contaId) => {
     let nomeConta = '';
     if (contaId) {
-        const contaObj = contasMaster.find(c => String(c.id) === String(contaId));
-        if (contaObj) nomeConta = contaObj.contaBancaria;
+      const contaObj = contasMaster.find(c => String(c.id) === String(contaId));
+      if (contaObj) nomeConta = contaObj.contaBancaria;
     }
 
     const novoLancamento = {
       data: ofxItem.data,
       descricao: ofxItem.descricao,
       valor: ofxItem.valor,
-      conta_bancaria: nomeConta, 
+      conta_bancaria: nomeConta,
       categoria: "Movimentação Avulsa",
       transaction_id: ofxItem.id,
     };
@@ -217,17 +217,17 @@ export default function FluxoDeCaixaPage() {
         { headers: getAuthHeader() }
       );
       if (!response.ok) throw new Error("Falha ao carregar movimentações.");
-      
+
       const result = await response.json();
-      
+
       if (Array.isArray(result)) {
-          setMovimentacoes(result);
-          setSaldoAnterior(0);
-          setReconciledTransactionIds(new Set(result.map((m) => m.transaction_id).filter(Boolean)));
+        setMovimentacoes(result);
+        setSaldoAnterior(0);
+        setReconciledTransactionIds(new Set(result.map((m) => m.transaction_id).filter(Boolean)));
       } else {
-          setMovimentacoes(result.data || []);
-          setSaldoAnterior(result.saldoAnterior || 0);
-          setReconciledTransactionIds(new Set((result.data || []).map((m) => m.transaction_id).filter(Boolean)));
+        setMovimentacoes(result.data || []);
+        setSaldoAnterior(result.saldoAnterior || 0);
+        setReconciledTransactionIds(new Set((result.data || []).map((m) => m.transaction_id).filter(Boolean)));
       }
 
     } catch (err) {
@@ -358,7 +358,7 @@ export default function FluxoDeCaixaPage() {
     return () => document.removeEventListener("click", handleClick);
   }, []);
 
-  
+
   const searchDuplicatasParaConciliacao = async (query) => {
     if (!query) return [];
     try {
@@ -533,11 +533,11 @@ export default function FluxoDeCaixaPage() {
         },
         recebedor: apiResponse.recebedor
           ? {
-              nome: apiResponse.recebedor.nome,
-              cnpj: apiResponse.recebedor.documento,
-              instituicao: apiResponse.recebedor.banco,
-              chavePix: apiResponse.recebedor.identificacao_chave,
-            }
+            nome: apiResponse.recebedor.nome,
+            cnpj: apiResponse.recebedor.documento,
+            instituicao: apiResponse.recebedor.banco,
+            chavePix: apiResponse.recebedor.identificacao_chave,
+          }
           : null,
       });
 
@@ -593,7 +593,7 @@ export default function FluxoDeCaixaPage() {
       fetchSaldos(filters);
       setRefreshKey(prev => prev + 1);
       setItemOfxParaCriar(null);
-      return true; 
+      return true;
     } catch (err) {
       showNotification(err.message, "error");
       return false;
@@ -662,10 +662,17 @@ export default function FluxoDeCaixaPage() {
       const opId = contextMenu.selectedItem.operacaoId || contextMenu.selectedItem.operacao_id;
       const cliId = contextMenu.selectedItem.operacao?.cliente?.id || contextMenu.selectedItem.operacao?.cliente_id;
 
-      if (!opId || !cliId) {
-          console.error('Falha ao identificar IDs para envio de email:', contextMenu.selectedItem);
-          showNotification("Não foi possível identificar a operação ou cliente deste lançamento.", "error");
-          return;
+      console.log('[Fluxo Caixa] Abrir Email - Dados:', {
+        item: contextMenu.selectedItem,
+        opId,
+        cliId,
+        opIdType: typeof opId
+      });
+
+      if (!opId || opId === 'undefined' || !cliId || cliId === 'undefined') {
+        console.error('[Fluxo Caixa] Falha ao identificar IDs para envio de email. Item:', contextMenu.selectedItem);
+        showNotification("Não foi possível identificar a operação ou cliente deste lançamento. (IDs inválidos ou ausentes)", "error");
+        return;
       }
 
       setOperacaoParaEmail({
@@ -676,19 +683,37 @@ export default function FluxoDeCaixaPage() {
     }
   };
   const handleSendEmail = async (destinatarios) => {
+    console.log("[Fluxo Caixa] handleSendEmail iniciado.", { operacaoParaEmail, destinatarios });
+
+    // Proteção final contra ID inválido no momento do envio
+    if (!operacaoParaEmail?.id || operacaoParaEmail.id === 'undefined') {
+      console.error("[Fluxo Caixa] Abortando envio: ID de operação inválido.", operacaoParaEmail);
+      showNotification("Erro interno: ID da operação inválido para envio.", "error");
+      return;
+    }
+
     setIsSendingEmail(true);
     try {
-      await fetch(`/api/operacoes/${operacaoParaEmail.id}/enviar-email`, {
+      const response = await fetch(`/api/operacoes/${operacaoParaEmail.id}/enviar-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({ destinatarios }),
       });
-      showNotification("E-mails enviados!", "success");
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Falha ao enviar e-mail.");
+      }
+
+      showNotification(data.message || "E-mails enviados!", "success");
     } catch (err) {
+      console.error("Erro handleSendEmail:", err);
       showNotification(err.message, "error");
+    } finally {
+      setIsSendingEmail(false);
+      setIsEmailModalOpen(false);
     }
-    setIsSendingEmail(false);
-    setIsEmailModalOpen(false);
   };
   const handleGeneratePdf = async () => {
     const operacaoId = contextMenu.selectedItem?.operacaoId;
@@ -726,19 +751,19 @@ export default function FluxoDeCaixaPage() {
   const handleSaveComplemento = async (payload, pixResult) => {
     if (!payload) return false;
     try {
-        const response = await fetch('/api/operacoes/complemento', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-            body: JSON.stringify(payload),
-        });
-        if (!response.ok) throw new Error("Falha ao salvar complemento.");
-        showNotification("Complemento salvo!", "success");
-        fetchMovimentacoes(filters, sortConfig);
-        fetchSaldos(filters);
-        return true;
+      const response = await fetch('/api/operacoes/complemento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error("Falha ao salvar complemento.");
+      showNotification("Complemento salvo!", "success");
+      fetchMovimentacoes(filters, sortConfig);
+      fetchSaldos(filters);
+      return true;
     } catch (err) {
-        showNotification(err.message, "error");
-        return false;
+      showNotification(err.message, "error");
+      return false;
     }
   };
 
@@ -747,35 +772,35 @@ export default function FluxoDeCaixaPage() {
     if (!item) return;
 
     let recebedorData = null;
-    
+
     if (item.operacao && item.operacao.cliente) {
-        const cliente = item.operacao.cliente;
-        const contaPix = cliente.contas_bancarias?.find(c => c.chave_pix) || {};
-        
-        recebedorData = {
-            nome: cliente.nome,
-            cnpj: cliente.cnpj,
-            instituicao: contaPix.banco || 'Não informado', 
-            chavePix: contaPix.chave_pix || 'Não informada'
-        };
+      const cliente = item.operacao.cliente;
+      const contaPix = cliente.contas_bancarias?.find(c => c.chave_pix) || {};
+
+      recebedorData = {
+        nome: cliente.nome,
+        cnpj: cliente.cnpj,
+        instituicao: contaPix.banco || 'Não informado',
+        chavePix: contaPix.chave_pix || 'Não informada'
+      };
     }
 
     // Usa 'created_at' se disponível para pegar a hora exata. Senão, usa o ajuste de meio-dia.
-    const dataAjustada = item.created_at 
-        ? item.created_at
-        : (item.dataMovimento && typeof item.dataMovimento === 'string' && !item.dataMovimento.includes('T')
-            ? `${item.dataMovimento}T12:00:00`
-            : item.dataMovimento);
+    const dataAjustada = item.created_at
+      ? item.created_at
+      : (item.dataMovimento && typeof item.dataMovimento === 'string' && !item.dataMovimento.includes('T')
+        ? `${item.dataMovimento}T12:00:00`
+        : item.dataMovimento);
 
     setReceiptData({
-      valor: Math.abs(item.valor), 
-      data: dataAjustada, 
+      valor: Math.abs(item.valor),
+      data: dataAjustada,
       transactionId: item.transaction_id,
       descricao: item.descricao,
       pagador: {
-        nome: clienteMasterInfo.nome, 
-        cnpj: clienteMasterInfo.cnpj, 
-        conta: item.contaBancaria,    
+        nome: clienteMasterInfo.nome,
+        cnpj: clienteMasterInfo.cnpj,
+        conta: item.contaBancaria,
       },
       recebedor: recebedorData
     });
@@ -787,56 +812,56 @@ export default function FluxoDeCaixaPage() {
     if (!movimentacoes || movimentacoes.length === 0) return [];
 
     const sorted = [...movimentacoes].sort((a, b) => new Date(a.dataMovimento) - new Date(b.dataMovimento));
-    
+
     const groupedByDate = {};
-    
+
     sorted.forEach(item => {
-        const date = item.dataMovimento.split('T')[0];
-        if (!groupedByDate[date]) groupedByDate[date] = [];
-        groupedByDate[date].push(item);
+      const date = item.dataMovimento.split('T')[0];
+      if (!groupedByDate[date]) groupedByDate[date] = [];
+      groupedByDate[date].push(item);
     });
 
     const finalIds = [];
-    let runningBalance = saldoAnterior || 0; 
+    let runningBalance = saldoAnterior || 0;
 
     Object.keys(groupedByDate).sort().forEach(date => {
-        const itemsDoDia = groupedByDate[date];
-        
-        itemsDoDia.forEach(item => {
-            runningBalance += parseFloat(item.valor);
-            finalIds.push(item);
-        });
+      const itemsDoDia = groupedByDate[date];
 
-        finalIds.push({
-            id: `saldo-${date}`,
-            isBalanceRow: true,
-            dataMovimento: date, 
-            descricao: 'Saldo Total Disponível',
-            valor: runningBalance,
-            contaBancaria: '', 
-            categoria: 'Saldo'
-        });
+      itemsDoDia.forEach(item => {
+        runningBalance += parseFloat(item.valor);
+        finalIds.push(item);
+      });
+
+      finalIds.push({
+        id: `saldo-${date}`,
+        isBalanceRow: true,
+        dataMovimento: date,
+        descricao: 'Saldo Total Disponível',
+        valor: runningBalance,
+        contaBancaria: '',
+        categoria: 'Saldo'
+      });
     });
 
     const isAsc = sortConfig.direction === 'ASC';
     return finalIds.sort((a, b) => {
-        const dateA = new Date(a.dataMovimento);
-        const dateB = new Date(b.dataMovimento);
-        if (dateA - dateB !== 0) return isAsc ? dateA - dateB : dateB - dateA;
-        
-        if (a.isBalanceRow) return isAsc ? 1 : -1; 
-        if (b.isBalanceRow) return isAsc ? -1 : 1;
-        
-        return 0;
+      const dateA = new Date(a.dataMovimento);
+      const dateB = new Date(b.dataMovimento);
+      if (dateA - dateB !== 0) return isAsc ? dateA - dateB : dateB - dateA;
+
+      if (a.isBalanceRow) return isAsc ? 1 : -1;
+      if (b.isBalanceRow) return isAsc ? -1 : 1;
+
+      return 0;
     });
 
   }, [movimentacoes, saldoAnterior, sortConfig]);
 
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-  
+
   const currentItems = movimentacoesProcessadas.slice(indexOfFirstItem, indexOfLastItem);
-  
+
   const saldosTitle =
     filters.dataInicio && filters.dataFim
       ? "Resultado do Período"
@@ -907,7 +932,7 @@ export default function FluxoDeCaixaPage() {
         }}
         onSave={handleSaveLancamentoManual}
         transacao={itemOfxParaCriar || transacaoParaConciliar}
-        contasInternas={contasMaster} 
+        contasInternas={contasMaster}
         showNotification={showNotification}
       />
 
@@ -991,9 +1016,8 @@ export default function FluxoDeCaixaPage() {
                         {formatDisplayConta(saldo.contaBancaria)}
                       </p>
                       <p
-                        className={`text-xl font-bold ${
-                          saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
-                        }`}
+                        className={`text-xl font-bold ${saldo.saldo >= 0 ? "text-green-400" : "text-red-400"
+                          }`}
                       >
                         {formatBRLNumber(saldo.saldo)}
                       </p>
@@ -1056,11 +1080,10 @@ export default function FluxoDeCaixaPage() {
                                   >
                                     <div>
                                       <p
-                                        className={`font-semibold ${
-                                          t.tipoOperacao === "C"
-                                            ? "text-green-400"
-                                            : "text-red-400"
-                                        }`}
+                                        className={`font-semibold ${t.tipoOperacao === "C"
+                                          ? "text-green-400"
+                                          : "text-red-400"
+                                          }`}
                                       >
                                         {t.descricao}
                                       </p>
@@ -1069,11 +1092,10 @@ export default function FluxoDeCaixaPage() {
                                       </p>
                                     </div>
                                     <span
-                                      className={`font-bold ${
-                                        t.tipoOperacao === "C"
-                                          ? "text-green-400"
-                                          : "text-red-400"
-                                      }`}
+                                      className={`font-bold ${t.tipoOperacao === "C"
+                                        ? "text-green-400"
+                                        : "text-red-400"
+                                        }`}
                                     >
                                       {t.tipoOperacao === "D" ? "-" : "+"}
                                       {formatBRLNumber(parseFloat(t.valor))}
@@ -1140,18 +1162,18 @@ export default function FluxoDeCaixaPage() {
                               // Renderização especial para a linha de Saldo
                               if (mov.isBalanceRow) {
                                 return (
-                                    <tr key={mov.id} className="bg-gray-900/80 font-bold border-t border-gray-600">
-                                        <td className="px-3 py-2 text-sm text-gray-300 align-middle">
-                                            {formatDate(mov.dataMovimento)}
-                                        </td>
-                                        <td className="px-3 py-2 text-sm text-orange-400 uppercase tracking-wider align-middle flex items-center gap-2">
-                                            <FaWallet /> {mov.descricao}
-                                        </td>
-                                        <td className="px-3 py-2"></td>
-                                        <td className={`px-3 py-2 text-sm text-right align-middle ${mov.valor >= 0 ? "text-blue-400" : "text-red-400"}`}>
-                                            {formatBRLNumber(mov.valor)}
-                                        </td>
-                                    </tr>
+                                  <tr key={mov.id} className="bg-gray-900/80 font-bold border-t border-gray-600">
+                                    <td className="px-3 py-2 text-sm text-gray-300 align-middle">
+                                      {formatDate(mov.dataMovimento)}
+                                    </td>
+                                    <td className="px-3 py-2 text-sm text-orange-400 uppercase tracking-wider align-middle flex items-center gap-2">
+                                      <FaWallet /> {mov.descricao}
+                                    </td>
+                                    <td className="px-3 py-2"></td>
+                                    <td className={`px-3 py-2 text-sm text-right align-middle ${mov.valor >= 0 ? "text-blue-400" : "text-red-400"}`}>
+                                      {formatBRLNumber(mov.valor)}
+                                    </td>
+                                  </tr>
                                 );
                               }
 
@@ -1172,11 +1194,10 @@ export default function FluxoDeCaixaPage() {
                                     {formatDisplayConta(mov.contaBancaria)}
                                   </td>
                                   <td
-                                    className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${
-                                      mov.valor >= 0
-                                        ? "text-green-400"
-                                        : "text-red-400"
-                                    }`}
+                                    className={`px-3 py-2 whitespace-nowrap text-sm text-right font-semibold align-middle ${mov.valor >= 0
+                                      ? "text-green-400"
+                                      : "text-red-400"
+                                      }`}
                                   >
                                     {formatBRLNumber(mov.valor)}
                                   </td>
@@ -1221,39 +1242,39 @@ export default function FluxoDeCaixaPage() {
             <div className="py-1">
               {contextMenu.selectedItem.categoria ===
                 "Pagamento de Borderô" && (
-                <>
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleAbrirModalComplemento();
-                    }}
-                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-                  >
-                    Lançar Complemento
-                  </a>
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleGeneratePdf();
-                    }}
-                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-                  >
-                    Gerar PDF do Borderô
-                  </a>
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleAbrirEmailModal();
-                    }}
-                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-                  >
-                    Enviar Borderô por E-mail
-                  </a>
-                </>
-              )}
+                  <>
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleAbrirModalComplemento();
+                      }}
+                      className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                    >
+                      Lançar Complemento
+                    </a>
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleGeneratePdf();
+                      }}
+                      className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                    >
+                      Gerar PDF do Borderô
+                    </a>
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleAbrirEmailModal();
+                      }}
+                      className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                    >
+                      Enviar Borderô por E-mail
+                    </a>
+                  </>
+                )}
               {contextMenu.selectedItem.categoria === "Recebimento" && (
                 <>
                   <div className="border-t border-gray-600 my-1"></div>
@@ -1290,30 +1311,30 @@ export default function FluxoDeCaixaPage() {
                 "Movimentação Avulsa",
                 "Pagamento PIX",
               ].includes(contextMenu.selectedItem.categoria) && (
-                <>
-                  <div className="border-t border-gray-600 my-1"></div>
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleEditRequest();
-                    }}
-                    className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
-                  >
-                    Editar Lançamento
-                  </a>
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleDeleteRequest();
-                    }}
-                    className="block px-4 py-2 text-sm text-red-400 hover:bg-gray-600"
-                  >
-                    Excluir Lançamento
-                  </a>
-                </>
-              )}
+                  <>
+                    <div className="border-t border-gray-600 my-1"></div>
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleEditRequest();
+                      }}
+                      className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+                    >
+                      Editar Lançamento
+                    </a>
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleDeleteRequest();
+                      }}
+                      className="block px-4 py-2 text-sm text-red-400 hover:bg-gray-600"
+                    >
+                      Excluir Lançamento
+                    </a>
+                  </>
+                )}
             </div>
           </div>
         )}

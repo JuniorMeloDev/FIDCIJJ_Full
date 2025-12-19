@@ -7,37 +7,30 @@ import autoTable from 'jspdf-autotable';
 import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
 // Removidos 'fs' e 'path'
 
-// NOVA FUNÇÃO HELPER
 const getBaseURL = () => {
-    // 1. Prioriza a URL de produção que você definiu
-    let baseURL = process.env.NEXT_PUBLIC_APP_URL; 
-
-    // 2. Se não estiver, tenta a URL automática da Vercel (para deploys de preview/dev)
-    if (!baseURL && process.env.VERCEL_URL) {
-        baseURL = `https://${process.env.VERCEL_URL}`;
+    // 1. Prioriza a variavel de ambiente publica
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+        return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
     }
-    
-    // 3. Se ainda não estiver, usa o localhost (ambiente local)
-    if (!baseURL) {
-        baseURL = 'http://localhost:3000';
+    // 2. Vercel URL (sempre https em produção)
+    if (process.env.VERCEL_URL) {
+        return `https://${process.env.VERCEL_URL}`;
     }
-
-    // Remove barra final se houver, para evitar URL duplicada (ex: https://site.com//Logo.png)
-    return baseURL.replace(/\/$/, '');
+    // 3. Fallback local
+    return 'http://localhost:3000';
 };
 
 
-// Função atualizada para buscar logo via URL
+// Função atualizada para buscar logo via URL com tratamento de erro robusto
 const getLogoBase64 = async () => {
     try {
         const baseURL = getBaseURL();
         const logoURL = `${baseURL}/Logo.png`;
         
-        console.log(`[LOG LOGO] Buscando logo de: ${logoURL}`);
-
         const response = await fetch(logoURL);
         if (!response.ok) {
-            throw new Error(`Falha ao buscar logo (${response.status}): ${response.statusText} - URL: ${logoURL}`);
+            console.warn(`[AVISO LOGO] Falha ao buscar logo: ${response.status} ${response.statusText} - ${logoURL}`);
+            return null; // Retorna null sem quebrar a execução
         }
         
         const imageBuffer = await response.arrayBuffer();
@@ -45,8 +38,8 @@ const getLogoBase64 = async () => {
         return `data:image/png;base64,${base64String}`;
 
     } catch (error) {
-        console.error("[ERRO LOGO] Erro ao buscar/converter logo via URL:", error);
-        return null; // Retorna null se falhar
+        console.error("[ERRO LOGO] Erro ao buscar/converter logo via URL (Ignorando logo):", error.message);
+        return null; // Retorna null se falhar, permitindo que o email seja enviado sem logo
     }
 };
 
@@ -105,11 +98,12 @@ const generatePdfBuffer = async (operacao) => {
 // Marcar como async
 export async function POST(request, { params }) {
     try {
+        const { id } = await params; // Aguarda params (Next.js 15+)
+        
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
-
-        const { id } = params;
+        
         const { destinatarios } = await request.json();
 
         if (!destinatarios || destinatarios.length === 0) {
@@ -121,7 +115,11 @@ export async function POST(request, { params }) {
             .select('*, cliente:clientes(*), tipo_operacao:tipos_operacao(*), descontos(*)')
             .eq('id', id)
             .single();
-        if (operacaoError) throw new Error("Operação não encontrada.");
+        
+        if (operacaoError) {
+             console.error(`[DEBUG API] Erro ao buscar operação ${id}:`, operacaoError);
+             throw new Error(`Operação não encontrada (Erro: ${operacaoError.message || operacaoError.code})`);
+        }
 
         const { data: duplicatasData, error: duplicatasError } = await supabase
             .from('duplicatas')

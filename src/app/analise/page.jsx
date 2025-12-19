@@ -17,7 +17,7 @@ export default function AnalisePage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [notification, setNotification] = useState({ message: '', type: '' });
-    
+
     // Modais e Seleção
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [operacaoSelecionada, setOperacaoSelecionada] = useState(null);
@@ -33,14 +33,14 @@ export default function AnalisePage() {
     const [pixConfirmData, setPixConfirmData] = useState(null);
     const [isPixReceiptOpen, setIsPixReceiptOpen] = useState(false);
     const [pixReceiptData, setPixReceiptData] = useState(null);
-    
+
     // Estados de Controle de Fluxo e Dados Temporários
     const [isPreparingPix, setIsPreparingPix] = useState(false); // NOVO: Controla o loading da transição
     const [pendingApprovalPayload, setPendingApprovalPayload] = useState(null);
     const [pendingPartialData, setPendingPartialData] = useState(null);
-    
+
     // Dados cacheados para o Recibo
-    const [cachedClientData, setCachedClientData] = useState(null); 
+    const [cachedClientData, setCachedClientData] = useState(null);
     const [cachedContaMasterData, setCachedContaMasterData] = useState(null);
 
     // Modais Auxiliares
@@ -74,7 +74,7 @@ export default function AnalisePage() {
             setLoading(false);
         }
     };
-    
+
     useEffect(() => {
         const fetchContas = async () => {
             try {
@@ -92,12 +92,12 @@ export default function AnalisePage() {
         setRecompraData(null);
         setIsModalOpen(true);
     };
-    
+
     const handleConfirmRecompra = (data) => {
         if (data && data.credito !== null && data.principal !== null) {
-            setRecompraData({ 
-                ids: data.duplicataIds, 
-                dataLiquidacao: operacaoSelecionada.data_operacao 
+            setRecompraData({
+                ids: data.duplicataIds,
+                dataLiquidacao: operacaoSelecionada.data_operacao
             });
 
             let descontosRecompra = [];
@@ -106,8 +106,8 @@ export default function AnalisePage() {
             if (data.credito > 0) descontosRecompra.push({ id: `rec-cred-${Date.now()}`, descricao: `Crédito Juros Recompra`, valor: -Math.abs(data.credito) });
             if (data.jurosAdicionais > 0) descontosRecompra.push({ id: `rec-juros-${Date.now()}`, descricao: `Juros Recompra`, valor: Math.abs(data.jurosAdicionais) });
             if (data.abatimentos > 0) descontosRecompra.push({ id: `rec-abat-${Date.now()}`, descricao: `Abatimento Recompra`, valor: -Math.abs(data.abatimentos) });
-            
-            setDescontosAdicionais(prev => [ ...prev, ...descontosRecompra ]);
+
+            setDescontosAdicionais(prev => [...prev, ...descontosRecompra]);
             showNotification("Itens de recompra adicionados.", "success");
         }
     };
@@ -120,11 +120,11 @@ export default function AnalisePage() {
     };
 
     // --- LÓGICA CORE: PREPARAÇÃO DOS DADOS (CORRIGIDA) ---
-    
+
     const prepareAndOpenPixConfirm = async (payload, partialData) => {
         // Ativa loading VISUAL (mantendo o modal de aprovação aberto)
-        setIsPreparingPix(true); 
-        
+        setIsPreparingPix(true);
+
         try {
             setPendingApprovalPayload(payload);
             setPendingPartialData(partialData);
@@ -143,7 +143,7 @@ export default function AnalisePage() {
             // 2. DADOS DO PAGADOR (Sua Empresa/Conta Master)
             // Precisamos dos detalhes da conta para pegar o CNPJ do titular
             let contaMasterFull = contasMaster.find(c => String(c.id) === String(payload.conta_bancaria_id));
-            
+
             // Tenta buscar detalhes mais profundos se a conta estiver incompleta
             // (Assumindo que talvez exista um endpoint ou que o objeto conta tenha campos aninhados)
             const dadosPagador = {
@@ -158,7 +158,7 @@ export default function AnalisePage() {
 
             // 3. CÁLCULO DE VALORES
             const totalDescontos = descontosAdicionais.reduce((acc, d) => acc + d.valor, 0);
-            const valorFinal = partialData?.valorDebito 
+            const valorFinal = partialData?.valorDebito
                 ? parseFloat(partialData.valorDebito)
                 : (operacaoSelecionada?.valor_liquido || 0) - totalDescontos;
 
@@ -181,17 +181,17 @@ export default function AnalisePage() {
             }
 
             let tipoChavePix = clienteFull.tipo_chave_pix;
-            
+
             // Se achou uma conta com PIX mas não tinha tipo definido no cliente, pega da conta
             if (contaComPix && (!tipoChavePix || tipoChavePix === 'CPF/CNPJ')) {
-                 if (contaComPix.tipo_chave_pix) tipoChavePix = contaComPix.tipo_chave_pix;
+                if (contaComPix.tipo_chave_pix) tipoChavePix = contaComPix.tipo_chave_pix;
             }
             if (!tipoChavePix) tipoChavePix = 'CPF/CNPJ'; // Fallback final
 
             const pixData = {
                 valor: valorFinal,
-                contaOrigem: contaOrigemDisplay, 
-                favorecido: clienteFull.razao_social || clienteFull.nome, 
+                contaOrigem: contaOrigemDisplay,
+                favorecido: clienteFull.razao_social || clienteFull.nome,
                 chave: chavePix || 'Chave não cadastrada',
                 tipo_chave_pix: tipoChavePix
             };
@@ -200,7 +200,7 @@ export default function AnalisePage() {
 
             // 5. TROCA DE MODAIS (Sem piscar a tela de fundo)
             // Aqui fechamos o modal de parcial explicitamente quando tudo estiver pronto
-            setIsPartialDebitModalOpen(false); 
+            setIsPartialDebitModalOpen(false);
             setIsModalOpen(false); // Garante que o de aprovação também esteja fechado
             setIsPixConfirmOpen(true); // Abre Confirmação PIX
 
@@ -236,8 +236,8 @@ export default function AnalisePage() {
         // ou fechamos se quisermos mostrar loading geral. Vamos manter aberto com loading.
 
         try {
-            const finalPayload = { 
-                ...pendingApprovalPayload, 
+            const finalPayload = {
+                ...pendingApprovalPayload,
                 descontos: descontosAdicionais,
                 valor_debito_parcial: pendingPartialData?.valorDebito || null,
                 data_debito_parcial: pendingPartialData?.dataDebito || null,
@@ -249,14 +249,14 @@ export default function AnalisePage() {
                 headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
                 body: JSON.stringify(finalPayload),
             });
-            
+
             const result = await response.json();
             if (!response.ok) throw new Error(result.message || "Erro ao salvar operação.");
 
             showNotification("Operação finalizada com sucesso!", "success");
             fetchPendentes();
             setIsPixConfirmOpen(false); // Agora sim fecha o modal de confirmação
-            
+
             // --- GERAÇÃO DO COMPROVANTE (RECIBO) ---
             if (pendingApprovalPayload.status === 'Aprovada') {
                 setOperacaoParaEmail({
@@ -269,10 +269,10 @@ export default function AnalisePage() {
                 const pagador = cachedContaMasterData || {};
 
                 // Valor Final
-                const valorFinal = pendingPartialData?.valorDebito 
+                const valorFinal = pendingPartialData?.valorDebito
                     ? parseFloat(pendingPartialData.valorDebito)
                     : (operacaoSelecionada?.valor_liquido || 0) - descontosAdicionais.reduce((acc, d) => acc + d.valor, 0);
-                
+
                 // Normalização CNPJ Recebedor (Evitar ".")
                 const cnpjRecebedor = cliente.cnpj_cpf || cliente.cpf_cnpj || cliente.cnpj || 'Não informado';
                 const chavePixFinal = cliente.chave_pix || cliente.chavePix || (cliente.contasBancarias?.[0]?.chave_pix) || 'Chave não informada';
@@ -283,10 +283,10 @@ export default function AnalisePage() {
                     data: new Date(),
                     transactionId: result.transactionId || `OP-${operacaoSelecionada.id}-${Date.now()}`,
                     descricao: result.descricao || `Pagamento Operação #${operacaoSelecionada.id}`, // Usa a descrição vinda da API (ex: Borderô CTe 123, 456)
-                    
+
                     pagador: {
-                        nome: pagador.nome, 
-                        cnpj: pagador.cnpj, 
+                        nome: pagador.nome,
+                        cnpj: pagador.cnpj,
                         conta: formatDisplayConta(`${pagador.banco} - ${pagador.agencia}/${pagador.conta}`)
                     },
 
@@ -307,40 +307,40 @@ export default function AnalisePage() {
             // Se houve erro na resposta (500), mas a operação foi finalizada no banco (como no caso do erro do log anterior),
             // verificamos o status real da operação para ver se devemos prosseguir.
             console.error("Erro ao processar análise. Tentando verificar se houve sucesso parcial:", err);
-            
+
             let recovered = false;
-            
+
             // Só tenta recuperar se estivéssemos aprovando
             if (pendingApprovalPayload && pendingApprovalPayload.status === 'Aprovada') {
-               try {
-                  const checkRes = await fetch(`/api/operacoes/${operacaoSelecionada.id}`, { headers: getAuthHeader() });
-                  if (checkRes.ok) {
-                      const opAtualizada = await checkRes.json();
-                      if (opAtualizada.status === 'Aprovada') {
-                           // SUCESSO CONFIRMADO! O erro foi apenas no retorno da API (ex: timeout ou bug no final).
-                           console.log("Recuperação bem sucedida! A operação consta como APROVADA no banco.");
-                           recovered = true;
-                           
-                           showNotification("Operação aprovada com aviso! (Erro no retorno da API, mas processamento concluído)", "warning");
-                           fetchPendentes();
-                           setIsPixConfirmOpen(false);
+                try {
+                    const checkRes = await fetch(`/api/operacoes/${operacaoSelecionada.id}`, { headers: getAuthHeader() });
+                    if (checkRes.ok) {
+                        const opAtualizada = await checkRes.json();
+                        if (opAtualizada.status === 'Aprovada') {
+                            // SUCESSO CONFIRMADO! O erro foi apenas no retorno da API (ex: timeout ou bug no final).
+                            console.log("Recuperação bem sucedida! A operação consta como APROVADA no banco.");
+                            recovered = true;
 
-                           // Monta dados do recibo manualmente com o que temos
-                           const cliente = cachedClientData || operacaoSelecionada.cliente || {};
-                           const pagador = cachedContaMasterData || {};
-                           
-                           const valorFinal = pendingPartialData?.valorDebito 
+                            showNotification("Operação aprovada com aviso! (Erro no retorno da API, mas processamento concluído)", "warning");
+                            fetchPendentes();
+                            setIsPixConfirmOpen(false);
+
+                            // Monta dados do recibo manualmente com o que temos
+                            const cliente = cachedClientData || operacaoSelecionada.cliente || {};
+                            const pagador = cachedContaMasterData || {};
+
+                            const valorFinal = pendingPartialData?.valorDebito
                                 ? parseFloat(pendingPartialData.valorDebito)
                                 : (operacaoSelecionada?.valor_liquido || 0) - descontosAdicionais.reduce((acc, d) => acc + d.valor, 0);
 
-                           const dadosComprovante = {
+                            const dadosComprovante = {
                                 valor: valorFinal,
                                 data: new Date(),
                                 transactionId: `REC-${Date.now()}`, // ID Gerado pois perdemos o original do retorno
                                 descricao: `Pagamento Operação #${operacaoSelecionada.id} (Recuperado)`,
                                 pagador: {
-                                    nome: pagador.nome || 'Sua Empresa', 
-                                    cnpj: pagador.cnpj || '', 
+                                    nome: pagador.nome || 'Sua Empresa',
+                                    cnpj: pagador.cnpj || '',
                                     conta: formatDisplayConta(`${pagador.banco || ''} - ${pagador.agencia || ''}/${pagador.conta || ''}`)
                                 },
                                 recebedor: {
@@ -349,19 +349,19 @@ export default function AnalisePage() {
                                     instituicao: cliente.banco || 'Banco Destino',
                                     chavePix: cliente.chave_pix || cliente.chavePix || 'Chave não informada'
                                 }
-                           };
-                           
-                           setOperacaoParaEmail({
+                            };
+
+                            setOperacaoParaEmail({
                                 id: operacaoSelecionada.id,
                                 clienteId: operacaoSelecionada?.cliente?.id
-                           });
-                           setPixReceiptData(dadosComprovante);
-                           setIsPixReceiptOpen(true);
-                      }
-                  }
-               } catch (recErr) {
-                   console.error("Falha na tentativa de recuperação:", recErr);
-               }
+                            });
+                            setPixReceiptData(dadosComprovante);
+                            setIsPixReceiptOpen(true);
+                        }
+                    }
+                } catch (recErr) {
+                    console.error("Falha na tentativa de recuperação:", recErr);
+                }
             }
 
             if (!recovered) {
@@ -375,7 +375,7 @@ export default function AnalisePage() {
             setPendingPartialData(null);
         }
     };
-    
+
     // Função para salvar REPROVAÇÕES (sem Pix)
     const handleSalvarImediato = async (operacaoId, payload) => {
         setIsSaving(true);
@@ -387,11 +387,11 @@ export default function AnalisePage() {
                 body: JSON.stringify(finalPayload),
             });
             if (!response.ok) throw new Error("Erro ao atualizar.");
-            
+
             showNotification("Status atualizado!", "success");
             fetchPendentes();
             setIsModalOpen(false);
-        } catch(e) { showNotification(e.message, "error"); } finally { setIsSaving(false); }
+        } catch (e) { showNotification(e.message, "error"); } finally { setIsSaving(false); }
     };
 
     const handleSendEmail = async (destinatarios) => {
@@ -403,10 +403,21 @@ export default function AnalisePage() {
                 headers: { "Content-Type": "application/json", ...getAuthHeader() },
                 body: JSON.stringify({ destinatarios }),
             });
-            if (!response.ok) throw new Error("Erro envio email.");
-            showNotification("E-mail enviado!", "success");
-        } catch (err) { showNotification(err.message, "error"); } finally {
-            setIsSendingEmail(false); setIsEmailModalOpen(false); setOperacaoParaEmail(null);
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || "Erro ao enviar e-mail (Status desconhecido).");
+            }
+
+            showNotification(data.message || "E-mail enviado!", "success");
+        } catch (err) {
+            console.error("Erro handleSendEmail:", err);
+            showNotification(err.message, "error");
+        } finally {
+            setIsSendingEmail(false);
+            setIsEmailModalOpen(false);
+            setOperacaoParaEmail(null);
         }
     };
 
@@ -415,36 +426,36 @@ export default function AnalisePage() {
     return (
         <main className="h-full p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '', type: '' })} />
-            
+
             {/* Modal de Confirmação do Pix */}
-            <PixConfirmationModal 
-                isOpen={isPixConfirmOpen} 
-                onClose={() => setIsPixConfirmOpen(false)} 
-                onConfirm={handleSalvarAnalise} 
-                data={pixConfirmData} 
-                isSending={isSaving} 
+            <PixConfirmationModal
+                isOpen={isPixConfirmOpen}
+                onClose={() => setIsPixConfirmOpen(false)}
+                onConfirm={handleSalvarAnalise}
+                data={pixConfirmData}
+                isSending={isSaving}
             />
-            
+
             {/* Modal de Recibo */}
-            <PixReceiptModal 
-                isOpen={isPixReceiptOpen} 
-                onClose={handleClosePixReceipt} 
-                receiptData={pixReceiptData} 
+            <PixReceiptModal
+                isOpen={isPixReceiptOpen}
+                onClose={handleClosePixReceipt}
+                receiptData={pixReceiptData}
             />
 
             <RecompraModal isOpen={isRecompraModalOpen} onClose={() => setIsRecompraModalOpen(false)} onConfirm={handleConfirmRecompra} dataNovaOperacao={operacaoSelecionada?.data_operacao} clienteId={operacaoSelecionada?.cliente?.id} />
-            
+
             {/* Modal de Aprovação (Principal) */}
-            <AprovacaoOperacaoModal 
-                isOpen={isModalOpen} 
+            <AprovacaoOperacaoModal
+                isOpen={isModalOpen}
                 onClose={() => !isPreparingPix && setIsModalOpen(false)} // Impede fechar se estiver carregando Pix
-                onConfirm={handleApprovalConfirmation} 
+                onConfirm={handleApprovalConfirmation}
                 isSaving={isSaving || isPreparingPix} // Mostra loading no botão confirmar
-                operacao={operacaoSelecionada} 
+                operacao={operacaoSelecionada}
                 contasBancarias={contasMaster}
-                onAddDesconto={() => setIsDescontoModalOpen(true)} 
+                onAddDesconto={() => setIsDescontoModalOpen(true)}
                 onRecompraClick={() => setIsRecompraModalOpen(true)}
-                descontosAdicionais={descontosAdicionais} 
+                descontosAdicionais={descontosAdicionais}
                 setDescontosAdicionais={setDescontosAdicionais}
             />
 
@@ -458,33 +469,33 @@ export default function AnalisePage() {
             </motion.header>
 
             <div className="flex-grow bg-gray-800 p-4 rounded-lg shadow-md overflow-auto">
-                {loading ? <p className="text-center py-10">Carregando...</p> : 
-                 error ? <p className="text-red-400 text-center py-10">{error}</p> :
-                 operacoes.length === 0 ? <p className="text-center py-10 text-gray-400">Nenhuma operação pendente de análise.</p> :
-                (
-                    <table className="min-w-full divide-y divide-gray-700">
-                        <thead className="bg-gray-700">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Data</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Cliente</th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase">Valor Líquido</th>
-                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase">Ação</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-gray-800 divide-y divide-gray-700">
-                            {operacoes.map((op) => (
-                                <tr key={op.id} className="hover:bg-gray-700">
-                                    <td className="px-6 py-4">{formatDate(op.data_operacao)}</td>
-                                    <td className="px-6 py-4">{op.cliente.nome}</td>
-                                    <td className="px-6 py-4 text-right">{formatBRLNumber(op.valor_liquido)}</td>
-                                    <td className="px-6 py-4 text-center">
-                                        <button onClick={() => handleAnalisarClick(op)} className="bg-orange-500 text-white font-semibold py-1 px-3 rounded-md text-sm hover:bg-orange-600">Analisar</button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
+                {loading ? <p className="text-center py-10">Carregando...</p> :
+                    error ? <p className="text-red-400 text-center py-10">{error}</p> :
+                        operacoes.length === 0 ? <p className="text-center py-10 text-gray-400">Nenhuma operação pendente de análise.</p> :
+                            (
+                                <table className="min-w-full divide-y divide-gray-700">
+                                    <thead className="bg-gray-700">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Data</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Cliente</th>
+                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase">Valor Líquido</th>
+                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase">Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-gray-800 divide-y divide-gray-700">
+                                        {operacoes.map((op) => (
+                                            <tr key={op.id} className="hover:bg-gray-700">
+                                                <td className="px-6 py-4">{formatDate(op.data_operacao)}</td>
+                                                <td className="px-6 py-4">{op.cliente.nome}</td>
+                                                <td className="px-6 py-4 text-right">{formatBRLNumber(op.valor_liquido)}</td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <button onClick={() => handleAnalisarClick(op)} className="bg-orange-500 text-white font-semibold py-1 px-3 rounded-md text-sm hover:bg-orange-600">Analisar</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
             </div>
         </main>
     );

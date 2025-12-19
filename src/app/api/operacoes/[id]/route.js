@@ -17,7 +17,7 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ message: "Acesso negado" }, { status: 403 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const { status, conta_bancaria_id, descontos, valor_debito_parcial, data_debito_parcial, efetuar_pix, recompraData } = await request.json();
 
     const { data: operacao, error: fetchError } = await supabase

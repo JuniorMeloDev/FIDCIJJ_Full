@@ -9,7 +9,7 @@ export async function GET(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { clienteId } = params;
+        const { clienteId } = await params;
 
         const { data, error } = await supabase
             .from('users')
