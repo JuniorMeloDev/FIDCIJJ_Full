@@ -11,7 +11,7 @@ import Logo from '../../../public/Logo.png';
 // Função auxiliar para processar dados da Curva ABC
 const processAbcData = (data) => {
     if (!data || data.length === 0) return [];
-    
+
     const total = data.reduce((sum, item) => sum + (item.valor_total || 0), 0);
     let cumulative = 0;
 
@@ -21,7 +21,7 @@ const processAbcData = (data) => {
         let classe = 'C';
         if (acumulado <= 80) classe = 'A';
         else if (acumulado <= 95) classe = 'B';
-        
+
         return {
             name: item.nome,
             valor: item.valor_total,
@@ -84,7 +84,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         const { name, value } = e.target;
         setFilters(prev => ({ ...prev, [name]: value }));
     };
-    
+
     const clearFilters = () => setFilters(initialState);
 
     const handleAutocompleteSelect = (name, item) => {
@@ -98,7 +98,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
     const handleGenerateReport = async () => {
         setIsGenerating(true);
         const params = new URLSearchParams();
-        
+
         // Mapeamento dos tipos de relatório para os endpoints da API
         const endpointMap = {
             fluxoCaixa: 'fluxo-caixa',
@@ -109,7 +109,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         const endpoint = endpointMap[reportType];
 
         Object.entries(filters).forEach(([key, value]) => {
-            if(value && value !== 'Todos' && key !== 'clienteNome') params.append(key, value);
+            if (value && value !== 'Todos' && key !== 'clienteNome') params.append(key, value);
         });
 
         try {
@@ -117,11 +117,11 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 headers: getAuthHeader()
             });
             if (!response.ok) {
-                 const errorData = await response.json();
-                 throw new Error(errorData.message || 'Não foi possível buscar os dados para o relatório.');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Não foi possível buscar os dados para o relatório.');
             }
             const data = await response.json();
-            
+
             // Validação se existem dados antes de gerar
             const hasData = (type, responseData) => {
                 if (type === 'totalOperado') return responseData && (responseData.clientes?.length > 0 || responseData.sacados?.length > 0);
@@ -130,7 +130,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             };
 
             if (!hasData(reportType, data)) {
-                 alert("Nenhum dado encontrado para os filtros selecionados.");
+                alert("Nenhum dado encontrado para os filtros selecionados.");
             } else {
                 if (format === 'pdf') {
                     generatePdf(data, reportType, filters);
@@ -141,8 +141,8 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             }
 
         } catch (error) {
-          console.error('Erro ao gerar relatório:', error);
-          alert(`Erro ao gerar relatório: ${error.message}`);
+            console.error('Erro ao gerar relatório:', error);
+            alert(`Erro ao gerar relatório: ${error.message}`);
         } finally {
             setIsGenerating(false);
         }
@@ -150,7 +150,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
 
     const generatePdf = (data, type, currentFilters) => {
         const doc = new jsPDF({ orientation: type === 'fluxoCaixa' || type === 'duplicatas' ? 'landscape' : 'portrait' });
-        
+
         if (logoBase64) {
             const logoWidth = 40;
             const logoHeight = logoWidth / 2.3;
@@ -158,7 +158,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         }
         const pageWidth = doc.internal.pageSize.getWidth();
         doc.setFontSize(18);
-        
+
         const titles = {
             fluxoCaixa: 'Fluxo de Caixa',
             duplicatas: 'Consulta de Duplicatas',
@@ -167,7 +167,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         };
 
         doc.text(`Relatório de ${titles[type]}`, pageWidth - 14, 22, { align: 'right' });
-        
+
         let filterText = 'Filtros: ';
         if (currentFilters.dataInicio || currentFilters.dataFim) {
             filterText += `Período de ${formatDate(currentFilters.dataInicio) || '...'} a ${formatDate(currentFilters.dataFim) || '...'}. `;
@@ -177,7 +177,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             if (currentFilters.clienteNome) filterText += `Cedente: ${currentFilters.clienteNome}. `;
             if (currentFilters.sacado) filterText += `Sacado: ${currentFilters.sacado}. `;
         }
-        
+
         doc.setFontSize(8);
         doc.text(filterText, 14, 30);
 
@@ -187,14 +187,14 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 head = [['Data', 'Descrição', 'Conta', 'Categoria', 'Valor']];
                 body = data.map(row => [formatDate(row.data_movimento), row.descricao, row.conta_bancaria, row.categoria, formatBRLNumber(row.valor)]);
                 autoTable(doc, { startY: 35, head, body });
-                
+
                 const totaisPorCategoria = data.reduce((acc, row) => {
                     const { categoria, valor } = row;
                     if (!acc[categoria]) acc[categoria] = 0;
                     acc[categoria] += valor;
                     return acc;
                 }, {});
-                
+
                 let finalY = doc.lastAutoTable.finalY + 15;
                 doc.setFontSize(12);
                 doc.text('Resumo por Categoria', 14, finalY);
@@ -207,7 +207,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                         cardX = 14;
                         finalY += cardHeight + cardMargin;
                     }
-                    doc.setFillColor(241, 241, 241); 
+                    doc.setFillColor(241, 241, 241);
                     doc.roundedRect(cardX, finalY + 5, cardWidth, cardHeight, 3, 3, 'F');
                     doc.setTextColor(50, 50, 50);
                     doc.setFontSize(10);
@@ -222,7 +222,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             case 'duplicatas':
                 head = [['Data Op.', 'NF/CT-e', 'Cedente', 'Sacado', 'Venc.', 'Status', 'Juros Op.', 'Juros Mora', 'Valor Bruto']];
                 body = data.map(row => [
-                    formatDate(row.data_operacao), row.nf_cte, row.empresa_cedente, 
+                    formatDate(row.data_operacao), row.nf_cte, row.empresa_cedente,
                     row.cliente_sacado, formatDate(row.data_vencimento), row.status_recebimento,
                     formatBRLNumber(row.valor_juros || 0), formatBRLNumber(row.juros_mora || 0), formatBRLNumber(row.valor_bruto)
                 ]);
@@ -230,7 +230,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 const totalJurosOp = data.reduce((sum, row) => sum + (row.valor_juros || 0), 0);
                 const totalJurosMora = data.reduce((sum, row) => sum + (row.juros_mora || 0), 0);
                 const totalJuros = totalJurosOp + totalJurosMora;
-                
+
                 autoTable(doc, { startY: 35, head: head, body: body });
                 autoTable(doc, {
                     startY: doc.lastAutoTable.finalY,
@@ -247,7 +247,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 doc.text(`Total de Juros: ${formatBRLNumber(data.totalJuros)}`, 14, 45);
                 doc.text(`Total de Despesas: ${formatBRLNumber(data.totalDespesas)}`, 14, 50);
                 doc.text(`Lucro Líquido: ${formatBRLNumber(data.lucroLiquido)}`, 14, 55);
-                
+
                 if (processedCedentes.length > 0) {
                     autoTable(doc, { startY: 65, head: [['Classe', 'Cedente', 'Valor', '% Acumulado']], body: processedCedentes.map(c => [c.classe, c.name, formatBRLNumber(c.valor), `${c.acumulado.toFixed(2)}%`]) });
                 }
@@ -262,13 +262,13 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                     startY: 35,
                     head: [['Descrição', 'Valor']],
                     body: [
-                        [{ content: 'RECEITAS OPERACIONAIS', colSpan: 2, styles: { fillColor: [220, 220, 220], fontStyle: 'bold', textColor: [0,0,0] } }],
+                        [{ content: 'RECEITAS OPERACIONAIS', colSpan: 2, styles: { fillColor: [220, 220, 220], fontStyle: 'bold', textColor: [0, 0, 0] } }],
                         ...data.receitas.map(r => [r.descricao, formatBRLNumber(r.valor)]),
                         [{ content: 'TOTAL DE RECEITAS', styles: { fontStyle: 'bold' } }, { content: formatBRLNumber(data.totalReceitas), styles: { fontStyle: 'bold', textColor: [0, 100, 0] } }],
-                        
+
                         [{ content: '', colSpan: 2, styles: { fillColor: [255, 255, 255] } }], // Espaço
 
-                        [{ content: 'DESPESAS OPERACIONAIS', colSpan: 2, styles: { fillColor: [220, 220, 220], fontStyle: 'bold', textColor: [0,0,0] } }],
+                        [{ content: 'DESPESAS OPERACIONAIS', colSpan: 2, styles: { fillColor: [220, 220, 220], fontStyle: 'bold', textColor: [0, 0, 0] } }],
                         ...data.despesas.map(d => [d.descricao, `(${formatBRLNumber(d.valor)})`]),
                         [{ content: 'TOTAL DE DESPESAS', styles: { fontStyle: 'bold' } }, { content: `(${formatBRLNumber(data.totalDespesas)})`, styles: { fontStyle: 'bold', textColor: [200, 0, 0] } }],
 
@@ -295,20 +295,20 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 ws_data = data.map(row => ({ Data: formatDate(row.data_movimento), Descrição: row.descricao, Conta: row.conta_bancaria, Categoria: row.categoria, Valor: row.valor }));
                 break;
             case 'duplicatas':
-                ws_data = data.map(row => ({ 'Data Op.': formatDate(row.data_operacao), 'NF/CT-e': row.nf_cte, 'Cedente': row.empresa_cedente, 'Sacado': row.cliente_sacado, 'Vencimento': formatDate(row.data_vencimento), 'Status': row.status_recebimento, 'Juros Op.': row.valor_juros || 0, 'Juros Mora': row.juros_mora || 0, 'Valor Bruto': row.valor_bruto }));
+                ws_data = data.map(row => ({ 'Data Op.': formatDate(row.data_operacao), 'Tipo de Operação': row.tipo_operacao_nome, 'NF/CT-e': row.nf_cte, 'Cedente': row.empresa_cedente, 'Sacado': row.cliente_sacado, 'Vencimento': formatDate(row.data_vencimento), 'Status': row.status_recebimento, 'Juros Op.': row.valor_juros || 0, 'Juros Mora': row.juros_mora || 0, 'Valor Bruto': row.valor_bruto }));
                 break;
             case 'totalOperado':
-                const summary = [ { Item: 'Total Operado no Período', Valor: data.valorOperadoNoMes }, { Item: 'Total de Juros', Valor: data.totalJuros }, { Item: 'Total de Despesas', Valor: data.totalDespesas }, { Item: 'Lucro Líquido', Valor: data.lucroLiquido } ];
+                const summary = [{ Item: 'Total Operado no Período', Valor: data.valorOperadoNoMes }, { Item: 'Total de Juros', Valor: data.totalJuros }, { Item: 'Total de Despesas', Valor: data.totalDespesas }, { Item: 'Lucro Líquido', Valor: data.lucroLiquido }];
                 const cedentesABC = processAbcData(data.clientes).map(c => ({ Classe: c.classe, Cedente: c.name, Valor: c.valor, '% Acumulado': c.acumulado / 100 }));
                 const sacadosABC = processAbcData(data.sacados).map(s => ({ Classe: s.classe, Sacado: s.name, Valor: s.valor, '% Acumulado': s.acumulado / 100 }));
-                
+
                 const ws = XLSX.utils.json_to_sheet(summary);
                 XLSX.utils.sheet_add_json(ws, cedentesABC, { origin: 'A7', header: ['Classe', 'Cedente', 'Valor', '% Acumulado'] });
                 XLSX.utils.sheet_add_json(ws, sacadosABC, { origin: -1, header: ['Classe', 'Sacado', 'Valor', '% Acumulado'] });
                 XLSX.utils.book_append_sheet(wb, ws, 'Análise ABC');
                 XLSX.writeFile(wb, `relatorio_${type}.xlsx`);
                 return;
-            
+
             case 'dre':
                 ws_data = [
                     { Descrição: 'RECEITAS', Valor: '' },
@@ -316,14 +316,14 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                     { Descrição: 'TOTAL DE RECEITAS', Valor: data.totalReceitas },
                     { Descrição: '', Valor: '' },
                     { Descrição: 'DESPESAS', Valor: '' },
-                    ...data.despesas.map(d => ({ Descrição: d.descricao, Valor: d.valor * -1 })), 
+                    ...data.despesas.map(d => ({ Descrição: d.descricao, Valor: d.valor * -1 })),
                     { Descrição: 'TOTAL DE DESPESAS', Valor: data.totalDespesas * -1 },
                     { Descrição: '', Valor: '' },
                     { Descrição: 'RESULTADO LÍQUIDO', Valor: data.lucroLiquido }
                 ];
                 break;
         }
-        
+
         if (ws_data) {
             const ws = XLSX.utils.json_to_sheet(ws_data);
             XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
@@ -332,7 +332,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
     };
 
     if (!isOpen) return null;
-    
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
             <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg text-white">
@@ -356,16 +356,16 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                             </select>
                         </div>
                     </div>
-                    
+
                     {/* Campos de Filtro */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-700 pt-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-300">Data Início</label>
-                            <input type="date" name="dataInicio" value={filters.dataInicio} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
+                            <input type="date" name="dataInicio" value={filters.dataInicio} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300">Data Fim</label>
-                            <input type="date" name="dataFim" value={filters.dataFim} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm"/>
+                            <input type="date" name="dataFim" value={filters.dataFim} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm" />
                         </div>
 
                         {/* Filtros Extras: Escondidos para DRE e Fluxo de Caixa tem seus próprios */}
@@ -380,11 +380,11 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300">Cedente</label>
-                                    <AutocompleteSearch name="clienteNome" value={filters.clienteNome} onChange={handleFilterChange} onSelect={(c) => handleAutocompleteSelect('cliente', c)} fetchSuggestions={fetchClientes} placeholder="Todos"/>
+                                    <AutocompleteSearch name="clienteNome" value={filters.clienteNome} onChange={handleFilterChange} onSelect={(c) => handleAutocompleteSelect('cliente', c)} fetchSuggestions={fetchClientes} placeholder="Todos" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300">Sacado</label>
-                                    <AutocompleteSearch name="sacado" value={filters.sacado} onChange={handleFilterChange} onSelect={(s) => handleAutocompleteSelect('sacado', s)} fetchSuggestions={fetchSacados} placeholder="Todos"/>
+                                    <AutocompleteSearch name="sacado" value={filters.sacado} onChange={handleFilterChange} onSelect={(s) => handleAutocompleteSelect('sacado', s)} fetchSuggestions={fetchSacados} placeholder="Todos" />
                                 </div>
                             </>
                         )}
@@ -411,7 +411,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                                         <option value="Transferencia Recebida">Transferência Recebida</option>
                                     </select>
                                 </div>
-                                 <div>
+                                <div>
                                     <label className="block text-sm font-medium text-gray-300">Tipo</label>
                                     <select name="tipoValor" value={filters.tipoValor} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
                                         <option value="Todos">Todos</option>

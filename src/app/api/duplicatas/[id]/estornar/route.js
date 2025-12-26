@@ -8,7 +8,7 @@ export async function POST(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params; // ID da Duplicata
+        const { id } = await params; // ID da Duplicata
 
         // 1. Executa a função de banco (RPC) que volta a duplicata para 'Pendente'
         const { error: rpcError } = await supabase.rpc('estornar_liquidacao', { p_duplicata_id: id });
