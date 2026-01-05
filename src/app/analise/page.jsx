@@ -172,20 +172,38 @@ export default function AnalisePage() {
             }
 
             // Lógica melhorada para chave pix
-            // Tenta achar a chave e o tipo correspondente na lista de contas do cliente se não tiver explícito
-            let chavePix = clienteFull.chave_pix || clienteFull.chavePix;
-            // Tenta achar nas contas
-            const contaComPix = clienteFull.contasBancarias?.find(c => c.chave_pix);
-            if (!chavePix && contaComPix) {
-                chavePix = contaComPix.chave_pix;
+            let chavePix = '';
+            let tipoChavePix = '';
+
+            // Se veio um ID de conta específico do modal (selecionado pelo usuário)
+            if (payload?.pix_account_id) {
+                // Procura nas contas do cliente (clienteFull.contasBancarias ou contas_bancarias)
+                const contasC = clienteFull.contasBancarias || clienteFull.contas_bancarias || [];
+                // Precisamos garantir comparação de string/number
+                const contaSelected = contasC.find(c => String(c.id) === String(payload.pix_account_id));
+
+                if (contaSelected) {
+                    chavePix = contaSelected.chave_pix || contaSelected.chavePix;
+                    tipoChavePix = contaSelected.tipo_chave_pix || contaSelected.tipoChavePix;
+                }
             }
 
-            let tipoChavePix = clienteFull.tipo_chave_pix;
+            // Fallback: Se não achou pelo ID (ou não veio ID), tenta a lógica antiga "inteligente"
+            if (!chavePix) {
+                // Tenta achar nas contas a primeira que tiver chave
+                const contasC = clienteFull.contasBancarias || clienteFull.contas_bancarias || [];
+                const contaComPix = contasC.find(c => c.chave_pix);
 
-            // Se achou uma conta com PIX mas não tinha tipo definido no cliente, pega da conta
-            if (contaComPix && (!tipoChavePix || tipoChavePix === 'CPF/CNPJ')) {
-                if (contaComPix.tipo_chave_pix) tipoChavePix = contaComPix.tipo_chave_pix;
+                if (contaComPix) {
+                    chavePix = contaComPix.chave_pix;
+                    tipoChavePix = contaComPix.tipo_chave_pix || contaComPix.tipoChavePix;
+                } else {
+                    // Último caso: dados soltos no cliente
+                    chavePix = clienteFull.chave_pix || clienteFull.chavePix;
+                    tipoChavePix = clienteFull.tipo_chave_pix;
+                }
             }
+
             if (!tipoChavePix) tipoChavePix = 'CPF/CNPJ'; // Fallback final
 
             const pixData = {
@@ -275,7 +293,25 @@ export default function AnalisePage() {
 
                 // Normalização CNPJ Recebedor (Evitar ".")
                 const cnpjRecebedor = cliente.cnpj_cpf || cliente.cpf_cnpj || cliente.cnpj || 'Não informado';
-                const chavePixFinal = cliente.chave_pix || cliente.chavePix || (cliente.contasBancarias?.[0]?.chave_pix) || 'Chave não informada';
+
+                // --- CORREÇÃO: Usar a chave selecionada no payload ---
+                let chavePixFinal = cliente.chave_pix || cliente.chavePix;
+                let instituicaoFinal = cliente.banco || (cliente.contasBancarias?.[0]?.banco);
+
+                if (pendingApprovalPayload.pix_account_id) {
+                    const contasC = cliente.contasBancarias || cliente.contas_bancarias || [];
+                    const contaSelected = contasC.find(c => String(c.id) === String(pendingApprovalPayload.pix_account_id));
+                    if (contaSelected) {
+                        chavePixFinal = contaSelected.chave_pix || contaSelected.chavePix;
+                        instituicaoFinal = contaSelected.banco;
+                    }
+                }
+
+                // Fallback se ainda não tiver chave (pega a primeira)
+                if (!chavePixFinal) {
+                    chavePixFinal = (cliente.contasBancarias?.[0]?.chave_pix) || 'Chave não informada';
+                }
+                // --- FIM CORREÇÃO ---
 
                 // Dados do Recibo
                 const dadosComprovante = {

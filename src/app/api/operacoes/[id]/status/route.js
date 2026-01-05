@@ -87,7 +87,20 @@ export async function PUT(request, props) {
       if (efetuar_pix) {
           const nomeBanco = conta.banco.toLowerCase();
           const { data: contasCliente } = await supabase.from('contas_bancarias').select('*').eq('cliente_id', operacao.cliente.id);
-          const contaDestino = contasCliente.find(c => c.chave_pix);
+          
+          let contaDestino = null;
+
+          // --- CORREÇÃO: Usar a chave selecionada pelo usuário se houver ---
+          // Recebemos o pix_account_id do frontend (body)
+          if (body.pix_account_id) {
+             contaDestino = contasCliente.find(c => String(c.id) === String(body.pix_account_id));
+          }
+
+          // Fallback: Se não veio ID ou não achou, usa a lógica antiga (procura a primeira com chave)
+          if (!contaDestino || !contaDestino.chave_pix) {
+             contaDestino = contasCliente.find(c => c.chave_pix);
+          }
+          // --- FIM DA CORREÇÃO ---
 
           if (!contaDestino || !contaDestino.chave_pix) {
               throw new Error(`Cliente ${operacao.cliente.nome} não possui chave PIX cadastrada para recebimento.`);
