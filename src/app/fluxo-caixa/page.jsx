@@ -1188,7 +1188,22 @@ export default function FluxoDeCaixaPage() {
                                     {formatDate(mov.dataMovimento)}
                                   </td>
                                   <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle">
-                                    {mov.descricao}
+                                    {(() => {
+                                      const isTransporte = mov.operacao?.cliente?.ramo_de_atividade === "Transportes";
+
+                                      if (mov.descricao.startsWith("Recebimento")) {
+                                        const numeroOriginal = mov.descricao.replace("Recebimento", "").trim();
+
+                                        if (isTransporte) {
+                                          const numeroCte = numeroOriginal.split('.')[0];
+                                          return `Recebimento CT-e ${numeroCte}`;
+                                        } else {
+                                          return `Recebimento NF ${numeroOriginal}`;
+                                        }
+                                      }
+
+                                      return mov.descricao;
+                                    })()}
                                   </td>
                                   <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
                                     {formatDisplayConta(mov.contaBancaria)}

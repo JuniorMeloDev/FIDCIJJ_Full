@@ -44,10 +44,10 @@ export async function GET(request) {
       .from('duplicatas')
       .select(`
         id, nf_cte, data_vencimento, valor_bruto, valor_juros, cliente_sacado,
-        operacao:operacoes!inner(
-          id, valor_liquido, valor_total_bruto, valor_total_juros,
-          cliente:clientes(nome), tipo_operacao:tipos_operacao(nome)
-        )
+          operacao:operacoes!inner(
+            id, valor_liquido, valor_total_bruto, valor_total_juros,
+            cliente:clientes(nome, ramo_de_atividade), tipo_operacao:tipos_operacao(nome)
+          )
       `)
       .eq('operacao.status', 'Aprovada')
       .eq('status_recebimento', 'Pendente')

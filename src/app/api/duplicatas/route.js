@@ -10,24 +10,7 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        // A consulta agora busca todos os dados da operação e do tipo de operação associado,
-        // que são necessários para a lógica de juros no frontend.
-        let { data: duplicatas, error } = await supabase
-            .from('duplicatas')
-            .select(`
-                *,
-                operacao:operacoes (
-                    *,
-                    cliente:clientes ( nome, ramo_de_atividade ),
-                    tipo_operacao:tipos_operacao ( * )
-                ),
-                sacado:sacados ( id, nome, uf, matriz_id )
-            `)
-            .eq('operacao.status', 'Aprovada');
-
-        if (error) throw error;
-
-        // Os filtros permanecem os mesmos
+        // Filtros (Params)
         const sacadoFilter = searchParams.get('sacado');
         const sacadoIdFilter = searchParams.get('sacadoId');
         const statusFilter = searchParams.get('status');
@@ -38,28 +21,107 @@ export async function GET(request) {
         const nfCteFilter = searchParams.get('nfCte');
         const clienteIdFilter = searchParams.get('clienteId');
         const tipoOperacaoIdFilter = searchParams.get('tipoOperacaoId');
+        const sortKey = searchParams.get('sort');
+        const sortDirection = searchParams.get('direction') || 'DESC';
 
-        const filteredData = duplicatas.filter(dup => {
-            if (!dup.operacao) return false;
-            
-            if (sacadoIdFilter) {
-                if (String(dup.sacado_id) !== sacadoIdFilter) return false;
-            } else if (sacadoFilter) {
-                if (!dup.cliente_sacado.toLowerCase().includes(sacadoFilter.toLowerCase())) return false;
-            }
+        // Inicia a query base
+        // Nota: Usamos !inner em operações para garantir que os filtros na tabela relacionada funcionem corretamente
+        // e filtrem as linhas da tabela principal (duplicatas).
+        let query = supabase
+            .from('duplicatas')
+            .select(`
+                *,
+                operacao:operacoes!inner (
+                    *,
+                    cliente:clientes ( nome, ramo_de_atividade ),
+                    tipo_operacao:tipos_operacao ( * )
+                ),
+                sacado:sacados ( id, nome, uf, matriz_id )
+            `);
 
-            if (statusFilter && statusFilter !== 'Todos' && dup.status_recebimento !== statusFilter) return false;
-            if (dataOpInicio && dup.data_operacao < dataOpInicio) return false;
-            if (dataOpFim && dup.data_operacao > dataOpFim) return false;
-            if (dataVencInicio && dup.data_vencimento < dataVencInicio) return false;
-            if (dataVencFim && dup.data_vencimento > dataVencFim) return false;
-            if (nfCteFilter && !dup.nf_cte.includes(nfCteFilter)) return false;
-            if (clienteIdFilter && String(dup.operacao.cliente_id) !== clienteIdFilter) return false;
-            if (tipoOperacaoIdFilter && String(dup.operacao.tipo_operacao_id) !== tipoOperacaoIdFilter) return false;
-            return true;
-        });
+        // Aplica Filtro Base (Status da Operação)
+        query = query.eq('operacao.status', 'Aprovada');
+
+        // --- Aplicação dos Filtros Dinâmicos (Server-Side) ---
+
+        // 1. Filtro de Sacado
+        if (sacadoIdFilter) {
+            query = query.eq('sacado_id', sacadoIdFilter);
+        } else if (sacadoFilter) {
+            // Filtra pelo nome gravado na duplicata (performance melhor que join)
+            query = query.ilike('cliente_sacado', `%${sacadoFilter}%`);
+        }
+
+        // 2. Filtro de Status de Recebimento
+        if (statusFilter && statusFilter !== 'Todos') {
+            query = query.eq('status_recebimento', statusFilter);
+        }
+
+        // 3. Filtros de Data de Operação (Range)
+        if (dataOpInicio) {
+            query = query.gte('data_operacao', dataOpInicio);
+        }
+        if (dataOpFim) {
+            query = query.lte('data_operacao', dataOpFim);
+        }
+
+        // 4. Filtros de Data de Vencimento (Range)
+        if (dataVencInicio) {
+            query = query.gte('data_vencimento', dataVencInicio);
+        }
+        if (dataVencFim) {
+           query = query.lte('data_vencimento', dataVencFim);
+        }
+
+        // 5. Filtro de NF/CT-e
+        if (nfCteFilter) {
+            query = query.ilike('nf_cte', `%${nfCteFilter}%`);
+        }
+
+        // 6. Filtro de Cliente (Cedente) - Via Operação
+        if (clienteIdFilter) {
+            query = query.eq('operacao.cliente_id', clienteIdFilter);
+        }
+
+        // 7. Filtro de Tipo de Operação - Via Operação
+        if (tipoOperacaoIdFilter) {
+            query = query.eq('operacao.tipo_operacao_id', tipoOperacaoIdFilter);
+        }
+
+        // --- Ordenação e Paginação ---
         
-        let formattedData = filteredData.map(d => ({
+        // Mapeamento de chaves de ordenação do frontend para colunas do banco
+        const sortMap = {
+            'dataOperacao': 'data_operacao',
+            'nfCte': 'nf_cte',
+            'valorBruto': 'valor_bruto',
+            'valorJuros': 'valor_juros',
+            'dataVencimento': 'data_vencimento',
+            'clienteSacado': 'cliente_sacado',
+            // Para colunas aninhadas (cedente), o sort padrão do SB não funciona direto simples assim em todas libs.
+            // Mas vamos manter o padrão 'id' desc como secundário sempre.
+        };
+
+        const dbSortColumn = sortMap[sortKey];
+        
+        if (dbSortColumn) {
+             query = query.order(dbSortColumn, { ascending: sortDirection === 'ASC' });
+        } else {
+             // Default sort
+             query = query.order('id', { ascending: false });
+        }
+
+        // Aumentamos o limite para garantir retorno suficiente da busca filtrada
+        // Agora o limite se aplica *ao resultado da busca*, não à base de busca.
+        query = query.limit(2000);
+
+        // Executa a query
+        const { data: duplicatas, error } = await query;
+
+        if (error) throw error;
+
+        // Formatação do Retorno
+        const formattedData = duplicatas.map(d => ({
             id: d.id,
             operacaoId: d.operacao_id,
             clienteId: d.operacao?.cliente_id,
@@ -76,22 +138,18 @@ export async function GET(request) {
             contaLiquidacao: d.conta_liquidacao,
             sacado_id: d.sacado_id,
             sacadoInfo: d.sacado,
-            operacao: d.operacao, // Passa o objeto completo da operação para o frontend
+            operacao: d.operacao,
             banco_emissor_boleto: d.banco_emissor_boleto,
         }));
 
-        const sortKey = searchParams.get('sort');
-        const sortDirection = searchParams.get('direction');
-
-        if (sortKey && sortDirection) {
+        // Se houver ordenação complexa (ex: Cedente) que não foi feita no banco, 
+        // fazemos em memória aqui (apenas para os X retornados).
+        // Cedente é 'operacao.cliente.nome', difícil ordenar direto na query sem join explícito complexo.
+        if (sortKey === 'empresaCedente') {
             formattedData.sort((a, b) => {
-                const valA = a[sortKey];
-                const valB = b[sortKey];
-                if (valA === null || valA === undefined) return 1;
-                if (valB === null || valB === undefined) return -1;
-                if (valA < valB) return sortDirection === 'ASC' ? -1 : 1;
-                if (valA > valB) return sortDirection === 'ASC' ? 1 : -1;
-                return 0;
+                 const nomeA = a.empresaCedente || '';
+                 const nomeB = b.empresaCedente || '';
+                 return sortDirection === 'ASC' ? nomeA.localeCompare(nomeB) : nomeB.localeCompare(nomeA);
             });
         }
 

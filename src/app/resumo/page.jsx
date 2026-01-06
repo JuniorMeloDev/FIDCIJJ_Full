@@ -6,8 +6,8 @@ import TopFiveApex from "../components/TopFiveApex";
 import { formatBRLNumber, formatDate } from "../utils/formatters";
 import RelatorioModal from "@/app/components/RelatorioModal";
 import DashboardFiltros from "@/app/components/DashboardFiltros";
-import LiquidacaoModal from "@/app/components/LiquidacaoModal"; 
-import Notification from "@/app/components/Notification"; 
+import LiquidacaoModal from "@/app/components/LiquidacaoModal";
+import Notification from "@/app/components/Notification";
 import { FaChartLine, FaDollarSign, FaClock } from "react-icons/fa";
 import { startOfMonth, endOfMonth, format } from "date-fns";
 
@@ -185,48 +185,48 @@ export default function ResumoPage() {
 
   const handleAbrirModalLiquidacao = () => {
     if (contextMenu.selectedItem) {
-      setDuplicataParaLiquidar([contextMenu.selectedItem]); 
+      setDuplicataParaLiquidar([contextMenu.selectedItem]);
       setIsLiquidarModalOpen(true);
     }
   };
 
   const handleConfirmarLiquidacao = async (
-  liquidacoes,
-  dataLiquidacao,
-  jurosMora,
-  desconto,
-  contaBancariaId
-) => {
-  try {
-    const response = await fetch("/api/duplicatas/liquidar-em-massa", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...getAuthHeader() },
-      body: JSON.stringify({
-        liquidacoes,
-        dataLiquidacao,
-        jurosMora,
-        desconto,
-        contaBancariaId,
-      }),
-    });
+    liquidacoes,
+    dataLiquidacao,
+    jurosMora,
+    desconto,
+    contaBancariaId
+  ) => {
+    try {
+      const response = await fetch("/api/duplicatas/liquidar-em-massa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify({
+          liquidacoes,
+          dataLiquidacao,
+          jurosMora,
+          desconto,
+          contaBancariaId,
+        }),
+      });
 
-    if (!response.ok) throw new Error("Falha ao liquidar a duplicata.");
-    showNotification(`Duplicata liquidada com sucesso!`, "success");
-    fetchDashboardData();
-  } catch (err) {
-    showNotification(err.message, "error");
-  } finally {
-    setIsLiquidarModalOpen(false);
-  }
-};
+      if (!response.ok) throw new Error("Falha ao liquidar a duplicata.");
+      showNotification(`Duplicata liquidada com sucesso!`, "success");
+      fetchDashboardData();
+    } catch (err) {
+      showNotification(err.message, "error");
+    } finally {
+      setIsLiquidarModalOpen(false);
+    }
+  };
 
 
   const totalGeral = saldos.reduce((sum, c) => sum + (c.saldo || 0), 0);
-  
-  const shouldShowGlobalMetrics = 
-    !filters.tipoOperacaoId && 
-    !filters.clienteId && 
-    !filters.sacado && 
+
+  const shouldShowGlobalMetrics =
+    !filters.tipoOperacaoId &&
+    !filters.clienteId &&
+    !filters.sacado &&
     !filters.contaBancaria;
 
   if (loading) {
@@ -314,38 +314,37 @@ export default function ResumoPage() {
               {saldos
                 .filter(conta => conta.saldo !== 0) // Filtra contas com saldo zero
                 .map((conta, index) => {
-                const cores = [
-                  "bg-blue-700 border-blue-400",
-                  "bg-green-700 border-green-400",
-                  "bg-purple-700 border-purple-400",
-                  "bg-pink-700 border-pink-400",
-                  "bg-indigo-700 border-indigo-400",
-                  "bg-teal-700 border-teal-400",
-                ];
-                const cor = cores[index % cores.length];
-                return (
-                  <motion.div
-                    key={conta.contaBancaria}
-                    className={`p-4 rounded-lg shadow-lg transition border-l-4 flex flex-col justify-between ${cor}`}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 * index }}
-                  >
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-100 truncate">
-                        {conta.contaBancaria}
-                      </h3>
-                      <p
-                        className={`mt-2 text-2xl font-semibold ${
-                          conta.saldo < 0 ? "text-red-200" : "text-white"
-                        }`}
-                      >
-                        {formatBRLNumber(conta.saldo)}
-                      </p>
-                    </div>
-                  </motion.div>
-                );
-              })}
+                  const cores = [
+                    "bg-blue-700 border-blue-400",
+                    "bg-green-700 border-green-400",
+                    "bg-purple-700 border-purple-400",
+                    "bg-pink-700 border-pink-400",
+                    "bg-indigo-700 border-indigo-400",
+                    "bg-teal-700 border-teal-400",
+                  ];
+                  const cor = cores[index % cores.length];
+                  return (
+                    <motion.div
+                      key={conta.contaBancaria}
+                      className={`p-4 rounded-lg shadow-lg transition border-l-4 flex flex-col justify-between ${cor}`}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 * index }}
+                    >
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-100 truncate">
+                          {conta.contaBancaria}
+                        </h3>
+                        <p
+                          className={`mt-2 text-2xl font-semibold ${conta.saldo < 0 ? "text-red-200" : "text-white"
+                            }`}
+                        >
+                          {formatBRLNumber(conta.saldo)}
+                        </p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
             </section>
 
             <section className="mt-2">
@@ -359,9 +358,8 @@ export default function ResumoPage() {
                   Total Geral
                 </h3>
                 <p
-                  className={`mt-2 text-3xl font-semibold ${
-                    totalGeral < 0 ? "text-red-400" : "text-gray-100"
-                  }`}
+                  className={`mt-2 text-3xl font-semibold ${totalGeral < 0 ? "text-red-400" : "text-gray-100"
+                    }`}
                 >
                   {formatBRLNumber(totalGeral)}
                 </p>
@@ -426,7 +424,7 @@ export default function ResumoPage() {
                   </motion.div>
                 </>
               )}
-              
+
               <motion.div
                 key="operado"
                 className="p-4 rounded-lg shadow-lg transition bg-gray-700 border-l-4 border-gray-400"
@@ -445,7 +443,7 @@ export default function ResumoPage() {
                 </div>
               </motion.div>
             </section>
-            
+
             <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
               <motion.div
                 className="p-6 rounded-lg shadow-lg transition bg-gray-700"
@@ -477,14 +475,14 @@ export default function ResumoPage() {
                       )
                       .map((dup) => {
                         const isVencido = dup.dataVencimento < today;
-                        
+
                         // --- INÍCIO DA CORREÇÃO ---
                         // Calcula o valor a ser exibido usando a mesma lógica do modal
                         const valorExibido = isPostFixedInterest(dup.operacao, dup)
                           ? (dup.valorBruto || 0) + (dup.valorJuros || 0)
                           : (dup.valorBruto || 0);
                         // --- FIM DA CORREÇÃO ---
-                        
+
                         return (
                           <div
                             key={dup.id}
@@ -496,14 +494,15 @@ export default function ResumoPage() {
                                 {dup.clienteSacado}
                               </p>
                               <p className="text-xs text-gray-400">
-                                NF {dup.nfCte}
+                                {dup.operacao?.cliente?.ramo_de_atividade === "Transportes"
+                                  ? `CT-e ${dup.nfCte.split('.')[0]}`
+                                  : `NF ${dup.nfCte}`}
                               </p>
                             </div>
                             <div className="text-right">
                               <p
-                                className={`font-semibold ${
-                                  isVencido ? "text-red-500" : "text-yellow-400"
-                                }`}
+                                className={`font-semibold ${isVencido ? "text-red-500" : "text-yellow-400"
+                                  }`}
                               >
                                 {formatDate(dup.dataVencimento)}
                               </p>
@@ -530,9 +529,8 @@ export default function ResumoPage() {
                 transition={{ delay: 0.9 }}
               >
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-100">{`Top ${topNLimit} ${
-                    topFiveChartType === "cedentes" ? "Cedentes" : "Sacados"
-                  } por Valor`}</h3>
+                  <h3 className="text-lg font-semibold text-gray-100">{`Top ${topNLimit} ${topFiveChartType === "cedentes" ? "Cedentes" : "Sacados"
+                    } por Valor`}</h3>
                   <div className="flex items-center gap-2">
                     <select
                       value={topNLimit}
@@ -547,21 +545,19 @@ export default function ResumoPage() {
                     <div className="flex space-x-1 rounded-lg bg-gray-800 p-1 w-auto">
                       <button
                         onClick={() => setTopFiveChartType("cedentes")}
-                        className={`px-4 py-1 text-sm font-medium rounded-md transition ${
-                          topFiveChartType === "cedentes"
-                            ? "bg-orange-500 text-white"
-                            : "text-gray-300 hover:bg-gray-700"
-                        }`}
+                        className={`px-4 py-1 text-sm font-medium rounded-md transition ${topFiveChartType === "cedentes"
+                          ? "bg-orange-500 text-white"
+                          : "text-gray-300 hover:bg-gray-700"
+                          }`}
                       >
                         Cedentes
                       </button>
                       <button
                         onClick={() => setTopFiveChartType("sacados")}
-                        className={`px-4 py-1 text-sm font-medium rounded-md transition ${
-                          topFiveChartType === "sacados"
-                            ? "bg-orange-500 text-white"
-                            : "text-gray-300 hover:bg-gray-700"
-                        }`}
+                        className={`px-4 py-1 text-sm font-medium rounded-md transition ${topFiveChartType === "sacados"
+                          ? "bg-orange-500 text-white"
+                          : "text-gray-300 hover:bg-gray-700"
+                          }`}
                       >
                         Sacados
                       </button>

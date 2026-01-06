@@ -19,7 +19,7 @@ export async function GET(request) {
             operacao:operacoes ( 
                 valor_liquido, 
                 cliente:clientes ( 
-                    id, nome, cnpj, 
+                    id, nome, cnpj, ramo_de_atividade,
                     contas_bancarias ( banco, chave_pix, tipo_chave_pix )
                 ) 
             ),
