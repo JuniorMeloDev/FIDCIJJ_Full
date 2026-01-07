@@ -31,9 +31,9 @@ const processAbcData = (data) => {
     });
 };
 
-export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchClientes, fetchSacados }) {
+export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchClientes, fetchSacados, isPortal = false }) {
     const initialState = {
-        dataInicio: "", dataFim: "", tipoOperacaoId: "", clienteId: "", clienteNome: "", sacado: "", conta: "", status: "Todos", categoria: "Todos", tipoValor: "Todos"
+        dataInicio: "", dataFim: "", tipoOperacaoId: [], clienteId: "", clienteNome: "", sacado: "", conta: "", status: "Todos", categoria: "Todos", tipoValor: "Todos"
     };
     const [reportType, setReportType] = useState('fluxoCaixa');
     const [filters, setFilters] = useState(initialState);
@@ -41,6 +41,13 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
     const [contas, setContas] = useState([]);
     const [format, setFormat] = useState('pdf');
     const [logoBase64, setLogoBase64] = useState(null);
+
+    // Se for portal, força o tipo de relatório para duplicatas ao abrir
+    useEffect(() => {
+        if (isPortal) {
+            setReportType('duplicatas');
+        }
+    }, [isPortal, isOpen]);
 
     // Carrega o Logo para o PDF
     useEffect(() => {
@@ -62,9 +69,9 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     };
 
-    // Busca as contas para o filtro de Fluxo de Caixa
+    // Busca as contas para o filtro de Fluxo de Caixa (apenas se não for portal)
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && !isPortal) {
             const fetchContas = async () => {
                 try {
                     const res = await fetch(`/api/dashboard/saldos`, { headers: getAuthHeader() });
@@ -78,7 +85,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
             };
             fetchContas();
         }
-    }, [isOpen]);
+    }, [isOpen, isPortal]);
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
@@ -109,7 +116,13 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         const endpoint = endpointMap[reportType];
 
         Object.entries(filters).forEach(([key, value]) => {
-            if (value && value !== 'Todos' && key !== 'clienteNome') params.append(key, value);
+            if (value && value !== 'Todos' && key !== 'clienteNome') {
+                if (key === 'tipoOperacaoId' && Array.isArray(value)) {
+                    value.forEach(id => params.append(key, id));
+                } else {
+                    params.append(key, value);
+                }
+            }
         });
 
         try {
@@ -172,6 +185,11 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
         if (currentFilters.dataInicio || currentFilters.dataFim) {
             filterText += `Período de ${formatDate(currentFilters.dataInicio) || '...'} a ${formatDate(currentFilters.dataFim) || '...'}. `;
         }
+        if (currentFilters.tipoOperacaoId && currentFilters.tipoOperacaoId.length > 0) {
+            const ops = tiposOperacao.filter(t => currentFilters.tipoOperacaoId.includes(t.id.toString()) || currentFilters.tipoOperacaoId.includes(t.id));
+            const opsNames = ops.map(o => o.nome).join(', ');
+            filterText += `Tipos: ${opsNames}. `;
+        }
         // Filtros extras apenas se não for DRE
         if (type !== 'dre') {
             if (currentFilters.clienteNome) filterText += `Cedente: ${currentFilters.clienteNome}. `;
@@ -220,9 +238,9 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 break;
 
             case 'duplicatas':
-                head = [['Data Op.', 'NF/CT-e', 'Cedente', 'Sacado', 'Venc.', 'Status', 'Juros Op.', 'Juros Mora', 'Valor Bruto']];
+                head = [['Data Op.', 'Tipo Op.', 'NF/CT-e', 'Cedente', 'Sacado', 'Venc.', 'Status', 'Juros Op.', 'Juros Mora', 'Valor Bruto']];
                 body = data.map(row => [
-                    formatDate(row.data_operacao), row.nf_cte, row.empresa_cedente,
+                    formatDate(row.data_operacao), row.tipo_operacao_nome, row.nf_cte, row.empresa_cedente,
                     row.cliente_sacado, formatDate(row.data_vencimento), row.status_recebimento,
                     formatBRLNumber(row.valor_juros || 0), formatBRLNumber(row.juros_mora || 0), formatBRLNumber(row.valor_bruto)
                 ]);
@@ -341,13 +359,19 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-300">Tipo de Relatório</label>
-                            <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-sm">
-                                <option value="fluxoCaixa">Fluxo de Caixa</option>
+                            <select
+                                value={reportType}
+                                onChange={(e) => setReportType(e.target.value)}
+                                className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-sm disabled:opacity-50"
+                                disabled={isPortal} // Desabilita se for portal
+                            >
+                                {!isPortal && <option value="fluxoCaixa">Fluxo de Caixa</option>}
                                 <option value="duplicatas">Consulta de Duplicatas</option>
-                                <option value="totalOperado">Total Operado (ABC)</option>
-                                <option value="dre">DRE Gerencial</option>
+                                {!isPortal && <option value="totalOperado">Total Operado (ABC)</option>}
+                                {!isPortal && <option value="dre">DRE Gerencial</option>}
                             </select>
                         </div>
+
                         <div>
                             <label className="block text-sm font-medium text-gray-300">Formato</label>
                             <select value={format} onChange={(e) => setFormat(e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-sm">
@@ -372,20 +396,50 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                         {reportType !== 'fluxoCaixa' && reportType !== 'dre' && (
                             <>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300">Tipo de Operação</label>
-                                    <select name="tipoOperacaoId" value={filters.tipoOperacaoId} onChange={handleFilterChange} className="mt-1 w-full bg-gray-700 border-gray-600 rounded-md p-1.5 text-sm">
-                                        <option value="">Todos</option>
-                                        {tiposOperacao.map(op => <option key={op.id} value={op.id}>{op.nome}</option>)}
-                                    </select>
+                                    <label className="block text-sm font-medium text-gray-300 mb-1">Tipo de Operação</label>
+                                    <div className="bg-gray-700 border border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto">
+                                        {tiposOperacao.map(op => (
+                                            <div key={op.id} className="flex items-center mb-1">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`op-${op.id}`}
+                                                    value={op.id}
+                                                    checked={filters.tipoOperacaoId.includes(String(op.id))}
+                                                    onChange={(e) => {
+                                                        const id = e.target.value;
+                                                        setFilters(prev => {
+                                                            const currentIds = prev.tipoOperacaoId;
+                                                            if (currentIds.includes(id)) {
+                                                                return { ...prev, tipoOperacaoId: currentIds.filter(i => i !== id) };
+                                                            } else {
+                                                                return { ...prev, tipoOperacaoId: [...currentIds, id] };
+                                                            }
+                                                        });
+                                                    }}
+                                                    className="mr-2 rounded text-orange-500 focus:ring-orange-500 bg-gray-600 border-gray-500"
+                                                />
+                                                <label htmlFor={`op-${op.id}`} className="text-sm cursor-pointer select-none truncate">
+                                                    {op.nome}
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="text-xs text-gray-400 mt-1">
+                                        {filters.tipoOperacaoId.length === 0 ? "Todos selecionados" : `${filters.tipoOperacaoId.length} selecionado(s)`}
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300">Cedente</label>
-                                    <AutocompleteSearch name="clienteNome" value={filters.clienteNome} onChange={handleFilterChange} onSelect={(c) => handleAutocompleteSelect('cliente', c)} fetchSuggestions={fetchClientes} placeholder="Todos" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300">Sacado</label>
-                                    <AutocompleteSearch name="sacado" value={filters.sacado} onChange={handleFilterChange} onSelect={(s) => handleAutocompleteSelect('sacado', s)} fetchSuggestions={fetchSacados} placeholder="Todos" />
-                                </div>
+                                {!isPortal && (
+                                    <>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-300">Cedente</label>
+                                            <AutocompleteSearch name="clienteNome" value={filters.clienteNome} onChange={handleFilterChange} onSelect={(c) => handleAutocompleteSelect('cliente', c)} fetchSuggestions={fetchClientes} placeholder="Todos" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-300">Sacado</label>
+                                            <AutocompleteSearch name="sacado" value={filters.sacado} onChange={handleFilterChange} onSelect={(s) => handleAutocompleteSelect('sacado', s)} fetchSuggestions={fetchSacados} placeholder="Todos" />
+                                        </div>
+                                    </>
+                                )}
                             </>
                         )}
 

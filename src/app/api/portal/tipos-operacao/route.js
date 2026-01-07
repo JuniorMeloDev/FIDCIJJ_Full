@@ -11,20 +11,59 @@ export async function GET(request) {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const clienteId = decoded.cliente_id;
         
+        const { searchParams } = new URL(request.url);
+        const source = searchParams.get('source'); // 'all' para buscar todos (para relatórios)
+
         if (!clienteId) {
             return NextResponse.json({ message: 'Usuário cliente sem empresa associada.' }, { status: 403 });
         }
 
-        // Busca os tipos de operação através da tabela de associação
-        const { data, error } = await supabase
-            .from('cliente_tipos_operacao')
-            .select('tipos_operacao(*)')
-            .eq('cliente_id', clienteId);
+        let tiposOperacao = [];
 
-        if (error) throw error;
+        if (source === 'all') {
+            // Busca TODOS os tipos de operação (para filtros de relatório)
+            const { data, error } = await supabase
+                .from('tipos_operacao')
+                .select('*');
+            
+            if (error) throw error;
+            tiposOperacao = data;
+        } else if (source === 'used') {
+            // Busca apenas os tipos de operação que o cliente JÁ UTILIZOU (tem histórico)
+            // 1. Busca IDs únicos das operações do cliente
+            const { data: ops, error: opsError } = await supabase
+                .from('operacoes')
+                .select('tipo_operacao_id')
+                .eq('cliente_id', clienteId);
+            
+            if (opsError) throw opsError;
 
-        // Formata os dados para retornar apenas a lista de tipos de operação
-        const tiposOperacao = data.map(item => item.tipos_operacao);
+            // Extrai IDs únicos
+            const uniqueTypeIds = [...new Set(ops.map(op => op.tipo_operacao_id))];
+
+            if (uniqueTypeIds.length > 0) {
+                 // 2. Busca os detalhes dos tipos
+                const { data, error } = await supabase
+                    .from('tipos_operacao')
+                    .select('*')
+                    .in('id', uniqueTypeIds);
+
+                if (error) throw error;
+                tiposOperacao = data;
+            } else {
+                tiposOperacao = [];
+            }
+
+        } else {
+            // Busca apenas os tipos PERMITIDOS para o cliente (para novas operações)
+            const { data, error } = await supabase
+                .from('cliente_tipos_operacao')
+                .select('tipos_operacao(*)')
+                .eq('cliente_id', clienteId);
+
+            if (error) throw error;
+            tiposOperacao = data.map(item => item.tipos_operacao);
+        }
 
         return NextResponse.json(tiposOperacao, { status: 200 });
 

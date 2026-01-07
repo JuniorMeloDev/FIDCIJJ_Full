@@ -6,7 +6,9 @@ export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
-        jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userRoles = decoded.roles || [];
+        const userClienteId = decoded.cliente_id;
 
         const { searchParams } = new URL(request.url);
 
@@ -16,7 +18,7 @@ export async function GET(request) {
         const dataInicio = searchParams.get('dataInicio');
         const dataFim = searchParams.get('dataFim');
         const clienteIdFilter = searchParams.get('clienteId');
-        const tipoOperacaoIdFilter = searchParams.get('tipoOperacaoId');
+        const tipoOperacaoIdFilter = searchParams.getAll('tipoOperacaoId');
 
         // 2. CONSTRÓI A CONSULTA BASE DO SUPABASE
         let query = supabase
@@ -31,13 +33,24 @@ export async function GET(request) {
                     tipo_operacao:tipos_operacao ( nome )
                 )
             `)
-            // --- CORREÇÃO AQUI ---
-            // Adiciona o filtro BASE para trazer apenas duplicatas de OPERAÇÕES APROVADAS
             .eq('operacao.status', 'Aprovada'); 
-            // ---------------------------------
 
-        // 3. APLICA OS FILTROS DA URL
+        // 3. APLICA OS FILTROS DA URL AND AUTH
         
+        // --- SEGURANÇA: FILTRO POR CLIENTE (ROLE_CLIENTE) ---
+        if (userRoles.includes('ROLE_CLIENTE')) {
+            if (userClienteId) {
+                query = query.eq('operacao.cliente_id', userClienteId);
+            } else {
+                // Se tem role de cliente mas não tem ID, não deve ver nada (segurança)
+                return NextResponse.json([], { status: 200 }); 
+            }
+        } else if (clienteIdFilter) {
+            // Se não é cliente (admin), pode usar o filtro da URL
+            query = query.eq('operacao.cliente_id', clienteIdFilter);
+        }
+        // ----------------------------------------------------
+
         // Filtro de status da DUPLICATA (Pendente, Recebido, etc.)
         if (statusFilter && statusFilter !== 'todos') { 
             query = query.eq('status_recebimento', statusFilter);
@@ -53,11 +66,8 @@ export async function GET(request) {
         if (dataFim) {
             query = query.lte('data_operacao', dataFim);
         }
-         if (clienteIdFilter) {
-            query = query.eq('operacao.cliente_id', clienteIdFilter);
-        }
-        if (tipoOperacaoIdFilter) {
-            query = query.eq('operacao.tipo_operacao_id', tipoOperacaoIdFilter);
+        if (tipoOperacaoIdFilter && tipoOperacaoIdFilter.length > 0) {
+            query = query.in('operacao.tipo_operacao_id', tipoOperacaoIdFilter);
         }
 
         // Adiciona ordenação
