@@ -40,8 +40,7 @@ export async function PUT(request, { params }) {
         const updateData = {
             data,
             assunto,
-            conteudo,
-            updated_at: new Date().toISOString()
+            conteudo
         };
 
         // Lógica de Upload se houver novo arquivo
