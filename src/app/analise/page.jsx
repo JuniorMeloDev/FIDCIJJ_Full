@@ -147,9 +147,9 @@ export default function AnalisePage() {
             // Tenta buscar detalhes mais profundos se a conta estiver incompleta
             // (Assumindo que talvez exista um endpoint ou que o objeto conta tenha campos aninhados)
             const dadosPagador = {
-                nome: contaMasterFull?.titular || contaMasterFull?.descricao || 'Sua Empresa',
+                nome: contaMasterFull?.titular || contaMasterFull?.descricao || contaMasterFull?.empresa?.razao_social || 'Sua Empresa',
                 // Tenta pegar CNPJ de vários lugares possíveis no objeto conta
-                cnpj: contaMasterFull?.cnpj || contaMasterFull?.cpf_cnpj || contaMasterFull?.cnpj_cpf || contaMasterFull?.empresa?.cnpj || 'CNPJ não informado',
+                cnpj: contaMasterFull?.cnpj || contaMasterFull?.cpf_cnpj || contaMasterFull?.cnpj_cpf || contaMasterFull?.empresa?.cnpj || contaMasterFull?.empresa?.cnpj_cpf || 'CNPJ não informado',
                 banco: contaMasterFull?.banco || 'Banco',
                 agencia: contaMasterFull?.agencia || '',
                 conta: contaMasterFull?.conta || contaMasterFull?.conta_corrente || ''
@@ -167,7 +167,7 @@ export default function AnalisePage() {
             let contaOrigemDisplay = 'Sua Empresa';
             if (dadosPagador.banco) {
                 contaOrigemDisplay = formatDisplayConta(`${dadosPagador.banco} - ${dadosPagador.agencia}/${dadosPagador.conta}`);
-            } else if (dadosPagador.nome) {
+            } else if (dadosPagador.nome && dadosPagador.nome !== 'Sua Empresa') {
                 contaOrigemDisplay = dadosPagador.nome;
             }
 
@@ -185,6 +185,10 @@ export default function AnalisePage() {
                 if (contaSelected) {
                     chavePix = contaSelected.chave_pix || contaSelected.chavePix;
                     tipoChavePix = contaSelected.tipo_chave_pix || contaSelected.tipoChavePix;
+                    // --- CORREÇÃO: Pegar nome do banco se disponível na conta ---
+                    if (contaSelected.banco) {
+                        // Pode ser que tenhamos que adicionar essa prop ao pixData
+                    }
                 }
             }
 
@@ -206,12 +210,26 @@ export default function AnalisePage() {
 
             if (!tipoChavePix) tipoChavePix = 'CPF/CNPJ'; // Fallback final
 
+            // --- CORREÇÃO: Identificar banco destino ---
+            let instituicaoDestino = 'Banco Destino';
+            if (payload?.pix_account_id) {
+                const contasC = clienteFull.contasBancarias || clienteFull.contas_bancarias || [];
+                const contaSelected = contasC.find(c => String(c.id) === String(payload.pix_account_id));
+                if (contaSelected && contaSelected.banco) {
+                    instituicaoDestino = contaSelected.banco;
+                }
+            } else {
+                // Fallback banco do cliente
+                instituicaoDestino = clienteFull.banco || (clienteFull.contasBancarias?.[0]?.banco) || 'Banco Destino';
+            }
+
             const pixData = {
                 valor: valorFinal,
                 contaOrigem: contaOrigemDisplay,
                 favorecido: clienteFull.razao_social || clienteFull.nome,
                 chave: chavePix || 'Chave não cadastrada',
-                tipo_chave_pix: tipoChavePix
+                tipo_chave_pix: tipoChavePix,
+                instituicao: instituicaoDestino // Adicionado campo instituicao
             };
 
             setPixConfirmData(pixData);
@@ -329,7 +347,7 @@ export default function AnalisePage() {
                     recebedor: {
                         nome: cliente.razao_social || cliente.nome || 'Nome não informado',
                         cnpj: cnpjRecebedor,
-                        instituicao: cliente.banco || (cliente.contasBancarias?.[0]?.banco) || 'Banco Destino',
+                        instituicao: instituicaoFinal,
                         chavePix: chavePixFinal
                     }
                 };

@@ -82,7 +82,21 @@ export async function PUT(request, props) {
           throw new Error("Conta bancária selecionada não encontrada no banco de dados.");
       }
 
-      // Lógica PIX removida daqui e variáveis usadas no escopo superior
+      // --- MOVIDO: Cálculo da descrição para usar no PIX e no Extrato ---
+      descricaoLancamento = `Borderô #${id}`;
+      const { data: duplicatas } = await supabase
+        .from("duplicatas")
+        .select("nf_cte")
+        .eq("operacao_id", id);
+      if (duplicatas && duplicatas.length > 0 && operacao.cliente) {
+        const docType =
+          operacao.cliente.ramo_de_atividade === "Transportes" ? "CTe" : "NF";
+        const numerosDoc = [
+          ...new Set(duplicatas.map((d) => d.nf_cte.split(".")[0])),
+        ].join(", ");
+        descricaoLancamento = `Borderô ${docType} ${numerosDoc}`;
+      }
+      // ------------------------------------------------------------------
 
       if (efetuar_pix) {
           const nomeBanco = conta.banco.toLowerCase();
@@ -111,7 +125,7 @@ export async function PUT(request, props) {
               const dadosPix = {
                   valor: parseFloat(valorDebitado.toFixed(2)),
                   dataPagamento: dataEfetivaDebito,
-                  descricao: `Pagamento Borderô #${id}`,
+                  descricao: descricaoLancamento, // Usa a descrição detalhada
                   destinatario: {
                       tipo: "CHAVE",
                       chave: contaDestino.chave_pix
@@ -146,7 +160,7 @@ export async function PUT(request, props) {
                     chave: contaDestino.chave_pix,
                     tipo_conta: "CC",
                     referencia_empresa: `OP-${id}`.substring(0, 20),
-                    identificacao_comprovante: `Pgto Op ${id}`.substring(0, 100),
+                    identificacao_comprovante: descricaoLancamento.substring(0, 100), // Usa a descrição detalhada
                     pagador: {
                         tipo_conta: "CC",
                         agencia: contaRealInfo.agencia.replace(/\D/g, ""),
@@ -162,20 +176,6 @@ export async function PUT(request, props) {
                 pixEndToEndId = resultadoPix.cod_pagamento || "ENVIADO_ITAU";
           }
       }
-
-      descricaoLancamento = `Borderô #${id}`;
-      const { data: duplicatas } = await supabase
-        .from("duplicatas")
-        .select("nf_cte")
-        .eq("operacao_id", id);
-      if (duplicatas && duplicatas.length > 0 && operacao.cliente) {
-        const docType =
-          operacao.cliente.ramo_de_atividade === "Transportes" ? "CTe" : "NF";
-        const numerosDoc = [
-          ...new Set(duplicatas.map((d) => d.nf_cte.split(".")[0])),
-        ].join(", ");
-        descricaoLancamento = `Borderô ${docType} ${numerosDoc}`;
-      }
       
       // pixEndToEndId já está no escopo correto agora
       
@@ -186,11 +186,22 @@ export async function PUT(request, props) {
       const contaFmt = conta.conta_corrente || '';
       const nomeContaFormatado = `${conta.banco} - ${agenciaFmt}/${contaFmt}`;
 
+      // --- Persistência de Metadata do PIX para 2ª Via do Comprovante ---
+      let descricaoMovimentacao = descricaoLancamento;
+      if (pixEndToEndId && contaDestino) {
+          const meta = {
+              banco: contaDestino.banco,
+              chave: contaDestino.chave_pix,
+              tipo: contaDestino.tipo_chave_pix || contaDestino.tipoChavePix
+          };
+          descricaoMovimentacao += ` | PIX_META:${JSON.stringify(meta)}`;
+      }
+
       const { error: movError } = await supabase.from("movimentacoes_caixa").insert({
         operacao_id: id,
         data_movimento: dataEfetivaDebito,
         created_at: dataHoraRealTransacao, 
-        descricao: descricaoLancamento,
+        descricao: descricaoMovimentacao, // Usa a descrição com metadata
         valor: -Math.abs(valorDebitado), // Garante que é negativo (Débito)
         categoria: "Pagamento de Borderô",
         conta_bancaria: nomeContaFormatado, // Usa a string formatada seguramente

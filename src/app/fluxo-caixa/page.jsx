@@ -773,7 +773,23 @@ export default function FluxoDeCaixaPage() {
 
     let recebedorData = null;
 
-    if (item.operacao && item.operacao.cliente) {
+    // Tenta extrair metadata do PIX da descrição (novo modelo)
+    const metaParts = item.descricao ? item.descricao.split(' | PIX_META:') : [];
+
+    if (metaParts.length > 1) {
+      try {
+        const meta = JSON.parse(metaParts[1]);
+        recebedorData = {
+          nome: item.operacao?.cliente?.nome || 'Nome não informado',
+          cnpj: item.operacao?.cliente?.cnpj || 'Não informado',
+          instituicao: meta.banco || 'Não informado',
+          chavePix: meta.chave || 'Não informada'
+        };
+      } catch (e) { console.error("Erro ao parsear PIX_META:", e); }
+    }
+
+    // Fallback para o modelo antigo (pega a primeira conta com pix) se não achou metadata
+    if (!recebedorData && item.operacao && item.operacao.cliente) {
       const cliente = item.operacao.cliente;
       const contaPix = cliente.contas_bancarias?.find(c => c.chave_pix) || {};
 
@@ -785,6 +801,9 @@ export default function FluxoDeCaixaPage() {
       };
     }
 
+    // Limpa a descrição para o recibo (remove o metadata)
+    const descricaoLimpa = metaParts[0];
+
     // Usa 'created_at' se disponível para pegar a hora exata. Senão, usa o ajuste de meio-dia.
     const dataAjustada = item.created_at
       ? item.created_at
@@ -792,14 +811,17 @@ export default function FluxoDeCaixaPage() {
         ? `${item.dataMovimento}T12:00:00`
         : item.dataMovimento);
 
+    // Tenta encontrar a conta bancária usada para pegar os dados do pagador corretos
+    const contaObj = contasMaster.find(c => c.contaBancaria === item.contaBancaria);
+
     setReceiptData({
       valor: Math.abs(item.valor),
       data: dataAjustada,
       transactionId: item.transaction_id,
-      descricao: item.descricao,
+      descricao: descricaoLimpa,
       pagador: {
-        nome: clienteMasterInfo.nome,
-        cnpj: clienteMasterInfo.cnpj,
+        nome: contaObj?.titular || contaObj?.descricao || contaObj?.empresa?.razao_social || clienteMasterInfo.nome || 'Sua Empresa',
+        cnpj: contaObj?.cnpj || contaObj?.cpf_cnpj || contaObj?.empresa?.cnpj || clienteMasterInfo.cnpj || 'Não informado',
         conta: item.contaBancaria,
       },
       recebedor: recebedorData
@@ -1202,7 +1224,7 @@ export default function FluxoDeCaixaPage() {
                                         }
                                       }
 
-                                      return mov.descricao;
+                                      return mov.descricao.split(' | PIX_META:')[0];
                                     })()}
                                   </td>
                                   <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">

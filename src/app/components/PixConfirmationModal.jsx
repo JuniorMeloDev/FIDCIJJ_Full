@@ -20,22 +20,22 @@ export default function PixConfirmationModal({
 
     const [chave, tipoChave] = useMemo(() => {
         if (!data) return [null, null];
-        
+
         // Tenta o formato aninhado (usado em outros lugares)
         if (data.destinatario?.chave) {
             return [data.destinatario.chave, data.destinatario.tipo];
         }
-        
+
         // Tenta o formato "flat" (enviado pelo operacao-bordero)
         if (data.chave) {
             return [data.chave, data.tipo_chave_pix]; // <-- CORRIGIDO AQUI
         }
-        
+
         // Fallback para o nome antigo (para não quebrar outros lugares)
         if (data.chavePix) {
             return [data.chavePix, data.tipoChave];
         }
-        
+
         return [null, null]; // Nenhum dado encontrado
 
     }, [data]);
@@ -58,9 +58,9 @@ export default function PixConfirmationModal({
         setErrorInfo('');
         // Simula uma chamada de API
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         if (data.favorecido) {
-             setRecebedor({ nome: data.favorecido, documento: '***.123.456-**' });
+            setRecebedor({ nome: data.favorecido, documento: '***.123.456-**' });
         } else {
             setErrorInfo("Não foi possível validar a chave PIX.");
         }
@@ -83,17 +83,22 @@ export default function PixConfirmationModal({
                             <span className="text-gray-400">Valor a Pagar:</span>
                             <span className="font-semibold text-xl text-orange-400">{formatBRLNumber(data.valor || 0)}</span>
                         </div>
-                        
+
                         {/* --- INÍCIO DA CORREÇÃO (Exibir Chave) --- */}
                         <div className="flex justify-between py-2 border-b border-gray-600">
                             <span className="text-gray-400">Favorecido:</span>
                             <span className="font-semibold text-right">{data.favorecido || 'N/A'}</span>
                         </div>
+                        {/* --- NOVO: Exibir Banco --- */}
+                        <div className="flex justify-between py-2 border-b border-gray-600">
+                            <span className="text-gray-400">Instituição:</span>
+                            <span className="font-semibold text-right">{data.instituicao || 'N/A'}</span>
+                        </div>
                         <div className="flex justify-between py-2 border-b border-gray-600">
                             <span className="text-gray-400">Chave PIX:</span>
                             <span className="font-semibold text-right">{chave || 'N/A'}</span>
                         </div>
-                         <div className="flex justify-between py-2 border-b border-gray-600">
+                        <div className="flex justify-between py-2 border-b border-gray-600">
                             <span className="text-gray-400">Tipo da Chave:</span>
                             <span className="font-semibold text-right">{tipoChave || 'N/A'}</span>
                         </div>
@@ -118,7 +123,7 @@ export default function PixConfirmationModal({
                         >
                             Cancelar
                         </button>
-                        
+
                         <button
                             onClick={onConfirm}
                             disabled={isSending || loadingInfo || !!errorInfo} // Não deixa confirmar se houver erro
