@@ -15,6 +15,7 @@ export async function PUT(request, props) {
   // Variáveis declaradas no escopo superior para evitar ReferenceError
   let pixEndToEndId = null;
   let descricaoLancamento = null;
+  let contaDestino = null;
 
   try {
     const token = request.headers.get("Authorization")?.split(" ")[1];
@@ -102,7 +103,8 @@ export async function PUT(request, props) {
           const nomeBanco = conta.banco.toLowerCase();
           const { data: contasCliente } = await supabase.from('contas_bancarias').select('*').eq('cliente_id', operacao.cliente.id);
           
-          let contaDestino = null;
+          
+          contaDestino = null;
 
           // --- CORREÇÃO: Usar a chave selecionada pelo usuário se houver ---
           // Recebemos o pix_account_id do frontend (body)

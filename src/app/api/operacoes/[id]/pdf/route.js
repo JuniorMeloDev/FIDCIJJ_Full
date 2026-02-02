@@ -50,7 +50,10 @@ const generatePdfBuffer = async (operacao) => {
     doc.text(`Empresa: ${operacao.cliente.nome}`, 14, 40);
 
     const head = [[getHeaderCell('Nº. Do Título'), getHeaderCell('Venc. Parcelas'), getHeaderCell('Sacado/Emitente'), getHeaderCell('Juros Parcela'), getHeaderCell('Valor')]];
-    const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), dup.cliente_sacado, { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
+    // Truncate function
+    const truncate = (str, n) => (str && str.length > n) ? str.substr(0, n-1) + '...' : str;
+
+    const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), truncate(dup.cliente_sacado, 35), { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
 
     autoTable(doc, {
         startY: 50, head: head, body: body,
@@ -70,8 +73,17 @@ const generatePdfBuffer = async (operacao) => {
     ];
 
     autoTable(doc, {
-        startY: finalY, body: totaisBody, theme: 'plain', tableWidth: 'wrap',
-        margin: { left: pageWidth / 2 }, styles: { cellPadding: 1, fontSize: 10 }
+        startY: finalY, 
+        body: totaisBody, 
+        theme: 'plain', 
+        // Removed tableWidth: 'wrap' and left margin calc that pushed it off screen
+        margin: { left: pageWidth * 0.4 }, // Start at 40% of page to give space
+        tableWidth: pageWidth * 0.55, // Use remaining 55%
+        styles: { cellPadding: 1, fontSize: 10, overflow: 'linebreak' },
+        columnStyles: {
+            0: { cellWidth: 'auto' }, // Description column
+            1: { cellWidth: 30, halign: 'right' } // Value column fixed width
+        }
     });
 
     return Buffer.from(doc.output('arraybuffer'));

@@ -102,7 +102,21 @@ export default function AnalisePage() {
 
             let descontosRecompra = [];
             // Adiciona descontos visuais
-            if (data.principal > 0) descontosRecompra.push({ id: `rec-deb-${Date.now()}`, descricao: `Débito Recompra`, valor: Math.abs(data.principal) });
+            // if (data.principal > 0) descontosRecompra.push({ id: `rec-deb-${Date.now()}`, descricao: `Débito Recompra`, valor: Math.abs(data.principal) });
+
+            // NOVO: Detalhamento item a item
+            if (data.duplicatasDetalhes && data.duplicatasDetalhes.length > 0) {
+                data.duplicatasDetalhes.forEach((d, index) => {
+                    descontosRecompra.push({
+                        id: `rec-deb-${d.id}-${Date.now()}`,
+                        descricao: `Recompra NF/CTe ${d.nf_cte} - ${d.cliente_sacado}`,
+                        valor: Math.abs(d.valor_bruto)
+                    });
+                });
+            } else if (data.principal > 0) {
+                // Fallback caso não tenha detalhes (compatibilidade)
+                descontosRecompra.push({ id: `rec-deb-${Date.now()}`, descricao: `Débito Recompra`, valor: Math.abs(data.principal) });
+            }
             if (data.credito > 0) descontosRecompra.push({ id: `rec-cred-${Date.now()}`, descricao: `Crédito Juros Recompra`, valor: -Math.abs(data.credito) });
             if (data.jurosAdicionais > 0) descontosRecompra.push({ id: `rec-juros-${Date.now()}`, descricao: `Juros Recompra`, valor: Math.abs(data.jurosAdicionais) });
             if (data.abatimentos > 0) descontosRecompra.push({ id: `rec-abat-${Date.now()}`, descricao: `Abatimento Recompra`, valor: -Math.abs(data.abatimentos) });
@@ -256,8 +270,12 @@ export default function AnalisePage() {
                 setPendingApprovalPayload(payload);
                 setIsPartialDebitModalOpen(true);
             } else {
-                // Se total, chama a função que busca dados (mantendo o loading no botão)
-                await prepareAndOpenPixConfirm(payload, null);
+                // Se total, verifica se houve solicitação de PIX
+                if (payload.efetuar_pix) {
+                    await prepareAndOpenPixConfirm(payload, null);
+                } else {
+                    handleSalvarImediato(operacaoSelecionada.id, payload);
+                }
             }
         } else {
             handleSalvarImediato(operacaoSelecionada.id, payload);
@@ -445,6 +463,14 @@ export default function AnalisePage() {
             showNotification("Status atualizado!", "success");
             fetchPendentes();
             setIsModalOpen(false);
+
+            if (finalPayload.status === 'Aprovada') {
+                setOperacaoParaEmail({
+                    id: operacaoSelecionada.id,
+                    clienteId: operacaoSelecionada?.cliente?.id
+                });
+                setIsEmailModalOpen(true);
+            }
         } catch (e) { showNotification(e.message, "error"); } finally { setIsSaving(false); }
     };
 

@@ -7,9 +7,9 @@ import { differenceInDays } from 'date-fns';
 export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOperacao, clienteId }) {
     const [searchTerm, setSearchTerm] = useState({ nfCte: '', sacadoNome: '' });
     // Alterado: duplicatasEncontradas agora acumula resultados
-    const [duplicatasEncontradas, setDuplicatasEncontradas] = useState([]); 
+    const [duplicatasEncontradas, setDuplicatasEncontradas] = useState([]);
     const [selectedDuplicatas, setSelectedDuplicatas] = useState(new Set());
-    
+
     const [jurosAdicionais, setJurosAdicionais] = useState('');
     const [outrosAbatimentos, setOutrosAbatimentos] = useState('');
 
@@ -27,7 +27,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         setError('');
         onClose();
     };
-    
+
     // Função auxiliar para limpar a busca atual sem perder os itens já selecionados (opcional, mas útil)
     const handleClearSearch = () => {
         setSearchTerm({ nfCte: '', sacadoNome: '' });
@@ -55,7 +55,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         // NÃO limpamos mais duplicatasEncontradas aqui para permitir acumulação
         // setDuplicatasEncontradas([]); 
         setCalculo(null);
-        
+
         try {
             const params = new URLSearchParams({
                 nfCte: searchTerm.nfCte,
@@ -63,33 +63,33 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
                 clienteId: clienteId
             });
             const response = await fetch(`/api/duplicatas/search-pendentes?${params.toString()}`, { headers: getAuthHeader() });
-            
+
             if (!response.ok) {
                 const err = await response.json();
                 throw new Error(err.message || 'Nenhuma duplicata em aberto encontrada.');
             }
-            
+
             const data = await response.json();
-            
+
             // Ordena os novos resultados
             const sortedData = data.sort((a, b) => {
                 const dateA = new Date(a.data_vencimento.split('/').reverse().join('-'));
                 const dateB = new Date(b.data_vencimento.split('/').reverse().join('-'));
                 return dateA - dateB;
             });
-            
+
             // LÓGICA DE ACUMULAÇÃO (CORREÇÃO PRINCIPAL)
             setDuplicatasEncontradas(prev => {
                 // Cria um Map com os itens anteriores para busca rápida por ID
                 const existingIds = new Set(prev.map(item => item.id));
-                
+
                 // Filtra os novos itens que ainda não estão na lista
                 const newItems = sortedData.filter(item => !existingIds.has(item.id));
-                
+
                 // Retorna a lista antiga + novos itens únicos
                 return [...prev, ...newItems];
             });
-            
+
         } catch (err) {
             setError(err.message);
         } finally {
@@ -118,7 +118,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         setError('');
         // Calcula apenas sobre os itens que estão no array duplicatasEncontradas E no Set selectedDuplicatas
         const parcelasSelecionadas = duplicatasEncontradas.filter(d => selectedDuplicatas.has(d.id));
-        
+
         if (parcelasSelecionadas.length === 0) {
             setError('Selecione ao menos uma parcela para calcular.');
             return;
@@ -137,37 +137,38 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
 
             const dataOperacaoOriginal = new Date(p.data_operacao + 'T12:00:00Z');
             const diasCorridos = differenceInDays(dataOperacaoNova, dataOperacaoOriginal);
-            
+
             const dataVencimentoOriginal = new Date(p.data_vencimento + 'T12:00:00Z');
             const prazoTotalParcela = differenceInDays(dataVencimentoOriginal, dataOperacaoOriginal);
-            
+
             if (prazoTotalParcela > 0 && diasCorridos > 0) {
                 const jurosDiario = p.valor_juros / prazoTotalParcela;
                 jurosProporcionais += jurosDiario * diasCorridos;
             }
         });
-        
+
         const creditoFinal = totalJurosOriginais - jurosProporcionais;
-        
+
         setCalculo({
             credito: creditoFinal > 0 ? creditoFinal : 0,
             principal: totalPrincipal,
             descricao: `NF/CTe ${Array.from(nfCtes).join(', ')}`
         });
     };
-    
+
     const handleConfirm = () => {
         if (!calculo) {
             setError('Por favor, calcule o crédito antes de confirmar.');
             return;
         }
-        
+
         onConfirm({
             credito: calculo.credito,
             principal: calculo.principal,
             jurosAdicionais: parseBRL(jurosAdicionais),
             abatimentos: parseBRL(outrosAbatimentos),
             duplicataIds: Array.from(selectedDuplicatas),
+            duplicatasDetalhes: duplicatasEncontradas.filter(d => selectedDuplicatas.has(d.id)),
             descricao: calculo.descricao
         });
         handleClose();
@@ -179,12 +180,12 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[60] p-4" onClick={handleClose}>
             <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-3xl text-white max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-                
+
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-bold">Recompra de Duplicatas</h2>
                     <span className="text-sm text-gray-400">{countSelected} itens selecionados</span>
                 </div>
-                
+
                 {/* --- SEÇÃO DE BUSCA --- */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 flex-shrink-0">
                     <input
@@ -204,7 +205,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
                         className="md:col-span-1 bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
                     />
                     <div className="md:col-span-1 flex gap-2">
-                         <button onClick={handleSearch} disabled={loading} className="flex-grow bg-blue-600 font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50">
+                        <button onClick={handleSearch} disabled={loading} className="flex-grow bg-blue-600 font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50">
                             {loading ? '...' : 'Adicionar à Lista'}
                         </button>
                         {duplicatasEncontradas.length > 0 && (
@@ -235,7 +236,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
                         <p className="text-gray-500 text-sm text-center p-4">Utilize a busca acima para adicionar itens à lista de recompra.</p>
                     )}
                 </div>
-                
+
                 {/* --- SEÇÃO DE CÁLCULO --- */}
                 <div className="mt-4 flex-shrink-0">
                     {selectedDuplicatas.size > 0 && (
