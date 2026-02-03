@@ -292,6 +292,7 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                                     <option value="itau">Itaú</option>
                                     <option value="safra">Safra</option>
                                     <option value="bradesco">Bradesco</option>
+                                    <option value="inter">Inter</option>
                                 </select>
                             </div>
                             <div className="mt-6 flex justify-end gap-4">

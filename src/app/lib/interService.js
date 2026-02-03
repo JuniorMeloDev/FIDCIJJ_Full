@@ -20,29 +20,42 @@ const createInterAgent = () => {
     });
 };
 
+const isInterSandbox = () => {
+    const env = (process.env.INTER_ENV || '').toLowerCase();
+    return env === 'sandbox' || process.env.INTER_USE_SANDBOX === 'true';
+};
+
+const getInterBaseUrl = () => {
+    return isInterSandbox()
+        ? 'https://cdpj-sandbox.partners.uatinter.co'
+        : 'https://cdpj.partners.bancointer.com.br';
+};
+
 /**
  * Obtém o token de acesso (access_token) da API de produção do Banco Inter.
  */
 export async function getInterAccessToken() {
-    console.log("\n--- [INTER API] Etapa 1: Obtenção de Token de PRODUÇÃO ---");
+    console.log(`\n--- [INTER API] Etapa 1: Obtenção de Token (${isInterSandbox() ? 'SANDBOX' : 'PRODUÇÃO'}) ---`);
     const clientId = process.env.INTER_CLIENT_ID;
     const clientSecret = process.env.INTER_CLIENT_SECRET;
     if (!clientId || !clientSecret) {
-        throw new Error('As credenciais de produção (INTER_CLIENT_ID, INTER_CLIENT_SECRET) do Inter não estão configuradas.');
+        throw new Error('As credenciais (INTER_CLIENT_ID, INTER_CLIENT_SECRET) do Inter não estão configuradas.');
     }
-    const tokenEndpoint = 'https://cdpj.partners.bancointer.com.br/oauth/v2/token';
+    const tokenEndpoint = `${getInterBaseUrl()}/oauth/v2/token`;
+    const defaultScope = 'extrato.read pagamento-pix.write pagamento-pix.read boleto-cobranca.write boleto-cobranca.read';
+    const scope = process.env.INTER_OAUTH_SCOPE || defaultScope;
     const postData = new URLSearchParams({
         'grant_type': 'client_credentials',
         'client_id': clientId,
         'client_secret': clientSecret,
-        'scope': 'extrato.read pagamento-pix.write pagamento-pix.read'
+        'scope': scope
     }).toString();
     const options = {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         agent: createInterAgent(),
     };
-    console.log("[LOG INTER] Enviando requisição de token para PRODUÇÃO.");
+    console.log(`[LOG INTER] Enviando requisição de token para ${isInterSandbox() ? 'SANDBOX' : 'PRODUÇÃO'}.`);
     return new Promise((resolve, reject) => {
         const req = https.request(tokenEndpoint, options, (res) => {
             let data = '';
@@ -72,7 +85,7 @@ export async function getInterAccessToken() {
 export async function consultarSaldoInter(accessToken, contaCorrente) {
     console.log("\n--- [INTER API] Etapa 2: Consulta de Saldo ---");
     const hoje = format(new Date(), 'yyyy-MM-dd');
-    const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/saldo?dataSaldo=${hoje}`;
+    const apiEndpoint = `${getInterBaseUrl()}/banking/v2/saldo?dataSaldo=${hoje}`;
     const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
 
     const options = {
@@ -110,7 +123,7 @@ export async function consultarSaldoInter(accessToken, contaCorrente) {
  */
 export async function consultarExtratoInter(accessToken, contaCorrente, dataInicio, dataFim) {
     console.log("\n--- [INTER API] Etapa 3: Consulta de Extrato ---");
-    const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/extrato?dataInicio=${dataInicio}&dataFim=${dataFim}`;
+    const apiEndpoint = `${getInterBaseUrl()}/banking/v2/extrato?dataInicio=${dataInicio}&dataFim=${dataFim}`;
     const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
     const options = {
         method: 'GET',
@@ -148,7 +161,7 @@ export async function consultarExtratoInter(accessToken, contaCorrente, dataInic
  */
 async function consultarPixEnviadoInter(accessToken, contaCorrente, codigoSolicitacao) {
     console.log(`\n--- [INTER API] Etapa 3.1: Consultando PIX com código ${codigoSolicitacao} ---`);
-    const apiEndpoint = `https://cdpj.partners.bancointer.com.br/banking/v2/pix/${codigoSolicitacao}`;
+    const apiEndpoint = `${getInterBaseUrl()}/banking/v2/pix/${codigoSolicitacao}`;
     const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
     const options = {
         method: 'GET',
@@ -202,7 +215,7 @@ if (data.statusCode >= 200 && data.statusCode < 300 && jsonData.transacaoPix && 
 export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
     console.log("\n--- [INTER API] Etapa 3: Envio de PIX ---");
 
-    const apiEndpoint = 'https://cdpj.partners.bancointer.com.br/banking/v2/pix';
+    const apiEndpoint = `${getInterBaseUrl()}/banking/v2/pix`;
     const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
     const idIdempotente = randomUUID();
 
@@ -250,4 +263,124 @@ export async function enviarPixInter(accessToken, dadosPix, contaCorrente) {
     
     // Etapa 2: Usar o código de solicitação para obter os detalhes completos, incluindo o endToEndId
     return await consultarPixEnviadoInter(accessToken, contaCorrente, resultadoEnvio.codigoSolicitacao);
+}
+
+/**
+ * Emite uma cobrança (boleto com pix) na API Cobrança V3.
+ */
+export async function emitirCobrancaInter(accessToken, contaCorrente, dadosCobranca) {
+    console.log("\n--- [INTER API] Etapa 4: Emissão de Cobrança ---");
+    const apiEndpoint = `${getInterBaseUrl()}/cobranca/v3/cobrancas`;
+    const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
+    const payload = JSON.stringify(dadosCobranca);
+
+    const options = {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'x-conta-corrente': cleanContaCorrente,
+            'Content-Type': 'application/json'
+        },
+        agent: createInterAgent()
+    };
+
+    return new Promise((resolve, reject) => {
+        const req = https.request(apiEndpoint, options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const jsonData = JSON.parse(data);
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        resolve(jsonData);
+                    } else {
+                        reject(new Error(`Erro ${res.statusCode} ao emitir cobrança: ${jsonData.detail || jsonData.title || data}`));
+                    }
+                } catch (e) {
+                    reject(new Error(`Falha ao processar resposta da emissão: ${data}`));
+                }
+            });
+        });
+        req.on('error', e => reject(new Error(`Erro de rede na emissão de cobrança: ${e.message}`)));
+        req.write(payload);
+        req.end();
+    });
+}
+
+/**
+ * Consulta uma cobrança a partir do codigoSolicitacao.
+ */
+export async function consultarCobrancaInter(accessToken, contaCorrente, codigoSolicitacao) {
+    console.log(`\n--- [INTER API] Etapa 5: Consultando Cobrança (${codigoSolicitacao}) ---`);
+    const apiEndpoint = `${getInterBaseUrl()}/cobranca/v3/cobrancas/${codigoSolicitacao}`;
+    const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
+
+    const options = {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'x-conta-corrente': cleanContaCorrente
+        },
+        agent: createInterAgent()
+    };
+
+    return new Promise((resolve, reject) => {
+        const req = https.request(apiEndpoint, options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const jsonData = JSON.parse(data);
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        resolve(jsonData);
+                    } else {
+                        reject(new Error(`Erro ${res.statusCode} ao consultar cobrança: ${jsonData.detail || jsonData.title || data}`));
+                    }
+                } catch (e) {
+                    reject(new Error(`Falha ao processar resposta da consulta: ${data}`));
+                }
+            });
+        });
+        req.on('error', e => reject(new Error(`Erro de rede na consulta da cobrança: ${e.message}`)));
+        req.end();
+    });
+}
+
+/**
+ * Recupera o PDF da cobrança a partir do codigoSolicitacao.
+ */
+export async function obterPdfCobrancaInter(accessToken, contaCorrente, codigoSolicitacao) {
+    console.log(`\n--- [INTER API] Etapa 6: Baixando PDF (${codigoSolicitacao}) ---`);
+    const apiEndpoint = `${getInterBaseUrl()}/cobranca/v3/cobrancas/${codigoSolicitacao}/pdf`;
+    const cleanContaCorrente = contaCorrente.replace(/\D/g, '');
+
+    const options = {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'x-conta-corrente': cleanContaCorrente
+        },
+        agent: createInterAgent()
+    };
+
+    return new Promise((resolve, reject) => {
+        const req = https.request(apiEndpoint, options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const jsonData = JSON.parse(data);
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        resolve(jsonData);
+                    } else {
+                        reject(new Error(`Erro ${res.statusCode} ao obter PDF: ${jsonData.detail || jsonData.title || data}`));
+                    }
+                } catch (e) {
+                    reject(new Error(`Falha ao processar resposta do PDF: ${data}`));
+                }
+            });
+        });
+        req.on('error', e => reject(new Error(`Erro de rede ao obter PDF: ${e.message}`)));
+        req.end();
+    });
 }

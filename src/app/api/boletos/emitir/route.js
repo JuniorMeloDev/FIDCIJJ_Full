@@ -14,6 +14,11 @@ import {
   registrarBoleto,
 } from "@/app/lib/bradescoService";
 import { getItauAccessToken, registrarBoletoItau } from "@/app/lib/itauService";
+import {
+  getInterAccessToken,
+  emitirCobrancaInter,
+  consultarCobrancaInter,
+} from "@/app/lib/interService";
 
 // Função Dac Itaú (mantida igual)
 function calcularDacItau(nossoNumeroBase, codigoCarteira = "109") {
@@ -201,6 +206,54 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
     };
   }
 
+  // INTER (Boleto com Pix V3)
+  if (banco === "inter") {
+    const valorComAbatimento = duplicata.valor_bruto - (abatimento || 0);
+    if (valorComAbatimento <= 0) throw new Error("Valor com abatimento inválido.");
+
+    const cleanCpfCnpj = (sacado.cnpj || "").replace(/\D/g, "");
+    const isCpf = cleanCpfCnpj.length === 11;
+
+    const enderecoRaw = (sacado.endereco || "NAO INFORMADO").trim();
+    let endereco = enderecoRaw;
+    let numero = "0";
+    if (enderecoRaw.includes(",")) {
+      const parts = enderecoRaw.split(",");
+      endereco = parts[0].trim() || enderecoRaw;
+      numero = (parts.slice(1).join(",").trim() || "0").substring(0, 10);
+    }
+
+    const telefoneRaw = (sacado.fone || "").replace(/\D/g, "");
+    const ddd = telefoneRaw.length >= 10 ? telefoneRaw.substring(0, 2) : undefined;
+    const telefone = telefoneRaw.length >= 10 ? telefoneRaw.substring(2) : undefined;
+
+    const nfCteClean = (duplicata.nf_cte || "").replace(/[^0-9A-Za-z]/g, "");
+    const seuNumeroBase = nfCteClean || duplicata.id.toString();
+    const seuNumero = seuNumeroBase.length > 15 ? seuNumeroBase.slice(-15) : seuNumeroBase;
+
+    return {
+      seuNumero,
+      valorNominal: parseFloat(valorComAbatimento.toFixed(2)),
+      dataVencimento: format(new Date(duplicata.data_vencimento + "T12:00:00Z"), "yyyy-MM-dd"),
+      numDiasAgenda: 0,
+      pagador: {
+        cpfCnpj: cleanCpfCnpj,
+        tipoPessoa: isCpf ? "FISICA" : "JURIDICA",
+        nome: (sacado.nome || "NAO INFORMADO").substring(0, 60),
+        endereco: endereco.substring(0, 60),
+        numero,
+        complemento: (sacado.complemento || "").substring(0, 30),
+        bairro: (sacado.bairro || "NAO INFORMADO").substring(0, 20),
+        cidade: (sacado.municipio || "NAO INFORMADO").substring(0, 20),
+        uf: sacado.uf || "SP",
+        cep: (sacado.cep || "00000000").replace(/\D/g, ""),
+        email: sacado.email || undefined,
+        ddd,
+        telefone,
+      },
+    };
+  }
+
   throw new Error("Banco inválido.");
 }
 
@@ -255,6 +308,97 @@ export async function POST(request) {
       linhaDigitavelParaRetorno = dadosIndividuais.linha_digitavel || "N/A";
       dadosParaSalvar = dadosIndividuais.codigo_barras || linhaDigitavelParaRetorno;
       console.log(`[EMISSÃO API ITAÚ] Sucesso. Linha Digitável: ${linhaDigitavelParaRetorno}`);
+    
+    } else if (banco === "inter") {
+      const tokenData = await getInterAccessToken();
+      const contaCorrente = process.env.INTER_CONTA_CORRENTE;
+      if (!contaCorrente) throw new Error("INTER_CONTA_CORRENTE não configurada.");
+
+      console.log("[EMISSÃO API] Token Inter obtido. Emitindo cobrança...");
+      const cobrancaEmitida = await emitirCobrancaInter(tokenData.access_token, contaCorrente, dadosParaBoleto);
+
+      const codigoSolicitacao = cobrancaEmitida?.codigoSolicitacao;
+      if (!codigoSolicitacao) {
+        console.error("[EMISSÃO API INTER ERRO] Resposta sem codigoSolicitacao:", JSON.stringify(cobrancaEmitida));
+        throw new Error("Resposta da API Inter não retornou codigoSolicitacao.");
+      }
+
+      // Consulta com retry curto para tentar obter a linha digitável/código de barras.
+      let detalhesCobranca = null;
+      const maxAttempts = 5;
+      const delay = 2000;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          detalhesCobranca = await consultarCobrancaInter(tokenData.access_token, contaCorrente, codigoSolicitacao);
+          if (detalhesCobranca?.boleto?.linhaDigitavel || detalhesCobranca?.boleto?.codigoBarras) {
+            break;
+          }
+        } catch (err) {
+          console.warn(`[EMISSÃO API INTER] Tentativa ${attempt} falhou: ${err.message}`);
+        }
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+
+      const linhaDigitavelInter = detalhesCobranca?.boleto?.linhaDigitavel;
+      const codigoBarrasInter = detalhesCobranca?.boleto?.codigoBarras;
+      linhaDigitavelParaRetorno = linhaDigitavelInter || "EM_PROCESSAMENTO";
+      dadosParaSalvar = codigoBarrasInter || linhaDigitavelInter || null;
+
+      // Salva também o codigoSolicitacao para uso do PDF
+      dadosParaSalvar = dadosParaSalvar || null;
+      console.log(`[EMISSÃO API INTER] CódigoSolicitação: ${codigoSolicitacao}`);
+
+      const updatePayload = {
+        banco_emissor_boleto: banco,
+        valor_abatimento: abatimento || 0,
+        codigo_solicitacao_inter: codigoSolicitacao,
+      };
+      if (dadosParaSalvar) {
+        updatePayload.linha_digitavel = dadosParaSalvar;
+      }
+
+      // Salvar no Supabase (Inter: usa payload específico)
+      console.log(`[EMISSÃO API] Atualizando duplicata ${duplicataId} no Supabase (Inter)...`);
+      const { error: updateError } = await supabase
+        .from("duplicatas")
+        .update(updatePayload)
+        .eq("id", duplicataId);
+
+      if (updateError) {
+        console.error(`[EMISSÃO API INTER ERRO DB] Falha ao salvar no Supabase: ${updateError.message}`);
+
+        // Fallback: tenta salvar sem o campo codigo_solicitacao_inter (caso a coluna não exista).
+        const fallbackPayload = {
+          banco_emissor_boleto: banco,
+          valor_abatimento: abatimento || 0,
+        };
+        if (dadosParaSalvar) {
+          fallbackPayload.linha_digitavel = dadosParaSalvar;
+        }
+
+        const { error: fallbackError } = await supabase
+          .from("duplicatas")
+          .update(fallbackPayload)
+          .eq("id", duplicataId);
+
+        return NextResponse.json({
+          success: true,
+          linhaDigitavel: linhaDigitavelParaRetorno,
+          codigoSolicitacao,
+          warning: fallbackError
+            ? "Cobrança emitida, mas falha ao salvar no banco."
+            : "Cobrança emitida, mas a coluna codigo_solicitacao_inter não foi salva.",
+        });
+      }
+
+      console.log(`[EMISSÃO API INTER] Sucesso total para duplicata ${duplicataId}.`);
+      return NextResponse.json({
+        success: true,
+        linhaDigitavel: linhaDigitavelParaRetorno,
+        codigoSolicitacao,
+      });
     
     } else {
       throw new Error("Banco selecionado inválido.");
