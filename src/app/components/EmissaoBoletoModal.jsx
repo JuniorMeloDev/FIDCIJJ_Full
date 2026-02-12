@@ -223,7 +223,7 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
     const startEmissaoProcess = () => {
         // --- CORREÇÃO APLICADA AQUI ---
         // Ativa o fluxo de abatimento para Itaú e Safra
-        if (['itau', 'safra'].includes(bancoSelecionado)) {
+        if (['itau', 'safra', 'bradesco'].includes(bancoSelecionado)) {
             setShowAbatimentoQuestion(true);
         } else {
             handleEmitirBoletos(0);
@@ -341,3 +341,4 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
         </>
     );
 }
+

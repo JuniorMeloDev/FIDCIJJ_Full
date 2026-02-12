@@ -20,7 +20,7 @@ export async function GET(request) {
 
         let query = supabase
             .from('duplicatas')
-            .select('*, operacao:operacoes!inner(cliente_id)') // <-- CORREÇÃO: Faz join com operacoes
+            .select('*, operacao:operacoes!inner(cliente_id, valor_total_bruto, valor_liquido, valor_total_juros, valor_total_descontos)') // <-- CORREÇÃO: Faz join com operacoes
             // REGRA DE NEGÓCIO CORRETA: Apenas duplicatas "Em Aberto"
             .eq('status_recebimento', 'Pendente'); 
 

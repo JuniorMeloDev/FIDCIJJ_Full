@@ -145,11 +145,58 @@ export async function GET(request) {
         // Se houver ordenação complexa (ex: Cedente) que não foi feita no banco, 
         // fazemos em memória aqui (apenas para os X retornados).
         // Cedente é 'operacao.cliente.nome', difícil ordenar direto na query sem join explícito complexo.
+        const compareNfCte = (nfA, nfB) => {
+            const [baseA = '', parcelaA = ''] = String(nfA || '').split('.');
+            const [baseB = '', parcelaB = ''] = String(nfB || '').split('.');
+            const baseNumA = Number(baseA);
+            const baseNumB = Number(baseB);
+
+            if (Number.isFinite(baseNumA) && Number.isFinite(baseNumB) && baseNumA !== baseNumB) {
+                return baseNumA - baseNumB;
+            }
+
+            const cmpBase = baseA.localeCompare(baseB, 'pt-BR', { numeric: true, sensitivity: 'base' });
+            if (cmpBase !== 0) return cmpBase;
+
+            const parcelaNumA = Number(parcelaA);
+            const parcelaNumB = Number(parcelaB);
+            if (Number.isFinite(parcelaNumA) && Number.isFinite(parcelaNumB) && parcelaNumA !== parcelaNumB) {
+                return parcelaNumA - parcelaNumB;
+            }
+
+            return parcelaA.localeCompare(parcelaB, 'pt-BR', { numeric: true, sensitivity: 'base' });
+        };
+
+        if (sortKey === 'dataOperacao') {
+            formattedData.sort((a, b) => {
+                const timeA = new Date(a.dataOperacao).getTime();
+                const timeB = new Date(b.dataOperacao).getTime();
+                const cmpData = timeA - timeB;
+                if (cmpData !== 0) return sortDirection === 'ASC' ? cmpData : -cmpData;
+
+                const cmpNf = compareNfCte(a.nfCte, b.nfCte);
+                if (cmpNf !== 0) return cmpNf;
+                return (a.id || 0) - (b.id || 0);
+            });
+        }
+
+        if (sortKey === 'nfCte') {
+            formattedData.sort((a, b) => {
+                const cmpNf = compareNfCte(a.nfCte, b.nfCte);
+                if (cmpNf !== 0) return sortDirection === 'ASC' ? cmpNf : -cmpNf;
+                return (a.id || 0) - (b.id || 0);
+            });
+        }
+
         if (sortKey === 'empresaCedente') {
             formattedData.sort((a, b) => {
                  const nomeA = a.empresaCedente || '';
                  const nomeB = b.empresaCedente || '';
-                 return sortDirection === 'ASC' ? nomeA.localeCompare(nomeB) : nomeB.localeCompare(nomeA);
+                 const cmpNome = sortDirection === 'ASC' ? nomeA.localeCompare(nomeB) : nomeB.localeCompare(nomeA);
+                 if (cmpNome !== 0) return cmpNome;
+                 const cmpNf = compareNfCte(a.nfCte, b.nfCte);
+                 if (cmpNf !== 0) return cmpNf;
+                 return (a.id || 0) - (b.id || 0);
             });
         }
 

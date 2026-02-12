@@ -110,7 +110,7 @@ export default function AnalisePage() {
                     descontosRecompra.push({
                         id: `rec-deb-${d.id}-${Date.now()}`,
                         descricao: `Recompra NF/CTe ${d.nf_cte} - ${d.cliente_sacado}`,
-                        valor: Math.abs(d.valor_bruto)
+                        valor: Math.abs(d.valor_recompra ?? d.valor_bruto)
                     });
                 });
             } else if (data.principal > 0) {

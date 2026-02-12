@@ -31,6 +31,20 @@ const processAbcData = (data) => {
     });
 };
 
+const isPostFixedInterest = (row) => {
+    const totalDescontadoNaOrigem = (row.operacao_valor_total_bruto || 0) - (row.operacao_valor_liquido || 0);
+    const descontosEsperadosPreFixado = (row.operacao_valor_total_juros || 0) + (row.operacao_valor_total_descontos || 0);
+    if (totalDescontadoNaOrigem < (descontosEsperadosPreFixado - 0.01)) {
+        return (row.valor_juros || 0) > 0;
+    }
+    return false;
+};
+
+const getValorMaisJurosPos = (row) => {
+    if (!isPostFixedInterest(row)) return null;
+    return (row.valor_bruto || 0) + (row.valor_juros || 0);
+};
+
 export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchClientes, fetchSacados, isPortal = false }) {
     const initialState = {
         dataInicio: "", dataFim: "", tipoOperacaoId: [], clienteId: "", clienteNome: "", sacado: "", conta: "", status: "Todos", categoria: "Todos", tipoValor: "Todos"
@@ -238,21 +252,22 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 break;
 
             case 'duplicatas':
-                head = [['Data Op.', 'Tipo Op.', 'NF/CT-e', 'Cedente', 'Sacado', 'Venc.', 'Status', 'Juros Op.', 'Juros Mora', 'Valor Bruto']];
+                head = [['Data Op.', 'Tipo Op.', 'NF/CT-e', 'Cedente', 'Sacado', 'Venc.', 'Status', 'Juros Op.', 'Valor Bruto', 'Valor + Juros']];
                 body = data.map(row => [
                     formatDate(row.data_operacao), row.tipo_operacao_nome, row.nf_cte, row.empresa_cedente,
                     row.cliente_sacado, formatDate(row.data_vencimento), row.status_recebimento,
-                    formatBRLNumber(row.valor_juros || 0), formatBRLNumber(row.juros_mora || 0), formatBRLNumber(row.valor_bruto)
+                    formatBRLNumber(row.valor_juros || 0),
+                    formatBRLNumber(row.valor_bruto),
+                    getValorMaisJurosPos(row) !== null ? formatBRLNumber(getValorMaisJurosPos(row)) : '-'
                 ]);
                 const totalBruto = data.reduce((sum, row) => sum + (row.valor_bruto || 0), 0);
                 const totalJurosOp = data.reduce((sum, row) => sum + (row.valor_juros || 0), 0);
-                const totalJurosMora = data.reduce((sum, row) => sum + (row.juros_mora || 0), 0);
-                const totalJuros = totalJurosOp + totalJurosMora;
+                const totalValorMaisJurosPos = data.reduce((sum, row) => sum + (getValorMaisJurosPos(row) || 0), 0);
 
                 autoTable(doc, { startY: 35, head: head, body: body });
                 autoTable(doc, {
                     startY: doc.lastAutoTable.finalY,
-                    body: [['', '', '', '', '', 'TOTAIS:', formatBRLNumber(totalJurosOp), formatBRLNumber(totalJurosMora), formatBRLNumber(totalBruto)]],
+                    body: [['', '', '', '', '', '', 'TOTAIS:', formatBRLNumber(totalJurosOp), formatBRLNumber(totalBruto), formatBRLNumber(totalValorMaisJurosPos)]],
                     theme: 'grid', bodyStyles: { fontStyle: 'bold', fillColor: [41, 128, 185], textColor: 255 }
                 });
                 break;
@@ -313,7 +328,7 @@ export default function RelatorioModal({ isOpen, onClose, tiposOperacao, fetchCl
                 ws_data = data.map(row => ({ Data: formatDate(row.data_movimento), Descrição: row.descricao, Conta: row.conta_bancaria, Categoria: row.categoria, Valor: row.valor }));
                 break;
             case 'duplicatas':
-                ws_data = data.map(row => ({ 'Data Op.': formatDate(row.data_operacao), 'Tipo de Operação': row.tipo_operacao_nome, 'NF/CT-e': row.nf_cte, 'Cedente': row.empresa_cedente, 'Sacado': row.cliente_sacado, 'Vencimento': formatDate(row.data_vencimento), 'Status': row.status_recebimento, 'Juros Op.': row.valor_juros || 0, 'Juros Mora': row.juros_mora || 0, 'Valor Bruto': row.valor_bruto }));
+                ws_data = data.map(row => ({ 'Data Op.': formatDate(row.data_operacao), 'Tipo de Operação': row.tipo_operacao_nome, 'NF/CT-e': row.nf_cte, 'Cedente': row.empresa_cedente, 'Sacado': row.cliente_sacado, 'Vencimento': formatDate(row.data_vencimento), 'Status': row.status_recebimento, 'Juros Op.': row.valor_juros || 0, 'Valor Bruto': row.valor_bruto, 'Valor + Juros': getValorMaisJurosPos(row) }));
                 break;
             case 'totalOperado':
                 const summary = [{ Item: 'Total Operado no Período', Valor: data.valorOperadoNoMes }, { Item: 'Total de Juros', Valor: data.totalJuros }, { Item: 'Total de Despesas', Valor: data.totalDespesas }, { Item: 'Lucro Líquido', Valor: data.lucroLiquido }];

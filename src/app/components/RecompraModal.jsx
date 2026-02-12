@@ -17,6 +17,23 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    const isPostFixedInterest = (operation, duplicate) => {
+        if (!operation) return false;
+        const totalDescontadoNaOrigem = (operation.valor_total_bruto || 0) - (operation.valor_liquido || 0);
+        const descontosEsperadosPreFixado = (operation.valor_total_juros || 0) + (operation.valor_total_descontos || 0);
+        if (totalDescontadoNaOrigem < (descontosEsperadosPreFixado - 0.01)) {
+            return (duplicate.valorJuros || duplicate.valor_juros || 0) > 0;
+        }
+        return false;
+    };
+
+    const getValorRecompraDuplicata = (duplicate) => {
+        const valorBruto = Number(duplicate.valorBruto || duplicate.valor_bruto) || 0;
+        const valorJuros = Number(duplicate.valorJuros || duplicate.valor_juros) || 0;
+        const ehPosFixado = isPostFixedInterest(duplicate.operacao, duplicate);
+        return ehPosFixado ? valorBruto + valorJuros : valorBruto;
+    };
+
     const handleClose = () => {
         setSearchTerm({ nfCte: '', sacadoNome: '' });
         setDuplicatasEncontradas([]);
@@ -131,8 +148,9 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
         let nfCtes = new Set();
 
         parcelasSelecionadas.forEach(p => {
-            totalJurosOriginais += p.valor_juros;
-            totalPrincipal += p.valor_bruto;
+            const valorJuros = Number(p.valor_juros) || 0;
+            totalJurosOriginais += valorJuros;
+            totalPrincipal += getValorRecompraDuplicata(p);
             nfCtes.add(p.nf_cte.split('.')[0]);
 
             const dataOperacaoOriginal = new Date(p.data_operacao + 'T12:00:00Z');
@@ -142,7 +160,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
             const prazoTotalParcela = differenceInDays(dataVencimentoOriginal, dataOperacaoOriginal);
 
             if (prazoTotalParcela > 0 && diasCorridos > 0) {
-                const jurosDiario = p.valor_juros / prazoTotalParcela;
+                const jurosDiario = valorJuros / prazoTotalParcela;
                 jurosProporcionais += jurosDiario * diasCorridos;
             }
         });
@@ -162,13 +180,20 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
             return;
         }
 
+        const duplicatasDetalhes = duplicatasEncontradas
+            .filter(d => selectedDuplicatas.has(d.id))
+            .map(d => ({
+                ...d,
+                valor_recompra: getValorRecompraDuplicata(d)
+            }));
+
         onConfirm({
             credito: calculo.credito,
             principal: calculo.principal,
             jurosAdicionais: parseBRL(jurosAdicionais),
             abatimentos: parseBRL(outrosAbatimentos),
             duplicataIds: Array.from(selectedDuplicatas),
-            duplicatasDetalhes: duplicatasEncontradas.filter(d => selectedDuplicatas.has(d.id)),
+            duplicatasDetalhes,
             descricao: calculo.descricao
         });
         handleClose();
@@ -228,7 +253,7 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
                                     <span className="font-semibold truncate" title={d.cliente_sacado}>{d.cliente_sacado}</span>
                                     <span>NF/CTe: <strong>{d.nf_cte}</strong></span>
                                     <span>Venc: {formatDate(d.data_vencimento)}</span>
-                                    <span className="text-right">{formatBRLNumber(d.valor_bruto)}</span>
+                                    <span className="text-right">{formatBRLNumber(getValorRecompraDuplicata(d))}</span>
                                 </div>
                             </label>
                         ))

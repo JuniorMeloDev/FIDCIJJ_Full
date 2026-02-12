@@ -28,6 +28,10 @@ export async function GET(request) {
                 operacao:operacoes!inner (
                     cliente_id,
                     tipo_operacao_id,
+                    valor_total_bruto,
+                    valor_liquido,
+                    valor_total_juros,
+                    valor_total_descontos,
                     status,
                     cliente:clientes ( nome ),
                     tipo_operacao:tipos_operacao ( nome )
@@ -92,6 +96,10 @@ export async function GET(request) {
             data_vencimento: d.data_vencimento,
             tipo_operacao_nome: d.operacao?.tipo_operacao?.nome,
             status_recebimento: d.status_recebimento,
+            operacao_valor_total_bruto: d.operacao?.valor_total_bruto,
+            operacao_valor_liquido: d.operacao?.valor_liquido,
+            operacao_valor_total_juros: d.operacao?.valor_total_juros,
+            operacao_valor_total_descontos: d.operacao?.valor_total_descontos,
         }));
 
         // 6. LÓGICA DE DEDUPLICAÇÃO FINAL
