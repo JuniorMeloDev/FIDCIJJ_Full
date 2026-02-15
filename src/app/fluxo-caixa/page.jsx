@@ -31,6 +31,117 @@ import ConciliacaoOFXModal from "../components/ConciliacaoOFXModal";
 const ITEMS_PER_PAGE = 8;
 const INTER_ITEMS_PER_PAGE = 2;
 
+const parseContaExterna = (contaExterna) => {
+  const parts = String(contaExterna || "").split("|");
+  if (parts.length >= 3) {
+    return {
+      banco: parts[0],
+      agencia: parts[1],
+      conta: parts[2],
+    };
+  }
+
+  return {
+    banco: "Inter",
+    agencia: "",
+    conta: String(contaExterna || ""),
+  };
+};
+
+const onlyDigits = (value) => String(value || "").replace(/\D/g, "");
+
+const normalizeBradescoAgencia = (agencia) => onlyDigits(agencia).slice(0, 4);
+
+const normalizeBradescoConta = (conta) => {
+  const digits = onlyDigits(conta);
+  if (digits.length <= 7) return digits;
+  return digits.slice(0, 7);
+};
+
+const toDDMMYYYY = (isoDate) => {
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return "";
+  const [yyyy, mm, dd] = isoDate.split("-");
+  return `${dd}${mm}${yyyy}`;
+};
+
+const parseBrMoney = (value) => {
+  const cleaned = String(value ?? "")
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .replace(/[^\d.-]/g, "");
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const normalizeBradescoDate = (value) => {
+  const raw = String(value || "").trim();
+  const ddmmyyyy = raw.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (ddmmyyyy) return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
+
+  const withSlash = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (withSlash) return `${withSlash[3]}-${withSlash[2]}-${withSlash[1]}`;
+
+  const withDot = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (withDot) return `${withDot[3]}-${withDot[2]}-${withDot[1]}`;
+
+  return raw;
+};
+
+const normalizeBradescoExtrato = (raw) => {
+  const ultimos = raw?.extratoUltimosLancamentos?.listaLancamentos || {};
+
+  const pickArray = (keyIncludes) =>
+    Object.entries(ultimos).find(([key, value]) => {
+      if (!Array.isArray(value)) return false;
+      const normalizedKey = key
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      return keyIncludes.some((term) => normalizedKey.includes(term));
+    })?.[1] || [];
+
+  const listaUltimos = pickArray(["ultimos"]);
+  const listaDia = pickArray(["dia"]);
+  const listaFuturos =
+    raw?.extratoLancamentosFuturos?.listaLancamentos?.["Lancamentos Futuros"] ||
+    raw?.extratoLancamentosFuturos?.listaLancamentos?.["Lançamentos Futuros"] ||
+    [];
+  const listaPeriodo = raw?.extratoPorPeriodo?.lstLancamentoMensal || [];
+
+  const all = [...listaUltimos, ...listaDia, ...listaFuturos, ...listaPeriodo];
+
+  const transacoes = all
+    .map((item, index) => {
+      const tipoOperacao = item.sinalLancamento === "-" ? "D" : "C";
+      const valor = parseBrMoney(item.valorLancamento);
+      const saldoSemSinal = parseBrMoney(item.valorSaldoAposLancamento);
+      const saldoApos =
+        item.sinalSaldo === "-" ? saldoSemSinal * -1 : saldoSemSinal;
+
+      return {
+        idTransacao: String(item.numeroDocumento || `bradesco-${index}`),
+        dataEntrada: normalizeBradescoDate(item.dataLancamento),
+        tipoOperacao,
+        valor,
+        descricao:
+          item.descritivoLancamentoCompleto ||
+          item.descritivoLancamentoAbreviado ||
+          item.segundaLinhalLancamento ||
+          "Lançamento",
+        titulo: item.numeroDocumento || "",
+        saldoApos: Number.isFinite(saldoApos) ? saldoApos : null,
+      };
+    })
+    .filter((t) => t.dataEntrada);
+
+  const saldoDisponivel =
+    transacoes.length > 0
+      ? transacoes[transacoes.length - 1]?.saldoApos ?? 0
+      : 0;
+
+  return { transacoes, saldoDisponivel };
+};
+
 export default function FluxoDeCaixaPage() {
   const [movimentacoes, setMovimentacoes] = useState([]);
   const [saldoAnterior, setSaldoAnterior] = useState(0); // Novo state para saldo inicial
@@ -255,19 +366,75 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
-  const fetchExtratoInter = async (conta, dataInicio, dataFim) => {
+  const fetchExtratoApiBancaria = async (contaExterna, dataInicio, dataFim) => {
     setLoading(true);
     setError("");
     setMovimentacoes([]);
     setInterExtrato(null);
     setInterSaldo(null);
     try {
+      const contaInfo = parseContaExterna(contaExterna);
+      const banco = String(contaInfo.banco || "").toLowerCase();
+
+      if (banco.includes("bradesco")) {
+        const dataInicioBr = toDDMMYYYY(dataInicio);
+        const dataFimBr = toDDMMYYYY(dataFim);
+        const agenciaBr = normalizeBradescoAgencia(contaInfo.agencia);
+        const contaBr = normalizeBradescoConta(contaInfo.conta);
+        if (!dataInicioBr || !dataFimBr) {
+          throw new Error("Período inválido para consulta de extrato Bradesco.");
+        }
+        if (!agenciaBr || !contaBr) {
+          throw new Error("Agência/conta Bradesco inválidas para consulta de extrato.");
+        }
+
+        const extratoRes = await fetch(
+          `/api/bradesco/extrato?agencia=${encodeURIComponent(
+            agenciaBr
+          )}&conta=${encodeURIComponent(
+            contaBr
+          )}&dataInicio=${dataInicioBr}&dataFim=${dataFimBr}&tipo=cc&tipoOperacao=1`,
+          { headers: getAuthHeader() }
+        );
+
+        const extratoData = await extratoRes.json();
+        if (!extratoRes.ok)
+          throw new Error(`Erro extrato: ${extratoData.message}`);
+
+        const normalized = normalizeBradescoExtrato(extratoData);
+        let saldoDisponivel = Number(normalized.saldoDisponivel) || 0;
+
+        try {
+          const saldoRes = await fetch(
+            `/api/bradesco/saldo?agencia=${encodeURIComponent(
+              agenciaBr
+            )}&conta=${encodeURIComponent(contaBr)}&tipo=cc&tipoOperacao=1`,
+            { headers: getAuthHeader() }
+          );
+          const saldoData = await saldoRes.json();
+          if (saldoRes.ok && Number.isFinite(Number(saldoData?.saldo?.valor))) {
+            saldoDisponivel = Number(saldoData.saldo.valor);
+          }
+        } catch {
+          // Se o saldo falhar, mantém o saldo derivado do extrato.
+        }
+
+        setInterSaldo({
+          disponivel: saldoDisponivel,
+        });
+        setInterExtrato({
+          transacoes: normalized.transacoes,
+          source: "bradesco",
+        });
+        return;
+      }
+
       const [saldoRes, extratoRes] = await Promise.all([
-        fetch(`/api/inter/saldo?contaCorrente=${conta}`, {
+        fetch(`/api/inter/saldo?contaCorrente=${contaInfo.conta}`, {
           headers: getAuthHeader(),
         }),
         fetch(
-          `/api/inter/extrato?contaCorrente=${conta}&dataInicio=${dataInicio}&dataFim=${dataFim}`,
+          `/api/inter/extrato?contaCorrente=${contaInfo.conta}&dataInicio=${dataInicio}&dataFim=${dataFim}`,
           { headers: getAuthHeader() }
         ),
       ]);
@@ -337,7 +504,7 @@ export default function FluxoDeCaixaPage() {
     if (filters.contaExterna) {
       setOfxExtrato(null);
       if (filters.dataInicio && filters.dataFim) {
-        fetchExtratoInter(
+        fetchExtratoApiBancaria(
           filters.contaExterna,
           filters.dataInicio,
           filters.dataFim
@@ -394,7 +561,14 @@ export default function FluxoDeCaixaPage() {
     contaDestino, // (Legado)
   }) => {
     try {
-      const contaSelecionada = contaBancaria || filters.contaExterna;
+      const contaExternaInfo = parseContaExterna(filters.contaExterna);
+      const contaExternaFormatada = contasMaster.find(
+        (c) =>
+          String(c.agencia) === String(contaExternaInfo.agencia) &&
+          String(c.contaCorrente) === String(contaExternaInfo.conta)
+      )?.contaBancaria;
+
+      const contaSelecionada = contaBancaria || contaExternaFormatada || filters.contaExterna;
 
       if (!items || items.length === 0 || detalhesTransacao.valor < 0) {
         const payload = {
@@ -433,6 +607,7 @@ export default function FluxoDeCaixaPage() {
 
   const interExtratoProcessado = useMemo(() => {
     if (!interExtrato?.transacoes || !interSaldo) return [];
+    const source = interExtrato?.source || "inter";
     const groupedByDate = interExtrato.transacoes.reduce((acc, t) => {
       const date = t.dataEntrada;
       if (!acc[date]) acc[date] = [];
@@ -445,6 +620,18 @@ export default function FluxoDeCaixaPage() {
     let runningBalance = interSaldo.disponivel;
     return sortedDates.map((date) => {
       const transactions = groupedByDate[date];
+
+      if (source === "bradesco") {
+        const lastWithBalance = [...transactions]
+          .reverse()
+          .find((t) => Number.isFinite(t.saldoApos));
+        return {
+          date,
+          transactions,
+          dailyBalance: lastWithBalance?.saldoApos ?? 0,
+        };
+      }
+
       const netChange = transactions.reduce((sum, t) => {
         const value = parseFloat(t.valor);
         return t.tipoOperacao === "C" ? sum + value : sum - value;
@@ -486,10 +673,12 @@ export default function FluxoDeCaixaPage() {
     });
     setOfxExtrato(null);
     setCurrentPage(1);
+    setInterCurrentPage(1);
   };
 
   const handleFilterChange = (e) => {
     setCurrentPage(1);
+    setInterCurrentPage(1);
     setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
@@ -930,7 +1119,7 @@ export default function FluxoDeCaixaPage() {
         onConfirm={handleConfirmarConciliacao}
         transacao={transacaoParaConciliar}
         searchDuplicatas={searchDuplicatasParaConciliacao}
-        contaApi={filters.contaExterna}
+        contaApi={parseContaExterna(filters.contaExterna).conta}
         onManualEntry={() => setIsLancamentoManualOpen(true)}
       />
 
@@ -1093,7 +1282,7 @@ export default function FluxoDeCaixaPage() {
                               <ul className="divide-y divide-gray-700 bg-gray-700/50 p-2 rounded-b-md">
                                 {group.transactions.map((t, index) => (
                                   <li
-                                    key={t.idTransacao || index}
+                                    key={`${group.date}-${t.idTransacao || "sem-id"}-${index}-${t.valor || 0}-${t.tipoOperacao || "N"}`}
                                     className="py-2 flex justify-between items-center text-sm hover:bg-gray-600/50 cursor-pointer"
                                     onContextMenu={(e) => {
                                       e.preventDefault();

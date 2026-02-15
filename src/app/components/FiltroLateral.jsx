@@ -17,8 +17,26 @@ export default function FiltroLateral({
 
     const fileInputRef = useRef(null); 
 
-    const contasInter = Array.isArray(contasMaster)
-        ? contasMaster.filter(c => c.contaBancaria.toLowerCase().includes('inter'))
+    const contasApi = Array.isArray(contasMaster)
+        ? contasMaster.filter(c => {
+            const banco = String(c?.banco || '').toLowerCase();
+            const descricao = String(c?.descricao || '').toLowerCase();
+            const contaBancaria = String(c?.contaBancaria || '').toLowerCase();
+
+            const isInter =
+                banco.includes('inter') ||
+                descricao.includes('inter') ||
+                contaBancaria.includes('inter');
+
+            const isBradesco =
+                banco.includes('bradesco') ||
+                descricao.includes('bradesco') ||
+                contaBancaria.includes('bradesco') ||
+                banco === '237' ||
+                contaBancaria.includes('237');
+
+            return isInter || isBradesco;
+        })
         : [];
 
     const handleUploadClick = () => {
@@ -59,8 +77,11 @@ export default function FiltroLateral({
                             disabled={!!ofxExtrato} 
                         >
                             <option value="">-- Nenhum --</option>
-                            {contasInter.map(conta => (
-                                <option key={conta.id} value={conta.contaBancaria.split('/')[1]}> 
+                            {contasApi.map(conta => (
+                                <option
+                                    key={conta.id}
+                                    value={`${conta.banco}|${conta.agencia}|${conta.contaCorrente}`}
+                                >
                                     {formatDisplayConta(conta.contaBancaria)}
                                 </option>
                             ))}

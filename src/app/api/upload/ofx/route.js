@@ -39,13 +39,22 @@ export async function POST(request) {
 
         const transactions = statement.BANKTRANLIST?.STMTTRN || [];
         
-        const formattedTransactions = transactions.map(t => ({
-            idTransacao: t.FITID, // ID único da transação
-            dataEntrada: formatOfxDate(t.DTPOSTED), // Data
-            descricao: t.MEMO, // Descrição
-            valor: parseFloat(t.TRNAMT), // Valor
-            tipoOperacao: parseFloat(t.TRNAMT) >= 0 ? 'C' : 'D', // Tipo (Crédito/Débito)
-        }));
+        const formattedTransactions = transactions.map((t, index) => {
+            const descricao =
+                t.MEMO ||
+                t.NAME ||
+                t.CHECKNUM ||
+                t.FITID ||
+                `Lançamento ${index + 1}`;
+
+            return {
+                idTransacao: t.FITID || `${t.DTPOSTED || ''}-${index + 1}`, // ID único da transação
+                dataEntrada: formatOfxDate(t.DTPOSTED), // Data
+                descricao, // Descrição com fallback
+                valor: parseFloat(t.TRNAMT), // Valor
+                tipoOperacao: parseFloat(t.TRNAMT) >= 0 ? 'C' : 'D', // Tipo (Crédito/Débito)
+            };
+        });
 
         // 5. Retornar os dados formatados (similar à sua API do Inter)
         return NextResponse.json({

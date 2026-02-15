@@ -1,7 +1,7 @@
 import https from "https";
 
 const getBradescoBaseUrl = () =>
-  (process.env.BRADESCO_BASE_URL || "https://openapisandbox.prebanco.com.br").replace(/\/$/, "");
+  (process.env.BRADESCO_BASE_URL || "https://openapi.bradesco.com.br").replace(/\/$/, "");
 
 const getBradescoApiBaseUrlFromEnv = () =>
   (process.env.BRADESCO_API_BASE_URL || getBradescoBaseUrl()).replace(/\/$/, "");
@@ -11,24 +11,37 @@ const getBradescoTokenEndpoints = () => {
   if (explicitUrl) return [explicitUrl];
 
   const baseUrl = getBradescoBaseUrl();
-  return [
-    `${baseUrl}/auth/server-mtls/v2/token`,
-    `${baseUrl}/auth/server/oauth/token`,
-  ];
+  return [`${baseUrl}/auth/server-mtls/v2/token`];
 };
 
+const isBradescoDebugEnabled = () => String(process.env.BRADESCO_DEBUG || "false").toLowerCase() === "true";
+
+const normalizePemFromEnv = (value) =>
+  String(value || "")
+    .replace(/\\n/g, "\n")
+    .replace(/\r/g, "")
+    .trim();
+
 const createBradescoAgent = () => {
-  const certificate = process.env.BRADESCO_PUBLIC_CERT || process.env.BRADESCO_CERTIFICATE;
-  const privateKey = process.env.BRADESCO_PRIVATE_KEY;
+  const certificateRaw = process.env.BRADESCO_PUBLIC_CERT || process.env.BRADESCO_CERTIFICATE;
+  const privateKeyRaw = process.env.BRADESCO_PRIVATE_KEY;
+  const certificate = normalizePemFromEnv(certificateRaw);
+  const privateKey = normalizePemFromEnv(privateKeyRaw);
 
   if (!certificate || !privateKey) {
     throw new Error("Certificado/chave do Bradesco nao configurados.");
   }
 
-  return new https.Agent({
+  const agentOptions = {
     cert: certificate,
     key: privateKey,
-  });
+  };
+
+  if (process.env.BRADESCO_PRIVATE_KEY_PASSPHRASE) {
+    agentOptions.passphrase = process.env.BRADESCO_PRIVATE_KEY_PASSPHRASE;
+  }
+
+  return new https.Agent(agentOptions);
 };
 
 const parseJsonSafe = (rawData) => {
@@ -125,9 +138,10 @@ const removeKeysFromObject = (obj, keysToRemove = []) => {
 };
 
 export async function getBradescoAccessToken() {
-  const clientId = process.env.BRADESCO_CLIENT_ID;
-  const clientSecret = process.env.BRADESCO_CLIENT_SECRET;
-  const scope = process.env.BRADESCO_SCOPE || "CBON";
+  const clientId = process.env.BRADESCO_BOLETO_CLIENT_ID || process.env.BRADESCO_CLIENT_ID;
+  const clientSecret =
+    process.env.BRADESCO_BOLETO_CLIENT_SECRET || process.env.BRADESCO_CLIENT_SECRET;
+  const scope = process.env.BRADESCO_BOLETO_SCOPE || process.env.BRADESCO_SCOPE;
 
   if (!clientId || !clientSecret) {
     throw new Error("Client ID/Secret do Bradesco nao configurados.");
@@ -146,23 +160,27 @@ export async function getBradescoAccessToken() {
     },
   };
 
-  const runTokenRequest = (tokenEndpoint, useBasicAuth) => {
+  const runTokenRequest = (tokenEndpoint) => {
     const tokenParams = new URLSearchParams(baseParams);
-    if (!useBasicAuth) {
-      tokenParams.set("client_id", clientId);
-      tokenParams.set("client_secret", clientSecret);
-    }
+    tokenParams.set("client_id", clientId);
+    tokenParams.set("client_secret", clientSecret);
     const payload = tokenParams.toString();
     const options = {
       ...baseOptions,
       headers: {
         ...baseOptions.headers,
-        ...(useBasicAuth
-          ? { Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}` }
-          : {}),
         "Content-Length": Buffer.byteLength(payload),
       },
     };
+
+    if (isBradescoDebugEnabled()) {
+      console.warn("[BRADESCO TOKEN DEBUG] Tentando endpoint:", tokenEndpoint);
+      console.warn("[BRADESCO TOKEN DEBUG] Modo auth: body_client_credentials");
+      console.warn(
+        "[BRADESCO TOKEN DEBUG] Payload keys:",
+        Object.fromEntries([...tokenParams.keys()].map((k) => [k, k === "client_secret" ? "***" : tokenParams.get(k)]))
+      );
+    }
 
     return new Promise((resolve, reject) => {
       const req = https.request(tokenEndpoint, options, (res) => {
@@ -170,37 +188,56 @@ export async function getBradescoAccessToken() {
         res.on("data", (chunk) => (data += chunk));
         res.on("end", () => {
           const jsonData = parseJsonSafe(data);
+          if (isBradescoDebugEnabled()) {
+            console.warn("[BRADESCO TOKEN DEBUG] Status:", res.statusCode);
+            console.warn("[BRADESCO TOKEN DEBUG] Response headers:", JSON.stringify(res.headers));
+            console.warn("[BRADESCO TOKEN DEBUG] Response body (first 500):", String(data).slice(0, 500));
+          }
           if (res.statusCode >= 200 && res.statusCode < 300 && jsonData?.access_token) {
             resolve(jsonData);
             return;
           }
-          reject(new Error(`Erro ${res.statusCode} ao obter token Bradesco: ${extractApiError(jsonData, data)}`));
+          reject(
+            new Error(
+              `Erro ${res.statusCode} ao obter token Bradesco (endpoint=${tokenEndpoint}, auth=body): ${extractApiError(
+                jsonData,
+                data
+              )}`
+            )
+          );
         });
       });
 
-      req.on("error", (err) => reject(new Error(`Erro de rede ao obter token Bradesco: ${err.message}`)));
+      req.on("error", (err) => {
+        if (isBradescoDebugEnabled()) {
+          console.warn("[BRADESCO TOKEN DEBUG] Erro de rede:", err.message);
+        }
+        reject(new Error(`Erro de rede ao obter token Bradesco: ${err.message}`));
+      });
       req.write(payload);
       req.end();
     });
   };
 
   const endpoints = getBradescoTokenEndpoints();
-  const attempts = [];
+  let lastError = null;
   for (const endpoint of endpoints) {
-    attempts.push({ endpoint, useBasicAuth: false });
-    attempts.push({ endpoint, useBasicAuth: true });
-  }
-
-  let lastError;
-  for (const attempt of attempts) {
     try {
-      return await runTokenRequest(attempt.endpoint, attempt.useBasicAuth);
+      return await runTokenRequest(endpoint);
     } catch (error) {
+      if (isBradescoDebugEnabled()) {
+        console.warn("[BRADESCO TOKEN DEBUG] Tentativa falhou:", error.message);
+      }
       lastError = error;
     }
   }
 
-  throw lastError || new Error("Falha ao obter token Bradesco.");
+  const baseHint =
+    "Falha no token mTLS Bradesco. Valide se o certificado publico cadastrado na credencial de producao corresponde a chave privada usada no app e se a credencial está Ativa.";
+  if (!lastError) {
+    throw new Error(baseHint);
+  }
+  throw new Error(`${baseHint} Detalhe: ${lastError.message}`);
 }
 
 export async function registrarBoleto(accessToken, dadosBoletoPayload) {
@@ -211,28 +248,43 @@ export async function registrarBoleto(accessToken, dadosBoletoPayload) {
   const apiBaseUrl = getBradescoApiBaseUrlFromEnv();
   const apiEndpoint = `${apiBaseUrl}/boleto/cobranca-registro/v1/cobranca`;
 
-  const options = {
+  const baseOptions = {
     method: "POST",
     agent: createBradescoAgent(),
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${accessToken}`,
-      "X-IBM-Client-Id": process.env.BRADESCO_CLIENT_ID,
-      ...(process.env.BRADESCO_CLIENT_SECRET
-        ? { "X-IBM-Client-Secret": process.env.BRADESCO_CLIENT_SECRET }
-        : {}),
-    },
   };
 
-  const sendRequest = (payloadObj) => {
+  const authClientId = process.env.BRADESCO_BOLETO_CLIENT_ID || process.env.BRADESCO_CLIENT_ID;
+  const authClientSecret =
+    process.env.BRADESCO_BOLETO_CLIENT_SECRET || process.env.BRADESCO_CLIENT_SECRET;
+
+  const authAttempts = [
+    // Mais próximo do padrão mTLS em produção.
+    { mode: "bearer_no_ibm", authorization: `Bearer ${accessToken}`, includeIbmHeaders: false },
+    // Alguns gateways aceitam token sem prefixo Bearer.
+    { mode: "raw_no_ibm", authorization: accessToken, includeIbmHeaders: false },
+    // Fallbacks com headers IBM.
+    { mode: "bearer_with_ibm", authorization: `Bearer ${accessToken}`, includeIbmHeaders: true },
+    { mode: "raw_with_ibm", authorization: accessToken, includeIbmHeaders: true },
+  ];
+
+  const sendRequest = (payloadObj, authAttempt) => {
     const localPayload = JSON.stringify(payloadObj);
+    const localHeaders = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: authAttempt.authorization,
+      "Content-Length": Buffer.byteLength(localPayload),
+    };
+    if (authAttempt.includeIbmHeaders) {
+      localHeaders["X-IBM-Client-Id"] = authClientId;
+      if (authClientSecret) {
+        localHeaders["X-IBM-Client-Secret"] = authClientSecret;
+      }
+    }
+
     const localOptions = {
-      ...options,
-      headers: {
-        ...options.headers,
-        "Content-Length": Buffer.byteLength(localPayload),
-      },
+      ...baseOptions,
+      headers: localHeaders,
     };
 
     return new Promise((resolve, reject) => {
@@ -241,6 +293,12 @@ export async function registrarBoleto(accessToken, dadosBoletoPayload) {
         res.on("data", (chunk) => (data += chunk));
         res.on("end", () => {
           const jsonData = parseJsonSafe(data);
+          if (isBradescoDebugEnabled()) {
+            console.warn("[BRADESCO BOLETO DEBUG] Endpoint:", apiEndpoint);
+            console.warn("[BRADESCO BOLETO DEBUG] Auth mode:", authAttempt.mode);
+            console.warn("[BRADESCO BOLETO DEBUG] Status:", res.statusCode);
+            console.warn("[BRADESCO BOLETO DEBUG] Response body (first 500):", String(data).slice(0, 500));
+          }
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve({ ok: true, res, data, jsonData: jsonData ?? { raw: data } });
             return;
@@ -255,8 +313,20 @@ export async function registrarBoleto(accessToken, dadosBoletoPayload) {
     });
   };
 
-  const firstAttempt = await sendRequest(dadosBoletoPayload);
-  if (firstAttempt.ok) return firstAttempt.jsonData;
+  let firstAttempt = null;
+  let lastAttempt = null;
+  for (const authAttempt of authAttempts) {
+    const attemptResult = await sendRequest(dadosBoletoPayload, authAttempt);
+    lastAttempt = attemptResult;
+    if (attemptResult.ok) return attemptResult.jsonData;
+    if (!firstAttempt) firstAttempt = attemptResult;
+    // Se não for erro de autorização/autenticação, não insiste em outros formatos.
+    if (![400, 401, 403].includes(attemptResult.res.statusCode)) {
+      break;
+    }
+  }
+  if (!firstAttempt) firstAttempt = lastAttempt;
+  if (!lastAttempt) lastAttempt = firstAttempt;
 
   if (firstAttempt.res.statusCode === 422) {
     const unknownArgsLog = extractUnknownArguments(firstAttempt.jsonData);
@@ -281,7 +351,7 @@ export async function registrarBoleto(accessToken, dadosBoletoPayload) {
     if (unknownArgs.length) {
       console.warn("[BRADESCO 422] Retry removendo campos nao suportados:", unknownArgs.sort());
     }
-    const secondAttempt = await sendRequest(retriedPayload);
+    const secondAttempt = await sendRequest(retriedPayload, authAttempts[0]);
     if (secondAttempt.ok) return secondAttempt.jsonData;
 
     const correlationIdRetry =
@@ -302,18 +372,18 @@ export async function registrarBoleto(accessToken, dadosBoletoPayload) {
   }
 
   const correlationId =
-    firstAttempt.res.headers["x-request-id"] ||
-    firstAttempt.res.headers["x-correlation-id"] ||
-    firstAttempt.res.headers["x-global-transaction-id"] ||
-    firstAttempt.jsonData?.details?.msgId ||
-    firstAttempt.jsonData?.msgId ||
+    lastAttempt.res.headers["x-request-id"] ||
+    lastAttempt.res.headers["x-correlation-id"] ||
+    lastAttempt.res.headers["x-global-transaction-id"] ||
+    lastAttempt.jsonData?.details?.msgId ||
+    lastAttempt.jsonData?.msgId ||
     "";
   const correlationText = correlationId ? ` (correlationId: ${correlationId})` : "";
-  const summaryMessages = extractValidationMessages(firstAttempt.jsonData);
+  const summaryMessages = extractValidationMessages(lastAttempt.jsonData);
   const compactSummary = summaryMessages.length
     ? `${summaryMessages.slice(0, 8).join(" | ")}${summaryMessages.length > 8 ? " | ..." : ""}`
-    : extractApiError(firstAttempt.jsonData, firstAttempt.data);
+    : extractApiError(lastAttempt.jsonData, lastAttempt.data);
   throw new Error(
-    `Erro ${firstAttempt.res.statusCode} ao registrar boleto Bradesco${correlationText}: ${compactSummary}`
+    `Erro ${lastAttempt.res.statusCode} ao registrar boleto Bradesco${correlationText}: ${compactSummary}`
   );
 }

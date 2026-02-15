@@ -25,10 +25,13 @@ import Notification from "@/app/components/Notification";
 import TopFiveApex from "@/app/components/TopFiveApex";
 import VolumeOperadoChart from "@/app/components/VolumeOperadoChart";
 import RelatorioModal from "@/app/components/RelatorioModal";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 
 // ... (Todos os componentes internos como UploadIcon, useSortableData, HistoricoOperacoesTable, etc. permanecem inalterados) ...
 const ITEMS_PER_PAGE_OPERATIONS = 5;
 const ITEMS_PER_PAGE_DUPLICATAS = 5;
+const ITEMS_PER_PAGE_EXTRATO = 2;
 
 const UploadIcon = () => (
   <svg
@@ -519,6 +522,656 @@ const AcompanhamentoDuplicatasTable = ({ duplicatas, loading, error }) => {
         onPageChange={setCurrentPage}
       />
     </div>
+  );
+};
+
+const toDDMMYYYY = (isoDate) => {
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return "";
+  const [yyyy, mm, dd] = isoDate.split("-");
+  return `${dd}${mm}${yyyy}`;
+};
+
+const parseBrMoney = (value) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const cleaned = raw
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .replace(/[^\d.-]/g, "");
+  if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeBradescoDate = (value) => {
+  const raw = String(value || "").trim();
+  const ddmmyyyy = raw.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (ddmmyyyy) return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
+
+  const withSlash = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (withSlash) return `${withSlash[3]}-${withSlash[2]}-${withSlash[1]}`;
+
+  const withDot = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (withDot) return `${withDot[3]}-${withDot[2]}-${withDot[1]}`;
+
+  return raw;
+};
+
+const isDateInRange = (dateIso, startIso, endIso) => {
+  if (!dateIso || !startIso || !endIso) return false;
+  const date = new Date(`${dateIso}T12:00:00`);
+  const start = new Date(`${startIso}T00:00:00`);
+  const end = new Date(`${endIso}T23:59:59`);
+  if (Number.isNaN(date.getTime()) || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return false;
+  }
+  return date >= start && date <= end;
+};
+
+const buildDateRange = (startIso, endIso) => {
+  if (!startIso || !endIso) return [];
+  const start = new Date(`${startIso}T00:00:00`);
+  const end = new Date(`${endIso}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+    return [];
+  }
+
+  const days = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    days.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+};
+
+const toCompactDate = (isoDate) => {
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return "";
+  const [yyyy, mm, dd] = isoDate.split("-");
+  return `${yyyy}${mm}${dd}`;
+};
+
+const sanitizeOfxText = (value) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[<>\r\n]/g, " ")
+    .trim();
+
+const normalizeBradescoExtrato = (raw) => {
+  const ultimos = raw?.extratoUltimosLancamentos?.listaLancamentos || {};
+
+  const pickArray = (keyIncludes) =>
+    Object.entries(ultimos).find(([key, value]) => {
+      if (!Array.isArray(value)) return false;
+      const normalizedKey = key
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      return keyIncludes.some((term) => normalizedKey.includes(term));
+    })?.[1] || [];
+
+  const listaUltimos = pickArray(["ultimos"]);
+  const listaDia = pickArray(["dia"]);
+  const listaFuturos =
+    raw?.extratoLancamentosFuturos?.listaLancamentos?.["Lancamentos Futuros"] ||
+    raw?.extratoLancamentosFuturos?.listaLancamentos?.["Lançamentos Futuros"] ||
+    [];
+  const listaPeriodo = raw?.extratoPorPeriodo?.lstLancamentoMensal || [];
+
+  // Mescla os blocos para não perder lançamentos futuros (ex.: próximo dia com movimento).
+  const all = [
+    ...listaPeriodo.map((item) => ({ item, origem: "periodo" })),
+    ...listaUltimos.map((item) => ({ item, origem: "ultimos" })),
+    ...listaDia.map((item) => ({ item, origem: "dia" })),
+    ...listaFuturos.map((item) => ({ item, origem: "futuro" })),
+  ];
+
+  const seen = new Set();
+
+  return all
+    .map((entry, index) => {
+      const { item, origem } = entry;
+      const tipoOperacao = item.sinalLancamento === "-" ? "D" : "C";
+      const valor = parseBrMoney(item.valorLancamento);
+      const dataEntrada = normalizeBradescoDate(item.dataLancamento);
+      const saldoSemSinal = parseBrMoney(item.valorSaldoAposLancamento);
+      const saldoApos =
+        saldoSemSinal === null
+          ? null
+          : item.sinalSaldo === "-"
+            ? saldoSemSinal * -1
+            : saldoSemSinal;
+
+      return {
+        idTransacao: String(item.numeroDocumento || `bradesco-${index}`),
+        order: index,
+        tipoLancamento: item.tipoLancamento || null,
+        dataEntrada,
+        tipoOperacao,
+        valor: valor ?? 0,
+        descricao:
+          item.descritivoLancamentoCompleto ||
+          item.descritivoLancamentoAbreviado ||
+          item.segundaLinhalLancamento ||
+          "Lancamento",
+        titulo: item.numeroDocumento || "",
+        saldoApos: Number.isFinite(saldoApos) ? saldoApos : null,
+        isFuturo: origem === "futuro",
+      };
+    })
+    .filter((t) => {
+      if (!t.dataEntrada) return false;
+      const dedupeKey = `${t.dataEntrada}|${t.idTransacao}|${t.tipoOperacao}|${t.valor}|${t.descricao}|${t.isFuturo ? "futuro" : "normal"}`;
+      if (seen.has(dedupeKey)) return false;
+      seen.add(dedupeKey);
+      return true;
+    });
+};
+
+const ExtratoBancarioView = ({ getAuthHeader, showNotification }) => {
+  const [dataInicio, setDataInicio] = useState(() => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    return firstDay.toISOString().slice(0, 10);
+  });
+  const [dataFim, setDataFim] = useState(() => new Date().toISOString().slice(0, 10));
+  const [loadingExtrato, setLoadingExtrato] = useState(false);
+  const [extratoError, setExtratoError] = useState("");
+  const [transacoes, setTransacoes] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [contaBradesco, setContaBradesco] = useState(null);
+
+  const carregarContaBradescoCliente = async () => {
+    const response = await fetch("/api/portal/profile", {
+      headers: getAuthHeader(),
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data?.message || "Falha ao carregar perfil do cliente.");
+    }
+
+    const contas = Array.isArray(data?.contas_bancarias) ? data.contas_bancarias : [];
+    const conta =
+      contas.find((c) => String(c?.banco || "").toLowerCase().includes("bradesco")) ||
+      null;
+
+    if (!conta) {
+      throw new Error("Cliente logado nao possui conta Bradesco vinculada.");
+    }
+
+    setContaBradesco(conta);
+    return conta;
+  };
+
+  const consultarExtrato = async () => {
+    setLoadingExtrato(true);
+    setExtratoError("");
+    setTransacoes([]);
+
+    try {
+      const inicio = toDDMMYYYY(dataInicio);
+      const fim = toDDMMYYYY(dataFim);
+      if (!inicio || !fim) {
+        throw new Error("Periodo invalido para consulta.");
+      }
+
+      const contaCliente = contaBradesco || (await carregarContaBradescoCliente());
+      const agencia = String(contaCliente.agencia || "").replace(/\D/g, "").slice(0, 4);
+      const conta = String(contaCliente.conta_corrente || "").replace(/\D/g, "").slice(0, 7);
+
+      if (!agencia || !conta) {
+        throw new Error("Agencia/conta Bradesco do cliente estao invalidas no cadastro.");
+      }
+
+      const response = await fetch(
+        `/api/portal/bradesco/extrato?dataInicio=${inicio}&dataFim=${fim}&tipo=cc&tipoOperacao=2`,
+        { headers: getAuthHeader() }
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message || "Falha ao consultar extrato Bradesco.");
+      }
+
+      const normalized = normalizeBradescoExtrato(data);
+      const filtered = normalized.filter((t) =>
+        isDateInRange(t.dataEntrada, dataInicio, dataFim)
+      );
+      setTransacoes(filtered);
+      setCurrentPage(1);
+    } catch (err) {
+      const msg = err.message || "Erro ao consultar extrato Bradesco.";
+      setExtratoError(msg);
+      showNotification(msg, "error");
+    } finally {
+      setLoadingExtrato(false);
+    }
+  };
+
+  useEffect(() => {
+    carregarContaBradescoCliente()
+      .then(() => consultarExtrato())
+      .catch((err) => {
+        const msg = err.message || "Erro ao carregar conta Bradesco do cliente.";
+        setExtratoError(msg);
+        showNotification(msg, "error");
+      });
+  }, []);
+
+  const extratoProcessado = useMemo(() => {
+    const groupedByDate = (Array.isArray(transacoes) ? transacoes : []).reduce((acc, t) => {
+      const date = t.dataEntrada;
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(t);
+      return acc;
+    }, {});
+
+    const sortedDatesAsc = buildDateRange(dataInicio, dataFim);
+    if (sortedDatesAsc.length === 0) return [];
+
+    let previousDayClosing = null;
+    const processedAsc = sortedDatesAsc.map((date) => {
+      const transactions = [...(groupedByDate[date] || [])].sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      );
+
+      if (transactions.length === 0) {
+        return {
+          date,
+          transactions: [],
+          dailyBalance: Number.isFinite(previousDayClosing) ? previousDayClosing : null,
+        };
+      }
+
+      // Regra de negócio: saldo final do dia = saldo do último lançamento do dia.
+      const lastWithBalance = [...transactions]
+        .reverse()
+        .find((t) => Number.isFinite(t.saldoApos));
+
+      let dailyBalance = lastWithBalance?.saldoApos ?? null;
+      if (!Number.isFinite(dailyBalance) && Number.isFinite(previousDayClosing)) {
+        dailyBalance = previousDayClosing;
+      }
+
+      if (Number.isFinite(dailyBalance)) {
+        dailyBalance = Math.round(dailyBalance * 100) / 100;
+        previousDayClosing = dailyBalance;
+      }
+
+      return {
+        date,
+        transactions,
+        dailyBalance,
+      };
+    });
+
+    return processedAsc.sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [transacoes]);
+
+  const indexOfLastItem = currentPage * ITEMS_PER_PAGE_EXTRATO;
+  const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE_EXTRATO;
+  const currentItems = extratoProcessado.slice(indexOfFirstItem, indexOfLastItem);
+
+  const transacoesFlatOrdenadas = useMemo(() => {
+    const ascGroups = [...extratoProcessado].sort((a, b) => new Date(a.date) - new Date(b.date));
+    return ascGroups.flatMap((group) =>
+      (group.transactions || []).map((t) => ({
+        ...t,
+        groupDate: group.date,
+      }))
+    );
+  }, [extratoProcessado]);
+
+  const saldoFinalPeriodo = useMemo(() => {
+    const groupFim = extratoProcessado.find((g) => g.date === dataFim);
+    if (groupFim && Number.isFinite(groupFim.dailyBalance)) return groupFim.dailyBalance;
+    const latest = extratoProcessado[0];
+    return latest && Number.isFinite(latest.dailyBalance) ? latest.dailyBalance : 0;
+  }, [extratoProcessado, dataFim]);
+
+  const handleExportPdf = () => {
+    if (!extratoProcessado.length) {
+      showNotification("Nao ha dados para exportar em PDF.", "error");
+      return;
+    }
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+    const contaInfo = contaBradesco
+      ? `${contaBradesco.banco} - ${contaBradesco.agencia}/${contaBradesco.conta_corrente}`
+      : "Conta Bradesco";
+
+    doc.setFontSize(14);
+    doc.text("Extrato Bancario - Portal do Cliente", 40, 40);
+    doc.setFontSize(10);
+    doc.text(`Conta: ${contaInfo}`, 40, 58);
+    doc.text(`Periodo: ${formatDate(dataInicio)} a ${formatDate(dataFim)}`, 40, 72);
+
+    const saldoDiaRows = [...extratoProcessado]
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map((group) => [
+        formatDate(group.date),
+        Number.isFinite(group.dailyBalance) ? formatBRLNumber(group.dailyBalance) : "-",
+      ]);
+
+    autoTable(doc, {
+      startY: 86,
+      head: [["Data", "Saldo final do dia"]],
+      body: saldoDiaRows.length ? saldoDiaRows : [["-", "-"]],
+      styles: { fontSize: 8, cellPadding: 4 },
+      headStyles: { fillColor: [55, 65, 81] },
+      margin: { left: 30, right: 30 },
+      tableWidth: 260,
+      columnStyles: {
+        1: { halign: "right" },
+      },
+    });
+
+    const startMovimentosY = (doc.lastAutoTable?.finalY || 86) + 16;
+
+    const rows = transacoesFlatOrdenadas.map((t) => {
+      const isDebito = t.tipoOperacao === "D";
+      const valorFormatado = formatBRLNumber(Math.abs(t.valor || 0));
+      return [
+        formatDate(t.groupDate || t.dataEntrada),
+        isDebito ? "Debito" : "Credito",
+        `${t.descricao}${t.isFuturo ? " [FUTURO]" : ""}`,
+        t.titulo || "-",
+        `${isDebito ? "-" : ""}${valorFormatado}`,
+        Number.isFinite(t.saldoApos) ? formatBRLNumber(t.saldoApos) : "-",
+      ];
+    });
+
+    autoTable(doc, {
+      startY: startMovimentosY,
+      head: [["Data", "Tipo", "Descricao", "Documento", "Valor", "Saldo apos"]],
+      body: rows.length ? rows : [["-", "-", "Sem movimentacoes no periodo", "-", "-", "-"]],
+      styles: { fontSize: 8, cellPadding: 4 },
+      headStyles: { fillColor: [31, 41, 55] },
+      margin: { left: 30, right: 30 },
+      didParseCell: (hookData) => {
+        if (hookData.section !== "body") return;
+        const tipo = String(hookData.row.raw?.[1] || "");
+        // Coluna de valor com debito em vermelho.
+        if (hookData.column.index === 4 && tipo === "Debito") {
+          hookData.cell.styles.textColor = [220, 38, 38];
+        }
+      },
+    });
+
+    const finalY = doc.lastAutoTable?.finalY || 120;
+    doc.setFontSize(11);
+    doc.text(`Saldo final do periodo: ${formatBRLNumber(saldoFinalPeriodo)}`, 40, finalY + 24);
+
+    doc.save(`extrato-bradesco-${dataInicio}-a-${dataFim}.pdf`);
+  };
+
+  const handleExportOfx = () => {
+    if (!extratoProcessado.length) {
+      showNotification("Nao ha dados para exportar em OFX.", "error");
+      return;
+    }
+
+    const dtStart = toCompactDate(dataInicio) || toCompactDate(new Date().toISOString().slice(0, 10));
+    const dtEnd = toCompactDate(dataFim) || dtStart;
+    const contaNumero = String(contaBradesco?.conta_corrente || "").replace(/\D/g, "").slice(0, 7);
+    const agenciaNumero = String(contaBradesco?.agencia || "").replace(/\D/g, "").slice(0, 4);
+
+    const saldoDiaMap = extratoProcessado.reduce((acc, group) => {
+      acc[group.date] = group.dailyBalance;
+      return acc;
+    }, {});
+
+    const lastIndexByDate = {};
+    transacoesFlatOrdenadas.forEach((t, idx) => {
+      const dateKey = t.groupDate || t.dataEntrada;
+      lastIndexByDate[dateKey] = idx;
+    });
+
+    const stmtLines = transacoesFlatOrdenadas
+      .flatMap((t, idx) => {
+        const trnType = t.tipoOperacao === "D" ? "DEBIT" : "CREDIT";
+        const trnAmt = (t.tipoOperacao === "D" ? -1 : 1) * Math.abs(Number(t.valor || 0));
+        const dateKey = t.groupDate || t.dataEntrada;
+        const compactDate = toCompactDate(dateKey);
+        const posted = `${compactDate}000000`;
+        const fitIdBase = `${compactDate}${String(t.idTransacao || idx).replace(/\D/g, "")}`;
+        const fitId = fitIdBase || `${compactDate}${idx + 1}`;
+        const name = sanitizeOfxText(t.descricao).slice(0, 32) || "LANCAMENTO";
+        const saldoDia = saldoDiaMap[dateKey];
+        const isLastOfDay = lastIndexByDate[dateKey] === idx;
+        const memo = sanitizeOfxText(
+          `${t.descricao}${t.isFuturo ? " [FUTURO]" : ""}`
+        ).slice(0, 120);
+        const checkNum = sanitizeOfxText(t.titulo || "").slice(0, 30);
+
+        const lancamentoPrincipal = [
+          "<STMTTRN>",
+          `<TRNTYPE>${trnType}`,
+          `<DTPOSTED>${posted}`,
+          `<TRNAMT>${trnAmt.toFixed(2)}`,
+          `<FITID>${fitId}`,
+          `<NAME>${name}`,
+          checkNum ? `<CHECKNUM>${checkNum}` : "",
+          memo ? `<MEMO>${memo}` : "",
+          "</STMTTRN>",
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+        if (!isLastOfDay || !Number.isFinite(saldoDia)) {
+          return [lancamentoPrincipal];
+        }
+
+        const saldoMemo = sanitizeOfxText(`SALDO FINAL DIA: ${formatBRLNumber(saldoDia)}`).slice(0, 120);
+        const saldoFitId = `${compactDate}SFD${String(idx + 1).padStart(4, "0")}`;
+        const lancamentoSaldoDia = [
+          "<STMTTRN>",
+          `<TRNTYPE>CREDIT`,
+          `<DTPOSTED>${posted}`,
+          `<TRNAMT>0.00`,
+          `<FITID>${saldoFitId}`,
+          `<NAME>SALDO FINAL DO DIA`,
+          `<MEMO>${saldoMemo}`,
+          "</STMTTRN>",
+        ].join("\n");
+
+        return [lancamentoPrincipal, lancamentoSaldoDia];
+      })
+      .join("\n");
+
+    const now = new Date();
+    const generatedAt = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
+      now.getDate()
+    ).padStart(2, "0")}${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(
+      now.getSeconds()
+    ).padStart(2, "0")}`;
+
+    const ofxContent = `OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+SECURITY:NONE
+ENCODING:USASCII
+CHARSET:1252
+COMPRESSION:NONE
+OLDFILEUID:NONE
+NEWFILEUID:${generatedAt}
+
+<OFX>
+<SIGNONMSGSRSV1>
+<SONRS>
+<STATUS>
+<CODE>0
+<SEVERITY>INFO
+</STATUS>
+<DTSERVER>${generatedAt}
+<LANGUAGE>POR
+</SONRS>
+</SIGNONMSGSRSV1>
+<BANKMSGSRSV1>
+<STMTTRNRS>
+<TRNUID>1
+<STATUS>
+<CODE>0
+<SEVERITY>INFO
+</STATUS>
+<STMTRS>
+<CURDEF>BRL
+<BANKACCTFROM>
+<BANKID>237
+<BRANCHID>${agenciaNumero || "0000"}
+<ACCTID>${contaNumero || "0000000"}
+<ACCTTYPE>CHECKING
+</BANKACCTFROM>
+<BANKTRANLIST>
+<DTSTART>${dtStart}000000
+<DTEND>${dtEnd}235959
+${stmtLines}
+</BANKTRANLIST>
+<LEDGERBAL>
+<BALAMT>${Number(saldoFinalPeriodo || 0).toFixed(2)}
+<DTASOF>${dtEnd}235959
+</LEDGERBAL>
+<AVAILBAL>
+<BALAMT>${Number(saldoFinalPeriodo || 0).toFixed(2)}
+<DTASOF>${dtEnd}235959
+</AVAILBAL>
+</STMTRS>
+</STMTTRNRS>
+</BANKMSGSRSV1>
+</OFX>`;
+
+    const blob = new Blob([ofxContent], { type: "application/x-ofx" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `extrato-bradesco-${dataInicio}-a-${dataFim}.ofx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-white">Extrato Bancário</h2>
+            <p className="text-sm text-gray-400">Consulta de extrato Bradesco (CC + Invest Facil)</p>
+            {contaBradesco && (
+              <p className="text-xs text-gray-500 mt-1">
+                Conta vinculada: {contaBradesco.banco} - {contaBradesco.agencia}/{contaBradesco.conta_corrente}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="date"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+              className="bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-white"
+            />
+            <input
+              type="date"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              className="bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-white"
+            />
+            <button
+              onClick={consultarExtrato}
+              disabled={loadingExtrato}
+              className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-600 transition disabled:opacity-60"
+            >
+              {loadingExtrato ? "Consultando..." : "Consultar"}
+            </button>
+            <button
+              onClick={handleExportPdf}
+              disabled={loadingExtrato || !extratoProcessado.length}
+              className="bg-gray-700 text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-600 transition disabled:opacity-50"
+            >
+              Exportar PDF
+            </button>
+            <button
+              onClick={handleExportOfx}
+              disabled={loadingExtrato || !extratoProcessado.length}
+              className="bg-gray-700 text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-600 transition disabled:opacity-50"
+            >
+              Exportar OFX
+            </button>
+          </div>
+        </div>
+
+        {extratoError && <p className="text-red-400 text-sm mb-4">{extratoError}</p>}
+
+        {loadingExtrato ? (
+          <p className="text-center py-10 text-gray-400">Carregando...</p>
+        ) : currentItems.length > 0 ? (
+          <div className="space-y-4">
+            {currentItems.map((group) => (
+              <div key={group.date}>
+                <div className="flex justify-between items-center bg-gray-700 p-2 rounded-t-md sticky top-0 z-10">
+                  <h3 className="font-semibold text-sm">{formatDate(group.date)}</h3>
+                  <span className="text-sm text-gray-300">
+                    Saldo final do dia:{" "}
+                    <span className="font-bold text-white">
+                      {group.dailyBalance === null ? "-" : formatBRLNumber(group.dailyBalance)}
+                    </span>
+                  </span>
+                </div>
+                <ul className="divide-y divide-gray-700 bg-gray-700/50 p-2 rounded-b-md">
+                  {group.transactions.length === 0 ? (
+                    <li className="py-3 text-sm text-gray-400">Sem movimentações no dia.</li>
+                  ) : (
+                    group.transactions.map((t, index) => (
+                      <li
+                        key={`${group.date}-${t.idTransacao || "sem-id"}-${index}-${t.valor || 0}-${t.tipoOperacao || "N"}`}
+                        className="py-2 flex justify-between items-center text-sm"
+                      >
+                        <div>
+                          <p className={`font-semibold ${t.tipoOperacao === "C" ? "text-green-400" : "text-red-400"}`}>
+                            {t.descricao}
+                            {t.isFuturo && (
+                              <span className="ml-2 align-middle text-[10px] px-2 py-0.5 rounded bg-amber-600/20 text-amber-300 border border-amber-500/40">
+                                Futuro
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-gray-400 text-xs">{t.titulo}</p>
+                        </div>
+                        <span className={`font-bold ${t.tipoOperacao === "C" ? "text-green-400" : "text-red-400"}`}>
+                          {t.tipoOperacao === "D" ? "-" : "+"}
+                          {formatBRLNumber(parseFloat(t.valor))}
+                          {Number.isFinite(t.saldoApos) && (
+                            <span className="block text-xs text-gray-300 font-medium">
+                              Saldo: {formatBRLNumber(t.saldoApos)}
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            ))}
+
+            <div className="pt-4">
+              <Pagination
+                totalItems={extratoProcessado.length}
+                itemsPerPage={ITEMS_PER_PAGE_EXTRATO}
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          </div>
+        ) : (
+          <p className="text-center py-10 text-gray-400">
+            Nenhum lancamento encontrado para o periodo.
+          </p>
+        )}
+      </div>
+    </motion.div>
   );
 };
 
@@ -1022,6 +1675,13 @@ export default function ClientDashboardPage() {
             >
               Enviar Nova Operação
             </TabButton>
+            <TabButton
+              viewName="extrato-bancario"
+              currentView={activeView}
+              setView={setActiveView}
+            >
+              Extrato Bancário
+            </TabButton>
           </div>
 
           <button
@@ -1181,6 +1841,13 @@ export default function ClientDashboardPage() {
                 }}
               />
             </motion.div>
+          )}
+
+          {activeView === "extrato-bancario" && (
+            <ExtratoBancarioView
+              showNotification={showNotification}
+              getAuthHeader={getAuthHeader}
+            />
           )}
         </div>
       </div>

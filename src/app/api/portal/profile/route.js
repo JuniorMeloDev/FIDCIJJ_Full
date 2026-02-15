@@ -19,7 +19,10 @@ export async function GET(request) {
 
         const { data: clienteData, error: clienteError } = await supabase
             .from('clientes')
-            .select('*')
+            .select(`
+                *,
+                contas_bancarias (*)
+            `)
             .eq('id', clienteId)
             .single();
 
