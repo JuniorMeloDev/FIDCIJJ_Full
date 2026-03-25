@@ -164,6 +164,7 @@ export default function FluxoDeCaixaPage() {
     dataInicio: formatDateFns(startOfMonth(new Date()), "yyyy-MM-dd"),
     dataFim: formatDateFns(new Date(), "yyyy-MM-dd"),
     descricao: "",
+    valor: "",
     contaBancaria: "",
     categoria: "Todos",
     contaExterna: "",
@@ -317,6 +318,7 @@ export default function FluxoDeCaixaPage() {
     if (currentFilters.dataInicio) params.append("dataInicio", currentFilters.dataInicio);
     if (currentFilters.dataFim) params.append("dataFim", currentFilters.dataFim);
     if (currentFilters.descricao) params.append("descricao", currentFilters.descricao);
+    if (currentFilters.valor) params.append("valor", currentFilters.valor);
     if (currentFilters.contaBancaria) params.append("conta", currentFilters.contaBancaria);
     if (currentFilters.categoria && currentFilters.categoria !== "Todos") params.append("categoria", currentFilters.categoria);
     params.append("sort", currentSortConfig.key);
@@ -667,6 +669,7 @@ export default function FluxoDeCaixaPage() {
       dataInicio: formatDateFns(startOfMonth(new Date()), "yyyy-MM-dd"),
       dataFim: formatDateFns(new Date(), "yyyy-MM-dd"),
       descricao: "",
+      valor: "",
       contaBancaria: "",
       categoria: "Todos",
       contaExterna: "",

@@ -110,6 +110,7 @@ export default function Navbar() {
     { label: 'Análise', href: '/analise' },
     { label: 'Consultas', href: '/consultas' },
     { label: 'Fluxo de Caixa', href: '/fluxo-caixa' },
+    { label: 'Investimentos', href: '/investimentos' },
     { label: 'Cadastros', href: '/cadastros/clientes' },
     { label: 'Agenda', href: '/agenda' },
   ]

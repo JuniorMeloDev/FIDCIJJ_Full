@@ -5,6 +5,19 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 
+const parseValorFiltro = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+
+    const normalized = raw
+        .replace(/\./g, '')
+        .replace(',', '.')
+        .replace(/[^\d.-]/g, '');
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
 export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -29,6 +42,7 @@ export async function GET(request) {
         const dataInicio = searchParams.get('dataInicio');
         const dataFim = searchParams.get('dataFim');
         const conta = searchParams.get('conta');
+        const valorFiltro = parseValorFiltro(searchParams.get('valor'));
 
         if (dataInicio) query = query.gte('data_movimento', dataInicio);
         if (dataFim) query = query.lte('data_movimento', dataFim);
@@ -51,7 +65,7 @@ export async function GET(request) {
             throw error;
         }
 
-        const formattedData = data.map(m => ({
+        let formattedData = data.map(m => ({
             ...m,
             dataMovimento: m.data_movimento,
             contaBancaria: m.conta_bancaria,
@@ -60,6 +74,19 @@ export async function GET(request) {
             operacao: m.operacao,
             duplicata: m.duplicata
         }));
+
+        if (valorFiltro !== null) {
+            const filtroEhNegativo = valorFiltro < 0;
+            formattedData = formattedData.filter((item) => {
+                const valorItem = Number(item.valor || 0);
+
+                if (filtroEhNegativo) {
+                    return valorItem === valorFiltro;
+                }
+
+                return Math.abs(valorItem) === Math.abs(valorFiltro);
+            });
+        }
 
         // --- 2. Cálculo do Saldo Anterior ---
         // Soma tudo que veio ANTES da data de início para compor o saldo inicial do extrato

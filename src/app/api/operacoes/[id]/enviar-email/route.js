@@ -5,41 +5,24 @@ import nodemailer from 'nodemailer';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatBRLNumber, formatDate } from '@/app/utils/formatters';
-// Removidos 'fs' e 'path'
+import fs from 'fs';
+import path from 'path';
 
-const getBaseURL = () => {
-    // 1. Prioriza a variavel de ambiente publica
-    if (process.env.NEXT_PUBLIC_APP_URL) {
-        return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
-    }
-    // 2. Vercel URL (sempre https em produção)
-    if (process.env.VERCEL_URL) {
-        return `https://${process.env.VERCEL_URL}`;
-    }
-    // 3. Fallback local
-    return 'http://localhost:3000';
-};
-
-
-// Função atualizada para buscar logo via URL com tratamento de erro robusto
 const getLogoBase64 = async () => {
     try {
-        const baseURL = getBaseURL();
-        const logoURL = `${baseURL}/Logo.png`;
+        const logoName = 'Logo.png';
+        const filePath = path.join(process.cwd(), 'public', logoName);
         
-        const response = await fetch(logoURL);
-        if (!response.ok) {
-            console.warn(`[AVISO LOGO] Falha ao buscar logo: ${response.status} ${response.statusText} - ${logoURL}`);
-            return null; // Retorna null sem quebrar a execução
+        if (!fs.existsSync(filePath)) {
+            console.error(`[ERRO LOGO PDF] Arquivo não encontrado: ${filePath}`);
+            return null;
         }
-        
-        const imageBuffer = await response.arrayBuffer();
-        const base64String = Buffer.from(imageBuffer).toString('base64');
-        return `data:image/png;base64,${base64String}`;
 
+        const imageBuffer = fs.readFileSync(filePath);
+        return `data:image/png;base64,${imageBuffer.toString('base64')}`;
     } catch (error) {
-        console.error("[ERRO LOGO] Erro ao buscar/converter logo via URL (Ignorando logo):", error.message);
-        return null; // Retorna null se falhar, permitindo que o email seja enviado sem logo
+        console.error("[ERRO LOGO PDF] Erro ao ler logo do disco:", error);
+        return null;
     }
 };
 
@@ -48,10 +31,9 @@ const getHeaderCell = (text) => ({
     styles: { fillColor: [31, 41, 55], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }
 });
 
-// Marcar como async
 const generatePdfBuffer = async (operacao) => {
     const doc = new jsPDF();
-    const logoBase64 = await getLogoBase64(); // Usar await
+    const logoBase64 = await getLogoBase64();
     const pageWidth = doc.internal.pageSize.getWidth();
 
     if (logoBase64) {
@@ -68,7 +50,8 @@ const generatePdfBuffer = async (operacao) => {
     doc.text(`Empresa: ${operacao.cliente.nome}`, 14, 40);
 
     const head = [[getHeaderCell('Nº. Do Título'), getHeaderCell('Venc. Parcelas'), getHeaderCell('Sacado/Emitente'), getHeaderCell('Juros Parcela'), getHeaderCell('Valor')]];
-    const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), dup.cliente_sacado, { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
+    const truncate = (str, n) => (str && str.length > n) ? str.substr(0, n - 1) + '...' : str;
+    const body = operacao.duplicatas.map(dup => [ dup.nf_cte, formatDate(dup.data_vencimento), truncate(dup.cliente_sacado, 35), { content: formatBRLNumber(dup.valor_juros), styles: { halign: 'right' } }, { content: formatBRLNumber(dup.valor_bruto), styles: { halign: 'right' } } ]);
 
     autoTable(doc, {
         startY: 50, head: head, body: body,
@@ -88,8 +71,16 @@ const generatePdfBuffer = async (operacao) => {
     ];
 
     autoTable(doc, {
-        startY: finalY, body: totaisBody, theme: 'plain', tableWidth: 'wrap',
-        margin: { left: pageWidth / 2 }, styles: { cellPadding: 1, fontSize: 10 }
+        startY: finalY,
+        body: totaisBody,
+        theme: 'plain',
+        margin: { left: pageWidth * 0.4 },
+        tableWidth: pageWidth * 0.55,
+        styles: { cellPadding: 1, fontSize: 10, overflow: 'linebreak' },
+        columnStyles: {
+            0: { cellWidth: 'auto' },
+            1: { cellWidth: 30, halign: 'right' }
+        }
     });
 
     return Buffer.from(doc.output('arraybuffer'));

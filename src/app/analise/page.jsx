@@ -22,6 +22,7 @@ export default function AnalisePage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [operacaoSelecionada, setOperacaoSelecionada] = useState(null);
     const [contasMaster, setContasMaster] = useState([]);
+    const [clienteMasterInfo, setClienteMasterInfo] = useState({ nome: '', cnpj: '' });
 
     // Email
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -61,6 +62,28 @@ export default function AnalisePage() {
         setTimeout(() => setNotification({ message: '', type: '' }), 5000);
     };
 
+    const resolveDadosPagador = async (contaBancariaId) => {
+        let contaMasterFull = contasMaster.find(c => String(c.id) === String(contaBancariaId));
+        let clienteConta = null;
+
+        if (contaMasterFull?.cliente_id) {
+            try {
+                const resCliente = await fetch(`/api/cadastros/clientes/${contaMasterFull.cliente_id}`, { headers: getAuthHeader() });
+                if (resCliente.ok) clienteConta = await resCliente.json();
+            } catch (error) {
+                console.error("Erro ao buscar cliente da conta master:", error);
+            }
+        }
+
+        return {
+            nome: contaMasterFull?.titular || contaMasterFull?.descricao || contaMasterFull?.empresa?.razao_social || clienteConta?.razao_social || clienteConta?.nome || clienteMasterInfo.nome || 'Sua Empresa',
+            cnpj: contaMasterFull?.cnpj || contaMasterFull?.cpf_cnpj || contaMasterFull?.cnpj_cpf || contaMasterFull?.empresa?.cnpj || contaMasterFull?.empresa?.cnpj_cpf || clienteConta?.cnpj || clienteConta?.cnpj_cpf || clienteConta?.cpf_cnpj || clienteMasterInfo.cnpj || 'Não informado',
+            banco: contaMasterFull?.banco || 'Banco',
+            agencia: contaMasterFull?.agencia || '',
+            conta: contaMasterFull?.conta || contaMasterFull?.conta_corrente || '',
+        };
+    };
+
     const fetchPendentes = async () => {
         setLoading(true);
         try {
@@ -78,8 +101,28 @@ export default function AnalisePage() {
     useEffect(() => {
         const fetchContas = async () => {
             try {
-                const res = await fetch('/api/cadastros/contas/master', { headers: getAuthHeader() });
-                if (res.ok) setContasMaster(await res.json());
+                const headers = getAuthHeader();
+                const [contasRes, clientesRes] = await Promise.all([
+                    fetch('/api/cadastros/contas/master', { headers }),
+                    fetch('/api/cadastros/clientes', { headers }),
+                ]);
+
+                if (contasRes.ok) setContasMaster(await contasRes.json());
+
+                if (clientesRes.ok) {
+                    const clientesData = await clientesRes.json();
+                    const masterClientId = parseInt(process.env.NEXT_PUBLIC_MASTER_CLIENT_ID, 10);
+                    const clientePagador = masterClientId
+                        ? clientesData.find((c) => c.id === masterClientId)
+                        : clientesData[0];
+
+                    if (clientePagador) {
+                        setClienteMasterInfo({
+                            nome: clientePagador.nome,
+                            cnpj: clientePagador.cnpj,
+                        });
+                    }
+                }
             } catch (e) { console.error("Falha ao buscar contas master"); }
         };
         fetchContas();
@@ -156,18 +199,7 @@ export default function AnalisePage() {
 
             // 2. DADOS DO PAGADOR (Sua Empresa/Conta Master)
             // Precisamos dos detalhes da conta para pegar o CNPJ do titular
-            let contaMasterFull = contasMaster.find(c => String(c.id) === String(payload.conta_bancaria_id));
-
-            // Tenta buscar detalhes mais profundos se a conta estiver incompleta
-            // (Assumindo que talvez exista um endpoint ou que o objeto conta tenha campos aninhados)
-            const dadosPagador = {
-                nome: contaMasterFull?.titular || contaMasterFull?.descricao || contaMasterFull?.empresa?.razao_social || 'Sua Empresa',
-                // Tenta pegar CNPJ de vários lugares possíveis no objeto conta
-                cnpj: contaMasterFull?.cnpj || contaMasterFull?.cpf_cnpj || contaMasterFull?.cnpj_cpf || contaMasterFull?.empresa?.cnpj || contaMasterFull?.empresa?.cnpj_cpf || 'CNPJ não informado',
-                banco: contaMasterFull?.banco || 'Banco',
-                agencia: contaMasterFull?.agencia || '',
-                conta: contaMasterFull?.conta || contaMasterFull?.conta_corrente || ''
-            };
+            const dadosPagador = await resolveDadosPagador(payload.conta_bancaria_id);
             setCachedContaMasterData(dadosPagador);
 
             // 3. CÁLCULO DE VALORES

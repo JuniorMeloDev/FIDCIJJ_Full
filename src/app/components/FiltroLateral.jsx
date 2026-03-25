@@ -1,6 +1,6 @@
 'use client';
 
-import { formatDisplayConta } from '@/app/utils/formatters';
+import { formatBRLInput, formatDisplayConta } from '@/app/utils/formatters';
 import { FaUpload } from 'react-icons/fa'; 
 import { useRef } from 'react'; 
 
@@ -57,6 +57,15 @@ export default function FiltroLateral({
         if (onOfxClear) {
             onOfxClear();
         }
+    };
+
+    const handleValueChange = (e) => {
+        onFilterChange({
+            target: {
+                name: 'valor',
+                value: formatBRLInput(e.target.value),
+            },
+        });
     };
 
     return (
@@ -148,6 +157,20 @@ export default function FiltroLateral({
                             placeholder="Parte da descrição..." 
                             value={filters.descricao} 
                             onChange={onFilterChange} 
+                            className="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white" 
+                            disabled={!!filters.contaExterna || !!ofxExtrato} 
+                        />
+                    </div>
+
+                    <div>
+                        <label htmlFor="valor" className="block text-sm font-semibold text-gray-300">Valor</label>
+                        <input 
+                            id="valor" 
+                            type="text" 
+                            name="valor" 
+                            placeholder="R$ 0,00" 
+                            value={filters.valor || ""} 
+                            onChange={handleValueChange} 
                             className="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm text-sm p-2 text-white" 
                             disabled={!!filters.contaExterna || !!ofxExtrato} 
                         />
