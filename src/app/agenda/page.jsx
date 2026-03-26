@@ -15,7 +15,6 @@ const RenderContent = ({ content }) => {
 };
 
 export default function AgendaPage() {
-    // ... (os states existentes permanecem os mesmos) ...
     const [anotacoes, setAnotacoes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
