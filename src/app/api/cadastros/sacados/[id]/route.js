@@ -9,12 +9,13 @@ export async function PUT(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params;
+        const { id } = await params;
         const body = await request.json();
         
         // --- CORREÇÃO APLICADA AQUI ---
         // Remove a propriedade 'filiais' e outras de relacionamento antes de fazer o update.
         const { condicoesPagamento, condicoes_pagamento, filiais, ...sacadoData } = body;
+        delete sacadoData.id;
 
         // 1. Atualiza os dados principais do sacado
         const { error: sacadoError } = await supabase
@@ -55,7 +56,7 @@ export async function DELETE(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params;
+        const { id } = await params;
         const { error } = await supabase.from('sacados').delete().eq('id', id);
 
         if (error) throw error;

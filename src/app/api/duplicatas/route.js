@@ -18,6 +18,8 @@ export async function GET(request) {
         const dataOpFim = searchParams.get('dataOpFim');
         const dataVencInicio = searchParams.get('dataVencInicio');
         const dataVencFim = searchParams.get('dataVencFim');
+        const valorMinimoFilter = searchParams.get('valorMinimo');
+        const valorMaximoFilter = searchParams.get('valorMaximo');
         const nfCteFilter = searchParams.get('nfCte');
         const clienteIdFilter = searchParams.get('clienteId');
         const tipoOperacaoIdFilter = searchParams.get('tipoOperacaoId');
@@ -71,6 +73,13 @@ export async function GET(request) {
         }
         if (dataVencFim) {
            query = query.lte('data_vencimento', dataVencFim);
+        }
+
+        if (valorMinimoFilter) {
+            query = query.gte('valor_bruto', Number(valorMinimoFilter));
+        }
+        if (valorMaximoFilter) {
+            query = query.lte('valor_bruto', Number(valorMaximoFilter));
         }
 
         // 5. Filtro de NF/CT-e

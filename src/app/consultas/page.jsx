@@ -31,6 +31,8 @@ export default function ConsultasPage() {
     dataOpFim: "",
     dataVencInicio: "",
     dataVencFim: "",
+    valorMinimo: "",
+    valorMaximo: "",
     sacado: "",
     sacadoId: "", // <-- NOVO: Guarda o ID do sacado para filtro preciso
     nfCte: "",
@@ -193,6 +195,8 @@ export default function ConsultasPage() {
       dataOpFim: "",
       dataVencInicio: "",
       dataVencFim: "",
+      valorMinimo: "",
+      valorMaximo: "",
       sacado: "",
       sacadoId: "",
       nfCte: "",
