@@ -137,6 +137,49 @@ const removeKeysFromObject = (obj, keysToRemove = []) => {
   return next;
 };
 
+const summarizeBradescoField = (value) => {
+  if (Array.isArray(value)) {
+    return {
+      type: "array",
+      length: value.length,
+      preview: JSON.stringify(value).slice(0, 160),
+    };
+  }
+
+  if (value && typeof value === "object") {
+    return {
+      type: "object",
+      keys: Object.keys(value),
+      preview: JSON.stringify(value).slice(0, 160),
+    };
+  }
+
+  if (typeof value === "string") {
+    return {
+      type: "string",
+      length: value.length,
+      value,
+    };
+  }
+
+  return {
+    type: value === null ? "null" : typeof value,
+    value,
+  };
+};
+
+const buildBradescoPayloadDiagnostics = (payload = {}) =>
+  Object.fromEntries(
+    Object.entries(payload).map(([key, value]) => [key, summarizeBradescoField(value)])
+  );
+
+const pickBradescoPayloadFields = (payload = {}, fieldNames = []) =>
+  Object.fromEntries(
+    fieldNames
+      .filter((fieldName) => Object.prototype.hasOwnProperty.call(payload, fieldName))
+      .map((fieldName) => [fieldName, summarizeBradescoField(payload[fieldName])])
+  );
+
 export async function getBradescoAccessToken() {
   const clientId = process.env.BRADESCO_BOLETO_CLIENT_ID || process.env.BRADESCO_CLIENT_ID;
   const clientSecret =
@@ -331,7 +374,52 @@ export async function registrarBoleto(accessToken, dadosBoletoPayload) {
   if (firstAttempt.res.statusCode === 422) {
     const unknownArgsLog = extractUnknownArguments(firstAttempt.jsonData);
     const missingArgsLog = [];
+    const suspiciousFields = [
+      "codigoUsuarioSolicitante",
+      "nuCPFCNPJ",
+      "filialCPFCNPJ",
+      "ctrlCPFCNPJ",
+      "idProduto",
+      "nuNegociacao",
+      "nuTitulo",
+      "nuCliente",
+      "dtEmissaoTitulo",
+      "dtVencimentoTitulo",
+      "vlNominalTitulo",
+      "vlAbatimento",
+      "percentualJuros",
+      "vlJuros",
+      "qtdeDiasJuros",
+      "percentualMulta",
+      "vlMulta",
+      "qtdeDiasMulta",
+      "cdPagamentoParcial",
+      "qtdePagamentoParcial",
+      "cepPagador",
+      "complementoCepPagador",
+      "cdIndCpfcnpjPagador",
+      "nuCpfcnpjPagador",
+      "bancoDoDebAutomatico",
+      "agenciaDoDebAutomatico",
+      "digitoAgenciaDoDebAutomat",
+      "contaDoDebAutomatico",
+      "razaoDoDebAutomatico",
+      "listaMsgs",
+      "listaMsgs_1_mensagem",
+    ];
     console.warn("[BRADESCO 422] Campos enviados:", Object.keys(dadosBoletoPayload).sort());
+    console.warn(
+      "[BRADESCO 422] Resumo completo do payload:",
+      buildBradescoPayloadDiagnostics(dadosBoletoPayload)
+    );
+    console.warn(
+      "[BRADESCO 422] Campos criticos para conversao:",
+      pickBradescoPayloadFields(dadosBoletoPayload, suspiciousFields)
+    );
+    console.warn(
+      "[BRADESCO 422] Payload bruto (first 4000):",
+      JSON.stringify(dadosBoletoPayload).slice(0, 4000)
+    );
     if (unknownArgsLog.length) {
       console.warn("[BRADESCO 422] Campos nao suportados pelo contrato atual:", unknownArgsLog.sort());
     }
@@ -386,4 +474,84 @@ export async function registrarBoleto(accessToken, dadosBoletoPayload) {
   throw new Error(
     `Erro ${lastAttempt.res.statusCode} ao registrar boleto Bradesco${correlationText}: ${compactSummary}`
   );
+}
+
+export async function consultarBoletoBradesco(accessToken, payloadConsulta) {
+  if (!accessToken) {
+    throw new Error("Access token do Bradesco nao informado.");
+  }
+
+  const apiBaseUrl = getBradescoApiBaseUrlFromEnv();
+  const apiEndpoint = `${apiBaseUrl}/boleto-hibrido/cobranca-consulta-titulo/v1/consultar`;
+
+  const authClientId = process.env.BRADESCO_BOLETO_CLIENT_ID || process.env.BRADESCO_CLIENT_ID;
+  const authClientSecret =
+    process.env.BRADESCO_BOLETO_CLIENT_SECRET || process.env.BRADESCO_CLIENT_SECRET;
+
+  const authAttempts = [
+    { mode: "bearer_no_ibm", authorization: `Bearer ${accessToken}`, includeIbmHeaders: false },
+    { mode: "raw_no_ibm", authorization: accessToken, includeIbmHeaders: false },
+    { mode: "bearer_with_ibm", authorization: `Bearer ${accessToken}`, includeIbmHeaders: true },
+    { mode: "raw_with_ibm", authorization: accessToken, includeIbmHeaders: true },
+  ];
+
+  for (const authAttempt of authAttempts) {
+    const body = JSON.stringify(payloadConsulta);
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: authAttempt.authorization,
+      "Content-Length": Buffer.byteLength(body),
+    };
+    if (authAttempt.includeIbmHeaders) {
+      headers["X-IBM-Client-Id"] = authClientId;
+      if (authClientSecret) headers["X-IBM-Client-Secret"] = authClientSecret;
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      const req = https.request(
+        apiEndpoint,
+        {
+          method: "POST",
+          agent: createBradescoAgent(),
+          headers,
+        },
+        (res) => {
+          let data = "";
+          res.on("data", (chunk) => (data += chunk));
+          res.on("end", () => {
+            const jsonData = parseJsonSafe(data);
+            if (isBradescoDebugEnabled()) {
+              console.warn("[BRADESCO CONSULTA DEBUG] Endpoint:", apiEndpoint);
+              console.warn("[BRADESCO CONSULTA DEBUG] Auth mode:", authAttempt.mode);
+              console.warn("[BRADESCO CONSULTA DEBUG] Status:", res.statusCode);
+              console.warn("[BRADESCO CONSULTA DEBUG] Response body (first 500):", String(data).slice(0, 500));
+            }
+            resolve({ statusCode: res.statusCode, jsonData, rawData: data });
+          });
+        }
+      );
+
+      req.on("error", (err) =>
+        reject(new Error(`Erro de rede ao consultar boleto Bradesco: ${err.message}`))
+      );
+      req.write(body);
+      req.end();
+    });
+
+    if (result.statusCode >= 200 && result.statusCode < 300) {
+      return result.jsonData ?? { raw: result.rawData };
+    }
+
+    if (![400, 401, 403].includes(result.statusCode)) {
+      throw new Error(
+        `Erro ${result.statusCode} ao consultar boleto Bradesco: ${extractApiError(
+          result.jsonData,
+          result.rawData
+        )}`
+      );
+    }
+  }
+
+  throw new Error("Falha ao consultar boleto Bradesco.");
 }

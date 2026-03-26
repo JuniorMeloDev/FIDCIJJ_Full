@@ -56,7 +56,13 @@ const toDateBradesco = (dateString) =>
 const toMoneyBradesco = (value) => Number((Number(value) || 0).toFixed(2));
 const toMoneyBradescoString = (value) => (Number(value) || 0).toFixed(2);
 const toPercentBradesco = (value) => Number((Number(value) || 0).toFixed(3));
+const toPercentBradescoString = (value) => (Number(value) || 0).toFixed(2);
 const toStringSafe = (value) => String(value ?? "");
+const buildBradescoNegociacao = (agencia, conta) => {
+  const agenciaDigits = toOnlyDigits(agencia).padStart(4, "0").slice(-4);
+  const contaDigits = toOnlyDigits(conta).padStart(7, "0").slice(-7);
+  return `${agenciaDigits}${"0".repeat(7)}${contaDigits}`;
+};
 const isBradescoSandbox = () => {
   const base = String(process.env.BRADESCO_API_BASE_URL || process.env.BRADESCO_BASE_URL || "").toLowerCase();
   return base.includes("sandbox") || base.includes("prebanco");
@@ -139,13 +145,40 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
     const jurosPercentual = toPercentBradesco(tipoOperacao?.taxa_juros_mora || 0);
     const multaPercentual = toPercentBradesco(tipoOperacao?.taxa_multa || 0);
     const nuTitulo = String(duplicata.id).padStart(11, "0").slice(-11);
-    const nuCliente = String(duplicata.nf_cte || `DUP-${duplicata.id}`).slice(0, 25);
-    const mensagem = `REFERENTE A NF ${String(duplicata.nf_cte || duplicata.id)}`.slice(0, 80);
+    const nuCliente =
+      String(duplicata.nf_cte || `DUP${duplicata.id}`)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^A-Za-z0-9]/g, "")
+        .slice(0, 25) || String(duplicata.id);
+    const mensagem = toUpperAscii(`REFERENTE A NF ${String(duplicata.nf_cte || duplicata.id)}`).slice(0, 80);
 
     const nuCpfCnpjBeneficiario = toOnlyDigits(process.env.BRADESCO_CPFCNPJ_RAIZ);
     const filialCpfCnpjBeneficiario = toOnlyDigits(process.env.BRADESCO_FILIAL_CNPJ);
     const ctrlCpfCnpjBeneficiario = toOnlyDigits(process.env.BRADESCO_CTRL_CNPJ);
-    const nuNegociacao = toOnlyDigits(process.env.BRADESCO_NU_NEGOCIACAO);
+    const nuNegociacaoCalculada = buildBradescoNegociacao(
+      process.env.BRADESCO_AGENCIA,
+      process.env.BRADESCO_CONTA
+    );
+    const nuNegociacaoEnv = toOnlyDigits(process.env.BRADESCO_NU_NEGOCIACAO);
+    const nuNegociacao = nuNegociacaoCalculada || nuNegociacaoEnv;
+    const codigoUsuarioBradesco = toUpperAscii(
+      process.env.BRADESCO_CODIGO_USUARIO || "APISERVIC"
+    ).replace(/[^A-Z0-9]/g, "").slice(0, 9) || "APISERVIC";
+
+    if (
+      nuNegociacaoEnv &&
+      nuNegociacaoCalculada &&
+      nuNegociacaoEnv !== nuNegociacaoCalculada
+    ) {
+      console.warn(
+        "[BRADESCO CONFIG] BRADESCO_NU_NEGOCIACAO diverge do formato agencia+zeros+conta. Usando calculado:",
+        {
+          informado: nuNegociacaoEnv,
+          calculado: nuNegociacaoCalculada,
+        }
+      );
+    }
 
     if (!nuCpfCnpjBeneficiario || !filialCpfCnpjBeneficiario || !ctrlCpfCnpjBeneficiario || !nuNegociacao) {
       throw new Error(
@@ -154,7 +187,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
     }
 
     const payloadBase = {
-      codigoUsuarioSolicitante: toStringSafe(process.env.BRADESCO_CODIGO_USUARIO || "APISERVIC"),
+      codigoUsuarioSolicitante: codigoUsuarioBradesco,
       debitoAutomatico: toStringSafe(process.env.BRADESCO_DEBITO_AUTOMATICO || "N"),
       nuCPFCNPJ: toStringSafe(nuCpfCnpjBeneficiario),
       filialCPFCNPJ: toStringSafe(filialCpfCnpjBeneficiario),
@@ -167,74 +200,57 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
       dtVencimentoTitulo: toDateBradesco(duplicata.data_vencimento),
       indicadorMoeda: "1",
       vlNominalTitulo: toMoneyBradescoString(valorFinal),
-      cdEspecieTitulo: toStringSafe(process.env.BRADESCO_CD_ESPECIE_TITULO || 1),
+      cdEspecieTitulo: toStringSafe(process.env.BRADESCO_CD_ESPECIE_TITULO || 2),
       tpProtestoAutomaticoNegativacao: "0",
       prazoProtestoAutomaticoNegativacao: "0",
       controleParticipante: "",
       cdPagamentoParcial: "N",
       qtdePagamentoParcial: "0",
       tipoPrazoDecursoTres: toStringSafe(process.env.BRADESCO_TIPO_PRAZO_DECURSO_TRES || 0),
-      percentualJuros: toStringSafe(jurosPercentual),
-      vlJuros: "0",
+      percentualJuros: toPercentBradescoString(jurosPercentual),
+      vlJuros: "0.00",
       qtdeDiasJuros: toStringSafe(jurosPercentual > 0 ? 1 : 0),
-      percentualMulta: toStringSafe(multaPercentual),
-      vlMulta: "0",
+      percentualMulta: toPercentBradescoString(multaPercentual),
+      vlMulta: "0.00",
       qtdeDiasMulta: toStringSafe(multaPercentual > 0 ? 1 : 0),
-      percentualDesconto1: "0",
-      vlDesconto1: "0",
-      dataLimiteDesconto1: toDateBradesco(duplicata.data_vencimento),
-      percentualDesconto2: "0",
-      vlDesconto2: "0",
-      dataLimiteDesconto2: "",
-      percentualDesconto3: "0",
-      vlDesconto3: "0",
-      dataLimiteDesconto3: "",
-      prazoBonificacao: "0",
-      percentualBonificacao: "0",
-      vlBonificacao: "0",
-      dtLimiteBonificacao: "",
-      vlAbatimento: toStringSafe(toMoneyBradesco(abatimento || 0)),
-      vlIOF: "0",
-      nomePagador: (sacado.nome || "NAO INFORMADO").slice(0, 70),
-      logradouroPagador: logradouro,
+      vlAbatimento: toMoneyBradescoString(abatimento || 0),
+      vlIOF: "0.00",
+      nomePagador: toUpperAscii(sacado.nome || "NAO INFORMADO").slice(0, 70),
+      logradouroPagador: toUpperAscii(logradouro, "NAO INFORMADO").slice(0, 100),
       nuLogradouroPagador: numeroEndereco,
-      complementoLogradouroPagador: (sacado.complemento || "").slice(0, 30),
+      complementoLogradouroPagador: toUpperAscii(sacado.complemento || "").slice(0, 30),
       tpVencimento: "0",
       cepPagador: toStringSafe(cepBase),
       complementoCepPagador: toStringSafe(cepComplemento),
-      bairroPagador: toBradescoAlnum(sacado.bairro, "CENTRO"),
-      municipioPagador: (sacado.municipio || "NAO INFORMADO").slice(0, 50),
+      bairroPagador: toUpperAscii(toBradescoAlnum(sacado.bairro, "CENTRO")).slice(0, 40),
+      municipioPagador: toUpperAscii(sacado.municipio || "NAO INFORMADO").slice(0, 50),
       ufPagador: (sacado.uf || "SP").slice(0, 2).toUpperCase(),
       cdIndCpfcnpjPagador: toStringSafe(isCpfPagador ? 1 : 2),
       nuCpfcnpjPagador: toStringSafe(pagadorDoc),
-      endEletronicoPagador: (sacado.email || "").slice(0, 100),
-      dddFoneSacado: "",
-      foneSacado: "",
-      bancoDoDebAutomatico: "0",
-      agenciaDoDebAutomatico: "0",
-      digitoAgenciaDoDebAutomat: "0",
-      contaDoDebAutomatico: "0",
-      razaoDoDebAutomatico: "0",
-      // Campos exigidos por alguns contratos Bradesco (layout "default.json")
-      nomeSacadorAvalista: "",
-      logradouroSacadorAvalista: "",
-      enderecoSacadorAvalista: "",
-      nuLogradouroSacadorAvalista: "",
-      complementoLogradouroSacadorAvalista: "",
-      bairroSacadorAvalista: "",
-      municipioSacadorAvalista: "",
-      ufSacadorAvalista: "",
-      cepSacadorAvalista: "0",
-      complementoCepSacadorAvalista: "0",
-      cdIndCpfcnpjSacadorAvalista: "0",
-      nuCpfcnpjSacadorAvalista: "",
-      dddFoneSacadorAvalista: "0",
-      foneSacadorAvalista: "0",
       cindcdAceitSacdo: "N",
       listaMsgs: [{ mensagem }],
-      // Alguns ambientes validam também a mensagem no formato flatten.
-      listaMsgs_1_mensagem: mensagem,
     };
+
+    // Em produção, o Bradesco conta descontos/bonificação mesmo quando enviados zerados.
+    // Por isso, só incluiremos esses grupos quando houver uso real.
+
+    if (sacado.email) {
+      payloadBase.endEletronicoPagador = String(sacado.email).slice(0, 100);
+    }
+
+    if (payloadBase.debitoAutomatico === "S") {
+      payloadBase.bancoDoDebAutomatico = toStringSafe(
+        process.env.BRADESCO_BANCO_DEBITO_AUTOMATICO || 237
+      );
+      payloadBase.agenciaDoDebAutomatico = toStringSafe(process.env.BRADESCO_AGENCIA || 0);
+      payloadBase.digitoAgenciaDoDebAutomat = toStringSafe(
+        process.env.BRADESCO_AGENCIA_DV || 0
+      );
+      payloadBase.contaDoDebAutomatico = toStringSafe(process.env.BRADESCO_CONTA || 0);
+      payloadBase.razaoDoDebAutomatico = toStringSafe(
+        process.env.BRADESCO_RAZAO_DEBITO_AUTOMATICO || 705
+      );
+    }
 
     // Sandbox Bradesco trabalha por "cenarios" predefinidos.
     // Neste modo, enviamos um payload aderente ao exemplo oficial para aumentar compatibilidade.
@@ -351,7 +367,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
           descricao_instrumento_cobranca: "boleto",
           tipo_boleto: "a vista",
           codigo_carteira: process.env.ITAU_BOLETO_CARTEIRA || "109", // Usando variável de ambiente
-          codigo_especie: "01", // 01 = DM
+          codigo_especie: "02", // 02 = DM
           valor_total_titulo: valorFormatado,
           valor_abatimento: "0", // O abatimento já foi aplicado no valor_total_titulo
           data_emissao: format(new Date(duplicata.data_operacao + "T12:00:00Z"), "yyyy-MM-dd"),
@@ -482,7 +498,19 @@ export async function POST(request) {
       const tokenData = await getBradescoAccessToken();
       boletoGerado = await registrarBoleto(tokenData.access_token, dadosParaBoleto);
       const bradescoPayload = boletoGerado?.data || boletoGerado || {};
+      const codigoBarrasBradesco =
+        bradescoPayload?.codBarras10 ||
+        bradescoPayload?.codigoBarras10 ||
+        bradescoPayload?.codigo_barras10 ||
+        bradescoPayload?.codigoBarras ||
+        bradescoPayload?.codigo_barras ||
+        bradescoPayload?.titulo?.codigoBarras ||
+        bradescoPayload?.titulo?.codigo_barras ||
+        bradescoPayload?.registro?.codigoBarras ||
+        "";
       linhaDigitavelParaRetorno =
+        bradescoPayload?.linhaDig10 ||
+        bradescoPayload?.linha_digitavel10 ||
         bradescoPayload?.linhaDigitavel ||
         bradescoPayload?.linha_digitavel ||
         bradescoPayload?.linhaDigitable ||
@@ -491,13 +519,9 @@ export async function POST(request) {
         bradescoPayload?.registro?.linhaDigitavel ||
         "N/A";
       dadosParaSalvar =
-        bradescoPayload?.codigoBarras ||
-        bradescoPayload?.codigo_barras ||
-        bradescoPayload?.titulo?.codigoBarras ||
-        bradescoPayload?.titulo?.codigo_barras ||
-        bradescoPayload?.registro?.codigoBarras ||
-        bradescoPayload?.nuTituloGerado ||
-        linhaDigitavelParaRetorno;
+        linhaDigitavelParaRetorno !== "N/A"
+          ? linhaDigitavelParaRetorno
+          : codigoBarrasBradesco || "";
     
     } else if (banco === "itau") {
       const tokenData = await getItauAccessToken();
