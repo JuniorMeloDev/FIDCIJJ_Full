@@ -20,7 +20,7 @@ import Pagination from "@/app/components/Pagination";
 import { FaSort, FaSortUp, FaSortDown, FaWallet } from "react-icons/fa";
 import ComplementModal from "@/app/components/ComplementModal";
 import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal";
-import { format as formatDateFns, startOfMonth } from "date-fns";
+import { eachDayOfInterval, format as formatDateFns, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ConciliacaoModal from "@/app/components/ConciliacaoModal";
 import PixReceiptModal from "@/app/components/PixReceiptModal";
@@ -56,6 +56,56 @@ const normalizeBradescoConta = (conta) => {
   const digits = onlyDigits(conta);
   if (digits.length <= 7) return digits;
   return digits.slice(0, 7);
+};
+
+const normalizeItauAgencia = (agencia) => {
+  const digits = onlyDigits(agencia);
+  if (!digits) return "";
+  return digits.length <= 4 ? digits.padStart(4, "0") : digits.slice(0, 4);
+};
+
+const normalizeItauConta = (conta) => {
+  const raw = String(conta || "").trim();
+  if (!raw) return "";
+
+  if (raw.includes("-")) {
+    return onlyDigits(raw.split("-")[0]).padStart(5, "0").slice(-5);
+  }
+
+  const digits = onlyDigits(raw);
+  if (!digits) return "";
+
+  if (digits.length >= 6) {
+    return digits.slice(0, digits.length - 1).padStart(5, "0").slice(-5);
+  }
+
+  return digits.padStart(5, "0").slice(-5);
+};
+
+const getSaldoFallbackFromCards = (contaInfo, saldos = []) => {
+  const banco = String(contaInfo?.banco || "").toLowerCase();
+  const agencia = onlyDigits(contaInfo?.agencia);
+  const conta = onlyDigits(contaInfo?.conta);
+
+  const match = (Array.isArray(saldos) ? saldos : []).find((item) => {
+    const contaBancaria = String(item?.contaBancaria || "").toLowerCase();
+    const contaBancariaDigits = onlyDigits(contaBancaria);
+
+    const bancoMatch =
+      !banco ||
+      contaBancaria.includes(banco) ||
+      (banco.includes("ita") && contaBancaria.includes("341"));
+
+    const agenciaMatch = !agencia || contaBancariaDigits.includes(agencia);
+    const contaMatch =
+      !conta ||
+      contaBancariaDigits.includes(conta) ||
+      contaBancariaDigits.includes(normalizeItauConta(contaInfo?.conta));
+
+    return bancoMatch && agenciaMatch && contaMatch;
+  });
+
+  return Number(match?.saldo) || 0;
 };
 
 const toDDMMYYYY = (isoDate) => {
@@ -140,6 +190,290 @@ const normalizeBradescoExtrato = (raw) => {
       : 0;
 
   return { transacoes, saldoDisponivel };
+};
+
+const normalizeDateLike = (value) => {
+  if (!value) return "";
+
+  const raw = String(value).trim();
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+  const slash = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (slash) return `${slash[3]}-${slash[2]}-${slash[1]}`;
+
+  const compact = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compact) return `${compact[1]}-${compact[2]}-${compact[3]}`;
+
+  return "";
+};
+
+const parseAmountLike = (value) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+
+  const cleaned = value.trim();
+  if (!cleaned) return null;
+
+  const normalized = cleaned
+    .replace(/\s/g, "")
+    .replace(/\.(?=\d{3}(\D|$))/g, "")
+    .replace(",", ".");
+
+  const parsed = Number(normalized.replace(/[^\d.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getByPath = (obj, path) => {
+  const parts = path.split(".");
+  let current = obj;
+  for (const part of parts) {
+    if (current == null) return undefined;
+    current = current[part];
+  }
+  return current;
+};
+
+const firstValue = (obj, paths) => {
+  for (const path of paths) {
+    const value = getByPath(obj, path);
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return undefined;
+};
+
+const collectArrays = (node, path = "root", seen = new WeakSet()) => {
+  if (!node || typeof node !== "object") return [];
+  if (seen.has(node)) return [];
+  seen.add(node);
+
+  const arrays = [];
+
+  if (Array.isArray(node)) {
+    arrays.push({ path, value: node });
+    node.forEach((item, index) => {
+      arrays.push(...collectArrays(item, `${path}[${index}]`, seen));
+    });
+    return arrays;
+  }
+
+  Object.entries(node).forEach(([key, value]) => {
+    arrays.push(...collectArrays(value, `${path}.${key}`, seen));
+  });
+
+  return arrays;
+};
+
+const normalizeItauExtrato = (raw) => {
+  const groupedData = Array.isArray(raw?.data) ? raw.data : [];
+  const groupedEvents = groupedData.flatMap((item) =>
+    Array.isArray(item?.events) ? item.events : []
+  );
+  const groupedBalances = groupedData.flatMap((item) =>
+    Array.isArray(item?.balances) ? item.balances : []
+  );
+
+  const dailyBalances = groupedBalances.reduce((acc, balance) => {
+    const date = normalizeDateLike(firstValue(balance, ["date.event", "date.accounting", "date"]));
+    const type = String(firstValue(balance, ["type"]) || "").trim().toLowerCase();
+    const value = parseAmountLike(firstValue(balance, ["amount.value", "amount"]));
+
+    if (!date || typeof value !== "number") return acc;
+
+    if (!acc[date]) acc[date] = {};
+    acc[date][type] = value;
+    return acc;
+  }, {});
+
+  const pickDailyBalance = (balanceMap = {}) => {
+    if (Number.isFinite(balanceMap.saldo_disponivel)) return balanceMap.saldo_disponivel;
+    if (Number.isFinite(balanceMap.saldo_total)) return balanceMap.saldo_total;
+    if (Number.isFinite(balanceMap.saldo_conta)) return balanceMap.saldo_conta;
+    return null;
+  };
+
+  const normalizedDailyBalances = Object.fromEntries(
+    Object.entries(dailyBalances).map(([date, values]) => [date, pickDailyBalance(values)])
+  );
+
+  const baseArray = groupedEvents.length
+    ? groupedEvents
+    : collectArrays(raw)
+    .filter(
+      ({ value }) =>
+        Array.isArray(value) &&
+        value.length > 0 &&
+        value.every((item) => item && typeof item === "object" && !Array.isArray(item))
+    )
+    .map(({ path, value }) => {
+      const score = value.reduce((acc, item) => {
+        const hasDate = !!firstValue(item, [
+          "dataEntrada",
+          "date.accounting",
+          "date.event",
+          "data",
+          "bookingDate",
+          "transactionDate",
+          "postingDate",
+          "transactionDateTime",
+          "lancamentoData",
+        ]);
+        const hasAmount =
+          firstValue(item, [
+            "valor",
+            "amount.value",
+            "amount",
+            "transactionAmount",
+            "transactionAmount.value",
+            "valorLancamento",
+          ]) !== undefined;
+
+        return acc + (hasDate ? 2 : 0) + (hasAmount ? 2 : 0);
+      }, 0);
+
+      return { path, value, score };
+    })
+    .sort((a, b) => b.score - a.score)?.[0]?.value || [];
+
+  const transacoes = baseArray
+    .map((item, index) => {
+      const dataEntrada = normalizeDateLike(
+        firstValue(item, [
+          "dataEntrada",
+          "date.accounting",
+          "date.event",
+          "data",
+          "bookingDate",
+          "transactionDate",
+          "postingDate",
+          "transactionDateTime",
+          "lancamentoData",
+        ])
+      );
+
+      const rawValor = firstValue(item, [
+        "valor",
+        "amount.value",
+        "amount",
+        "transactionAmount",
+        "transactionAmount.value",
+        "valorLancamento",
+      ]);
+      const valor = parseAmountLike(rawValor);
+
+      const indicador = String(
+        firstValue(item, [
+          "tipoOperacao",
+          "operation",
+          "tipo",
+          "type",
+          "nature",
+          "entryType",
+          "debitCreditType",
+          "signal",
+        ]) || ""
+      )
+        .trim()
+        .toUpperCase();
+
+      let tipoOperacao = "C";
+      if (
+        indicador === "D" ||
+        indicador.includes("DEBIT") ||
+        indicador.includes("DEBITO") ||
+        indicador.includes("SAIDA") ||
+        indicador.includes("OUT")
+      ) {
+        tipoOperacao = "D";
+      } else if (
+        indicador === "C" ||
+        indicador.includes("CREDIT") ||
+        indicador.includes("CREDITO") ||
+        indicador.includes("ENTRADA") ||
+        indicador.includes("IN")
+      ) {
+        tipoOperacao = "C";
+      } else if (typeof valor === "number") {
+        tipoOperacao = valor < 0 ? "D" : "C";
+      }
+
+      const saldoApos = parseAmountLike(
+        firstValue(item, [
+          "saldoApos",
+          "balance.value",
+          "runningBalance.value",
+          "availableBalance.value",
+          "saldo",
+          "balance",
+          "runningBalance",
+          "saldoDisponivel",
+          "availableBalance",
+        ])
+      );
+
+      return {
+        idTransacao: String(
+          firstValue(item, [
+            "idTransacao",
+            "transactionId",
+            "id",
+            "numeroDocumento",
+            "documentNumber",
+            "nsu",
+          ]) || `itau-${index}`
+        ),
+        dataEntrada,
+        tipoOperacao,
+        valor: typeof valor === "number" ? Math.abs(valor) : 0,
+        descricao:
+          String(
+            firstValue(item, [
+              "descricao",
+              "description",
+              "literal.complete",
+              "literal.shortened",
+              "literal.complementary",
+              "transactionDescription",
+              "narrative",
+              "history",
+              "historico",
+              "titulo",
+              "title",
+              "name",
+            ]) || "Lancamento"
+          ).trim(),
+        titulo: String(
+          firstValue(item, ["titulo", "title", "numeroDocumento", "documentNumber"]) || ""
+        ).trim(),
+        saldoApos: typeof saldoApos === "number" ? saldoApos : null,
+      };
+    })
+    .filter((item) => item.dataEntrada);
+
+  const sortedBalanceDates = Object.keys(normalizedDailyBalances).sort(
+    (a, b) => new Date(b) - new Date(a)
+  );
+  const saldoDisponivel =
+    (sortedBalanceDates.length > 0 ? normalizedDailyBalances[sortedBalanceDates[0]] : null) ??
+    parseAmountLike(
+      firstValue(raw, [
+        "saldoDisponivel",
+        "data.0.balance.value",
+        "data.0.availableBalance.value",
+        "availableBalance",
+        "availableBalance.value",
+        "saldo",
+        "saldo.value",
+        "balance",
+        "balance.value",
+        "statement.balance",
+        "statement.balance.value",
+      ])
+    ) ??
+    [...transacoes].reverse().find((item) => Number.isFinite(item.saldoApos))?.saldoApos ??
+    0;
+
+  return { transacoes, saldoDisponivel, dailyBalances: normalizedDailyBalances };
 };
 
 export default function FluxoDeCaixaPage() {
@@ -431,6 +765,45 @@ export default function FluxoDeCaixaPage() {
         return;
       }
 
+      if (banco.includes("itaú") || banco.includes("itau")) {
+        const agenciaItau = normalizeItauAgencia(contaInfo.agencia);
+        const contaItauRaw = String(contaInfo.conta || "").trim();
+
+        if (!agenciaItau || !normalizeItauConta(contaItauRaw)) {
+          throw new Error("Agência/conta Itaú inválidas para consulta de extrato.");
+        }
+
+        const extratoRes = await fetch(
+          `/api/itau/extrato?agencia=${encodeURIComponent(
+            agenciaItau
+          )}&conta=${encodeURIComponent(
+            contaItauRaw
+          )}&dataInicio=${encodeURIComponent(dataInicio)}&dataFim=${encodeURIComponent(
+            dataFim
+          )}`,
+          { headers: getAuthHeader() }
+        );
+
+        const extratoData = await extratoRes.json();
+        if (!extratoRes.ok)
+          throw new Error(`Erro extrato: ${extratoData.message}`);
+
+        const normalized = normalizeItauExtrato(extratoData);
+        const saldoDisponivel =
+          Number(normalized.saldoDisponivel) ||
+          getSaldoFallbackFromCards(contaInfo, saldos);
+
+        setInterSaldo({
+          disponivel: saldoDisponivel,
+        });
+        setInterExtrato({
+          transacoes: normalized.transacoes,
+          source: "itau",
+          raw: extratoData,
+        });
+        return;
+      }
+
       const [saldoRes, extratoRes] = await Promise.all([
         fetch(`/api/inter/saldo?contaCorrente=${contaInfo.conta}`, {
           headers: getAuthHeader(),
@@ -616,21 +989,49 @@ export default function FluxoDeCaixaPage() {
       acc[date].push(t);
       return acc;
     }, {});
-    const sortedDates = Object.keys(groupedByDate).sort(
-      (a, b) => new Date(b) - new Date(a)
-    );
+    const sortedDates =
+      filters.dataInicio && filters.dataFim
+        ? eachDayOfInterval({
+          start: new Date(`${filters.dataInicio}T12:00:00`),
+          end: new Date(`${filters.dataFim}T12:00:00`),
+        })
+          .map((date) => formatDateFns(date, "yyyy-MM-dd"))
+          .sort((a, b) => new Date(b) - new Date(a))
+        : Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
     let runningBalance = interSaldo.disponivel;
     return sortedDates.map((date) => {
-      const transactions = groupedByDate[date];
+      const transactions = groupedByDate[date] || [];
+
+      if (source === "itau") {
+        const netChange = transactions.reduce((sum, t) => {
+          const value = parseFloat(t.valor);
+          return t.tipoOperacao === "C" ? sum + value : sum - value;
+        }, 0);
+        const explicitDailyBalance = interExtrato?.dailyBalances?.[date];
+        const dailyBalance =
+          Number.isFinite(explicitDailyBalance) ? explicitDailyBalance : runningBalance;
+        runningBalance -= netChange;
+        return {
+          date,
+          transactions,
+          dailyBalance,
+        };
+      }
 
       if (source === "bradesco") {
         const lastWithBalance = [...transactions]
           .reverse()
           .find((t) => Number.isFinite(t.saldoApos));
+        const netChange = transactions.reduce((sum, t) => {
+          const value = parseFloat(t.valor);
+          return t.tipoOperacao === "C" ? sum + value : sum - value;
+        }, 0);
+        const dailyBalance = lastWithBalance?.saldoApos ?? runningBalance;
+        runningBalance -= netChange;
         return {
           date,
           transactions,
-          dailyBalance: lastWithBalance?.saldoApos ?? 0,
+          dailyBalance,
         };
       }
 
@@ -642,7 +1043,7 @@ export default function FluxoDeCaixaPage() {
       runningBalance -= netChange;
       return { date, transactions, dailyBalance };
     });
-  }, [interExtrato, interSaldo]);
+  }, [filters.dataFim, filters.dataInicio, interExtrato, interSaldo]);
 
   const formatHeaderDate = (dateString) =>
     formatDateFns(

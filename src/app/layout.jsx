@@ -1,5 +1,6 @@
 import { Inter } from "next/font/google";
 import Navbar from "./components/Navbar";
+import ConsoleSilencer from "./components/ConsoleSilencer";
 import SetupChecker from "./components/SetupChecker";
 import "./globals.css";
 
@@ -14,6 +15,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="pt-br" className="bg-gray-900">
       <body className={`${inter.className} h-screen flex flex-col`}>
+        <ConsoleSilencer />
         <SetupChecker>
           <Navbar />
           {/* O container principal agora é mais simples e ocupa o espaço restante */}

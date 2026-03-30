@@ -35,7 +35,17 @@ export default function FiltroLateral({
                 banco === '237' ||
                 contaBancaria.includes('237');
 
-            return isInter || isBradesco;
+            const isItau =
+                banco.includes('itaú') ||
+                banco.includes('itau') ||
+                descricao.includes('itaú') ||
+                descricao.includes('itau') ||
+                contaBancaria.includes('itaú') ||
+                contaBancaria.includes('itau') ||
+                banco === '341' ||
+                contaBancaria.includes('341');
+
+            return isInter || isBradesco || isItau;
         })
         : [];
 
