@@ -13,7 +13,10 @@ export default function ConciliacaoOFXModal({
     contas = [], 
     lancamentosDoGrid = [], 
     saldoInicial = 0,
-    refreshKey = 0 
+    refreshKey = 0,
+    initialDataInicio = '',
+    initialDataFim = '',
+    apiDailyBalances = {}
 }) {
   const [contaSelecionada, setContaSelecionada] = useState('');
   const [lancamentosSistema, setLancamentosSistema] = useState([]);
@@ -31,7 +34,10 @@ export default function ConciliacaoOFXModal({
       setMatches({});
       // Se já tivermos dados carregados e for apenas uma reabertura (ou refresh), 
       // mantemos as datas. Se for a primeira vez, definimos o padrão.
-      if (!dataInicio) {
+      if (initialDataInicio && initialDataFim) {
+          setDataInicio(initialDataInicio);
+          setDataFim(initialDataFim);
+      } else {
           const hoje = new Date();
           const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
           
@@ -48,7 +54,7 @@ export default function ConciliacaoOFXModal({
           setContaSelecionada(contas[0].id);
       }
     }
-  }, [isOpen, contas]);
+  }, [isOpen, contas, initialDataInicio, initialDataFim]);
 
   // Carrega dados quando Conta, Data ou refreshKey mudam
   useEffect(() => {
@@ -172,6 +178,50 @@ export default function ConciliacaoOFXModal({
 
   }, [lancamentosSistema, saldoInicialLocal]);
 
+  const ofxProcessado = useMemo(() => {
+    if (!Array.isArray(ofxData) || ofxData.length === 0) return [];
+
+    const groupedByDate = {};
+
+    [...ofxData]
+      .sort((a, b) => new Date(a.data || 0) - new Date(b.data || 0))
+      .forEach((item) => {
+        const date = (item.data || '').split('T')[0];
+        if (!date) return;
+        if (!groupedByDate[date]) groupedByDate[date] = [];
+        groupedByDate[date].push(item);
+      });
+
+    const finalItems = [];
+
+    Object.keys(groupedByDate)
+      .sort()
+      .forEach((date) => {
+        groupedByDate[date].forEach((item) => finalItems.push(item));
+
+        const dailyBalance = Number(apiDailyBalances?.[date]);
+        if (Number.isFinite(dailyBalance)) {
+          finalItems.push({
+            id: `ofx-saldo-${date}`,
+            isBalanceRow: true,
+            data: date,
+            descricao: 'Saldo Final do Dia',
+            valor: dailyBalance,
+          });
+        }
+      });
+
+    return finalItems.sort((a, b) => {
+      const dateA = new Date(a.dataMovimento || a.data || 0);
+      const dateB = new Date(b.dataMovimento || b.data || 0);
+
+      if (dateA - dateB !== 0) return dateB - dateA;
+      if (a.isBalanceRow) return -1;
+      if (b.isBalanceRow) return 1;
+      return 0;
+    });
+  }, [apiDailyBalances, ofxData]);
+
   const autoConciliar = (ofxItems, sysItems) => {
     const newMatches = {};
     const sysItemsUsed = new Set();
@@ -247,7 +297,20 @@ export default function ConciliacaoOFXModal({
                 <span className="block text-xs text-gray-400 font-normal">{ofxData?.length || 0} registros importados</span>
             </div>
             <div className="flex-grow overflow-y-auto p-2 space-y-2">
-                {ofxData && ofxData.map((item) => {
+                {ofxProcessado && ofxProcessado.map((item) => {
+                    if (item.isBalanceRow) {
+                        return (
+                            <div key={item.id} className="bg-gray-900/80 border-t border-b border-gray-600 p-2 flex justify-between items-center">
+                                <div className="flex items-center gap-2 text-orange-400 text-sm font-bold uppercase">
+                                    <FaWallet /> {item.descricao} ({formatDate(item.data)})
+                                </div>
+                                <div className={`font-bold text-sm ${item.valor >= 0 ? "text-blue-400" : "text-red-400"}`}>
+                                    {formatBRLNumber(item.valor)}
+                                </div>
+                            </div>
+                        );
+                    }
+
                     const isMatched = !!matches[item.id];
                     return (
                         <div key={item.id} className={`p-3 rounded border flex justify-between items-center ${isMatched ? 'bg-green-900/20 border-green-600' : 'bg-gray-800 border-gray-600'}`}>

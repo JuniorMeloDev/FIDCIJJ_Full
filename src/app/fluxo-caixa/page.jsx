@@ -619,24 +619,15 @@ export default function FluxoDeCaixaPage() {
     setReconciledTransactionIds((prev) => new Set(prev).add(ofxItem.id));
   };
 
-  const handleCriarLancamentoDoOfx = (ofxItem, contaId) => {
-    let nomeConta = '';
-    if (contaId) {
-      const contaObj = contasMaster.find(c => String(c.id) === String(contaId));
-      if (contaObj) nomeConta = contaObj.contaBancaria;
-    }
-
-    const novoLancamento = {
+const handleCriarLancamentoDoOfx = (ofxItem) => {
+    setTransacaoParaConciliar({
+      id: ofxItem.idTransacao || ofxItem.id,
       data: ofxItem.data,
       descricao: ofxItem.descricao,
-      valor: ofxItem.valor,
-      conta_bancaria: nomeConta,
-      categoria: "Movimentação Avulsa",
-      transaction_id: ofxItem.id,
-    };
-
-    setItemOfxParaCriar(novoLancamento);
-    setIsLancamentoManualOpen(true);
+      valor: parseFloat(ofxItem.valor),
+      categoria: "Outros",
+    });
+    setIsConciliacaoModalOpen(true);
   };
 
   const getAuthHeader = () => ({
@@ -845,6 +836,23 @@ export default function FluxoDeCaixaPage() {
     }
   };
 
+  const refreshFluxoCaixaView = async (
+    currentFilters = filters,
+    currentSortConfig = sortConfig
+  ) => {
+    if (currentFilters.contaExterna) {
+      await fetchExtratoApiBancaria(
+        currentFilters.contaExterna,
+        currentFilters.dataInicio,
+        currentFilters.dataFim
+      );
+    } else {
+      await fetchMovimentacoes(currentFilters, currentSortConfig);
+    }
+
+    await fetchSaldos(currentFilters);
+  };
+
   useEffect(() => {
     const fetchStaticData = async () => {
       try {
@@ -891,7 +899,6 @@ export default function FluxoDeCaixaPage() {
   }, []);
 
   useEffect(() => {
-    fetchSaldos(filters);
     if (filters.contaExterna) {
       setOfxExtrato(null);
       if (filters.dataInicio && filters.dataFim) {
@@ -907,6 +914,8 @@ export default function FluxoDeCaixaPage() {
     } else {
       fetchMovimentacoes(filters, sortConfig);
     }
+
+    fetchSaldos(filters);
   }, [filters, sortConfig]);
 
   useEffect(() => {
@@ -917,11 +926,17 @@ export default function FluxoDeCaixaPage() {
   }, []);
 
 
-  const searchDuplicatasParaConciliacao = async (query) => {
-    if (!query) return [];
+  const searchDuplicatasParaConciliacao = async (search) => {
+    const query = typeof search === "string" ? search : search?.query || "";
+    const clienteId = typeof search === "object" ? search?.clienteId : "";
+
+    if (!query && !clienteId) return [];
     try {
+      const params = new URLSearchParams();
+      if (query) params.set("query", query);
+      if (clienteId) params.set("clienteId", clienteId);
       const response = await fetch(
-        `/api/duplicatas/search-conciliacao?query=${query}`,
+        `/api/duplicatas/search-conciliacao?${params.toString()}`,
         { headers: getAuthHeader() }
       );
       if (!response.ok) return [];
@@ -988,12 +1003,41 @@ export default function FluxoDeCaixaPage() {
       if (!response.ok) throw new Error("Falha ao conciliar pagamento.");
 
       showNotification("Conciliação realizada com sucesso!", "success");
-      fetchMovimentacoes(filters, sortConfig);
-      fetchSaldos(filters);
+      refreshFluxoCaixaView(filters, sortConfig);
       setIsConciliacaoModalOpen(false);
     } catch (err) {
       showNotification(err.message, "error");
     }
+  };
+
+  const handleAbrirConciliacaoOfxDaApi = () => {
+    const normalizedApiExtrato = (interExtrato?.transacoes || [])
+      .filter((t) => {
+        const transactionDate = String(
+          t.dataEntrada || t.dataMovimento || t.data || ""
+        ).slice(0, 10);
+
+        if (!transactionDate) return false;
+        if (filters.dataInicio && transactionDate < filters.dataInicio) return false;
+        if (filters.dataFim && transactionDate > filters.dataFim) return false;
+        return true;
+      })
+      .map((t, index) => ({
+        id: t.idTransacao || `api-${index}`,
+        idTransacao: t.idTransacao || `api-${index}`,
+        data: t.dataEntrada || t.dataMovimento || t.data || null,
+        descricao: t.descricao || "",
+        valor:
+          typeof t.valor === "number"
+            ? (t.tipoOperacao === "D" ? -Math.abs(t.valor) : Math.abs(t.valor))
+            : parseFloat(t.valor || 0),
+        tipoOperacao:
+          t.tipoOperacao ||
+          (parseFloat(t.valor || 0) >= 0 ? "C" : "D"),
+      }));
+
+    setOfxData(normalizedApiExtrato);
+    setIsOfxModalOpen(true);
   };
 
   const interExtratoProcessado = useMemo(() => {
@@ -1187,8 +1231,7 @@ export default function FluxoDeCaixaPage() {
   const handleSaveLancamento = async (payload) => {
     if (!payload) {
       showNotification("PIX enviado e lançamento registrado!", "success");
-      fetchMovimentacoes(filters, sortConfig);
-      fetchSaldos(filters);
+      refreshFluxoCaixaView(filters, sortConfig);
       return true;
     }
     try {
@@ -1200,8 +1243,7 @@ export default function FluxoDeCaixaPage() {
       if (!response.ok) throw new Error("Falha ao salvar lançamento.");
 
       showNotification("Lançamento salvo com sucesso!", "success");
-      fetchMovimentacoes(filters, sortConfig);
-      fetchSaldos(filters);
+      refreshFluxoCaixaView(filters, sortConfig);
       return true;
     } catch (error) {
       showNotification(error.message, "error");
@@ -1222,8 +1264,7 @@ export default function FluxoDeCaixaPage() {
         throw new Error(error.message || "Erro ao salvar lançamento");
       }
 
-      fetchMovimentacoes(filters, sortConfig);
-      fetchSaldos(filters);
+      await refreshFluxoCaixaView(filters, sortConfig);
       setRefreshKey(prev => prev + 1);
       setItemOfxParaCriar(null);
       return true;
@@ -1565,6 +1606,7 @@ export default function FluxoDeCaixaPage() {
         searchDuplicatas={searchDuplicatasParaConciliacao}
         contaApi={parseContaExterna(filters.contaExterna).conta}
         onManualEntry={() => setIsLancamentoManualOpen(true)}
+        onOpenOfxConciliacao={handleAbrirConciliacaoOfxDaApi}
       />
 
       <ConciliacaoOFXModal
@@ -1577,6 +1619,9 @@ export default function FluxoDeCaixaPage() {
         lancamentosDoGrid={movimentacoes}
         saldoInicial={saldoAnterior}
         refreshKey={refreshKey}
+        initialDataInicio={filters.dataInicio}
+        initialDataFim={filters.dataFim}
+        apiDailyBalances={interExtrato?.dailyBalances || {}}
       />
 
       <LancamentoExtratoModal
