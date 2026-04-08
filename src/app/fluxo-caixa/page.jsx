@@ -29,7 +29,7 @@ import PixConfirmationModal from "@/app/components/PixConfirmationModal";
 import ConciliacaoOFXModal from "../components/ConciliacaoOFXModal";
 
 const ITEMS_PER_PAGE = 16;
-const INTER_ITEMS_PER_PAGE = 4;
+const INTER_ITEMS_PER_PAGE = 2;
 
 const parseContaExterna = (contaExterna) => {
   const parts = String(contaExterna || "").split("|");
@@ -206,6 +206,21 @@ const normalizeDateLike = (value) => {
   if (compact) return `${compact[1]}-${compact[2]}-${compact[3]}`;
 
   return "";
+};
+
+const affectsItauTotalBalance = (transaction) => {
+  const descricao = String(transaction?.descricao || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+
+  // Aplicacao/resgate automaticos movem saldo entre conta e aplicacao
+  // e nao alteram o saldo total disponivel do dia.
+  if (descricao.startsWith("APL APLIC AUT MAIS")) return false;
+  if (descricao.startsWith("RES APLIC AUT MAIS")) return false;
+
+  return true;
 };
 
 const parseAmountLike = (value) => {
@@ -799,6 +814,7 @@ export default function FluxoDeCaixaPage() {
         setInterExtrato({
           transacoes: normalized.transacoes,
           source: "itau",
+          dailyBalances: normalized.dailyBalances,
           raw: extratoData,
         });
         return;
@@ -999,18 +1015,42 @@ export default function FluxoDeCaixaPage() {
           .sort((a, b) => new Date(b) - new Date(a))
         : Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
     let runningBalance = interSaldo.disponivel;
-    return sortedDates.map((date) => {
+
+    if (source === "itau") {
+      const latestDateWithTransactions = sortedDates.find(
+        (date) => (groupedByDate[date] || []).length > 0
+      );
+      const latestDateWithExplicitBalance = sortedDates.find((date) =>
+        Number.isFinite(interExtrato?.dailyBalances?.[date])
+      );
+      const startingBalanceDate =
+        latestDateWithTransactions || latestDateWithExplicitBalance || null;
+      const startingExplicitBalance = startingBalanceDate
+        ? interExtrato?.dailyBalances?.[startingBalanceDate]
+        : null;
+
+      if (Number.isFinite(startingExplicitBalance)) {
+        runningBalance = startingExplicitBalance;
+      }
+    }
+
+    return sortedDates.map((date, index) => {
       const transactions = groupedByDate[date] || [];
 
       if (source === "itau") {
         const netChange = transactions.reduce((sum, t) => {
+          if (!affectsItauTotalBalance(t)) return sum;
           const value = parseFloat(t.valor);
           return t.tipoOperacao === "C" ? sum + value : sum - value;
         }, 0);
         const explicitDailyBalance = interExtrato?.dailyBalances?.[date];
+        const isLatestDate = index === 0;
+        const shouldUseExplicitDailyBalance =
+          Number.isFinite(explicitDailyBalance) &&
+          (transactions.length > 0 || isLatestDate);
         const dailyBalance =
-          Number.isFinite(explicitDailyBalance) ? explicitDailyBalance : runningBalance;
-        runningBalance -= netChange;
+          shouldUseExplicitDailyBalance ? explicitDailyBalance : runningBalance;
+        runningBalance = dailyBalance - netChange;
         return {
           date,
           transactions,

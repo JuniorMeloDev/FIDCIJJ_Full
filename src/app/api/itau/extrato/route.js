@@ -43,6 +43,38 @@ export async function GET(request) {
       type,
     });
 
+    const extratoData = Array.isArray(extrato?.data) ? extrato.data : [];
+    console.log(
+      "[API_ITAU_EXTRATO][SUMMARY]",
+      JSON.stringify(
+        {
+          request: {
+            agencia,
+            conta,
+            dac,
+            dataInicio,
+            dataFim,
+            type,
+          },
+          totalDataItems: extratoData.length,
+          items: extratoData.map((item, index) => ({
+            index,
+            eventCount: Array.isArray(item?.events) ? item.events.length : 0,
+            balanceCount: Array.isArray(item?.balances) ? item.balances.length : 0,
+            balancePreview: Array.isArray(item?.balances)
+              ? item.balances.slice(0, 5).map((balance) => ({
+                  type: balance?.type ?? null,
+                  date: balance?.date ?? null,
+                  amount: balance?.amount ?? null,
+                }))
+              : [],
+          })),
+        },
+        null,
+        2
+      )
+    );
+
     return NextResponse.json(extrato);
   } catch (err) {
     console.error("[ERRO API EXTRATO ITAU]", err);

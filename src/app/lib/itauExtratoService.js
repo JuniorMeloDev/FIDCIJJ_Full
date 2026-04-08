@@ -61,6 +61,7 @@ const getItauExtratoPageSize = () =>
   normalizePositiveInteger(process.env.ITAU_EXTRATO_PAGE_SIZE) || 1000;
 
 const ITAU_EXTRATO_MAX_PAGES = 50;
+const ITAU_EXTRATO_DEBUG = true;
 
 const extractErrorMessage = (statusCode, rawBody) => {
   const json = parseJsonSafe(rawBody);
@@ -200,6 +201,45 @@ const requestItauExtratoPage = (endpoint, accessToken) => {
       res.on("end", () => {
         const jsonData = parseJsonSafe(data);
         if (res.statusCode >= 200 && res.statusCode < 300) {
+          if (ITAU_EXTRATO_DEBUG) {
+            const pageData = Array.isArray(jsonData?.data) ? jsonData.data : [];
+            const pageSummary = pageData.map((item, index) => ({
+              index,
+              eventCount: Array.isArray(item?.events) ? item.events.length : 0,
+              balanceCount: Array.isArray(item?.balances) ? item.balances.length : 0,
+              balanceDates: Array.isArray(item?.balances)
+                ? item.balances.slice(0, 5).map((balance) => ({
+                    type: balance?.type ?? null,
+                    date: balance?.date ?? null,
+                    amount: balance?.amount ?? null,
+                  }))
+                : [],
+              firstEventDate:
+                Array.isArray(item?.events) && item.events[0]
+                  ? item.events[0]?.date ?? item.events[0]?.transactionDate ?? null
+                  : null,
+            }));
+
+            console.log(
+              "[ITAU_EXTRATO][PAGE_RESPONSE]",
+              JSON.stringify(
+                {
+                  endpoint,
+                  statusCode: res.statusCode,
+                  pagination:
+                    jsonData?.pagination ||
+                    jsonData?.page ||
+                    jsonData?.paging ||
+                    jsonData?.meta?.pagination ||
+                    null,
+                  dataLength: pageData.length,
+                  pageSummary,
+                },
+                null,
+                2
+              )
+            );
+          }
           resolve(jsonData ?? { raw: data });
           return;
         }
@@ -298,6 +338,21 @@ export async function consultarExtratoItau(accessToken, params) {
 
     const query = buildExtratoQuery({ ...params, page: currentPage, pageSize });
     const endpoint = `${baseEndpoint}${query.toString() ? `?${query.toString()}` : ""}`;
+    if (ITAU_EXTRATO_DEBUG) {
+      console.log(
+        "[ITAU_EXTRATO][PAGE_REQUEST]",
+        JSON.stringify(
+          {
+            statementId,
+            currentPage,
+            pageSize,
+            endpoint,
+          },
+          null,
+          2
+        )
+      );
+    }
     const payload = await requestItauExtratoPage(endpoint, accessToken);
     const pageData = Array.isArray(payload?.data) ? payload.data : [];
 
@@ -311,8 +366,69 @@ export async function consultarExtratoItau(accessToken, params) {
       itemCount: pageData.length,
     });
 
+    if (ITAU_EXTRATO_DEBUG) {
+      console.log(
+        "[ITAU_EXTRATO][PAGE_DECISION]",
+        JSON.stringify(
+          {
+            currentPage,
+            pageDataLength: pageData.length,
+            nextPage,
+            visitedPages: Array.from(visitedPages),
+          },
+          null,
+          2
+        )
+      );
+    }
+
     if (!nextPage || visitedPages.has(nextPage)) break;
     currentPage = nextPage;
+  }
+
+  if (ITAU_EXTRATO_DEBUG) {
+    const consolidatedDates = consolidatedData.map((item, index) => ({
+      index,
+      eventCount: Array.isArray(item?.events) ? item.events.length : 0,
+      balanceCount: Array.isArray(item?.balances) ? item.balances.length : 0,
+      firstBalance:
+        Array.isArray(item?.balances) && item.balances[0]
+          ? {
+              type: item.balances[0]?.type ?? null,
+              date: item.balances[0]?.date ?? null,
+              amount: item.balances[0]?.amount ?? null,
+            }
+          : null,
+      firstEvent:
+        Array.isArray(item?.events) && item.events[0]
+          ? {
+              date: item.events[0]?.date ?? item.events[0]?.transactionDate ?? null,
+              amount:
+                item.events[0]?.amount ??
+                item.events[0]?.transactionAmount ??
+                item.events[0]?.valor ??
+                null,
+              type:
+                item.events[0]?.type ??
+                item.events[0]?.entryType ??
+                item.events[0]?.debitCreditType ??
+                null,
+            }
+          : null,
+    }));
+
+    console.log(
+      "[ITAU_EXTRATO][CONSOLIDATED_RESPONSE]",
+      JSON.stringify(
+        {
+          totalPagesFetched: visitedPages.size,
+          totalDataItems: consolidatedData.length,
+          consolidatedDates,
+        },
+        null,
+        2
+      )
+    );
   }
 
   if (!lastPayload || typeof lastPayload !== "object") {
