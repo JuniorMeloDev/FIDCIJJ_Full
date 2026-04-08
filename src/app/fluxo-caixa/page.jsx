@@ -28,8 +28,8 @@ import LancamentoExtratoModal from "@/app/components/LancamentoExtratoModal";
 import PixConfirmationModal from "@/app/components/PixConfirmationModal";
 import ConciliacaoOFXModal from "../components/ConciliacaoOFXModal";
 
-const ITEMS_PER_PAGE = 8;
-const INTER_ITEMS_PER_PAGE = 2;
+const ITEMS_PER_PAGE = 16;
+const INTER_ITEMS_PER_PAGE = 4;
 
 const parseContaExterna = (contaExterna) => {
   const parts = String(contaExterna || "").split("|");

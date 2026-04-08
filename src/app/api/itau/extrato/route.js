@@ -43,28 +43,6 @@ export async function GET(request) {
       type,
     });
 
-    console.log(
-      "[API EXTRATO ITAU] Resposta bruta:",
-      JSON.stringify(extrato, null, 2).slice(0, 4000)
-    );
-    if (Array.isArray(extrato?.data) && extrato.data[0]) {
-      const primeiroItem = extrato.data[0];
-      const resumo = Object.fromEntries(
-        Object.entries(primeiroItem).filter(([key]) => key !== "events")
-      );
-      console.log(
-        "[API EXTRATO ITAU] Resumo primeiro item:",
-        JSON.stringify(
-          {
-            keys: Object.keys(primeiroItem),
-            resumo,
-          },
-          null,
-          2
-        ).slice(0, 4000)
-      );
-    }
-
     return NextResponse.json(extrato);
   } catch (err) {
     console.error("[ERRO API EXTRATO ITAU]", err);
