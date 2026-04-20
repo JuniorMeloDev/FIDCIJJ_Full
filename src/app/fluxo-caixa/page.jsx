@@ -619,15 +619,22 @@ export default function FluxoDeCaixaPage() {
     setReconciledTransactionIds((prev) => new Set(prev).add(ofxItem.id));
   };
 
-const handleCriarLancamentoDoOfx = (ofxItem) => {
-    setTransacaoParaConciliar({
+const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
+    const contaSelecionada = contasMaster.find(
+      (conta) => String(conta.id) === String(contaSelecionadaId)
+    );
+
+    setItemOfxParaCriar({
       id: ofxItem.idTransacao || ofxItem.id,
+      idTransacao: ofxItem.idTransacao || ofxItem.id,
       data: ofxItem.data,
       descricao: ofxItem.descricao,
       valor: parseFloat(ofxItem.valor),
+      conta_bancaria: contaSelecionada?.contaBancaria || "",
       categoria: "Outros",
     });
-    setIsConciliacaoModalOpen(true);
+    setIsConciliacaoModalOpen(false);
+    setIsLancamentoManualOpen(true);
   };
 
   const getAuthHeader = () => ({
