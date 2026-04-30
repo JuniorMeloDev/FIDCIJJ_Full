@@ -403,10 +403,18 @@ export default function ConsultasPage() {
   };
 
   const handleGeneratePdf = async () => {
-    const operacaoId = contextMenu.selectedItem?.operacaoId;
+    const selectedItem = contextMenu.selectedItem;
+    const operacaoId = selectedItem?.operacaoId;
     if (!operacaoId) return;
     try {
-      const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, {
+      const isRenegociada =
+        selectedItem?.origemRenegociacaoId ||
+        String(selectedItem?.nfCte || "").includes("-REN");
+      const pdfUrl = isRenegociada
+        ? `/api/duplicatas/renegociar/pdf?duplicataId=${selectedItem.id}`
+        : `/api/operacoes/${operacaoId}/pdf`;
+
+      const response = await fetch(pdfUrl, {
         headers: getAuthHeader(),
       });
       if (!response.ok)
@@ -734,6 +742,8 @@ export default function ConsultasPage() {
                       {currentItems.map((dup) => {
                         const isLiquidado =
                           dup.statusRecebimento === "Recebido";
+                        const isBaixaRenegociada =
+                          dup.observacaoBaixa?.toLowerCase().includes("renegoci");
                         return (
                           <tr
                             key={dup.id}
@@ -815,8 +825,9 @@ export default function ConsultasPage() {
                                     </span>
                                   ) : (
                                     <span className="bg-gray-900 text-white text-xs font-bold py-1 px-4 rounded-full">
-                                      Baixado em{" "}
-                                      {formatDate(dup.dataLiquidacao)}
+                                      {isBaixaRenegociada
+                                        ? `Renegociada em ${formatDate(dup.dataLiquidacao)}`
+                                        : `Baixado em ${formatDate(dup.dataLiquidacao)}`}
                                     </span>
                                   )}
                                 </div>

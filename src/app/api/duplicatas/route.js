@@ -149,6 +149,9 @@ export async function GET(request) {
             sacadoInfo: d.sacado,
             operacao: d.operacao,
             banco_emissor_boleto: d.banco_emissor_boleto,
+            origemRenegociacaoId: d.origem_renegociacao_id,
+            observacao: d.observacao,
+            observacaoBaixa: d.observacao_baixa,
         }));
 
         // Se houver ordenação complexa (ex: Cedente) que não foi feita no banco, 

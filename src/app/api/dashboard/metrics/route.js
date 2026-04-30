@@ -45,8 +45,8 @@ export async function GET(request) {
       .select(`
         id, nf_cte, data_vencimento, valor_bruto, valor_juros, cliente_sacado,
           operacao:operacoes!inner(
-            id, valor_liquido, valor_total_bruto, valor_total_juros,
-            cliente:clientes(nome, ramo_de_atividade), tipo_operacao:tipos_operacao(nome)
+            id, cliente_id, valor_liquido, valor_total_bruto, valor_total_juros,
+            cliente:clientes(id, nome, ramo_de_atividade), tipo_operacao:tipos_operacao(nome, taxa_juros_mora, taxa_juros)
           )
       `)
       .eq('operacao.status', 'Aprovada')
@@ -56,20 +56,28 @@ export async function GET(request) {
     if (tipoOperacaoId) vencimentosQuery = vencimentosQuery.eq('operacao.tipo_operacao_id', tipoOperacaoId);
     if (clienteId) vencimentosQuery = vencimentosQuery.eq('operacao.cliente_id', clienteId);
     if (sacadoNome) vencimentosQuery = vencimentosQuery.ilike('cliente_sacado', `%${sacadoNome}%`);
-    
-    // --- INÍCIO DA CORREÇÃO ---
-    // (Esta seção é do seu código original, está correta)
-    // Busca os créditos de recompra separadamente
+
     let recompraQuery = supabase
       .from('descontos')
       .select('valor, operacao:operacoes!inner(data_operacao, tipo_operacao_id, cliente_id)')
-      .ilike('descricao', 'Crédito Juros Recompra%'); 
+      .ilike('descricao', 'Crédito Juros Recompra%');
 
-    // Aplica os mesmos filtros de data, tipo de operação e cliente à busca de recompras
     if (dataInicio) recompraQuery = recompraQuery.gte('operacao.data_operacao', dataInicio);
     if (dataFim) recompraQuery = recompraQuery.lte('operacao.data_operacao', dataFim);
     if (tipoOperacaoId) recompraQuery = recompraQuery.eq('operacao.tipo_operacao_id', tipoOperacaoId);
     if (clienteId) recompraQuery = recompraQuery.eq('operacao.cliente_id', clienteId);
+
+    let renegociacoesQuery = supabase
+      .from('duplicatas')
+      .select('valor_bruto, valor_juros, cliente_sacado, operacao:operacoes!inner(status, tipo_operacao_id, cliente_id)')
+      .not('origem_renegociacao_id', 'is', null)
+      .eq('operacao.status', 'Aprovada');
+
+    if (dataInicio) renegociacoesQuery = renegociacoesQuery.gte('data_operacao', dataInicio);
+    if (dataFim) renegociacoesQuery = renegociacoesQuery.lte('data_operacao', dataFim);
+    if (tipoOperacaoId) renegociacoesQuery = renegociacoesQuery.eq('operacao.tipo_operacao_id', tipoOperacaoId);
+    if (clienteId) renegociacoesQuery = renegociacoesQuery.eq('operacao.cliente_id', clienteId);
+    if (sacadoNome) renegociacoesQuery = renegociacoesQuery.ilike('cliente_sacado', `%${sacadoNome}%`);
 
     const [
       valorOperadoRes,
@@ -78,7 +86,8 @@ export async function GET(request) {
       totaisFinanceirosRes,
       vencimentosProximosRes,
       recompraCreditsRes,
-      jurosMoraRes // --- ADIÇÃO DA LINHA 1 ---
+      jurosMoraRes,
+      renegociacoesRes
     ] = await Promise.all([
       supabase.rpc('get_valor_operado', rpcParams),
       supabase.rpc('get_top_clientes', topNParams),
@@ -86,7 +95,8 @@ export async function GET(request) {
       supabase.rpc('get_totais_financeiros', rpcParams),
       vencimentosQuery,
       recompraQuery,
-      supabase.rpc('get_total_juros_mora_no_periodo', rpcParams) // --- ADIÇÃO DA LINHA 2 ---
+      supabase.rpc('get_total_juros_mora_no_periodo', rpcParams),
+      renegociacoesQuery
     ]);
 
     const errors = [
@@ -96,7 +106,8 @@ export async function GET(request) {
       totaisFinanceirosRes.error,
       vencimentosProximosRes.error,
       recompraCreditsRes.error,
-      jurosMoraRes.error // --- ADIÇÃO DA LINHA 3 ---
+      jurosMoraRes.error,
+      renegociacoesRes.error
     ].filter(Boolean);
 
     if (errors.length > 0) {
@@ -105,21 +116,17 @@ export async function GET(request) {
     }
 
     const totalCreditosRecompra = recompraCreditsRes.data?.reduce((sum, item) => sum + item.valor, 0) || 0;
-    
-    // --- ADIÇÃO DA LINHA 4 ---
     const totalJurosMora = jurosMoraRes.data || 0;
+    const totalOperadoRenegociacao = renegociacoesRes.data?.reduce((sum, item) => sum + (item.valor_bruto || 0), 0) || 0;
+    const totalJurosRenegociacao = renegociacoesRes.data?.reduce((sum, item) => sum + (item.valor_juros || 0), 0) || 0;
 
     const totais = totaisFinanceirosRes.data?.[0] || { total_juros: 0, total_despesas: 0 };
     const totalJurosBruto = totais.total_juros || 0;
-    
-    // --- ADIÇÃO DA LINHA 5 (MODIFICAÇÃO) ---
-    const totalJurosAjustado = totalJurosBruto + totalCreditosRecompra + totalJurosMora;
+    const totalJurosAjustado = totalJurosBruto + totalCreditosRecompra + totalJurosMora + totalJurosRenegociacao;
     const lucroLiquido = totalJurosAjustado - (totais.total_despesas || 0);
 
-    // --- FIM DA CORREÇÃO ---
-
     const metrics = {
-      valorOperadoNoMes: valorOperadoRes.data || 0,
+      valorOperadoNoMes: (valorOperadoRes.data || 0) + totalOperadoRenegociacao,
       topClientes: (topClientesRes.data || []).map(c => ({ ...c, valorTotal: c.valor_total })),
       topSacados: (topSacadosRes.data || []).map(s => ({ ...s, valorTotal: s.valor_total })),
       vencimentosProximos: (vencimentosProximosRes.data || []).map(v => ({
@@ -131,9 +138,9 @@ export async function GET(request) {
         clienteSacado: v.cliente_sacado,
         operacao: v.operacao
       })),
-      totalJuros: totalJurosAjustado, // <-- Valor agora corrigido
+      totalJuros: totalJurosAjustado,
       totalDespesas: totais.total_despesas || 0,
-      lucroLiquido: lucroLiquido
+      lucroLiquido
     };
 
     return NextResponse.json(metrics, { status: 200 });

@@ -7,6 +7,8 @@ import { formatBRLNumber, formatDate } from "../utils/formatters";
 import RelatorioModal from "@/app/components/RelatorioModal";
 import DashboardFiltros from "@/app/components/DashboardFiltros";
 import LiquidacaoModal from "@/app/components/LiquidacaoModal";
+import RenegociacaoModal from "@/app/components/RenegociacaoModal";
+import EmailModal from "@/app/components/EmailModal";
 import Notification from "@/app/components/Notification";
 import { FaChartLine, FaDollarSign, FaClock } from "react-icons/fa";
 import { startOfMonth, endOfMonth, format } from "date-fns";
@@ -50,7 +52,13 @@ export default function ResumoPage() {
 
   const [notification, setNotification] = useState({ message: "", type: "" });
   const [isLiquidarModalOpen, setIsLiquidarModalOpen] = useState(false);
+  const [isRenegociacaoModalOpen, setIsRenegociacaoModalOpen] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [duplicataParaLiquidar, setDuplicataParaLiquidar] = useState(null);
+  const [duplicatasParaRenegociar, setDuplicatasParaRenegociar] = useState([]);
+  const [duplicatasSelecionadas, setDuplicatasSelecionadas] = useState([]);
+  const [operacaoParaEmail, setOperacaoParaEmail] = useState(null);
   const [contextMenu, setContextMenu] = useState({
     visible: false,
     x: 0,
@@ -173,8 +181,29 @@ export default function ResumoPage() {
       contaBancaria: "",
     });
 
+  const handleDuplicataClick = (item) => {
+    setDuplicatasSelecionadas((prev) => {
+      const jaSelecionada = prev.some((dup) => dup.id === item.id);
+      return jaSelecionada
+        ? prev.filter((dup) => dup.id !== item.id)
+        : [...prev, item];
+    });
+  };
+
+  const limparSelecaoDuplicatas = () => {
+    setDuplicatasSelecionadas([]);
+  };
+
+  const getDuplicatasDaAcao = () => {
+    if (duplicatasSelecionadas.length > 0) return duplicatasSelecionadas;
+    return contextMenu.selectedItem ? [contextMenu.selectedItem] : [];
+  };
+
   const handleContextMenu = (event, item) => {
     event.preventDefault();
+    setDuplicatasSelecionadas((prev) =>
+      prev.some((dup) => dup.id === item.id) ? prev : [...prev, item]
+    );
     setContextMenu({
       visible: true,
       x: event.pageX,
@@ -184,9 +213,20 @@ export default function ResumoPage() {
   };
 
   const handleAbrirModalLiquidacao = () => {
-    if (contextMenu.selectedItem) {
-      setDuplicataParaLiquidar([contextMenu.selectedItem]);
+    const duplicatas = getDuplicatasDaAcao();
+    if (duplicatas.length > 0) {
+      setDuplicataParaLiquidar(duplicatas);
       setIsLiquidarModalOpen(true);
+      setContextMenu((prev) => ({ ...prev, visible: false }));
+    }
+  };
+
+  const handleAbrirModalRenegociacao = () => {
+    const duplicatas = getDuplicatasDaAcao();
+    if (duplicatas.length > 0) {
+      setDuplicatasParaRenegociar(duplicatas);
+      setIsRenegociacaoModalOpen(true);
+      setContextMenu((prev) => ({ ...prev, visible: false }));
     }
   };
 
@@ -211,12 +251,102 @@ export default function ResumoPage() {
       });
 
       if (!response.ok) throw new Error("Falha ao liquidar a duplicata.");
-      showNotification(`Duplicata liquidada com sucesso!`, "success");
+      showNotification(`Duplicata(s) liquidada(s) com sucesso!`, "success");
+      limparSelecaoDuplicatas();
       fetchDashboardData();
     } catch (err) {
       showNotification(err.message, "error");
     } finally {
       setIsLiquidarModalOpen(false);
+    }
+  };
+
+  const handleConfirmarRenegociacao = async ({
+    duplicataIds,
+    novaDataVencimento,
+    jurosManual,
+    taxaJurosManual,
+    observacao,
+  }) => {
+    try {
+      const response = await fetch("/api/duplicatas/renegociar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify({
+          duplicataIds,
+          novaDataVencimento,
+          jurosManual,
+          taxaJurosManual,
+          observacao,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || "Falha ao renegociar duplicata(s).");
+      }
+
+      showNotification(
+        data.message || "Renegociação realizada com sucesso.",
+        "success"
+      );
+
+      const primeiraDuplicata = duplicatasParaRenegociar[0];
+      const operacaoId =
+        data.operacaoId ||
+        data.novasDuplicatas?.[0]?.operacao_id ||
+        primeiraDuplicata?.operacao?.id;
+      const clienteId =
+        data.clienteId ||
+        primeiraDuplicata?.operacao?.cliente_id ||
+        primeiraDuplicata?.operacao?.cliente?.id;
+
+      if (operacaoId) {
+        setOperacaoParaEmail({
+          id: operacaoId,
+          clienteId,
+          duplicataIds: data.novasDuplicatas?.map((duplicata) => duplicata.id) || [],
+        });
+        setIsEmailModalOpen(true);
+      }
+
+      setIsRenegociacaoModalOpen(false);
+      setDuplicatasParaRenegociar([]);
+      limparSelecaoDuplicatas();
+      fetchDashboardData();
+    } catch (err) {
+      showNotification(err.message, "error");
+    }
+  };
+
+  const handleSendEmail = async (destinatarios) => {
+    if (!operacaoParaEmail) return;
+    setIsSendingEmail(true);
+    try {
+      const response = await fetch(
+        "/api/duplicatas/renegociar/enviar-email",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...getAuthHeader() },
+          body: JSON.stringify({
+            destinatarios,
+            duplicataIds: operacaoParaEmail.duplicataIds,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || "Falha ao enviar o e-mail.");
+      }
+
+      showNotification(data.message || "E-mail enviado com sucesso!", "success");
+    } catch (err) {
+      showNotification(err.message, "error");
+    } finally {
+      setIsSendingEmail(false);
+      setIsEmailModalOpen(false);
+      setOperacaoParaEmail(null);
     }
   };
 
@@ -250,6 +380,22 @@ export default function ResumoPage() {
         onConfirm={handleConfirmarLiquidacao}
         duplicata={duplicataParaLiquidar}
         contasMaster={contasBancarias}
+      />
+      <RenegociacaoModal
+        isOpen={isRenegociacaoModalOpen}
+        onClose={() => setIsRenegociacaoModalOpen(false)}
+        onConfirm={handleConfirmarRenegociacao}
+        duplicatas={duplicatasParaRenegociar}
+      />
+      <EmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => {
+          setIsEmailModalOpen(false);
+          setOperacaoParaEmail(null);
+        }}
+        onSend={handleSendEmail}
+        isSending={isSendingEmail}
+        clienteId={operacaoParaEmail?.clienteId}
       />
       <RelatorioModal
         isOpen={isRelatorioModalOpen}
@@ -465,6 +611,20 @@ export default function ResumoPage() {
                     <option value={30}>Próximos 30 dias</option>
                   </select>
                 </div>
+                {duplicatasSelecionadas.length > 0 && (
+                  <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-orange-500 bg-orange-500/10 px-3 py-2 text-sm text-orange-100">
+                    <span>
+                      {duplicatasSelecionadas.length} duplicata(s) selecionada(s)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={limparSelecaoDuplicatas}
+                      className="rounded-md border border-orange-400 px-2 py-1 text-xs font-semibold text-orange-200 hover:bg-orange-500 hover:text-white transition"
+                    >
+                      Limpar seleção
+                    </button>
+                  </div>
+                )}
                 <div className="space-y-3 max-h-80 overflow-auto pr-2">
                   {metrics.vencimentosProximos?.length > 0 ? (
                     metrics.vencimentosProximos
@@ -475,6 +635,9 @@ export default function ResumoPage() {
                       )
                       .map((dup) => {
                         const isVencido = dup.dataVencimento < today;
+                        const isSelecionada = duplicatasSelecionadas.some(
+                          (selecionada) => selecionada.id === dup.id
+                        );
 
                         // --- INÍCIO DA CORREÇÃO ---
                         // Calcula o valor a ser exibido usando a mesma lógica do modal
@@ -486,8 +649,12 @@ export default function ResumoPage() {
                         return (
                           <div
                             key={dup.id}
+                            onClick={() => handleDuplicataClick(dup)}
                             onContextMenu={(e) => handleContextMenu(e, dup)}
-                            className="flex justify-between items-center text-sm border-b border-gray-600 pb-2 last:border-none cursor-pointer hover:bg-gray-600 rounded-md p-2"
+                            className={`flex justify-between items-center text-sm border pb-2 cursor-pointer rounded-md p-2 transition ${isSelecionada
+                              ? "border-orange-500 bg-orange-500/15 shadow-[0_0_0_1px_rgba(249,115,22,0.35)]"
+                              : "border-transparent border-b-gray-600 hover:bg-gray-600"
+                              }`}
                           >
                             <div>
                               <p className="font-medium text-gray-200">
@@ -592,7 +759,17 @@ export default function ResumoPage() {
               }}
               className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
             >
-              Liquidar Duplicata
+              Liquidar selecionadas
+            </a>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleAbrirModalRenegociacao();
+              }}
+              className="block px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+            >
+              Renegociação
             </a>
           </div>
         </div>
