@@ -27,6 +27,7 @@ import PixReceiptModal from "@/app/components/PixReceiptModal";
 import LancamentoExtratoModal from "@/app/components/LancamentoExtratoModal";
 import PixConfirmationModal from "@/app/components/PixConfirmationModal";
 import ConciliacaoOFXModal from "../components/ConciliacaoOFXModal";
+import EmissaoBoletoManualModal from "@/app/components/EmissaoBoletoManualModal";
 
 const ITEMS_PER_PAGE = 16;
 const INTER_ITEMS_PER_PAGE = 2;
@@ -498,6 +499,7 @@ export default function FluxoDeCaixaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEmissaoBoletoManualOpen, setIsEmissaoBoletoManualOpen] = useState(false);
   const [notification, setNotification] = useState({ message: "", type: "" });
   const [operacaoParaEmail, setOperacaoParaEmail] = useState(null);
   const [itemParaExcluir, setItemParaExcluir] = useState(null);
@@ -1643,6 +1645,13 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
         showNotification={showNotification}
       />
 
+      <EmissaoBoletoManualModal
+        isOpen={isEmissaoBoletoManualOpen}
+        onClose={() => setIsEmissaoBoletoManualOpen(false)}
+        getAuthHeader={getAuthHeader}
+        showNotification={showNotification}
+      />
+
       <EditLancamentoModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
@@ -1692,12 +1701,20 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
                 Visão geral das suas movimentações financeiras.
               </p>
             </div>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition w-full md:w-auto"
-            >
-              + Novo Lançamento
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+              <button
+                onClick={() => setIsEmissaoBoletoManualOpen(true)}
+                className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-blue-700 transition w-full md:w-auto"
+              >
+                Emitir Boletos
+              </button>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition w-full md:w-auto"
+              >
+                + Novo Lançamento
+              </button>
+            </div>
           </motion.header>
         </div>
 
