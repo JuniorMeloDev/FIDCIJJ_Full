@@ -11,6 +11,8 @@ const initialForm = {
   seuNumero: "",
   descricao: "",
   abatimento: "",
+  juros: "",
+  multa: "",
 };
 
 const bancoLabels = {
@@ -18,6 +20,13 @@ const bancoLabels = {
   safra: "Safra",
   bradesco: "Bradesco",
   inter: "Inter",
+};
+
+const parsePercentInput = (value) => {
+  const normalized = String(value ?? "").trim().replace(/\s+/g, "").replace(",", ".");
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
 };
 
 export default function EmissaoBoletoManualModal({
@@ -35,6 +44,8 @@ export default function EmissaoBoletoManualModal({
 
   const valorNumerico = useMemo(() => parseBRL(form.valor), [form.valor]);
   const abatimentoNumerico = useMemo(() => parseBRL(form.abatimento), [form.abatimento]);
+  const jurosNumerico = useMemo(() => parsePercentInput(form.juros), [form.juros]);
+  const multaNumerica = useMemo(() => parsePercentInput(form.multa), [form.multa]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -100,6 +111,10 @@ export default function EmissaoBoletoManualModal({
     if (valorNumerico <= 0) return "Informe um valor maior que zero.";
     if (abatimentoNumerico < 0) return "O abatimento nao pode ser negativo.";
     if (abatimentoNumerico >= valorNumerico) return "O abatimento deve ser menor que o valor.";
+    if (Number.isNaN(jurosNumerico)) return "Informe um valor valido para juros.";
+    if (Number.isNaN(multaNumerica)) return "Informe um valor valido para multa.";
+    if (jurosNumerico < 0) return "Os juros nao podem ser negativos.";
+    if (multaNumerica < 0) return "A multa nao pode ser negativa.";
     if (!form.seuNumero.trim()) return "Informe seu numero/referencia.";
     if (!form.descricao.trim()) return "Informe a descricao.";
     return null;
@@ -130,6 +145,8 @@ export default function EmissaoBoletoManualModal({
           seuNumero: form.seuNumero.trim(),
           descricao: form.descricao.trim(),
           abatimento: abatimentoNumerico,
+          juros: jurosNumerico,
+          multa: multaNumerica,
         }),
       });
 
@@ -145,6 +162,15 @@ export default function EmissaoBoletoManualModal({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handlePrintPdf = () => {
+    if (!resultado?.pdfUrl) {
+      showNotification("PDF ainda nao disponivel para este boleto.", "error");
+      return;
+    }
+
+    window.open(resultado.pdfUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -295,6 +321,38 @@ export default function EmissaoBoletoManualModal({
                   disabled={isLoading}
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1" htmlFor="jurosManual">
+                  Juros (%)
+                </label>
+                <input
+                  id="jurosManual"
+                  type="text"
+                  inputMode="decimal"
+                  value={form.juros}
+                  onChange={(event) => updateForm("juros", event.target.value)}
+                  placeholder="0,00"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-md p-2"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1" htmlFor="multaManual">
+                  Multa (%)
+                </label>
+                <input
+                  id="multaManual"
+                  type="text"
+                  inputMode="decimal"
+                  value={form.multa}
+                  onChange={(event) => updateForm("multa", event.target.value)}
+                  placeholder="0,00"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-md p-2"
+                  disabled={isLoading}
+                />
+              </div>
             </div>
 
             <div>
@@ -349,18 +407,19 @@ export default function EmissaoBoletoManualModal({
             </div>
 
             <div className="flex justify-between gap-3">
-              {resultado.pdfUrl ? (
-                <a
-                  href={resultado.pdfUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition"
-                >
-                  Imprimir
-                </a>
-              ) : (
-                <span className="text-sm text-gray-400 self-center">PDF ainda nao disponivel para emissao manual.</span>
-              )}
+              <div className="flex items-center gap-3">
+                {resultado.pdfUrl ? (
+                  <button
+                    type="button"
+                    onClick={handlePrintPdf}
+                    className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition"
+                  >
+                    Imprimir
+                  </button>
+                ) : (
+                  <span className="text-sm text-gray-400 self-center">PDF ainda nao disponivel para emissao manual.</span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={onClose}

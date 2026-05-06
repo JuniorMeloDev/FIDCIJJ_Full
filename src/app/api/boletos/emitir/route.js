@@ -367,7 +367,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
           descricao_instrumento_cobranca: "boleto",
           tipo_boleto: "a vista",
           codigo_carteira: process.env.ITAU_BOLETO_CARTEIRA || "109", // Usando variável de ambiente
-          codigo_especie: "02", // 02 = DM
+          codigo_especie: "01", // 01 = DM
           valor_total_titulo: valorFormatado,
           valor_abatimento: "0", // O abatimento já foi aplicado no valor_total_titulo
           data_emissao: format(new Date(duplicata.data_operacao + "T12:00:00Z"), "yyyy-MM-dd"),

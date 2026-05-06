@@ -16,6 +16,11 @@ const onlyDigits = (value) => String(value || "").replace(/\D/g, "");
 const toStringSafe = (value) => String(value ?? "");
 const toMoneyString = (value) => (Number(value) || 0).toFixed(2);
 const toMoney = (value) => Number((Number(value) || 0).toFixed(2));
+const formatPercent = (value, decimalPlaces = 5, totalLength = 11) => {
+  const floatValue = parseFloat(value) || 0;
+  const fixedValue = floatValue.toFixed(decimalPlaces);
+  return fixedValue.replace(".", "").padStart(totalLength, "0");
+};
 const todayIso = () => format(new Date(), "yyyy-MM-dd");
 const dateAtNoon = (dateString) => new Date(`${dateString}T12:00:00Z`);
 const toDateBradesco = (dateString) => format(dateAtNoon(dateString), "dd.MM.yyyy");
@@ -72,13 +77,25 @@ const parseEndereco = (enderecoRaw) => {
   };
 };
 
-const validatePayload = ({ banco, sacadoId, vencimento, valor, seuNumero, descricao, abatimento }) => {
+const validatePayload = ({
+  banco,
+  sacadoId,
+  vencimento,
+  valor,
+  seuNumero,
+  descricao,
+  abatimento,
+  juros,
+  multa,
+}) => {
   if (!bancosPermitidos.has(banco)) throw new Error("Banco selecionado invalido.");
   if (!sacadoId) throw new Error("Sacado obrigatorio.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(vencimento || ""))) throw new Error("Vencimento invalido.");
   if (!Number.isFinite(Number(valor)) || Number(valor) <= 0) throw new Error("Valor invalido.");
   if (!Number.isFinite(Number(abatimento || 0)) || Number(abatimento || 0) < 0) throw new Error("Abatimento invalido.");
   if (Number(abatimento || 0) >= Number(valor)) throw new Error("Abatimento deve ser menor que o valor.");
+  if (!Number.isFinite(Number(juros || 0)) || Number(juros || 0) < 0) throw new Error("Juros invalido.");
+  if (!Number.isFinite(Number(multa || 0)) || Number(multa || 0) < 0) throw new Error("Multa invalida.");
   if (!String(seuNumero || "").trim()) throw new Error("Seu numero/referencia obrigatorio.");
   if (!String(descricao || "").trim()) throw new Error("Descricao obrigatoria.");
 };
@@ -109,10 +126,14 @@ const buildSafraPayload = ({ sacado, vencimento, valorFinal, abatimento, nossoNu
   },
 });
 
-const buildItauPayload = ({ sacado, vencimento, valorFinal, nossoNumero, seuNumero }) => {
+const buildItauPayload = ({ sacado, vencimento, valorFinal, nossoNumero, seuNumero, juros = 0, multa = 0 }) => {
   const documento = onlyDigits(sacado.cnpj);
   const isCpf = documento.length === 11;
   const valorFormatado = Math.round(valorFinal * 100).toString().padStart(15, "0");
+  const jurosNumerico = Number(juros) || 0;
+  const multaNumerica = Number(multa) || 0;
+  const jurosAtivo = jurosNumerico > 0;
+  const multaAtiva = multaNumerica > 0;
 
   return {
     data: {
@@ -123,7 +144,7 @@ const buildItauPayload = ({ sacado, vencimento, valorFinal, nossoNumero, seuNume
         descricao_instrumento_cobranca: "boleto",
         tipo_boleto: "a vista",
         codigo_carteira: process.env.ITAU_BOLETO_CARTEIRA || "109",
-        codigo_especie: "02",
+        codigo_especie: "01",
         valor_total_titulo: valorFormatado,
         valor_abatimento: "0",
         data_emissao: todayIso(),
@@ -151,8 +172,12 @@ const buildItauPayload = ({ sacado, vencimento, valorFinal, nossoNumero, seuNume
             texto_seu_numero: String(seuNumero).slice(0, 25),
           },
         ],
-        multa: { codigo_tipo_multa: "0", percentual_multa: "00000000000" },
-        juros: { codigo_tipo_juros: "0", percentual_juros: "00000000000" },
+        multa: multaAtiva
+          ? { codigo_tipo_multa: "02", percentual_multa: formatPercent(multaNumerica) }
+          : { codigo_tipo_multa: "0" },
+        juros: jurosAtivo
+          ? { codigo_tipo_juros: "90", percentual_juros: formatPercent(jurosNumerico) }
+          : { codigo_tipo_juros: "0" },
         recebimento_divergente: { codigo_tipo_autorizacao: "03" },
         desconto_expresso: false,
       },
@@ -408,6 +433,8 @@ export async function POST(request) {
       seuNumero: String(body.seuNumero || "").trim(),
       descricao: String(body.descricao || "").trim(),
       abatimento: Number(body.abatimento || 0),
+      juros: Number(body.juros || 0),
+      multa: Number(body.multa || 0),
     };
 
     validatePayload(payload);
@@ -446,6 +473,8 @@ export async function POST(request) {
       vencimento: payload.vencimento,
       valorFinal,
       abatimento: payload.abatimento,
+      juros: payload.juros,
+      multa: payload.multa,
       nossoNumero,
       seuNumero: payload.seuNumero,
       descricao: payload.descricao,
@@ -472,7 +501,13 @@ export async function POST(request) {
         codigo_barras: codigoBarras,
         nosso_numero: nossoNumeroFinal,
         status: "emitido",
-        resposta_banco: resultadoBanco.boletoGerado,
+        resposta_banco: {
+          ...(resultadoBanco.boletoGerado || {}),
+          juros: payload.juros,
+          multa: payload.multa,
+          abatimento: payload.abatimento,
+          valor_final: valorFinal,
+        },
       })
       .eq("id", boletoManualId);
 
@@ -483,7 +518,7 @@ export async function POST(request) {
         linhaDigitavel,
         codigoBarras,
         nossoNumero: nossoNumeroFinal,
-        pdfUrl: null,
+        pdfUrl: `/api/boletos/manual-pdf/${boletoManualId}`,
         warning: "Boleto emitido, mas falha ao atualizar o registro salvo.",
       });
     }
@@ -494,7 +529,7 @@ export async function POST(request) {
       linhaDigitavel,
       codigoBarras,
       nossoNumero: nossoNumeroFinal,
-      pdfUrl: null,
+      pdfUrl: `/api/boletos/manual-pdf/${boletoManualId}`,
     });
   } catch (error) {
     console.error(`[ERRO EMISSAO MANUAL] ${error.message}`, error.stack);
