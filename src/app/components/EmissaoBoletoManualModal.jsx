@@ -40,6 +40,7 @@ export default function EmissaoBoletoManualModal({
   const [sacados, setSacados] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [resultado, setResultado] = useState(null);
 
   const valorNumerico = useMemo(() => parseBRL(form.valor), [form.valor]);
@@ -170,7 +171,37 @@ export default function EmissaoBoletoManualModal({
       return;
     }
 
-    window.open(resultado.pdfUrl, "_blank", "noopener,noreferrer");
+    setIsPrinting(true);
+
+    const print = async () => {
+      try {
+        const response = await fetch(resultado.pdfUrl, {
+          headers: getAuthHeader(),
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.message || "Nao foi possivel gerar o PDF.");
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const windowRef = window.open(url, "_blank", "noopener,noreferrer");
+
+        if (!windowRef) {
+          window.URL.revokeObjectURL(url);
+          throw new Error("Bloqueio de popup impede abrir o PDF.");
+        }
+
+        setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+      } catch (error) {
+        showNotification(error.message, "error");
+      } finally {
+        setIsPrinting(false);
+      }
+    };
+
+    void print();
   };
 
   return (
@@ -412,9 +443,10 @@ export default function EmissaoBoletoManualModal({
                   <button
                     type="button"
                     onClick={handlePrintPdf}
-                    className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition"
+                    disabled={isPrinting}
+                    className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition disabled:opacity-50"
                   >
-                    Imprimir
+                    {isPrinting ? "Abrindo..." : "Imprimir"}
                   </button>
                 ) : (
                   <span className="text-sm text-gray-400 self-center">PDF ainda nao disponivel para emissao manual.</span>
