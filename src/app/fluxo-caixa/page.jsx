@@ -1,4 +1,4 @@
-// type: uploaded file
+﻿// type: uploaded file
 // fileName: app/fluxo-caixa/page.jsx
 
 "use client";
@@ -17,7 +17,7 @@ import {
 } from "@/app/utils/formatters";
 import FiltroLateral from "@/app/components/FiltroLateral";
 import Pagination from "@/app/components/Pagination";
-import { FaSort, FaSortUp, FaSortDown, FaWallet } from "react-icons/fa";
+import { FaSort, FaSortUp, FaSortDown, FaWallet, FaEllipsisV } from "react-icons/fa";
 import ComplementModal from "@/app/components/ComplementModal";
 import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal";
 import { eachDayOfInterval, format as formatDateFns, startOfMonth } from "date-fns";
@@ -531,6 +531,8 @@ export default function FluxoDeCaixaPage() {
     y: 0,
     selectedItem: null,
   });
+  const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false);
+  const [mobileActionsItem, setMobileActionsItem] = useState(null);
   const menuRef = useRef(null);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -1158,6 +1160,50 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
     return sortConfig.direction === "ASC" ? <FaSortUp /> : <FaSortDown />;
   };
 
+  const formatMovimentacaoDescricao = (mov) => {
+    const descricao = String(mov?.descricao || "");
+    const isTransporte = mov?.operacao?.cliente?.ramo_de_atividade === "Transportes";
+
+    if (descricao.startsWith("Recebimento")) {
+      const numeroOriginal = descricao.replace("Recebimento", "").trim();
+
+      if (isTransporte) {
+        const numeroCte = numeroOriginal.split(".")[0];
+        return `Recebimento CT-e ${numeroCte}`;
+      }
+
+      return `Recebimento NF ${numeroOriginal}`;
+    }
+
+    return descricao.split(" | PIX_META:")[0];
+  };
+
+  const normalizeMatchText = (value) =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+
+  const canShowBorderoActions = (item) => {
+    const categoria = normalizeMatchText(item?.categoria);
+    return categoria.includes("pagamento") && categoria.includes("border");
+  };
+
+  const canShowRecebimentoActions = (item) =>
+    normalizeMatchText(item?.categoria).startsWith("recebimento");
+
+  const canShowEditDeleteActions = (item) => {
+    const categoria = normalizeMatchText(item?.categoria);
+    return (
+      categoria.includes("despesa avulsa") ||
+      categoria.includes("receita avulsa") ||
+      (categoria.includes("movimenta") && categoria.includes("avulsa")) ||
+      categoria.includes("pagamento pix")
+    );
+  };
+
+  const canShowPixReceiptAction = (item) => Boolean(item?.transaction_id);
+
   const clearFilters = () => {
     setFilters({
       dataInicio: formatDateFns(startOfMonth(new Date()), "yyyy-MM-dd"),
@@ -1299,15 +1345,14 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
       return false;
     }
   };
-  const handleEditRequest = () => {
-    if (contextMenu.selectedItem) {
-      setItemParaEditar(contextMenu.selectedItem);
+  const handleEditRequest = (item = contextMenu.selectedItem) => {
+    if (item) {
+      setItemParaEditar(item);
       setIsEditModalOpen(true);
     }
   };
-  const handleDeleteRequest = () => {
-    if (contextMenu.selectedItem)
-      setItemParaExcluir(contextMenu.selectedItem.id);
+  const handleDeleteRequest = (item = contextMenu.selectedItem) => {
+    if (item) setItemParaExcluir(item.id);
   };
   const handleConfirmDelete = async () => {
     try {
@@ -1323,8 +1368,8 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
     }
     setItemParaExcluir(null);
   };
-  const handleEstornarRequest = () => {
-    if (contextMenu.selectedItem) setEstornoInfo(contextMenu.selectedItem);
+  const handleEstornarRequest = (item = contextMenu.selectedItem) => {
+    if (item) setEstornoInfo(item);
   };
   const confirmarEstorno = async () => {
     try {
@@ -1340,20 +1385,20 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
     }
     setEstornoInfo(null);
   };
-  const handleAbrirEmailModal = () => {
-    if (contextMenu.selectedItem) {
-      const opId = contextMenu.selectedItem.operacaoId || contextMenu.selectedItem.operacao_id;
-      const cliId = contextMenu.selectedItem.operacao?.cliente?.id || contextMenu.selectedItem.operacao?.cliente_id;
+  const handleAbrirEmailModal = (item = contextMenu.selectedItem) => {
+    if (item) {
+      const opId = item.operacaoId || item.operacao_id;
+      const cliId = item.operacao?.cliente?.id || item.operacao?.cliente_id;
 
       console.log('[Fluxo Caixa] Abrir Email - Dados:', {
-        item: contextMenu.selectedItem,
+        item,
         opId,
         cliId,
         opIdType: typeof opId
       });
 
       if (!opId || opId === 'undefined' || !cliId || cliId === 'undefined') {
-        console.error('[Fluxo Caixa] Falha ao identificar IDs para envio de email. Item:', contextMenu.selectedItem);
+        console.error('[Fluxo Caixa] Falha ao identificar IDs para envio de email. Item:', item);
         showNotification("Não foi possível identificar a operação ou cliente deste lançamento. (IDs inválidos ou ausentes)", "error");
         return;
       }
@@ -1398,8 +1443,8 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
       setIsEmailModalOpen(false);
     }
   };
-  const handleGeneratePdf = async () => {
-    const operacaoId = contextMenu.selectedItem?.operacaoId;
+  const handleGeneratePdf = async (item = contextMenu.selectedItem) => {
+    const operacaoId = item?.operacaoId;
     if (!operacaoId) return;
     try {
       const response = await fetch(`/api/operacoes/${operacaoId}/pdf`, { headers: getAuthHeader() });
@@ -1425,9 +1470,23 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
       selectedItem: item,
     });
   };
-  const handleAbrirModalComplemento = () => {
-    if (contextMenu.selectedItem) {
-      setLancamentoParaComplemento(contextMenu.selectedItem);
+
+  const handleOpenItemActions = (event, item) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu((prev) => ({ ...prev, visible: false }));
+    setMobileActionsItem(item);
+    setIsMobileActionsOpen(true);
+  };
+
+  const closeMobileActions = () => {
+    setIsMobileActionsOpen(false);
+    setMobileActionsItem(null);
+  };
+
+  const handleAbrirModalComplemento = (item = contextMenu.selectedItem) => {
+    if (item) {
+      setLancamentoParaComplemento(item);
       setIsComplementModalOpen(true);
     }
   };
@@ -1450,8 +1509,7 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
     }
   };
 
-  const handleAbrirComprovantePix = () => {
-    const item = contextMenu.selectedItem;
+  const handleAbrirComprovantePix = (item = contextMenu.selectedItem) => {
     if (!item) return;
 
     let recebedorData = null;
@@ -1848,7 +1906,87 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
                 ) : (
                   <>
                     <div className="flex-grow overflow-auto">
-                      <table className="min-w-full divide-y divide-gray-700">
+                      <div className="space-y-3 md:hidden">
+                        {currentItems.length > 0 ? (
+                          currentItems.map((mov) => {
+                            const descricao = formatMovimentacaoDescricao(mov);
+
+                            if (mov.isBalanceRow) {
+                              return (
+                                <motion.div
+                                  key={mov.id}
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  className="rounded-xl border border-orange-500/40 bg-gray-900/80 p-4 shadow-lg"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <p className="text-xs uppercase tracking-wider text-gray-400">
+                                        {formatDate(mov.dataMovimento)}
+                                      </p>
+                                      <p className="mt-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-orange-400">
+                                        <FaWallet /> {mov.descricao}
+                                      </p>
+                                    </div>
+                                    <p
+                                      className={`text-right text-lg font-bold ${mov.valor >= 0 ? "text-blue-400" : "text-red-400"}`}
+                                    >
+                                      {formatBRLNumber(mov.valor)}
+                                    </p>
+                                  </div>
+                                </motion.div>
+                              );
+                            }
+
+                            return (
+                              <motion.div
+                                key={mov.id}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="rounded-xl border border-gray-700 bg-gray-900/60 p-4 shadow-lg transition hover:border-gray-500"
+                                onContextMenu={(e) => handleContextMenu(e, mov)}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="text-xs uppercase tracking-wider text-gray-400">
+                                      {formatDate(mov.dataMovimento)}
+                                    </p>
+                                    <p
+                                      className={`mt-1 text-sm font-semibold leading-snug ${mov.valor >= 0 ? "text-green-400" : "text-red-400"}`}
+                                    >
+                                      {descricao}
+                                    </p>
+                                    <p className="mt-1 text-xs text-gray-400">
+                                      {formatDisplayConta(mov.contaBancaria)}
+                                    </p>
+                                  </div>
+                                  <div className="flex shrink-0 flex-col items-end gap-2">
+                                    <p
+                                      className={`text-right text-base font-bold ${mov.valor >= 0 ? "text-green-400" : "text-red-400"}`}
+                                    >
+                                      {formatBRLNumber(mov.valor)}
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleOpenItemActions(e, mov)}
+                                      className="inline-flex items-center gap-2 rounded-full border border-gray-600 bg-gray-800/90 px-3 py-1.5 text-xs font-semibold text-gray-200 transition hover:border-orange-400 hover:text-orange-300"
+                                    >
+                                      <FaEllipsisV className="text-[10px]" />
+                                      Ações
+                                    </button>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            );
+                          })
+                        ) : (
+                          <p className="rounded-xl border border-gray-700 bg-gray-900/60 px-4 py-10 text-center text-gray-400">
+                            Nenhuma movimentação encontrada.
+                          </p>
+                        )}
+                      </div>
+
+                      <table className="hidden min-w-full divide-y divide-gray-700 md:table">
                         <thead className="bg-gray-700 sticky top-0 z-10">
                           <tr>
                             <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
@@ -1912,22 +2050,7 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
                                     {formatDate(mov.dataMovimento)}
                                   </td>
                                   <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-100 align-middle">
-                                    {(() => {
-                                      const isTransporte = mov.operacao?.cliente?.ramo_de_atividade === "Transportes";
-
-                                      if (mov.descricao.startsWith("Recebimento")) {
-                                        const numeroOriginal = mov.descricao.replace("Recebimento", "").trim();
-
-                                        if (isTransporte) {
-                                          const numeroCte = numeroOriginal.split('.')[0];
-                                          return `Recebimento CT-e ${numeroCte}`;
-                                        } else {
-                                          return `Recebimento NF ${numeroOriginal}`;
-                                        }
-                                      }
-
-                                      return mov.descricao.split(' | PIX_META:')[0];
-                                    })()}
+                                    {formatMovimentacaoDescricao(mov)}
                                   </td>
                                   <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-400 align-middle">
                                     {formatDisplayConta(mov.contaBancaria)}
@@ -2077,7 +2200,128 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
             </div>
           </div>
         )}
+
+        {isMobileActionsOpen && mobileActionsItem && (
+          <div
+            className="fixed inset-0 z-30 bg-black/60 md:hidden"
+            onClick={closeMobileActions}
+          >
+            <div
+              className="absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-gray-700 bg-gray-900 p-4 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-gray-600" />
+              <div className="mb-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-gray-400">
+                  Ações do lançamento
+                </p>
+                <p className="mt-1 line-clamp-2 text-sm font-semibold text-white">
+                  {formatMovimentacaoDescricao(mobileActionsItem)}
+                </p>
+                <p className="mt-1 text-xs text-gray-400">
+                  {formatDate(mobileActionsItem.dataMovimento)} · {formatDisplayConta(mobileActionsItem.contaBancaria)}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {canShowEditDeleteActions(mobileActionsItem) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeMobileActions();
+                        handleEditRequest(mobileActionsItem);
+                      }}
+                      className="w-full rounded-2xl bg-gray-800 px-4 py-4 text-left text-base font-semibold text-white transition hover:bg-gray-700"
+                    >
+                      Editar lançamento
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeMobileActions();
+                        handleDeleteRequest(mobileActionsItem);
+                      }}
+                      className="w-full rounded-2xl bg-red-500/15 px-4 py-4 text-left text-base font-semibold text-red-300 transition hover:bg-red-500/25"
+                    >
+                      Excluir lançamento
+                    </button>
+                  </>
+                )}
+                {canShowBorderoActions(mobileActionsItem) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeMobileActions();
+                        handleAbrirModalComplemento(mobileActionsItem);
+                      }}
+                      className="w-full rounded-2xl bg-orange-500 px-4 py-4 text-left text-base font-semibold text-white transition hover:bg-orange-400"
+                    >
+                      Lançar complemento
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeMobileActions();
+                        handleGeneratePdf(mobileActionsItem);
+                      }}
+                      className="w-full rounded-2xl bg-blue-500 px-4 py-4 text-left text-base font-semibold text-white transition hover:bg-blue-400"
+                    >
+                      Gerar PDF do borderô
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeMobileActions();
+                        handleAbrirEmailModal(mobileActionsItem);
+                      }}
+                      className="w-full rounded-2xl bg-gray-800 px-4 py-4 text-left text-base font-semibold text-gray-100 transition hover:bg-gray-700"
+                    >
+                      Enviar borderô por e-mail
+                    </button>
+                  </>
+                )}
+
+                {canShowRecebimentoActions(mobileActionsItem) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobileActions();
+                      handleEstornarRequest(mobileActionsItem);
+                    }}
+                    className="w-full rounded-2xl bg-red-500/15 px-4 py-4 text-left text-base font-semibold text-red-300 transition hover:bg-red-500/25"
+                  >
+                    Estornar recebimento
+                  </button>
+                )}
+
+                {canShowPixReceiptAction(mobileActionsItem) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobileActions();
+                      handleAbrirComprovantePix(mobileActionsItem);
+                    }}
+                    className="w-full rounded-2xl bg-orange-500/15 px-4 py-4 text-left text-base font-semibold text-orange-300 transition hover:bg-orange-500/25"
+                  >
+                    Emitir comprovante PIX
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={closeMobileActions}
+                className="mt-4 w-full rounded-2xl border border-gray-700 px-4 py-4 text-base font-semibold text-gray-300 transition hover:bg-gray-800"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </>
   );
 }
+

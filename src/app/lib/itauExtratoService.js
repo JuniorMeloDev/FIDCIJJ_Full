@@ -32,7 +32,7 @@ const createItauExtratoAgent = () => {
 
   if (!certificate || !privateKey) {
     throw new Error(
-      "Certificado/chave do ItaÃº Extrato nao configurados (ITAU_EXTRATO_CERTIFICATE/PRIVATE_KEY)."
+      "Certificado/chave do Itaú Extrato nao configurados (ITAU_EXTRATO_CERTIFICATE/PRIVATE_KEY)."
     );
   }
 
@@ -246,7 +246,7 @@ const requestItauExtratoPage = (endpoint, accessToken) => {
 
         reject(
           new Error(
-            `Erro ${res.statusCode} ao consultar extrato ItaÃº: ${extractErrorMessage(
+            `Erro ${res.statusCode} ao consultar extrato Itaú: ${extractErrorMessage(
               res.statusCode,
               data
             )}`
@@ -256,7 +256,7 @@ const requestItauExtratoPage = (endpoint, accessToken) => {
     });
 
     req.on("error", (err) =>
-      reject(new Error(`Erro de rede ao consultar extrato ItaÃº: ${err.message}`))
+      reject(new Error(`Erro de rede ao consultar extrato Itaú: ${err.message}`))
     );
     req.end();
   });
@@ -270,7 +270,7 @@ export async function getItauExtratoAccessToken() {
 
   if (!clientId || !clientSecret) {
     throw new Error(
-      "Client ID/Secret do ItaÃº Extrato nao configurados (ITAU_EXTRATO_CLIENT_ID/CLIENT_SECRET)."
+      "Client ID/Secret do Itaú Extrato nao configurados (ITAU_EXTRATO_CLIENT_ID/CLIENT_SECRET)."
     );
   }
 
@@ -304,7 +304,7 @@ export async function getItauExtratoAccessToken() {
 
         reject(
           new Error(
-            `Erro ${res.statusCode} ao obter token ItaÃº Extrato: ${extractErrorMessage(
+            `Erro ${res.statusCode} ao obter token Itaú Extrato: ${extractErrorMessage(
               res.statusCode,
               data
             )}`
@@ -314,7 +314,7 @@ export async function getItauExtratoAccessToken() {
     });
 
     req.on("error", (err) =>
-      reject(new Error(`Erro de rede ao obter token ItaÃº Extrato: ${err.message}`))
+      reject(new Error(`Erro de rede ao obter token Itaú Extrato: ${err.message}`))
     );
     req.write(tokenPayload);
     req.end();
@@ -322,7 +322,7 @@ export async function getItauExtratoAccessToken() {
 }
 
 export async function consultarExtratoItau(accessToken, params) {
-  if (!accessToken) throw new Error("Access token do ItaÃº Extrato nao informado.");
+  if (!accessToken) throw new Error("Access token do Itaú Extrato nao informado.");
 
   const statementId = buildStatementId(params);
   const baseEndpoint = `${getItauExtratoEndpoint()}/${statementId}`;

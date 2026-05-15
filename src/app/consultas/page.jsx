@@ -231,6 +231,19 @@ export default function ConsultasPage() {
     });
   };
 
+  const openItemActions = (item, anchorEl) => {
+    const rect = anchorEl?.getBoundingClientRect();
+    const left = rect ? Math.max(16, rect.right - 192 + window.scrollX) : window.innerWidth - 208;
+    const top = rect ? rect.bottom + 8 + window.scrollY : window.scrollY + 16;
+
+    setContextMenu({
+      visible: true,
+      x: left,
+      y: top,
+      selectedItem: item,
+    });
+  };
+
   const handleAbrirModalLiquidacao = () => {
     let itemsParaLiquidar = [];
     if (itemsParaLiquidar.length > 0) {
@@ -676,121 +689,165 @@ export default function ConsultasPage() {
             ) : (
               <>
                 <div className="flex-grow overflow-auto">
-                  <table className="min-w-full divide-y divide-gray-700">
-                    <thead className="bg-gray-700 sticky top-0 z-10">
+                  <div className="space-y-3 lg:hidden">
+                    {currentItems.map((dup) => {
+                      const isLiquidado = dup.statusRecebimento === "Recebido";
+                      const isBaixaRenegociada = dup.observacaoBaixa?.toLowerCase().includes("renegoci");
+                      return (
+                        <article
+                          key={dup.id}
+                          onContextMenu={(e) => handleContextMenu(e, dup)}
+                          className={`rounded-2xl border p-4 shadow-sm transition ${isLiquidado ? "border-gray-700 bg-gray-800/70" : "border-gray-700 bg-gray-800/90 hover:border-gray-500"}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <label className="flex min-w-0 flex-1 items-start gap-3">
+                              {isSelectionMode && (
+                                <input
+                                  type="checkbox"
+                                  className="mt-1 h-4 w-4 shrink-0 rounded text-orange-500 bg-gray-600"
+                                  checked={selectedItems.has(dup.id)}
+                                  onChange={() => handleToggleSelectItem(dup.id)}
+                                  disabled={isLiquidado}
+                                />
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Data</span>
+                                  <span className={`text-xs ${isLiquidado ? "text-gray-500" : "text-gray-300"}`}>{formatDate(dup.dataOperacao)}</span>
+                                </div>
+                                <div className="mt-1 flex items-start gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <p className={`text-sm font-semibold ${isLiquidado ? "text-gray-400" : "text-white"}`}>
+                                      {dup.cedenteRamoAtividade === "Transportes" ? dup.nfCte.split(".")[0] : dup.nfCte}
+                                    </p>
+                                    <p className="mt-1 text-xs text-gray-300">{dup.empresaCedente}</p>
+                                    <p className="mt-1 truncate text-xs text-gray-400">
+                                      {dup.sacadoInfo?.matriz_id ? `${dup.clienteSacado} | Filial - ${dup.sacadoInfo.uf}` : dup.clienteSacado}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            </label>
+                            <div className="flex flex-col items-end gap-2">
+                              <span className={`text-sm font-bold ${isLiquidado ? "text-gray-500" : "text-green-300"}`}>
+                                {formatBRLNumber(dup.valorBruto)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openItemActions(dup, e.currentTarget);
+                                }}
+                                className="rounded-md border border-gray-600 bg-gray-900/70 px-3 py-2 text-xs font-semibold text-gray-100 transition hover:bg-gray-800"
+                              >
+                                Ações
+                              </button>
+                            </div>
+                          </div>
+                          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                            <div className="rounded-xl bg-gray-900/60 p-3">
+                              <span className="block uppercase tracking-wide text-gray-500">Juros</span>
+                              <span className={`mt-1 block font-bold ${isLiquidado ? "text-gray-500" : "text-red-400"}`}>{formatBRLNumber(dup.valorJuros)}</span>
+                            </div>
+                            <div className="rounded-xl bg-gray-900/60 p-3">
+                              <span className="block uppercase tracking-wide text-gray-500">Vencimento</span>
+                              <span className={`mt-1 block font-bold ${isLiquidado ? "text-gray-500" : "text-gray-100"}`}>{formatDate(dup.dataVencimento)}</span>
+                            </div>
+                          </div>
+                          {isLiquidado && dup.dataLiquidacao && (
+                            <div className="mt-3 rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-center text-xs">
+                              {dup.contaLiquidacao ? (
+                                <span className="font-semibold text-green-300">
+                                  Recebido em {formatDate(dup.dataLiquidacao)} na conta {dup.contaLiquidacao}
+                                </span>
+                              ) : (
+                                <span className="font-semibold text-green-300">
+                                  {isBaixaRenegociada ? `Renegociada em ${formatDate(dup.dataLiquidacao)}` : `Baixado em ${formatDate(dup.dataLiquidacao)}`}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+
+                  <table className="hidden min-w-full divide-y divide-gray-700 lg:table">
+                    <thead className="sticky top-0 z-10 bg-gray-700">
                       <tr>
                         {isSelectionMode && <th className="px-4 py-2"></th>}
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-                          <button
-                            onClick={() => handleSort("dataOperacao")}
-                            className="flex items-center gap-1"
-                          >
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-300">
+                          <button onClick={() => handleSort("dataOperacao")} className="flex items-center gap-1">
                             Data Op. {getSortIcon("dataOperacao")}
                           </button>
                         </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-                          <button
-                            onClick={() => handleSort("nfCte")}
-                            className="flex items-center gap-1"
-                          >
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-300">
+                          <button onClick={() => handleSort("nfCte")} className="flex items-center gap-1">
                             NF/CT-e {getSortIcon("nfCte")}
                           </button>
                         </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-                          <button
-                            onClick={() => handleSort("empresaCedente")}
-                            className="flex items-center gap-1"
-                          >
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-300">
+                          <button onClick={() => handleSort("empresaCedente")} className="flex items-center gap-1">
                             Cedente {getSortIcon("empresaCedente")}
                           </button>
                         </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-                          <button
-                            onClick={() => handleSort("clienteSacado")}
-                            className="flex items-center gap-1"
-                          >
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-300">
+                          <button onClick={() => handleSort("clienteSacado")} className="flex items-center gap-1">
                             Sacado {getSortIcon("clienteSacado")}
                           </button>
                         </th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase">
-                          <button
-                            onClick={() => handleSort("valorBruto")}
-                            className="flex items-center gap-1 float-right"
-                          >
+                        <th className="px-4 py-2 text-right text-xs font-medium uppercase text-gray-300">
+                          <button onClick={() => handleSort("valorBruto")} className="float-right flex items-center gap-1">
                             Valor Bruto {getSortIcon("valorBruto")}
                           </button>
                         </th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase">
-                          <button
-                            onClick={() => handleSort("valorJuros")}
-                            className="flex items-center gap-1 float-right"
-                          >
+                        <th className="px-4 py-2 text-right text-xs font-medium uppercase text-gray-300">
+                          <button onClick={() => handleSort("valorJuros")} className="float-right flex items-center gap-1">
                             Juros {getSortIcon("valorJuros")}
                           </button>
                         </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-                          <button
-                            onClick={() => handleSort("dataVencimento")}
-                            className="flex items-center gap-1"
-                          >
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-300">
+                          <button onClick={() => handleSort("dataVencimento")} className="flex items-center gap-1">
                             Data Venc. {getSortIcon("dataVencimento")}
                           </button>
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-gray-800 divide-y divide-gray-700">
+                    <tbody className="divide-y divide-gray-700 bg-gray-800">
                       {currentItems.map((dup) => {
-                        const isLiquidado =
-                          dup.statusRecebimento === "Recebido";
-                        const isBaixaRenegociada =
-                          dup.observacaoBaixa?.toLowerCase().includes("renegoci");
+                        const isLiquidado = dup.statusRecebimento === "Recebido";
+                        const isBaixaRenegociada = dup.observacaoBaixa?.toLowerCase().includes("renegoci");
                         return (
                           <tr
                             key={dup.id}
                             onContextMenu={(e) => handleContextMenu(e, dup)}
-                            className="group relative hover:bg-gray-700 cursor-pointer"
+                            className="group relative cursor-pointer hover:bg-gray-700"
                           >
                             {isSelectionMode && (
                               <td className="px-4 py-2 align-middle">
                                 <input
                                   type="checkbox"
-                                  className="h-4 w-4 rounded text-orange-500 bg-gray-600"
+                                  className="h-4 w-4 rounded bg-gray-600 text-orange-500"
                                   checked={selectedItems.has(dup.id)}
-                                  onChange={() =>
-                                    handleToggleSelectItem(dup.id)
-                                  }
+                                  onChange={() => handleToggleSelectItem(dup.id)}
                                   disabled={isLiquidado}
                                 />
                               </td>
                             )}
-                            <td
-                              className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"
-                                }`}
-                            >
+                            <td className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
                               {formatDate(dup.dataOperacao)}
                             </td>
-                            <td
-                              className={`px-4 py-2 font-medium ${isLiquidado ? "text-gray-500" : "text-gray-100"
-                                }`}
-                            >
-                              {dup.cedenteRamoAtividade === "Transportes"
-                                ? dup.nfCte.split(".")[0]
-                                : dup.nfCte}
+                            <td className={`px-4 py-2 font-medium ${isLiquidado ? "text-gray-500" : "text-gray-100"}`}>
+                              {dup.cedenteRamoAtividade === "Transportes" ? dup.nfCte.split(".")[0] : dup.nfCte}
                             </td>
-                            <td
-                              className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"
-                                }`}
-                            >
+                            <td className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
                               {dup.empresaCedente}
                             </td>
-                            <td
-                              className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"
-                                }`}
-                            >
+                            <td className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
                               {dup.sacadoInfo?.matriz_id ? (
                                 <span className="flex items-center gap-2">
                                   {dup.clienteSacado}
-                                  <span className="text-xs font-semibold bg-gray-600 text-gray-200 px-2 py-0.5 rounded-full">
+                                  <span className="rounded-full bg-gray-600 px-2 py-0.5 text-xs font-semibold text-gray-200">
                                     Filial - {dup.sacadoInfo.uf}
                                   </span>
                                 </span>
@@ -798,36 +855,23 @@ export default function ConsultasPage() {
                                 <span>{dup.clienteSacado}</span>
                               )}
                             </td>
-                            <td
-                              className={`px-4 py-2 text-sm text-right ${isLiquidado ? "text-gray-500" : "text-gray-100"
-                                }`}
-                            >
+                            <td className={`px-4 py-2 text-right text-sm ${isLiquidado ? "text-gray-500" : "text-gray-100"}`}>
                               {formatBRLNumber(dup.valorBruto)}
                             </td>
-                            <td
-                              className={`px-4 py-2 text-sm text-right ${isLiquidado ? "text-gray-500" : "text-red-400"
-                                }`}
-                            >
+                            <td className={`px-4 py-2 text-right text-sm ${isLiquidado ? "text-gray-500" : "text-red-400"}`}>
                               {formatBRLNumber(dup.valorJuros)}
                             </td>
-                            <td
-                              className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"
-                                }`}
-                            >
+                            <td className={`px-4 py-2 text-sm ${isLiquidado ? "text-gray-500" : "text-gray-400"}`}>
                               {formatDate(dup.dataVencimento)}
                               {isLiquidado && dup.dataLiquidacao && (
-                                <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-gray-900 bg-opacity-80 pointer-events-none">
+                                <div className="pointer-events-none absolute inset-0 hidden items-center justify-center bg-gray-900/80 group-hover:flex">
                                   {dup.contaLiquidacao ? (
-                                    <span className="bg-green-800 text-white text-xs font-bold py-1 px-4 rounded-full">
-                                      Recebido em{" "}
-                                      {formatDate(dup.dataLiquidacao)} na conta{" "}
-                                      {dup.contaLiquidacao}
+                                    <span className="rounded-full bg-green-800 px-4 py-1 text-xs font-bold text-white">
+                                      Recebido em {formatDate(dup.dataLiquidacao)} na conta {dup.contaLiquidacao}
                                     </span>
                                   ) : (
-                                    <span className="bg-gray-900 text-white text-xs font-bold py-1 px-4 rounded-full">
-                                      {isBaixaRenegociada
-                                        ? `Renegociada em ${formatDate(dup.dataLiquidacao)}`
-                                        : `Baixado em ${formatDate(dup.dataLiquidacao)}`}
+                                    <span className="rounded-full bg-gray-900 px-4 py-1 text-xs font-bold text-white">
+                                      {isBaixaRenegociada ? `Renegociada em ${formatDate(dup.dataLiquidacao)}` : `Baixado em ${formatDate(dup.dataLiquidacao)}`}
                                     </span>
                                   )}
                                 </div>

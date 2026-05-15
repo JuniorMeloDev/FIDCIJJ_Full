@@ -203,108 +203,138 @@ export default function RecompraModal({ isOpen, onClose, onConfirm, dataNovaOper
     const countSelected = selectedDuplicatas.size;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[60] p-4" onClick={handleClose}>
-            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-3xl text-white max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold">Recompra de Duplicatas</h2>
-                    <span className="text-sm text-gray-400">{countSelected} itens selecionados</span>
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4" onClick={handleClose}>
+            <div
+                className="flex h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-gray-800 text-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex items-start justify-between gap-3 border-b border-gray-700 px-5 py-4 sm:px-6">
+                    <div className="min-w-0">
+                        <h2 className="text-xl font-bold sm:text-2xl">Recompra de Duplicatas</h2>
+                        <p className="mt-1 text-sm text-gray-400">{countSelected} itens selecionados</p>
+                    </div>
+                    <button onClick={handleClose} className="rounded-md px-3 py-1 text-2xl font-bold leading-none text-gray-400 transition hover:text-white" aria-label="Fechar modal">
+                        &times;
+                    </button>
                 </div>
 
-                {/* --- SEÇÃO DE BUSCA --- */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 flex-shrink-0">
-                    <input
-                        type="text"
-                        value={searchTerm.nfCte}
-                        onChange={(e) => setSearchTerm(prev => ({ ...prev, nfCte: e.target.value, sacadoNome: '' }))}
-                        onKeyDown={handleKeyDown}
-                        placeholder="N° NF/CTe"
-                        className="md:col-span-1 bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
-                    />
-                    <input
-                        type="text"
-                        value={searchTerm.sacadoNome}
-                        onChange={(e) => setSearchTerm(prev => ({ ...prev, sacadoNome: e.target.value, nfCte: '' }))}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Nome do Sacado"
-                        className="md:col-span-1 bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
-                    />
-                    <div className="md:col-span-1 flex gap-2">
-                        <button onClick={handleSearch} disabled={loading} className="flex-grow bg-blue-600 font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50">
-                            {loading ? '...' : 'Adicionar à Lista'}
-                        </button>
-                        {duplicatasEncontradas.length > 0 && (
-                            <button onClick={() => setDuplicatasEncontradas([])} title="Limpar Lista" className="bg-gray-600 px-3 rounded-md hover:bg-gray-500">
-                                🗑️
+                <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <input
+                            type="text"
+                            value={searchTerm.nfCte}
+                            onChange={(e) => setSearchTerm((prev) => ({ ...prev, nfCte: e.target.value, sacadoNome: '' }))}
+                            onKeyDown={handleKeyDown}
+                            placeholder="N° NF/CTe"
+                            className="rounded-md border border-gray-600 bg-gray-700 p-3 text-sm"
+                        />
+                        <input
+                            type="text"
+                            value={searchTerm.sacadoNome}
+                            onChange={(e) => setSearchTerm((prev) => ({ ...prev, sacadoNome: e.target.value, nfCte: '' }))}
+                            onKeyDown={handleKeyDown}
+                            placeholder="Nome do Sacado"
+                            className="rounded-md border border-gray-600 bg-gray-700 p-3 text-sm"
+                        />
+                        <div className="flex gap-2">
+                            <button onClick={handleSearch} disabled={loading} className="flex-1 rounded-md bg-blue-600 px-4 py-3 font-semibold transition hover:bg-blue-700 disabled:opacity-50">
+                                {loading ? '...' : 'Adicionar à Lista'}
                             </button>
+                            {duplicatasEncontradas.length > 0 && (
+                                <button onClick={() => setDuplicatasEncontradas([])} title="Limpar Lista" className="rounded-md bg-gray-600 px-3 hover:bg-gray-500">
+                                    🗑️
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {error && <p className="mt-4 text-center text-sm text-red-400">{error}</p>}
+
+                    <div className="mt-4 space-y-3 rounded-2xl border border-gray-700 bg-gray-900/70 p-3">
+                        {duplicatasEncontradas.length > 0 ? (
+                            duplicatasEncontradas.map((d) => (
+                                <label
+                                    key={d.id}
+                                    className={`flex cursor-pointer flex-col gap-3 rounded-2xl border p-4 transition md:flex-row md:items-center ${selectedDuplicatas.has(d.id) ? 'border-orange-500 bg-gray-700' : 'border-gray-700 bg-gray-800/80 hover:bg-gray-700'}`}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedDuplicatas.has(d.id)}
+                                            onChange={() => handleToggleDuplicata(d.id)}
+                                            className="mt-1 h-4 w-4 rounded text-orange-500"
+                                        />
+                                        <div className="min-w-0">
+                                            <p className="truncate text-sm font-semibold text-white" title={d.cliente_sacado}>{d.cliente_sacado}</p>
+                                            <p className="mt-1 text-xs text-gray-400">NF/CTe: <strong>{d.nf_cte}</strong></p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 text-xs md:ml-auto md:grid-cols-3 md:gap-4 md:text-sm">
+                                        <div className="rounded-xl bg-gray-900/60 p-3">
+                                            <span className="block uppercase tracking-wide text-gray-500">Venc.</span>
+                                            <span className="mt-1 block font-semibold text-gray-100">{formatDate(d.data_vencimento)}</span>
+                                        </div>
+                                        <div className="rounded-xl bg-gray-900/60 p-3">
+                                            <span className="block uppercase tracking-wide text-gray-500">Valor</span>
+                                            <span className="mt-1 block font-semibold text-green-300">{formatBRLNumber(getValorRecompraDuplicata(d))}</span>
+                                        </div>
+                                        <div className="rounded-xl bg-gray-900/60 p-3">
+                                            <span className="block uppercase tracking-wide text-gray-500">Juros</span>
+                                            <span className="mt-1 block font-semibold text-red-400">{formatBRLNumber(d.valor_juros)}</span>
+                                        </div>
+                                    </div>
+                                </label>
+                            ))
+                        ) : (
+                            <p className="p-4 text-center text-sm text-gray-500">Utilize a busca acima para adicionar itens à lista de recompra.</p>
+                        )}
+                    </div>
+
+                    <div className="mt-4 space-y-4">
+                        {selectedDuplicatas.size > 0 && (
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                <input
+                                    type="text"
+                                    value={jurosAdicionais}
+                                    onChange={(e) => setJurosAdicionais(formatBRLInput(e.target.value))}
+                                    placeholder="Juros/Taxas Adicionais"
+                                    className="rounded-md border border-gray-600 bg-gray-700 p-3 text-sm"
+                                />
+                                <input
+                                    type="text"
+                                    value={outrosAbatimentos}
+                                    onChange={(e) => setOutrosAbatimentos(formatBRLInput(e.target.value))}
+                                    placeholder="Outros Abatimentos"
+                                    className="rounded-md border border-gray-600 bg-gray-700 p-3 text-sm"
+                                />
+                                <button onClick={handleCalculate} className="rounded-md bg-orange-500 px-4 py-3 font-semibold hover:bg-orange-600">
+                                    Calcular Valores
+                                </button>
+                            </div>
+                        )}
+
+                        {calculo !== null && (
+                            <div className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-700 bg-gray-700 p-4 md:grid-cols-2">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-gray-300">Débito (Valor Principal Recomprado)</h3>
+                                    <p className="text-xl font-bold text-red-400">{formatBRLNumber(calculo.principal)}</p>
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-semibold text-gray-300">Crédito (Juros a Estornar)</h3>
+                                    <p className="text-xl font-bold text-green-400">{formatBRLNumber(calculo.credito)}</p>
+                                </div>
+                            </div>
                         )}
                     </div>
                 </div>
 
-                {error && <p className="text-red-400 text-sm mb-4 flex-shrink-0">{error}</p>}
-
-                {/* --- SEÇÃO DE RESULTADOS (SCROLLABLE) --- */}
-                <div className="flex-grow space-y-2 max-h-64 overflow-y-auto border border-gray-700 p-2 rounded-md bg-gray-900">
-                    {duplicatasEncontradas.length > 0 ? (
-                        duplicatasEncontradas.map(d => (
-                            <label key={d.id} className={`flex items-center gap-3 p-2 rounded-md cursor-pointer border ${selectedDuplicatas.has(d.id) ? 'bg-gray-700 border-orange-500' : 'hover:bg-gray-800 border-transparent'}`}>
-                                <input type="checkbox" checked={selectedDuplicatas.has(d.id)} onChange={() => handleToggleDuplicata(d.id)} className="h-4 w-4 rounded text-orange-500" />
-                                <div className="flex-grow grid grid-cols-4 text-sm">
-                                    <span className="font-semibold truncate" title={d.cliente_sacado}>{d.cliente_sacado}</span>
-                                    <span>NF/CTe: <strong>{d.nf_cte}</strong></span>
-                                    <span>Venc: {formatDate(d.data_vencimento)}</span>
-                                    <span className="text-right">{formatBRLNumber(getValorRecompraDuplicata(d))}</span>
-                                </div>
-                            </label>
-                        ))
-                    ) : (
-                        <p className="text-gray-500 text-sm text-center p-4">Utilize a busca acima para adicionar itens à lista de recompra.</p>
-                    )}
-                </div>
-
-                {/* --- SEÇÃO DE CÁLCULO --- */}
-                <div className="mt-4 flex-shrink-0">
-                    {selectedDuplicatas.size > 0 && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                            <input
-                                type="text"
-                                value={jurosAdicionais}
-                                onChange={(e) => setJurosAdicionais(formatBRLInput(e.target.value))}
-                                placeholder="Juros/Taxas Adicionais"
-                                className="bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
-                            />
-                            <input
-                                type="text"
-                                value={outrosAbatimentos}
-                                onChange={(e) => setOutrosAbatimentos(formatBRLInput(e.target.value))}
-                                placeholder="Outros Abatimentos"
-                                className="bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
-                            />
-                            <button onClick={handleCalculate} className="bg-orange-500 font-semibold py-2 px-4 rounded-md hover:bg-orange-600">
-                                Calcular Valores
-                            </button>
-                        </div>
-                    )}
-
-                    {calculo !== null && (
-                        <div className="mt-4 p-4 bg-gray-700 rounded-md grid grid-cols-2 gap-4">
-                            <div>
-                                <h3 className="font-semibold text-sm text-gray-300">Débito (Valor Principal Recomprado):</h3>
-                                <p className="text-xl font-bold text-red-400">{formatBRLNumber(calculo.principal)}</p>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-sm text-gray-300">Crédito (Juros a Estornar):</h3>
-                                <p className="text-xl font-bold text-green-400">{formatBRLNumber(calculo.credito)}</p>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div className="mt-6 flex justify-end gap-4 flex-shrink-0 border-t border-gray-700 pt-4">
-                    <button onClick={handleClose} className="bg-gray-600 font-semibold py-2 px-4 rounded-md hover:bg-gray-500">Cancelar</button>
-                    <button onClick={handleConfirm} disabled={calculo === null} className="bg-green-600 font-semibold py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50">
-                        Confirmar Recompra
-                    </button>
+                <div className="border-t border-gray-700 px-5 py-4 sm:px-6">
+                    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                        <button onClick={handleClose} className="w-full rounded-md bg-gray-600 px-4 py-3 font-semibold hover:bg-gray-500 sm:w-auto">Cancelar</button>
+                        <button onClick={handleConfirm} disabled={calculo === null} className="w-full rounded-md bg-green-600 px-4 py-3 font-semibold hover:bg-green-700 disabled:opacity-50 sm:w-auto">
+                            Confirmar Recompra
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
