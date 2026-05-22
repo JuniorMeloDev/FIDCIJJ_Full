@@ -204,7 +204,7 @@ export default function AnalisePage() {
 
             // 3. CÁLCULO DE VALORES
             const totalDescontos = descontosAdicionais.reduce((acc, d) => acc + d.valor, 0);
-            const valorFinal = partialData?.valorDebito
+            const valorFinal = partialData?.valorDebito !== undefined && partialData?.valorDebito !== null
                 ? parseFloat(partialData.valorDebito)
                 : (operacaoSelecionada?.valor_liquido || 0) - totalDescontos;
 
@@ -314,8 +314,10 @@ export default function AnalisePage() {
         }
     };
 
-    const handleSalvarAnalise = async () => {
-        if (!pendingApprovalPayload) return;
+    const handleSalvarAnalise = async (overrides = {}) => {
+        const approvalPayload = overrides.payload || pendingApprovalPayload;
+        const partialData = overrides.partialData ?? pendingPartialData;
+        if (!approvalPayload) return;
 
         setIsSaving(true);
         // Não fechamos o modal do Pix aqui ainda para evitar flicker se der erro, 
@@ -323,10 +325,10 @@ export default function AnalisePage() {
 
         try {
             const finalPayload = {
-                ...pendingApprovalPayload,
+                ...approvalPayload,
                 descontos: descontosAdicionais,
-                valor_debito_parcial: pendingPartialData?.valorDebito || null,
-                data_debito_parcial: pendingPartialData?.dataDebito || null,
+                valor_debito_parcial: partialData?.valorDebito ?? null,
+                data_debito_parcial: partialData?.dataDebito ?? null,
                 recompraData: recompraData
             };
 
@@ -344,7 +346,7 @@ export default function AnalisePage() {
             setIsPixConfirmOpen(false); // Agora sim fecha o modal de confirmação
 
             // --- GERAÇÃO DO COMPROVANTE (RECIBO) ---
-            if (pendingApprovalPayload.status === 'Aprovada') {
+            if (approvalPayload.status === 'Aprovada') {
                 setOperacaoParaEmail({
                     id: operacaoSelecionada.id,
                     clienteId: operacaoSelecionada?.cliente?.id
@@ -355,8 +357,8 @@ export default function AnalisePage() {
                 const pagador = cachedContaMasterData || {};
 
                 // Valor Final
-                const valorFinal = pendingPartialData?.valorDebito
-                    ? parseFloat(pendingPartialData.valorDebito)
+                const valorFinal = partialData?.valorDebito !== undefined && partialData?.valorDebito !== null
+                    ? parseFloat(partialData.valorDebito)
                     : (operacaoSelecionada?.valor_liquido || 0) - descontosAdicionais.reduce((acc, d) => acc + d.valor, 0);
 
                 // Normalização CNPJ Recebedor (Evitar ".")
@@ -366,9 +368,9 @@ export default function AnalisePage() {
                 let chavePixFinal = cliente.chave_pix || cliente.chavePix;
                 let instituicaoFinal = cliente.banco || (cliente.contasBancarias?.[0]?.banco);
 
-                if (pendingApprovalPayload.pix_account_id) {
+                if (approvalPayload.pix_account_id) {
                     const contasC = cliente.contasBancarias || cliente.contas_bancarias || [];
-                    const contaSelected = contasC.find(c => String(c.id) === String(pendingApprovalPayload.pix_account_id));
+                    const contaSelected = contasC.find(c => String(c.id) === String(approvalPayload.pix_account_id));
                     if (contaSelected) {
                         chavePixFinal = contaSelected.chave_pix || contaSelected.chavePix;
                         instituicaoFinal = contaSelected.banco;
@@ -415,7 +417,7 @@ export default function AnalisePage() {
             let recovered = false;
 
             // Só tenta recuperar se estivéssemos aprovando
-            if (pendingApprovalPayload && pendingApprovalPayload.status === 'Aprovada') {
+            if (approvalPayload && approvalPayload.status === 'Aprovada') {
                 try {
                     const checkRes = await fetch(`/api/operacoes/${operacaoSelecionada.id}`, { headers: getAuthHeader() });
                     if (checkRes.ok) {
@@ -433,8 +435,8 @@ export default function AnalisePage() {
                             const cliente = cachedClientData || operacaoSelecionada.cliente || {};
                             const pagador = cachedContaMasterData || {};
 
-                            const valorFinal = pendingPartialData?.valorDebito
-                                ? parseFloat(pendingPartialData.valorDebito)
+                            const valorFinal = partialData?.valorDebito !== undefined && partialData?.valorDebito !== null
+                                ? parseFloat(partialData.valorDebito)
                                 : (operacaoSelecionada?.valor_liquido || 0) - descontosAdicionais.reduce((acc, d) => acc + d.valor, 0);
 
                             const dadosComprovante = {
@@ -571,7 +573,26 @@ export default function AnalisePage() {
                 setDescontosAdicionais={setDescontosAdicionais}
             />
 
-            <PartialDebitModal isOpen={isPartialDebitModalOpen} onClose={() => !isPreparingPix && setIsPartialDebitModalOpen(false)} onConfirm={(valorDebito, dataDebito) => { prepareAndOpenPixConfirm(pendingApprovalPayload, { valorDebito, dataDebito }); }} totalValue={valorLiq} isLoading={isPreparingPix} />
+            <PartialDebitModal
+                isOpen={isPartialDebitModalOpen}
+                onClose={() => !isPreparingPix && setIsPartialDebitModalOpen(false)}
+                onConfirm={(valorDebito, dataDebito) => {
+                    const partialData = { valorDebito, dataDebito };
+                    setIsPartialDebitModalOpen(false);
+                    if (pendingApprovalPayload?.efetuar_pix) {
+                        prepareAndOpenPixConfirm(pendingApprovalPayload, partialData);
+                        return;
+                    }
+
+                    setPendingPartialData(partialData);
+                    handleSalvarAnalise({
+                        payload: pendingApprovalPayload,
+                        partialData
+                    });
+                }}
+                totalValue={valorLiq}
+                isLoading={isPreparingPix}
+            />
             <EmailModal isOpen={isEmailModalOpen} onClose={() => { setIsEmailModalOpen(false); setOperacaoParaEmail(null); }} onSend={handleSendEmail} isSending={isSendingEmail} clienteId={operacaoParaEmail?.clienteId} />
             <DescontoModal isOpen={isDescontoModalOpen} onClose={() => setIsDescontoModalOpen(false)} onSave={(novoDesconto) => { setDescontosAdicionais([...descontosAdicionais, novoDesconto]); setIsDescontoModalOpen(false); }} />
 

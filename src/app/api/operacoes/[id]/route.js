@@ -42,7 +42,7 @@ export async function PUT(request, { params }) {
       const novoValorLiquido = operacao.valor_liquido - totalDescontosAdicionais;
       
       let valorDebitado = novoValorLiquido;
-      if (valor_debito_parcial && Number(valor_debito_parcial) > 0) {
+      if (valor_debito_parcial !== undefined && valor_debito_parcial !== null && valor_debito_parcial !== '') {
           valorDebitado = Number(valor_debito_parcial);
       }
 

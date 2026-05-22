@@ -60,7 +60,7 @@ export async function PUT(request, props) {
       const novoValorLiquido = operacao.valor_liquido - totalDescontosAdicionais - valorTotalRecompra;
       
       let valorDebitado = novoValorLiquido;
-      if (valor_debito_parcial && Number(valor_debito_parcial) > 0) {
+      if (valor_debito_parcial !== undefined && valor_debito_parcial !== null && valor_debito_parcial !== '') {
           valorDebitado = Number(valor_debito_parcial);
       }
 

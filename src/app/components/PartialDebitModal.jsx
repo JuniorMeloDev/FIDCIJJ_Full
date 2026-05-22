@@ -12,8 +12,12 @@ export default function PartialDebitModal({ isOpen, onClose, onConfirm, totalVal
 
     const handleConfirmClick = () => {
         const valorNum = parseBRL(valorParcial);
-        if (valorNum <= 0) {
-            setError('O valor deve ser maior que zero.');
+        if (valorParcial.trim() === '') {
+            setError('Informe um valor para o débito parcial.');
+            return;
+        }
+        if (valorNum < 0) {
+            setError('O valor parcial não pode ser negativo.');
             return;
         }
         if (valorNum > totalValue) {

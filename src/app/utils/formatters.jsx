@@ -1,5 +1,5 @@
 export const formatBRLInput = (value) => {
-    if (!value) return '';
+    if (value === null || value === undefined || value === '') return '';
     const cleanValue = String(value).replace(/\D/g, ''); // Remove tudo que não é dígito
     if (cleanValue === '') return '';
     const numberValue = Number(cleanValue) / 100;

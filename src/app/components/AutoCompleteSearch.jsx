@@ -7,6 +7,7 @@ const DropdownPortal = ({
   suggestions,
   onSuggestionClick,
   inputRef,
+  listRef,
   highlightedIndex,
   onHighlight,
   listClassName = '',
@@ -26,16 +27,31 @@ const DropdownPortal = ({
   }, [suggestions, inputRef]);
 
   useEffect(() => {
-    if (highlightedIndex < 0 || !suggestions[highlightedIndex]) return;
+    if (highlightedIndex < 0 || !suggestions[highlightedIndex] || !listRef.current) return;
 
-    const option = document.getElementById(`autocomplete-option-${suggestions[highlightedIndex].id}`);
-    option?.scrollIntoView({ block: 'nearest' });
-  }, [highlightedIndex, suggestions]);
+    const option = listRef.current.querySelector(
+      `#autocomplete-option-${suggestions[highlightedIndex].id}`
+    );
+
+    if (!option) return;
+
+    const optionTop = option.offsetTop;
+    const optionBottom = optionTop + option.offsetHeight;
+    const viewTop = listRef.current.scrollTop;
+    const viewBottom = viewTop + listRef.current.clientHeight;
+
+    if (optionTop < viewTop) {
+      listRef.current.scrollTop = optionTop;
+    } else if (optionBottom > viewBottom) {
+      listRef.current.scrollTop = optionBottom - listRef.current.clientHeight;
+    }
+  }, [highlightedIndex, suggestions, listRef]);
 
   if (suggestions.length === 0) return null;
 
   return createPortal(
     <ul
+      ref={listRef}
       style={style}
       className={
         `z-50 bg-gray-700 border border-gray-600 rounded-md max-h-40 overflow-y-auto shadow-lg ` +
@@ -84,6 +100,7 @@ export default function AutocompleteSearch({
   const [isFocused, setIsFocused] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const inputRef = useRef(null);
+  const listRef = useRef(null);
 
   const handleInputChange = async (e) => {
     const query = e.target.value;
@@ -176,6 +193,7 @@ export default function AutocompleteSearch({
           suggestions={suggestions}
           onSuggestionClick={handleSuggestionClick}
           inputRef={inputRef}
+          listRef={listRef}
           highlightedIndex={highlightedIndex}
           onHighlight={setHighlightedIndex}
           listClassName={listClassName}

@@ -195,6 +195,8 @@ export default function ConciliacaoModal({
         ...duplicata,
         juros: 0,
         desconto: 0,
+        jurosInput: '',
+        descontoInput: '',
         jurosBase: getEmbeddedInterestValue(duplicata)
       }]);
     }
@@ -202,7 +204,13 @@ export default function ConciliacaoModal({
 
   const handleItemValueChange = (id, field, value) => {
     setSelectedItemsData((prev) => prev.map((item) =>
-      item.id === id ? { ...item, [field]: parseBRL(value) } : item
+      item.id === id
+        ? {
+            ...item,
+            [field]: parseBRL(value),
+            [`${field}Input`]: value === '' ? '' : formatBRLInput(value)
+          }
+        : item
     ));
   };
 
@@ -435,8 +443,10 @@ export default function ConciliacaoModal({
                         <label className="block text-[10px] text-gray-500">Juros/Multa</label>
                         <input
                           type="text"
-                          value={formatBRLInput(d.juros)}
+                          inputMode="decimal"
+                          value={d.jurosInput ?? ''}
                           onChange={(e) => handleItemValueChange(d.id, 'juros', e.target.value)}
+                          placeholder="R$0,00"
                           className="w-full rounded border border-gray-600 bg-gray-700 p-2 text-right text-xs text-yellow-300"
                         />
                       </div>
@@ -444,8 +454,10 @@ export default function ConciliacaoModal({
                         <label className="block text-[10px] text-gray-500">Desconto</label>
                         <input
                           type="text"
-                          value={formatBRLInput(d.desconto)}
+                          inputMode="decimal"
+                          value={d.descontoInput ?? ''}
                           onChange={(e) => handleItemValueChange(d.id, 'desconto', e.target.value)}
+                          placeholder="R$0,00"
                           className="w-full rounded border border-gray-600 bg-gray-700 p-2 text-right text-xs text-blue-300"
                         />
                       </div>
