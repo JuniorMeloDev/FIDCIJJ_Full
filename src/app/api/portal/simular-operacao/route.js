@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js';
+import {
+  buildDuplicataIdentifiers,
+  formatDuplicataConflictMessage,
+  queryDuplicatasByIdentifiers,
+} from '@/app/lib/duplicataGuard';
 
 // Função auxiliar segura
 const getVal = (obj, path) => path.split('.').reduce((acc, key) => acc?.[key]?.[0], obj);
@@ -134,6 +139,29 @@ const parseXmlAndSimulate = async (xmlText, clienteCnpj, tipoOperacaoId) => {
         }
     }
 
+    const identificadoresDuplicata = buildDuplicataIdentifiers(numeroDoc, parcelasCalculadas);
+    const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
+        supabase,
+        identificadoresDuplicata
+    );
+
+    if (duplicatasConflitantes.length > 0) {
+        return {
+            chave_nfe: chaveNfe,
+            nfCte: numeroDoc,
+            dataNf: dataEmissao,
+            valorNf: valorTotal,
+            clienteSacado: sacadoData.nome,
+            sacadoId: sacadoData.id,
+            jurosCalculado: totalJuros,
+            valorLiquidoCalculado: valorTotal - totalJuros,
+            parcelasCalculadas,
+            identificadoresDuplicata,
+            isDuplicate: true,
+            duplicateReason: formatDuplicataConflictMessage(duplicatasConflitantes),
+        };
+    }
+
     return {
         chave_nfe: chaveNfe,
         nfCte: numeroDoc,
@@ -144,6 +172,7 @@ const parseXmlAndSimulate = async (xmlText, clienteCnpj, tipoOperacaoId) => {
         jurosCalculado: totalJuros,
         valorLiquidoCalculado: valorTotal - totalJuros,
         parcelasCalculadas,
+        identificadoresDuplicata,
         isDuplicate: false,
     };
 };
@@ -187,7 +216,28 @@ export async function POST(request) {
 
         const results = await Promise.all(simulationPromises);
 
-        const totals = results.reduce((acc, res) => {
+        const seenIdentifiers = new Set();
+        const normalizedResults = results.map((result) => {
+            if (!result || result.error || result.isDuplicate) return result;
+
+            const identifiers = Array.isArray(result.identificadoresDuplicata)
+                ? result.identificadoresDuplicata
+                : [];
+            const hasRepeatedInBatch = identifiers.some((identifier) => seenIdentifiers.has(identifier));
+
+            if (hasRepeatedInBatch) {
+                return {
+                    ...result,
+                    isDuplicate: true,
+                    duplicateReason: 'Documento repetido no mesmo envio.',
+                };
+            }
+
+            identifiers.forEach((identifier) => seenIdentifiers.add(identifier));
+            return result;
+        });
+
+        const totals = normalizedResults.reduce((acc, res) => {
             if (res && !res.isDuplicate && !res.error) {
                 acc.totalBruto += res.valorNf;
                 acc.totalJuros += res.jurosCalculado;
@@ -196,7 +246,7 @@ export async function POST(request) {
             return acc;
         }, { totalBruto: 0, totalJuros: 0, totalLiquido: 0 });
 
-        return NextResponse.json({ results, totals }, { status: 200 });
+        return NextResponse.json({ results: normalizedResults, totals }, { status: 200 });
 
     } catch (error) {
         console.error("Erro na simulação:", error);

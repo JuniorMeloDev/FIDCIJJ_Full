@@ -5,6 +5,11 @@ import { sendOperationStatusEmail } from "@/app/lib/emailService";
 import { getInterAccessToken, enviarPixInter } from "@/app/lib/interService";
 import { getItauAccessToken, enviarPixItau } from "@/app/lib/itauService";
 import { format } from 'date-fns';
+import {
+  findRepeatedValues,
+  formatDuplicataConflictMessage,
+  queryDuplicatasByIdentifiers,
+} from "@/app/lib/duplicataGuard";
 
 // ... imports existing ...
 
@@ -42,6 +47,33 @@ export async function PUT(request, props) {
     }
 
     if (status === "Aprovada") {
+      const { data: duplicatas } = await supabase
+        .from("duplicatas")
+        .select("nf_cte")
+        .eq("operacao_id", id);
+
+      const identificadoresDuplicata = duplicatas?.map((duplicata) => duplicata.nf_cte) || [];
+      const repetidosNaOperacao = findRepeatedValues(identificadoresDuplicata);
+      const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
+        supabase,
+        identificadoresDuplicata,
+        id
+      );
+
+      if (repetidosNaOperacao.length > 0 || duplicatasConflitantes.length > 0) {
+        return NextResponse.json(
+          {
+            message: formatDuplicataConflictMessage(
+              duplicatasConflitantes,
+              repetidosNaOperacao
+            ),
+            duplicatasConflitantes,
+            repetidosNaOperacao,
+          },
+          { status: 400 }
+        );
+      }
+
       if (!conta_bancaria_id) {
         return NextResponse.json(
           { message: "Conta bancária é obrigatória para aprovação." },
@@ -85,10 +117,6 @@ export async function PUT(request, props) {
 
       // --- MOVIDO: Cálculo da descrição para usar no PIX e no Extrato ---
       descricaoLancamento = `Borderô #${id}`;
-      const { data: duplicatas } = await supabase
-        .from("duplicatas")
-        .select("nf_cte")
-        .eq("operacao_id", id);
       if (duplicatas && duplicatas.length > 0 && operacao.cliente) {
         const docType =
           operacao.cliente.ramo_de_atividade === "Transportes" ? "CTe" : "NF";

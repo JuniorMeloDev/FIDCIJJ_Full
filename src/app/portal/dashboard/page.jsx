@@ -1178,10 +1178,12 @@ ${stmtLines}
 const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitted }) => {
   const [tiposOperacao, setTiposOperacao] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [fileChecks, setFileChecks] = useState({});
   const [tipoOperacaoId, setTipoOperacaoId] = useState("");
   const [simulationResult, setSimulationResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isValidatingFiles, setIsValidatingFiles] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -1206,6 +1208,12 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
     fetchTiposOperacao();
   }, [getAuthHeader, showNotification]);
 
+  useEffect(() => {
+    setIsValidatingFiles(
+      selectedFiles.some((file) => fileChecks[file.name]?.status === 'validating')
+    );
+  }, [selectedFiles, fileChecks]);
+
   const handleFileChange = (event) => {
     const newFiles = Array.from(event.target.files);
     const xmlFiles = newFiles.filter(file => file.type === "text/xml" || file.name.endsWith('.xml'));
@@ -1214,15 +1222,75 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
       showNotification("Apenas arquivos XML são permitidos. Alguns arquivos foram ignorados.", "error");
     }
 
-    setSelectedFiles(prevFiles => {
-      const existingNames = new Set(prevFiles.map(f => f.name));
-      const uniqueNewFiles = xmlFiles.filter(f => !existingNames.has(f.name));
-      return [...prevFiles, ...uniqueNewFiles];
+    setSimulationResult(null);
+    const existingNames = new Set(selectedFiles.map((file) => file.name));
+    const uniqueNewFiles = xmlFiles.filter((file) => !existingNames.has(file.name));
+
+    setSelectedFiles((prevFiles) => [...prevFiles, ...uniqueNewFiles]);
+
+    uniqueNewFiles.forEach((file) => {
+      setFileChecks((prev) => ({
+        ...prev,
+        [file.name]: { status: 'validating', message: 'Validando XML...' }
+      }));
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      fetch('/api/portal/upload-xml', {
+        method: 'POST',
+        headers: getAuthHeader(),
+        body: formData,
+      })
+        .then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.message || 'Falha ao validar XML.');
+          }
+          return data;
+        })
+        .then((data) => {
+          if (data?.isDuplicate) {
+            setFileChecks((prev) => ({
+              ...prev,
+              [file.name]: {
+                status: 'duplicate',
+                message: data.duplicateReason || 'Documento já operado.',
+                duplicateReason: data.duplicateReason || 'Documento já operado.',
+              },
+            }));
+            showNotification(`Arquivo ${file.name} já foi operado.`, 'error');
+          } else {
+            setFileChecks((prev) => ({
+              ...prev,
+              [file.name]: {
+                status: 'ok',
+                message: 'XML válido para simulação.',
+              },
+            }));
+          }
+        })
+        .catch((error) => {
+          setFileChecks((prev) => ({
+            ...prev,
+            [file.name]: {
+              status: 'error',
+              message: error.message || 'Erro ao validar XML.',
+            },
+          }));
+          showNotification(error.message || 'Erro ao validar XML.', 'error');
+        });
     });
   };
 
   const handleRemoveFile = (fileName) => {
     setSelectedFiles(prevFiles => prevFiles.filter(f => f.name !== fileName));
+    setSimulationResult(null);
+    setFileChecks(prev => {
+      const next = { ...prev };
+      delete next[fileName];
+      return next;
+    });
   };
 
   const handleSimulate = async () => {
@@ -1231,6 +1299,19 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
         "Por favor, selecione ao menos um arquivo e um tipo de operação.",
         "error"
       );
+      return;
+    }
+    const duplicateFiles = selectedFiles.filter((file) => fileChecks[file.name]?.status === 'duplicate');
+    if (duplicateFiles.length > 0) {
+      showNotification(
+        `Há XML(s) já operados no anexo: ${duplicateFiles.map((file) => file.name).join(', ')}.`,
+        "error"
+      );
+      return;
+    }
+    const pendingFiles = selectedFiles.filter((file) => fileChecks[file.name]?.status === 'validating');
+    if (pendingFiles.length > 0 || isValidatingFiles) {
+      showNotification("Aguarde a validação dos XMLs terminar antes de simular.", "info");
       return;
     }
     setIsLoading(true);
@@ -1265,6 +1346,11 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
 
   const handleConfirmSubmit = async () => {
     const validResults = simulationResult?.results.filter(r => !r.isDuplicate && !r.error);
+    const duplicateResults = simulationResult?.results.filter(r => r.isDuplicate) || [];
+    if (duplicateResults.length > 0) {
+      showNotification("Não é possível enviar a operação com XMLs duplicados.", "error");
+      return;
+    }
     if (!validResults || validResults.length === 0) return;
 
     setIsSubmitting(true);
@@ -1284,6 +1370,7 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
       }
       showNotification("Operação enviada para análise com sucesso!", "success");
       setSelectedFiles([]);
+      setFileChecks({});
       setTipoOperacaoId("");
       setSimulationResult(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -1417,7 +1504,7 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
           </button>
           <button
             onClick={onSubmit}
-            disabled={isSubmitting || validResults.length === 0}
+            disabled={isSubmitting || validResults.length === 0 || duplicateResults.length > 0 || errorResults.length > 0}
             className="bg-green-500 text-white font-semibold py-2 px-6 rounded-md shadow-sm hover:bg-green-600 transition disabled:bg-gray-500 disabled:cursor-not-allowed"
           >
             {isSubmitting ? "Enviando..." : `Enviar ${validResults.length} Documento(s) Válido(s)`}
@@ -1466,7 +1553,7 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
                 onClick={() => fileInputRef.current.click()}
               >
                 <div className="space-y-1 text-center">
-                  {selectedFiles.length > 0 ? (
+              {selectedFiles.length > 0 ? (
                     <div className="flex flex-col items-center text-green-400">
                       <CheckCircleIcon />
                       <span className="font-medium mt-1">{selectedFiles.length} arquivo(s) selecionado(s)</span>
@@ -1494,8 +1581,30 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
               {selectedFiles.length > 0 && (
                 <div className="mt-2 text-sm text-gray-300 space-y-1">
                   {selectedFiles.map(f => (
-                    <div key={f.name} className="flex items-center justify-between bg-gray-700/50 p-1 rounded">
-                      <span>{f.name}</span>
+                    <div key={f.name} className="flex items-center justify-between bg-gray-700/50 p-2 rounded">
+                      <div>
+                        <span>{f.name}</span>
+                        <p className="text-xs mt-1 text-gray-400">
+                          {fileChecks[f.name]?.message || 'Aguardando validação...'}
+                        </p>
+                      </div>
+                      <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                        fileChecks[f.name]?.status === 'duplicate'
+                          ? 'bg-red-900 text-red-100'
+                          : fileChecks[f.name]?.status === 'error'
+                            ? 'bg-yellow-900 text-yellow-100'
+                            : fileChecks[f.name]?.status === 'ok'
+                              ? 'bg-green-900 text-green-100'
+                              : 'bg-gray-600 text-gray-100'
+                      }`}>
+                        {fileChecks[f.name]?.status === 'duplicate'
+                          ? 'Duplicado'
+                          : fileChecks[f.name]?.status === 'error'
+                            ? 'Erro'
+                            : fileChecks[f.name]?.status === 'ok'
+                              ? 'Válido'
+                              : 'Validando'}
+                      </span>
                       <button onClick={() => handleRemoveFile(f.name)} className="text-red-400 hover:text-red-300">
                         <FaTimes />
                       </button>
@@ -1508,7 +1617,7 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
           <div className="mt-8 text-right">
             <button
               onClick={handleSimulate}
-              disabled={isLoading}
+              disabled={isLoading || isValidatingFiles || selectedFiles.some((file) => fileChecks[file.name]?.status === 'duplicate')}
               className="bg-orange-500 text-white font-semibold py-2 px-6 rounded-md shadow-sm hover:bg-orange-600 transition disabled:bg-orange-400"
             >
               {isLoading ? "Processando..." : "Simular Operação"}

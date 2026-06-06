@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js';
+import {
+  buildDuplicataIdentifiers,
+  formatDuplicataConflictMessage,
+  queryDuplicatasByIdentifiers,
+} from '@/app/lib/duplicataGuard';
 
 // Função auxiliar
 const getVal = (obj, path) => path.split('.').reduce((acc, key) => acc?.[key]?.[0], obj);
@@ -108,10 +113,42 @@ export async function POST(request) {
     //    return NextResponse.json({ message: 'Este XML não pertence à sua empresa.' }, { status: 403 });
     // }
 
-    // 4. Prepara o retorno (Sacado)
     const sacadoCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
     const nomeSacadoXml = getVal(sacadoNode, 'xNome');
 
+    const identificadoresDuplicata = buildDuplicataIdentifiers(numeroDoc, parcelas);
+    const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
+      supabase,
+      identificadoresDuplicata
+    );
+
+    if (duplicatasConflitantes.length > 0) {
+      return NextResponse.json({
+        success: true,
+        isDuplicate: true,
+        duplicateReason: formatDuplicataConflictMessage(duplicatasConflitantes),
+        duplicatasConflitantes,
+        xmlData: {
+          tipo: tipoDocumento,
+          chave: chaveDoc,
+          numero: numeroDoc,
+          emissao: dataEmissao,
+          valor: valorTotal,
+          emitente: {
+              cnpj: cnpjEmitenteXml,
+              nome: getVal(emitNode, 'xNome')
+          },
+          sacado: {
+              nome: nomeSacadoXml,
+              cnpj: sacadoCnpjCpf,
+              existeNoBanco: false
+          },
+          parcelas: parcelas
+        }
+      }, { status: 200 });
+    }
+
+    // 4. Prepara o retorno (Sacado)
     // Tenta buscar sacado no banco para completar dados (opcional no portal, mas útil)
     const { data: sacadoDb } = await supabase
         .from('sacados')

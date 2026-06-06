@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { parseStringPromise } from 'xml2js';
+import {
+  buildDuplicataIdentifiers,
+  formatDuplicataConflictMessage,
+  queryDuplicatasByIdentifiers,
+} from '@/app/lib/duplicataGuard';
 
 // Função auxiliar para extrair valores do XML parseado
 const getVal = (obj, path) => path.split('.').reduce((acc, key) => acc?.[key]?.[0], obj);
@@ -81,6 +86,25 @@ export async function POST(request) {
 
     if (existingOperation) {
         throw new Error(`Este documento já foi processado (Operação #${existingOperation.id}, Status: ${existingOperation.status}).`);
+    }
+
+    const identificadoresDuplicata = buildDuplicataIdentifiers(
+      numeroDoc,
+      parcelas.map((parcela) => ({ numeroParcela: parcela.numero }))
+    );
+    const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
+      supabase,
+      identificadoresDuplicata
+    );
+
+    if (duplicatasConflitantes.length > 0) {
+      return NextResponse.json(
+        {
+          message: formatDuplicataConflictMessage(duplicatasConflitantes),
+          duplicatasConflitantes,
+        },
+        { status: 400 }
+      );
     }
 
     const emitCnpj = getVal(emitNode, 'CNPJ');

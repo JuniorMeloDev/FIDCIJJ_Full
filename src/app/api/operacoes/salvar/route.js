@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
+import {
+    findRepeatedValues,
+    formatDuplicataConflictMessage,
+    queryDuplicatasByIdentifiers,
+} from '@/app/lib/duplicataGuard';
 
 export async function POST(request) {
     try {
@@ -11,7 +16,7 @@ export async function POST(request) {
         const body = await request.json();
         const { totais, notasFiscais, efetuar_pix, pixEndToEndId } = body;
         
-        const duplicatasParaSalvar = body.notasFiscais.flatMap(nf => {
+        const duplicatasParaSalvar = notasFiscais.flatMap(nf => {
             return nf.parcelasCalculadas.map(p => ({
                 nfCte: `${nf.nfCte}.${p.numeroParcela}`,
                 clienteSacado: nf.clienteSacado, 
@@ -21,6 +26,27 @@ export async function POST(request) {
                 dataVencimento: p.dataVencimento,
             }));
         });
+
+        const identificadoresDuplicata = duplicatasParaSalvar.map((duplicata) => duplicata.nfCte);
+        const repetidosNoEnvio = findRepeatedValues(identificadoresDuplicata);
+        const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
+            supabase,
+            identificadoresDuplicata
+        );
+
+        if (repetidosNoEnvio.length > 0 || duplicatasConflitantes.length > 0) {
+            return NextResponse.json(
+                {
+                    message: formatDuplicataConflictMessage(
+                        duplicatasConflitantes,
+                        repetidosNoEnvio
+                    ),
+                    duplicatasConflitantes,
+                    repetidosNoEnvio,
+                },
+                { status: 400 }
+            );
+        }
 
         const { data: operacaoId, error: rpcError } = await supabase.rpc('salvar_operacao_completa', {
             p_data_operacao: body.dataOperacao,

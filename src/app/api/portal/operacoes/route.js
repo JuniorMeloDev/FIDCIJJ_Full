@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { sendOperationSubmittedEmail } from '@/app/lib/emailService';
+import {
+    findRepeatedValues,
+    formatDuplicataConflictMessage,
+    queryDuplicatasByIdentifiers,
+} from '@/app/lib/duplicataGuard';
 
 // GET (sem alterações)
 export async function GET(request) {
@@ -70,6 +75,41 @@ export async function POST(request) {
         const valorTotalJuros = notasFiscais.reduce((sum, nf) => sum + nf.jurosCalculado, 0);
         const valorLiquido = notasFiscais.reduce((sum, nf) => sum + nf.valorLiquidoCalculado, 0);
 
+        // Prepara todas as duplicatas de todos os XMLs para inserção
+        const duplicatasParaSalvar = notasFiscais.flatMap(notaFiscal => 
+            notaFiscal.parcelasCalculadas.map(p => ({
+                data_operacao: body.dataOperacao,
+                nf_cte: `${notaFiscal.nfCte}.${p.numeroParcela}`,
+                cliente_sacado: notaFiscal.clienteSacado,
+                sacado_id: notaFiscal.sacadoId, // <-- ADICIONE ESTA LINHA
+                valor_bruto: p.valorParcela,
+                valor_juros: p.jurosParcela,
+                data_vencimento: p.dataVencimento,
+                status_recebimento: 'Pendente'
+            }))
+        );
+
+        const identificadoresDuplicata = duplicatasParaSalvar.map((duplicata) => duplicata.nf_cte);
+        const repetidosNoEnvio = findRepeatedValues(identificadoresDuplicata);
+        const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
+            supabase,
+            identificadoresDuplicata
+        );
+
+        if (repetidosNoEnvio.length > 0 || duplicatasConflitantes.length > 0) {
+            return NextResponse.json(
+                {
+                    message: formatDuplicataConflictMessage(
+                        duplicatasConflitantes,
+                        repetidosNoEnvio
+                    ),
+                    duplicatasConflitantes,
+                    repetidosNoEnvio,
+                },
+                { status: 400 }
+            );
+        }
+
         const { data: newOperacao, error: operacaoError } = await supabase
             .from('operacoes')
             .insert({
@@ -95,23 +135,12 @@ export async function POST(request) {
             throw new Error("Não foi possível criar o registro da operação.");
         }
 
-        // Prepara todas as duplicatas de todos os XMLs para inserção
-        const duplicatasParaSalvar = notasFiscais.flatMap(notaFiscal => 
-            notaFiscal.parcelasCalculadas.map(p => ({
-                operacao_id: newOperacao.id,
-                data_operacao: body.dataOperacao,
-                nf_cte: `${notaFiscal.nfCte}.${p.numeroParcela}`,
-                cliente_sacado: notaFiscal.clienteSacado,
-                sacado_id: notaFiscal.sacadoId, // <-- ADICIONE ESTA LINHA
-                valor_bruto: p.valorParcela,
-                valor_juros: p.jurosParcela,
-                data_vencimento: p.dataVencimento,
-                status_recebimento: 'Pendente'
-            }))
-        );
+        const duplicatasParaSalvarComOperacao = duplicatasParaSalvar.map((duplicata) => ({
+            ...duplicata,
+            operacao_id: newOperacao.id,
+        }));
 
-
-        const { error: duplicatasError } = await supabase.from('duplicatas').insert(duplicatasParaSalvar);
+        const { error: duplicatasError } = await supabase.from('duplicatas').insert(duplicatasParaSalvarComOperacao);
 
         if (duplicatasError) {
             await supabase.from('operacoes').delete().eq('id', newOperacao.id);

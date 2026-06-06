@@ -20,6 +20,8 @@ export default function AprovacaoOperacaoModal({
     const [error, setError] = useState('');
     const [isPartialDebit, setIsPartialDebit] = useState(false);
     const [efetuarPix, setEfetuarPix] = useState(false);
+    const [duplicateDocs, setDuplicateDocs] = useState([]);
+    const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
 
     const [clienteContas, setClienteContas] = useState([]);
     const [selectedPixAccountId, setSelectedPixAccountId] = useState('');
@@ -71,6 +73,44 @@ export default function AprovacaoOperacaoModal({
                     .catch(err => console.error("Erro ao buscar contas do cliente:", err))
                     .finally(() => setIsLoadingContas(false));
             }
+
+            const nfCtes = (operacao.duplicatas || [])
+                .map((duplicata) => duplicata.nf_cte)
+                .filter(Boolean);
+
+            if (nfCtes.length > 0) {
+                setIsCheckingDuplicates(true);
+                const token = sessionStorage.getItem('authToken');
+                fetch('/api/duplicatas/verificar-operacao', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    },
+                    body: JSON.stringify({
+                        nfCtes,
+                        excludeOperacaoId: operacao.id
+                    }),
+                })
+                    .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+                    .then(({ ok, data }) => {
+                        if (!ok) {
+                            setDuplicateDocs([]);
+                            return;
+                        }
+
+                        const conflicts = Array.isArray(data.conflicts) ? data.conflicts.map((item) => item.nf_cte) : [];
+                        const repeated = Array.isArray(data.repeatedInPayload) ? data.repeatedInPayload : [];
+                        setDuplicateDocs([...new Set([...conflicts, ...repeated])]);
+                    })
+                    .catch((err) => {
+                        console.error('Erro ao verificar duplicidade da operação:', err);
+                        setDuplicateDocs([]);
+                    })
+                    .finally(() => setIsCheckingDuplicates(false));
+            } else {
+                setDuplicateDocs([]);
+            }
         }
     }, [isOpen, operacao]);
 
@@ -84,6 +124,16 @@ export default function AprovacaoOperacaoModal({
 
         if (status === 'Aprovada' && efetuarPix && !selectedPixAccountId) {
             setError('Selecione uma Chave PIX do cliente para continuar.');
+            return;
+        }
+
+        if (status === 'Aprovada' && isCheckingDuplicates) {
+            setError('Aguarde a verificação de duplicidade terminar.');
+            return;
+        }
+
+        if (status === 'Aprovada' && duplicateDocs.length > 0) {
+            setError(`A operação possui NF/CT-e já operado(s): ${duplicateDocs.join(', ')}.`);
             return;
         }
 
@@ -131,7 +181,7 @@ export default function AprovacaoOperacaoModal({
                         <div><p className="text-sm font-bold text-orange-400"><strong>Valor Líquido Final:</strong> {formatBRLNumber(valorLiquidoFinal)}</p></div>
                     </div>
 
-                    <div className="mt-4 space-y-3">
+                <div className="mt-4 space-y-3">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-semibold text-gray-300">Duplicatas da Operação</h3>
                             <span className="text-xs text-gray-500 sm:hidden">toque para revisar</span>
@@ -221,6 +271,19 @@ export default function AprovacaoOperacaoModal({
                     </div>
                 </div>
 
+                {status === 'Aprovada' && (isCheckingDuplicates || duplicateDocs.length > 0) && (
+                    <div className="mx-5 mt-4 rounded-2xl border border-red-500/40 bg-red-950/30 px-4 py-3 text-sm text-red-100 sm:mx-6">
+                        {isCheckingDuplicates ? (
+                            <span>Verificando se existem NF/CT-e já operados nesta operação...</span>
+                        ) : (
+                            <span>
+                                Esta operação contém NF/CT-e já operado(s): <strong>{duplicateDocs.join(', ')}</strong>.
+                                A aprovação está bloqueada até que esses itens sejam removidos.
+                            </span>
+                        )}
+                    </div>
+                )}
+
                 <div className="border-t border-gray-700 px-5 py-4 sm:px-6">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
@@ -305,7 +368,7 @@ export default function AprovacaoOperacaoModal({
                         <button onClick={onClose} disabled={isSaving} className="w-full rounded-md bg-gray-600 px-4 py-3 font-semibold disabled:opacity-50 sm:w-auto">
                             Cancelar
                         </button>
-                        <button onClick={handleConfirmClick} disabled={isSaving} className="w-full rounded-md bg-green-600 px-4 py-3 font-semibold disabled:opacity-50 sm:w-auto">
+                        <button onClick={handleConfirmClick} disabled={isSaving || (status === 'Aprovada' && (isCheckingDuplicates || duplicateDocs.length > 0))} className="w-full rounded-md bg-green-600 px-4 py-3 font-semibold disabled:opacity-50 sm:w-auto">
                             {isSaving ? 'Salvando...' : 'Confirmar'}
                         </button>
                     </div>

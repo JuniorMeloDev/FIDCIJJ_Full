@@ -80,6 +80,21 @@ export default function OperacaoBorderoPage() {
     setTimeout(() => setNotification({ message: "", type: "" }), 5000);
   };
 
+  const getDuplicataIdentifiers = (nfCte, parcelasCalculadas = []) => {
+    const base = String(nfCte || '').trim();
+    if (!base) return [];
+
+    const identifiers = (parcelasCalculadas || [])
+      .map((parcela) => {
+        const numero = parcela?.numeroParcela ?? parcela?.numero ?? parcela?.parcela;
+        if (numero === null || numero === undefined || numero === '') return null;
+        return `${base}.${String(numero).trim()}`;
+      })
+      .filter(Boolean);
+
+    return identifiers.length > 0 ? [...new Set(identifiers)] : [`${base}.1`];
+  };
+
   const fetchApiData = async (url) => {
     try {
       const res = await fetch(url, { headers: getAuthHeader() });
@@ -403,6 +418,35 @@ export default function OperacaoBorderoPage() {
           (await response.json()).message || "Falha ao calcular os juros."
         );
       const calculoResult = await response.json();
+      const novosIdentificadores = getDuplicataIdentifiers(
+        novaNf.nfCte,
+        calculoResult.parcelasCalculadas
+      );
+
+      const identificadoresJaAdicionados = new Set(
+        notasFiscais.flatMap((nf) => getDuplicataIdentifiers(nf.nfCte, nf.parcelasCalculadas))
+      );
+
+      const repetidosNaTela = novosIdentificadores.filter((id) => identificadoresJaAdicionados.has(id));
+      if (repetidosNaTela.length > 0) {
+        showNotification(
+          `Esta NF/CT-e já foi adicionada no borderô: ${repetidosNaTela.join(', ')}.`,
+          "error"
+        );
+        return;
+      }
+
+      const validacaoResponse = await fetch('/api/duplicatas/verificar-operacao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify({ nfCtes: novosIdentificadores }),
+      });
+
+      const validacaoData = await validacaoResponse.json();
+      if (!validacaoResponse.ok || !validacaoData.ok) {
+        throw new Error(validacaoData.message || "Esta NF/CT-e já foi operada.");
+      }
+
       setNotasFiscais([
         ...notasFiscais,
         {
