@@ -25,6 +25,8 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
     return receiptData.pagador;
   }, [isOpen, receiptData]);
 
+  const comprovanteDescricao = (receiptData?.descricao || 'Comprovante PIX').trim();
+
   if (!isOpen || !receiptData) return null;
 
   const formatarDataTransacao = (date) => {
@@ -164,7 +166,7 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
       doc.text('Identificação no comprovante', 14, y);
       doc.setTextColor(40, 40, 40);
       doc.setFont('helvetica', 'bold');
-      doc.text(receiptData.descricao, 196, y, { align: 'right' });
+      doc.text(comprovanteDescricao, 196, y, { align: 'right' });
       y += 7;
       doc.setLineDashPattern([1, 1], 0);
       doc.line(14, y, 196, y);
@@ -177,7 +179,7 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
       doc.setFont('helvetica', 'bold');
       doc.text(receiptData.transactionId, 196, y, { align: 'right' });
 
-      const desc = receiptData.descricao || 'Comprovante PIX';
+      const desc = comprovanteDescricao;
       const valor = receiptData.valor || 0;
       const valorFormatado = formatBRLNumber(valor);
       const cleanDesc = desc.replace(/[/\\]/g, '-').replace(/[:*?"<>|]/g, '');
@@ -207,7 +209,7 @@ export default function PixReceiptModal({ isOpen, onClose, receiptData }) {
               <p><strong>Data:</strong> {formatarDataTransacao(receiptData.data)}</p>
               <p><strong>Horário:</strong> {receiptData.data ? formatDateFns(new Date(receiptData.data), 'HH:mm:ss') : '00:00'}</p>
               <p className="break-all"><strong>ID da transação:</strong> {receiptData.transactionId}</p>
-              <p><strong>Mensagem:</strong> {receiptData.descricao}</p>
+              <p><strong>Mensagem:</strong> {comprovanteDescricao}</p>
             </div>
           </div>
 

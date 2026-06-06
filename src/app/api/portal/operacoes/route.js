@@ -8,20 +8,38 @@ import {
     queryDuplicatasByIdentifiers,
 } from '@/app/lib/duplicataGuard';
 
+async function resolvePortalClient(token) {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    let clienteId = decoded.cliente_id;
+    let clienteNome = decoded.cliente_nome;
+
+    if (!clienteId && (decoded.id || decoded.sub)) {
+        const userId = decoded.id || decoded.sub;
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('cliente_id, clientes(nome)')
+            .eq('id', userId)
+            .single();
+
+        clienteId = userProfile?.cliente_id || clienteId;
+        clienteNome = userProfile?.clientes?.nome || clienteNome;
+    }
+
+    return { decoded, clienteId, clienteNome };
+}
+
 // GET (sem alterações)
 export async function GET(request) {
     try {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const { decoded, clienteId } = await resolvePortalClient(token);
         const userRoles = decoded.roles || [];
 
         if (!userRoles.includes('ROLE_CLIENTE')) {
             return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
         }
-        
-        const clienteId = decoded.cliente_id;
         
         if (!clienteId) {
             return NextResponse.json({ message: 'Usuário cliente sem empresa associada.' }, { status: 403 });
@@ -51,9 +69,7 @@ export async function POST(request) {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const clienteId = decoded.cliente_id;
-        const clienteNome = decoded.cliente_nome;
+        const { decoded, clienteId, clienteNome } = await resolvePortalClient(token);
         const userRoles = decoded.roles || [];
 
         if (!userRoles.includes('ROLE_CLIENTE') || !clienteId) {

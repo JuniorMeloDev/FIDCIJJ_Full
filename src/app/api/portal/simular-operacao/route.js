@@ -70,10 +70,6 @@ const parseXmlAndSimulate = async (xmlText, clienteCnpj, clienteId, tipoOperacao
         throw new Error(`O CNPJ do emitente no XML (${numeroDoc}) não corresponde ao seu cadastro.`);
     }
     
-    // VERIFICA SE A OPERAÇÃO JÁ EXISTE
-    const { data: existingOperation } = await supabase.from('operacoes').select('id').eq('chave_nfe', chaveNfe).maybeSingle();
-    if (existingOperation) return { chave_nfe: chaveNfe, nfCte: numeroDoc, isDuplicate: true };
-
     const destCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
     const nomeSacadoXml = getVal(sacadoNode, 'xNome');
     
@@ -183,7 +179,7 @@ export async function POST(request) {
         const token = request.headers.get('Authorization')?.split(' ')[1];
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const clienteId = decoded.cliente_id; // Confirme se seu token usa 'cliente_id' ou busca user->cliente
+        let clienteId = decoded.cliente_id;
         
         // Busca CNPJ do cliente logado
         const { data: clienteAtual } = await supabase.from('clientes').select('cnpj').eq('id', clienteId).single();
@@ -191,11 +187,13 @@ export async function POST(request) {
         // Se não achar direto pelo token, tenta buscar via User ID (caso o token tenha user_id)
         let cnpjCliente = clienteAtual?.cnpj;
         if (!cnpjCliente && decoded.id) {
-             const { data: userProfile } = await supabase.from('users').select('clientes(cnpj)').eq('id', decoded.id).single();
+             const { data: userProfile } = await supabase.from('users').select('cliente_id, clientes(cnpj)').eq('id', decoded.id).single();
              cnpjCliente = userProfile?.clientes?.cnpj;
+             clienteId = userProfile?.cliente_id || clienteId;
         }
 
         if (!cnpjCliente) throw new Error('Cliente não encontrado ou sem CNPJ cadastrado.');
+        if (!clienteId) throw new Error('Cliente não encontrado para validação da operação.');
 
         const formData = await request.formData();
         const files = formData.getAll('files');

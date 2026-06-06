@@ -95,6 +95,42 @@ export default function OperacaoBorderoPage() {
     return identifiers.length > 0 ? [...new Set(identifiers)] : [`${base}.1`];
   };
 
+  const buildBorderoDescricao = (documentos = []) => {
+    const numeros = [...new Set(
+      documentos
+        .map((item) => String(item?.nfCte || '').trim())
+        .filter(Boolean)
+    )];
+    const tipos = [...new Set(
+      documentos
+        .map((item) => String(item?.tipoDocumento || '').trim())
+        .filter(Boolean)
+    )];
+
+    let prefixo = 'Borderô';
+    if (tipos.length === 1) {
+      prefixo = tipos[0] === 'CTe' ? 'Borderô CT-e' : 'Borderô NF-e';
+    }
+
+    return numeros.length > 0 ? `${prefixo} ${numeros.join(', ')}` : prefixo;
+  };
+
+  const buildDuplicatasPayload = (documentos = []) => {
+    return documentos.flatMap((documento) => {
+      const base = String(documento?.nfCte || '').trim();
+      const parcelas = Array.isArray(documento?.parcelasCalculadas) && documento.parcelasCalculadas.length > 0
+        ? documento.parcelasCalculadas
+        : [{ numeroParcela: 1 }];
+
+      return parcelas
+        .map((parcela) => {
+          const numeroParcela = parcela?.numeroParcela ?? parcela?.numero ?? parcela?.parcela ?? 1;
+          return base ? `${base}.${String(numeroParcela).trim()}` : null;
+        })
+        .filter(Boolean);
+    });
+  };
+
   const fetchApiData = async (url) => {
     try {
       const res = await fetch(url, { headers: getAuthHeader() });
@@ -237,6 +273,7 @@ export default function OperacaoBorderoPage() {
           : "1",
       prazos: prazosString,
       peso: "",
+      tipoDocumento: data.tipo || null,
     });
 
     // Aqui garantimos que o nome e o objeto completo (com chaves pix) sejam usados
@@ -396,6 +433,13 @@ export default function OperacaoBorderoPage() {
       );
       return;
     }
+    if (!empresaCedenteId) {
+      showNotification(
+        "Selecione o cedente correto antes de adicionar a NF/CT-e.",
+        "error"
+      );
+      return;
+    }
     setIsLoading(true);
     const valorNfFloat = parseBRL(novaNf.valorNf);
     const body = {
@@ -455,6 +499,7 @@ export default function OperacaoBorderoPage() {
         {
           id: Date.now(),
           ...novaNf,
+          tipoDocumento: xmlDataPendente?.tipo || novaNf.tipoDocumento || null,
           clienteSacado: sacadoSelecionado.nome, 
           sacadoId: sacadoSelecionado.id, 
           valorNf: valorNfFloat,
@@ -730,6 +775,7 @@ export default function OperacaoBorderoPage() {
       }
       const operacaoId = await response.json();
       setSavedOperacaoInfo({ id: operacaoId, clienteId: empresaCedenteId });
+      const descricaoBordero = buildBorderoDescricao(notasFiscais);
 
       if (isPix) {
         showNotification("Operação salva e PIX enviado com sucesso!", "success");
@@ -740,7 +786,7 @@ export default function OperacaoBorderoPage() {
           valor: pixPayload.valor,
           data: new Date(), 
           transactionId: pixResultData.transactionId,
-          descricao: `Pagamento Borderô #${operacaoId}`,
+          descricao: descricaoBordero,
           pagador: {
               nome: clienteMasterInfo.nome,
               cnpj: clienteMasterInfo.cnpj,
@@ -775,10 +821,13 @@ export default function OperacaoBorderoPage() {
     const dataPagamento = (isPartialDebit && dataParcialPendente) 
                           ? dataParcialPendente 
                           : new Date().toISOString().split("T")[0];
+    const descricaoBordero = buildBorderoDescricao(notasFiscais);
+    const duplicatasPayload = buildDuplicatasPayload(notasFiscais);
 
     const payloadParaApiPix = {
         valor: valorDebitado,
-        descricao: `Pagamento Borderô #${empresaCedenteId}`,
+        descricao: descricaoBordero,
+        duplicatas: duplicatasPayload,
         contaOrigem: contaOrigemObj.contaCorrente,
         empresaAssociada: empresaCedente,
         pix: {

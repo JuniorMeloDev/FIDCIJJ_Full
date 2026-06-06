@@ -25,6 +25,13 @@ export async function POST(request) {
       return NextResponse.json({ message: 'Nenhum documento informado.' }, { status: 400 });
     }
 
+    if (!clienteId) {
+      return NextResponse.json(
+        { message: 'Cliente não informado para validação da duplicidade.' },
+        { status: 400 }
+      );
+    }
+
     const repeatedInPayload = findRepeatedValues(nfCtes);
     const conflicts = await queryDuplicatasByIdentifiers(supabase, nfCtes, {
       clienteId,

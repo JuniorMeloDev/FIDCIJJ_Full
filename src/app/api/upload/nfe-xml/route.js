@@ -76,37 +76,6 @@ export async function POST(request) {
         throw new Error("Não foi possível extrair a Chave de Acesso do documento XML.");
     }
     
-    const { data: existingOperation, error: checkError } = await supabase
-        .from('operacoes')
-        .select('id, status')
-        .eq('chave_nfe', chaveNfe)
-        .maybeSingle();
-
-    if (checkError) throw checkError;
-
-    if (existingOperation) {
-        throw new Error(`Este documento já foi processado (Operação #${existingOperation.id}, Status: ${existingOperation.status}).`);
-    }
-
-    const identificadoresDuplicata = buildDuplicataIdentifiers(
-      numeroDoc,
-      parcelas.map((parcela) => ({ numeroParcela: parcela.numero }))
-    );
-    const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
-      supabase,
-      identificadoresDuplicata
-    );
-
-    if (duplicatasConflitantes.length > 0) {
-      return NextResponse.json(
-        {
-          message: formatDuplicataConflictMessage(duplicatasConflitantes),
-          duplicatasConflitantes,
-        },
-        { status: 400 }
-      );
-    }
-
     const emitCnpj = getVal(emitNode, 'CNPJ');
     const sacadoCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
 
@@ -123,6 +92,46 @@ export async function POST(request) {
       .select('*, condicoes_pagamento(*)')
       .eq('cnpj', sacadoCnpjCpf)
       .single();
+
+    const clienteIdEmitente = emitenteData?.id || null;
+
+    if (clienteIdEmitente) {
+      const { data: existingOperation, error: checkError } = await supabase
+        .from('operacoes')
+        .select('id, status, cliente_id')
+        .eq('chave_nfe', chaveNfe)
+        .eq('cliente_id', clienteIdEmitente)
+        .maybeSingle();
+
+      if (checkError) throw checkError;
+
+      if (existingOperation) {
+        throw new Error(`Este documento já foi processado para este cliente (Operação #${existingOperation.id}, Status: ${existingOperation.status}).`);
+      }
+    }
+
+    const identificadoresDuplicata = buildDuplicataIdentifiers(
+      numeroDoc,
+      parcelas.map((parcela) => ({ numeroParcela: parcela.numero }))
+    );
+
+    if (clienteIdEmitente) {
+      const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
+        supabase,
+        identificadoresDuplicata,
+        { clienteId: clienteIdEmitente }
+      );
+
+      if (duplicatasConflitantes.length > 0) {
+        return NextResponse.json(
+          {
+            message: formatDuplicataConflictMessage(duplicatasConflitantes),
+            duplicatasConflitantes,
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     const enderSacado = sacadoNode?.enderDest?.[0] || sacadoNode?.enderToma?.[0] || sacadoNode?.enderReme?.[0];
 

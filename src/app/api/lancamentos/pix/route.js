@@ -17,6 +17,7 @@ export async function POST(request) {
     const {
       valor, // Vem como número do frontend (ex: 5)
       descricao,
+      duplicatas = [],
       contaOrigem,
       empresaAssociada,
       pix,
@@ -29,6 +30,10 @@ export async function POST(request) {
       "[LOG PIX] Payload recebido pela API:",
       JSON.stringify(body, null, 2)
     );
+
+    const duplicatasNormalizadas = Array.isArray(duplicatas)
+      ? [...new Set(duplicatas.map((item) => String(item).trim()).filter(Boolean))]
+      : [];
 
     if (!valor || !descricao || !contaOrigem || !pix || !pix.chave) {
       return NextResponse.json(
@@ -184,7 +189,15 @@ export async function POST(request) {
         chave: chaveFinal,
         referencia_empresa: descricao.substring(0, 20), // Ajustado para 20 (doc)
         identificacao_comprovante: descricao.substring(0, 100), // Ajustado para 100 (doc)
-        informacoes_entre_usuarios: descricao.substring(0, 140),
+        informacoes_entre_usuarios: [
+          descricao,
+          duplicatasNormalizadas.length > 0
+            ? `Duplicatas: ${duplicatasNormalizadas.join(", ")}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" | ")
+          .substring(0, 140),
         pagador: {
           tipo_conta: "CC",
           agencia: contaRealInfo.agencia.replace(/\D/g, ""),
@@ -228,7 +241,7 @@ export async function POST(request) {
     if (skipSave) {
       console.log("[LOG PIX] skipSave=true. Pulando inserção em movimentacoes_caixa.");
       return NextResponse.json(
-        { success: true, pixResult: resultadoPix },
+        { success: true, pixResult: resultadoPix, duplicatas: duplicatasNormalizadas },
         { status: 201 } // Retorna 201 (Created) pois o PIX foi criado
       );
     }
