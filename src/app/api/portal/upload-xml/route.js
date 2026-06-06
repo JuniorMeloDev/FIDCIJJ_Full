@@ -34,6 +34,7 @@ export async function POST(request) {
     }
     
     const cnpjClienteLogado = userProfile.clientes.cnpj.replace(/\D/g, '');
+    const clienteIdLogado = userProfile.cliente_id;
 
     // 2. Processamento do Arquivo
     const formData = await request.formData();
@@ -119,7 +120,8 @@ export async function POST(request) {
     const identificadoresDuplicata = buildDuplicataIdentifiers(numeroDoc, parcelas);
     const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
       supabase,
-      identificadoresDuplicata
+      identificadoresDuplicata,
+      { clienteId: clienteIdLogado }
     );
 
     if (duplicatasConflitantes.length > 0) {

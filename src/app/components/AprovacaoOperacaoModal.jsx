@@ -89,6 +89,7 @@ export default function AprovacaoOperacaoModal({
                     },
                     body: JSON.stringify({
                         nfCtes,
+                        clienteId: operacao.cliente?.id,
                         excludeOperacaoId: operacao.id
                     }),
                 })

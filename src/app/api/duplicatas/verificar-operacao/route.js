@@ -18,6 +18,7 @@ export async function POST(request) {
 
     const body = await request.json();
     const nfCtes = Array.isArray(body?.nfCtes) ? body.nfCtes : [];
+    const clienteId = body?.clienteId ?? null;
     const excludeOperacaoId = body?.excludeOperacaoId ?? null;
 
     if (nfCtes.length === 0) {
@@ -25,7 +26,10 @@ export async function POST(request) {
     }
 
     const repeatedInPayload = findRepeatedValues(nfCtes);
-    const conflicts = await queryDuplicatasByIdentifiers(supabase, nfCtes, excludeOperacaoId);
+    const conflicts = await queryDuplicatasByIdentifiers(supabase, nfCtes, {
+      clienteId,
+      excludeOperacaoId,
+    });
 
     return NextResponse.json({
       ok: conflicts.length === 0 && repeatedInPayload.length === 0,

@@ -57,7 +57,7 @@ export async function PUT(request, props) {
       const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
         supabase,
         identificadoresDuplicata,
-        id
+        { excludeOperacaoId: id, clienteId: operacao.cliente?.id }
       );
 
       if (repetidosNaOperacao.length > 0 || duplicatasConflitantes.length > 0) {

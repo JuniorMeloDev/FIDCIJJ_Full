@@ -49,7 +49,11 @@ export const findRepeatedValues = (values = []) => {
   return [...repeated];
 };
 
-export const queryDuplicatasByIdentifiers = async (supabase, identifiers = [], excludeOperacaoId = null) => {
+export const queryDuplicatasByIdentifiers = async (
+  supabase,
+  identifiers = [],
+  { clienteId = null, excludeOperacaoId = null } = {}
+) => {
   const uniqueIdentifiers = [...new Set(identifiers.map(normalizeDocumentoNumero).filter(Boolean))];
 
   if (uniqueIdentifiers.length === 0) {
@@ -58,10 +62,14 @@ export const queryDuplicatasByIdentifiers = async (supabase, identifiers = [], e
 
   let query = supabase
     .from('duplicatas')
-    .select('id, nf_cte, operacao_id, cliente_sacado, data_operacao, status_recebimento');
+    .select('id, nf_cte, operacao_id, cliente_sacado, data_operacao, status_recebimento, operacao:operacoes!inner(cliente_id)');
 
   if (excludeOperacaoId !== null && excludeOperacaoId !== undefined && excludeOperacaoId !== '') {
     query = query.neq('operacao_id', excludeOperacaoId);
+  }
+
+  if (clienteId !== null && clienteId !== undefined && clienteId !== '') {
+    query = query.eq('operacao.cliente_id', clienteId);
   }
 
   const { data, error } = await query.in('nf_cte', uniqueIdentifiers);

@@ -14,7 +14,7 @@ const getVal = (obj, path) => path.split('.').reduce((acc, key) => acc?.[key]?.[
 // Função auxiliar para limpar CNPJ/CPF (remove não-números)
 const clearDoc = (doc) => doc ? doc.replace(/\D/g, '') : '';
 
-const parseXmlAndSimulate = async (xmlText, clienteCnpj, tipoOperacaoId) => {
+const parseXmlAndSimulate = async (xmlText, clienteCnpj, clienteId, tipoOperacaoId) => {
     const parsedXml = await parseStringPromise(xmlText, { 
         explicitArray: true, 
         ignoreAttrs: false,
@@ -142,7 +142,8 @@ const parseXmlAndSimulate = async (xmlText, clienteCnpj, tipoOperacaoId) => {
     const identificadoresDuplicata = buildDuplicataIdentifiers(numeroDoc, parcelasCalculadas);
     const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
         supabase,
-        identificadoresDuplicata
+        identificadoresDuplicata,
+        { clienteId }
     );
 
     if (duplicatasConflitantes.length > 0) {
@@ -208,7 +209,7 @@ export async function POST(request) {
             try {
                 const fileBuffer = Buffer.from(await file.arrayBuffer());
                 const xmlText = fileBuffer.toString('utf-8');
-                return await parseXmlAndSimulate(xmlText, cnpjCliente, tipoOperacaoId);
+        return await parseXmlAndSimulate(xmlText, cnpjCliente, clienteId, tipoOperacaoId);
             } catch (error) {
                 return { error: error.message, fileName: file.name };
             }

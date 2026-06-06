@@ -439,7 +439,10 @@ export default function OperacaoBorderoPage() {
       const validacaoResponse = await fetch('/api/duplicatas/verificar-operacao', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-        body: JSON.stringify({ nfCtes: novosIdentificadores }),
+        body: JSON.stringify({
+          nfCtes: novosIdentificadores,
+          clienteId: empresaCedenteId,
+        }),
       });
 
       const validacaoData = await validacaoResponse.json();

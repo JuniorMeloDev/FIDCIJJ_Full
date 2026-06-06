@@ -31,7 +31,8 @@ export async function POST(request) {
         const repetidosNoEnvio = findRepeatedValues(identificadoresDuplicata);
         const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
             supabase,
-            identificadoresDuplicata
+            identificadoresDuplicata,
+            { clienteId: body.clienteId }
         );
 
         if (repetidosNoEnvio.length > 0 || duplicatasConflitantes.length > 0) {
