@@ -264,6 +264,8 @@ export default function ResumoPage() {
   const handleConfirmarRenegociacao = async ({
     duplicataIds,
     novaDataVencimento,
+    quantidadeParcelas,
+    datasVencimentoParcelas,
     jurosManual,
     taxaJurosManual,
     observacao,
@@ -275,6 +277,8 @@ export default function ResumoPage() {
         body: JSON.stringify({
           duplicataIds,
           novaDataVencimento,
+          quantidadeParcelas,
+          datasVencimentoParcelas,
           jurosManual,
           taxaJurosManual,
           observacao,
@@ -294,6 +298,7 @@ export default function ResumoPage() {
       const primeiraDuplicata = duplicatasParaRenegociar[0];
       const operacaoId =
         data.operacaoId ||
+        data.operacaoNova?.id ||
         data.novasDuplicatas?.[0]?.operacao_id ||
         primeiraDuplicata?.operacao?.id;
       const clienteId =

@@ -413,6 +413,9 @@ export default function ConciliacaoModal({
                         <div className="min-w-0">
                           <span className="block text-xs uppercase tracking-wide text-gray-400">Título</span>
                           <span className="block font-bold text-white">{d.nfCte || d.nf_cte}</span>
+                          <span className="mt-1 block text-[11px] text-gray-400">
+                            Vencimento: <strong className="text-gray-200">{formatDate(d.dataVencimento || d.data_vencimento)}</strong>
+                          </span>
                         </div>
                         <span className="shrink-0 text-right font-bold text-green-300">{formatBRLNumber(getDuplicateDisplayValue(d))}</span>
                       </div>
@@ -434,6 +437,9 @@ export default function ConciliacaoModal({
                         <div className="min-w-0">
                           <div className="text-sm font-semibold">{d.nfCte || d.nf_cte}</div>
                           <div className="truncate text-[11px] text-gray-400" title={d.clienteSacado || d.cliente_sacado}>{d.clienteSacado || d.cliente_sacado}</div>
+                          <div className="mt-1 text-[11px] text-gray-400">
+                            Vencimento: <span className="font-semibold text-gray-200">{formatDate(d.dataVencimento || d.data_vencimento)}</span>
+                          </div>
                         </div>
                       </div>
                       <div className="flex-shrink-0 whitespace-nowrap text-right text-sm text-green-300">{formatBRLNumber(getDuplicateDisplayValue(d))}</div>

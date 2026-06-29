@@ -1,43 +1,37 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/utils/supabaseClient";
 import jwt from "jsonwebtoken";
+import { buildRenegociacaoPlano } from "@/app/lib/renegociacao";
 
-const STATUS_BLOQUEADOS = new Set(["liquidada", "liquidado", "baixada", "baixado", "renegociada", "renegociado", "recebido"]);
-
-const toNumber = (value) => Number(value || 0);
+const STATUS_BLOQUEADOS = new Set([
+  "liquidada",
+  "liquidado",
+  "baixada",
+  "baixado",
+  "renegociada",
+  "renegociado",
+  "recebido",
+]);
 
 const toDateOnly = (date) => date.toISOString().split("T")[0];
+const normalize = (value) => String(value || "").trim().toLowerCase();
 
-const diffDias = (dataInicial, dataFinal) => {
-  if (!dataInicial || !dataFinal) return 0;
-  const inicio = new Date(`${String(dataInicial).split("T")[0]}T00:00:00`);
-  const fim = new Date(`${String(dataFinal).split("T")[0]}T00:00:00`);
-  const diff = Math.ceil((fim - inicio) / 86400000);
-  return Number.isFinite(diff) ? Math.max(diff, 0) : 0;
-};
-
-const getTaxaMensal = (duplicata) =>
-  toNumber(
-    duplicata?.operacao?.tipo_operacao?.taxa_juros ??
-      duplicata?.operacao?.tipo_operacao?.taxa_juros_mora ??
-      duplicata?.operacao?.taxa_juros ??
-      duplicata?.taxaJuros ??
-      duplicata?.taxa_juros ??
-      0
-  );
-
-const calcularJurosDuplicata = (duplicata, novaDataVencimento, taxaManual = null) => {
-  const valorBruto = toNumber(duplicata.valor_bruto);
-  const dias = diffDias(duplicata.data_vencimento, novaDataVencimento);
-  const taxaMensal = taxaManual ?? getTaxaMensal(duplicata);
-  return valorBruto * (taxaMensal / 100 / 30) * dias;
+const buildRenegociacaoBase = (duplicatas) => {
+  const numeros = [
+    ...new Set(
+      duplicatas
+        .map((dup) => String(dup.nf_cte || "").split(".")[0])
+        .filter(Boolean)
+    ),
+  ];
+  return numeros.length > 0 ? numeros.join("-") : `REN-${Date.now()}`;
 };
 
 export async function POST(request) {
   try {
     const token = request.headers.get("Authorization")?.split(" ")[1];
     if (!token) {
-      return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
+      return NextResponse.json({ message: "Nao autorizado." }, { status: 401 });
     }
 
     jwt.verify(token, process.env.JWT_SECRET);
@@ -45,6 +39,8 @@ export async function POST(request) {
     const {
       duplicataIds,
       novaDataVencimento,
+      quantidadeParcelas,
+      datasVencimentoParcelas,
       jurosManual,
       taxaJurosManual,
       observacao,
@@ -59,15 +55,17 @@ export async function POST(request) {
 
     if (!novaDataVencimento) {
       return NextResponse.json(
-        { message: "Informe a nova data de vencimento." },
+        { message: "Informe a data da primeira parcela." },
         { status: 400 }
       );
     }
 
+    const parcelas = Math.max(1, Number(quantidadeParcelas) || 1);
     const ids = [...new Set(duplicataIds.map(Number).filter(Boolean))];
+
     if (ids.length === 0) {
       return NextResponse.json(
-        { message: "IDs de duplicatas inválidos." },
+        { message: "IDs de duplicatas invalidos." },
         { status: 400 }
       );
     }
@@ -79,117 +77,169 @@ export async function POST(request) {
           *,
           operacao:operacoes(
             *,
+            cliente:clientes(*),
             tipo_operacao:tipos_operacao(*)
           )
         `
       )
-      .in("id", ids);
+      .in("id", ids)
+      .order("id", { ascending: true });
 
     if (duplicatasError) throw duplicatasError;
 
     if (!duplicatas || duplicatas.length !== ids.length) {
       return NextResponse.json(
-        { message: "Uma ou mais duplicatas não foram encontradas." },
+        { message: "Uma ou mais duplicatas nao foram encontradas." },
         { status: 404 }
       );
     }
 
-    const duplicataBloqueada = duplicatas.find((duplicata) => {
-      const statusAtual = String(
-        duplicata.status ?? duplicata.status_recebimento ?? ""
-      ).toLowerCase();
+    const bloqueada = duplicatas.find((duplicata) => {
+      const statusAtual = normalize(
+        duplicata.status ?? duplicata.status_recebimento
+      );
       return STATUS_BLOQUEADOS.has(statusAtual);
     });
 
-    if (duplicataBloqueada) {
+    if (bloqueada) {
       return NextResponse.json(
         {
-          message: `Duplicata ${duplicataBloqueada.nf_cte || duplicataBloqueada.id} não pode ser renegociada.`,
+          message: `Duplicata ${bloqueada.nf_cte || bloqueada.id} nao pode ser renegociada.`,
         },
         { status: 400 }
       );
     }
 
-    const totalOriginal = duplicatas.reduce(
-      (sum, duplicata) => sum + toNumber(duplicata.valor_bruto),
-      0
-    );
+    const clienteId = duplicatas[0]?.operacao?.cliente_id;
+    const tipoOperacaoId = duplicatas[0]?.operacao?.tipo_operacao_id;
+    const sacadoId = duplicatas[0]?.sacado_id;
 
-    if (totalOriginal <= 0) {
+    if (!clienteId || !tipoOperacaoId) {
+      return NextResponse.json(
+        { message: "Nao foi possivel identificar cliente ou tipo de operacao." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      duplicatas.some((duplicata) => duplicata.operacao?.cliente_id !== clienteId)
+    ) {
+      return NextResponse.json(
+        { message: "Selecione duplicatas do mesmo cliente para renegociar juntas." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      duplicatas.some(
+        (duplicata) => duplicata.operacao?.tipo_operacao_id !== tipoOperacaoId
+      )
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            "Selecione duplicatas do mesmo tipo de operacao para renegociar juntas.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (duplicatas.some((duplicata) => duplicata.sacado_id !== sacadoId)) {
+      return NextResponse.json(
+        { message: "Selecione duplicatas do mesmo sacado para renegociar juntas." },
+        { status: 400 }
+      );
+    }
+
+    const observacaoNormalizada = String(observacao || "").trim();
+    const hoje = toDateOnly(new Date());
+    const baseRenegociacao = buildRenegociacaoBase(duplicatas);
+    const baseOperacao = `REN-${baseRenegociacao}`;
+
+    const plano = buildRenegociacaoPlano({
+      duplicatas,
+      novaDataVencimento,
+      quantidadeParcelas: parcelas,
+      datasVencimentoParcelas,
+      taxaJurosManual,
+      jurosManual,
+    });
+
+    if (plano.totalOriginal <= 0) {
       return NextResponse.json(
         { message: "O total original das duplicatas deve ser maior que zero." },
         { status: 400 }
       );
     }
 
-    const jurosManualInformado =
-      jurosManual !== null &&
-      jurosManual !== undefined &&
-      jurosManual !== "" &&
-      Number.isFinite(Number(jurosManual));
-    const taxaManualInformada =
-      taxaJurosManual !== null &&
-      taxaJurosManual !== undefined &&
-      taxaJurosManual !== "" &&
-      Number.isFinite(Number(taxaJurosManual));
-    const taxaManual = taxaManualInformada ? Number(taxaJurosManual) : null;
+    const observacaoOperacao =
+      observacaoNormalizada || `Renegociacao da operacao ${baseOperacao}`;
 
-    const jurosCalculado = duplicatas.reduce(
-      (sum, duplicata) =>
-        sum + calcularJurosDuplicata(duplicata, novaDataVencimento, taxaManual),
-      0
-    );
-    const jurosTotal = jurosManualInformado ? Number(jurosManual) : jurosCalculado;
-    const totalRenegociado = totalOriginal + jurosTotal;
-    const hoje = toDateOnly(new Date());
-    const observacaoNormalizada = String(observacao || "").trim();
-    let observacaoBaixa =
-      observacaoNormalizada ||
-      "Duplicata baixada por renegociação, sem movimentação financeira.";
-    if (!observacaoNormalizada) {
-      observacaoBaixa = `Renegociada em ${hoje}`;
-    }
-
-    const observacaoNova =
-      observacaoNormalizada || "Duplicata criada por renegociação";
-
-    const novasDuplicatasPayload = duplicatas.map((duplicata) => {
-      const valorBruto = toNumber(duplicata.valor_bruto);
-      const proporcao = valorBruto / totalOriginal;
-      const jurosRateado = jurosTotal * proporcao;
-
-      return {
-        operacao_id: duplicata.operacao_id,
-        sacado_id: duplicata.sacado_id,
-        cliente_sacado: duplicata.cliente_sacado,
-        nf_cte: `${duplicata.nf_cte}-REN`,
+    const { data: novaOperacao, error: operacaoError } = await supabase
+      .from("operacoes")
+      .insert({
         data_operacao: hoje,
-        data_vencimento: novaDataVencimento,
-        valor_bruto: valorBruto + jurosRateado,
-        valor_juros: jurosRateado,
-        status_recebimento: "Pendente",
-        origem_renegociacao_id: duplicata.id,
-        observacao: observacaoNova,
-      };
-    });
+        tipo_operacao_id: tipoOperacaoId,
+        cliente_id: clienteId,
+        valor_total_bruto: plano.totalRenegociado,
+        valor_total_juros: plano.jurosTotal,
+        valor_total_descontos: 0,
+        valor_liquido: plano.totalOriginal,
+        status: "Aprovada",
+        conta_bancaria_id: null,
+        chave_nfe: baseOperacao,
+      })
+      .select("*")
+      .single();
 
-    const { data: novasDuplicatas, error: insertError } = await supabase
+    if (operacaoError) throw operacaoError;
+
+    const duplicatasParaSalvar = plano.parcelasCalculadas.map((parcela) => ({
+      operacao_id: novaOperacao.id,
+      nf_cte: `${baseOperacao}.${parcela.numeroParcela}`,
+      cliente_sacado: duplicatas[0]?.cliente_sacado || "Renegociacao",
+      sacado_id: sacadoId,
+      valor_bruto: parcela.valorParcela,
+      valor_juros: parcela.jurosParcela,
+      data_operacao: hoje,
+      data_vencimento: parcela.dataVencimento,
+      status_recebimento: "Pendente",
+      origem_renegociacao_id: ids[0],
+      observacao: observacaoOperacao,
+    }));
+
+    const { data: novasDuplicatas, error: duplicatasInsertError } = await supabase
       .from("duplicatas")
-      .insert(novasDuplicatasPayload)
+      .insert(duplicatasParaSalvar)
       .select("*");
 
-    if (insertError) throw insertError;
+    if (duplicatasInsertError) {
+      await supabase.from("operacoes").delete().eq("id", novaOperacao.id);
+      throw duplicatasInsertError;
+    }
 
-    const { error: updateError } = await supabase
+    const { error: baixaError } = await supabase
       .from("duplicatas")
       .update({
         status_recebimento: "Recebido",
         data_liquidacao: hoje,
-        observacao_baixa: observacaoBaixa,
+        observacao_baixa:
+          observacaoNormalizada ||
+          "Duplicata baixada por renegociacao, sem movimentacao financeira.",
       })
       .in("id", ids);
 
-    if (updateError) throw updateError;
+    if (baixaError) {
+      await supabase
+        .from("duplicatas")
+        .delete()
+        .in(
+          "id",
+          (novasDuplicatas || []).map((duplicata) => duplicata.id)
+        );
+      await supabase.from("operacoes").delete().eq("id", novaOperacao.id);
+      throw baixaError;
+    }
 
     const { error: historicoError } = await supabase
       .from("renegociacoes_duplicatas")
@@ -197,28 +247,37 @@ export async function POST(request) {
         duplicata_ids: ids,
         novas_duplicata_ids: (novasDuplicatas || []).map((duplicata) => duplicata.id),
         nova_data_vencimento: novaDataVencimento,
-        total_original: totalOriginal,
-        juros_calculado: jurosCalculado,
-        juros_manual: jurosManualInformado ? Number(jurosManual) : null,
-        total_renegociado: totalRenegociado,
+        total_original: plano.totalOriginal,
+        juros_calculado: plano.jurosCalculado,
+        juros_manual:
+          jurosManual !== null &&
+          jurosManual !== undefined &&
+          jurosManual !== "" &&
+          Number.isFinite(Number(jurosManual))
+            ? Number(jurosManual)
+            : null,
+        total_renegociado: plano.totalRenegociado,
         observacao: observacaoNormalizada || null,
       });
 
     if (historicoError) {
-      console.warn("Falha ao salvar histórico de renegociação:", historicoError);
+      console.warn("Falha ao salvar historico de renegociacao:", historicoError);
     }
 
     return NextResponse.json(
       {
         success: true,
-        message: "Renegociação realizada com sucesso.",
-        totalOriginal,
-        jurosCalculado,
-        jurosTotal,
-        totalRenegociado,
-        operacaoId: duplicatas[0]?.operacao_id,
-        clienteId: duplicatas[0]?.operacao?.cliente_id,
+        message: "Renegociacao realizada com sucesso.",
+        totalOriginal: plano.totalOriginal,
+        jurosCalculado: plano.jurosCalculado,
+        jurosTotal: plano.jurosTotal,
+        totalRenegociado: plano.totalRenegociado,
+        quantidadeParcelas: parcelas,
+        operacaoId: novaOperacao.id,
+        clienteId,
+        operacaoNova: novaOperacao,
         novasDuplicatas,
+        parcelasCalculadas: plano.parcelasCalculadas,
       },
       { status: 200 }
     );
@@ -230,4 +289,3 @@ export async function POST(request) {
     );
   }
 }
-
