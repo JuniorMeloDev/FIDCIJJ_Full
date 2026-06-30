@@ -32,6 +32,12 @@ const processAbcData = (data) => {
 };
 
 const isPostFixedInterest = (row) => {
+    if (typeof row.juros_pre_fixado === 'boolean') {
+        return !row.juros_pre_fixado;
+    }
+    if (typeof row.tipo_operacao_juros_pre_fixado === 'boolean') {
+        return !row.tipo_operacao_juros_pre_fixado;
+    }
     const totalDescontadoNaOrigem = (row.operacao_valor_total_bruto || 0) - (row.operacao_valor_liquido || 0);
     const descontosEsperadosPreFixado = (row.operacao_valor_total_juros || 0) + (row.operacao_valor_total_descontos || 0);
     if (totalDescontadoNaOrigem < (descontosEsperadosPreFixado - 0.01)) {

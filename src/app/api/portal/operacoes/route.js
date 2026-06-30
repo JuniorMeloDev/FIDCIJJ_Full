@@ -86,6 +86,18 @@ export async function POST(request) {
         // Usa a chave do primeiro documento para o registro da operação
         const chaveNfePrincipal = notasFiscais[0].chave_nfe;
 
+        const { data: tipoOperacao, error: tipoOperacaoError } = await supabase
+            .from('tipos_operacao')
+            .select('id, juros_pre_fixado')
+            .eq('id', body.tipoOperacaoId)
+            .single();
+
+        if (tipoOperacaoError) {
+            throw new Error('Tipo de operação não encontrado para determinar o modo de juros.');
+        }
+
+        const jurosPreFixado = body.jurosPre ?? tipoOperacao?.juros_pre_fixado ?? true;
+
         // Calcula os totais da operação
         const valorTotalBruto = notasFiscais.reduce((sum, nf) => sum + nf.valorNf, 0);
         const valorTotalJuros = notasFiscais.reduce((sum, nf) => sum + nf.jurosCalculado, 0);
@@ -139,7 +151,8 @@ export async function POST(request) {
                 valor_liquido: valorLiquido,
                 status: 'Pendente',
                 conta_bancaria_id: null,
-                chave_nfe: chaveNfePrincipal // Salva a chave do primeiro item como referência
+                chave_nfe: chaveNfePrincipal, // Salva a chave do primeiro item como referência
+                juros_pre_fixado: jurosPreFixado,
             })
             .select()
             .single();

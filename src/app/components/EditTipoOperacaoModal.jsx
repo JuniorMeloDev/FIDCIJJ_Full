@@ -20,6 +20,7 @@ export default function EditTipoOperacaoModal({
     taxa_juros_mora: "",
     usarPrazoSacado: false,
     usarPesoNoValorFixo: false,
+    jurosPreFixado: true,
   };
   const [formData, setFormData] = useState(initialState);
   const isEditMode = !!tipoOperacao?.id;
@@ -47,6 +48,12 @@ export default function EditTipoOperacaoModal({
             : "",
           usarPrazoSacado: tipoOperacao.usarPrazoSacado || false,
           usarPesoNoValorFixo: tipoOperacao.usarPesoNoValorFixo || false,
+          jurosPreFixado:
+            typeof tipoOperacao.jurosPreFixado === "boolean"
+              ? tipoOperacao.jurosPreFixado
+              : typeof tipoOperacao.juros_pre_fixado === "boolean"
+                ? tipoOperacao.juros_pre_fixado
+              : true,
         });
       } else {
         setFormData(initialState);
@@ -86,6 +93,7 @@ export default function EditTipoOperacaoModal({
         parseFloat(String(formData.taxa_juros_mora).replace(",", ".")) || 0,
       usarPrazoSacado: formData.usarPrazoSacado,
       usarPesoNoValorFixo: formData.usarPesoNoValorFixo,
+      jurosPreFixado: formData.jurosPreFixado,
     };
     onSave(tipoOperacao?.id, dataToSave);
   };
@@ -215,6 +223,18 @@ export default function EditTipoOperacaoModal({
                 />
                 <span className="ml-2 text-sm text-gray-200">
                   Utilizar peso no cálculo do valor fixo
+                </span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="jurosPreFixado"
+                  checked={formData.jurosPreFixado}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded text-orange-500 bg-gray-600 border-gray-500 focus:ring-orange-500"
+                />
+                <span className="ml-2 text-sm text-gray-200">
+                  Juros pré-fixado por padrão
                 </span>
               </label>
             </div>

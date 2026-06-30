@@ -58,6 +58,7 @@ export default function TiposOperacaoPage() {
         taxa_juros_mora: item.taxa_juros_mora, 
         usarPrazoSacado: item.usar_prazo_sacado,
         usarPesoNoValorFixo: item.usar_peso_no_valor_fixo,
+        jurosPreFixado: item.juros_pre_fixado,
       }));
       setTiposOperacao(formattedData);
     } catch (err) {
@@ -110,10 +111,13 @@ export default function TiposOperacaoPage() {
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify(data),
       });
-      if (!response.ok)
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
         throw new Error(
-          `Falha ao ${isUpdating ? "atualizar" : "criar"} tipo de operação.`
+          errorBody.message ||
+            `Falha ao ${isUpdating ? "atualizar" : "criar"} tipo de operação.`
         );
+      }
 
       showNotification(
         `Operação ${isUpdating ? "atualizada" : "criada"} com sucesso!`,
@@ -263,6 +267,9 @@ export default function TiposOperacaoPage() {
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase">
                       Desp. Bancárias
                     </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase">
+                      Juros
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -283,6 +290,11 @@ export default function TiposOperacaoPage() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-400 text-right">
                         {formatBRLNumber(item.despesasBancarias)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-center">
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${item.jurosPreFixado ? 'bg-emerald-500/20 text-emerald-300' : 'bg-sky-500/20 text-sky-300'}`}>
+                          {item.jurosPreFixado ? 'Pré-fixado' : 'Pós-fixado'}
+                        </span>
                       </td>
                     </tr>
                   ))}

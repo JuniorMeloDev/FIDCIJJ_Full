@@ -28,13 +28,14 @@ export async function GET(request) {
                 operacao:operacoes!inner (
                     cliente_id,
                     tipo_operacao_id,
+                    juros_pre_fixado,
                     valor_total_bruto,
                     valor_liquido,
                     valor_total_juros,
                     valor_total_descontos,
                     status,
                     cliente:clientes ( nome ),
-                    tipo_operacao:tipos_operacao ( nome )
+                    tipo_operacao:tipos_operacao ( nome, juros_pre_fixado )
                 )
             `)
             .eq('operacao.status', 'Aprovada'); 
@@ -95,6 +96,8 @@ export async function GET(request) {
             cliente_sacado: d.cliente_sacado,
             data_vencimento: d.data_vencimento,
             tipo_operacao_nome: d.operacao?.tipo_operacao?.nome,
+            juros_pre_fixado: d.operacao?.juros_pre_fixado,
+            tipo_operacao_juros_pre_fixado: d.operacao?.tipo_operacao?.juros_pre_fixado,
             status_recebimento: d.status_recebimento,
             operacao_valor_total_bruto: d.operacao?.valor_total_bruto,
             operacao_valor_liquido: d.operacao?.valor_liquido,

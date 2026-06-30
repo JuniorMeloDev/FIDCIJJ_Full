@@ -9,29 +9,51 @@ export async function PUT(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params;
+        const resolvedParams = await Promise.resolve(params);
+        const id = resolvedParams?.id;
+        if (id === undefined || id === null || id === '') {
+            return NextResponse.json({ message: 'ID do tipo de operação não informado.' }, { status: 400 });
+        }
         const body = await request.json();
 
-        const { data, error } = await supabase
+        const payload = {
+            nome: body.nome,
+            taxa_juros: body.taxaJuros,
+            valor_fixo: body.valorFixo,
+            taxa_multa: body.taxa_multa,
+            taxa_juros_mora: body.taxa_juros_mora,
+            despesas_bancarias: body.despesasBancarias,
+            descricao: body.descricao,
+            // Novos campos
+            usar_prazo_sacado: body.usarPrazoSacado,
+            usar_peso_no_valor_fixo: body.usarPesoNoValorFixo,
+            juros_pre_fixado: body.jurosPreFixado ?? true,
+        };
+
+        let { data, error } = await supabase
             .from('tipos_operacao')
-            .update({
-                nome: body.nome,
-                taxa_juros: body.taxaJuros,
-                valor_fixo: body.valorFixo,
-                taxa_multa: body.taxa_multa,
-                taxa_juros_mora: body.taxa_juros_mora,
-                despesas_bancarias: body.despesasBancarias,
-                descricao: body.descricao,
-                // Novos campos
-                usar_prazo_sacado: body.usarPrazoSacado,
-                usar_peso_no_valor_fixo: body.usarPesoNoValorFixo,
-            })
+            .update(payload)
             .eq('id', id)
             .select();
+
+        if (error && (error.code === '42703' || String(error.message || '').includes('juros_pre_fixado'))) {
+            const { juros_pre_fixado, ...fallbackPayload } = payload;
+            ({ data, error } = await supabase
+                .from('tipos_operacao')
+                .update(fallbackPayload)
+                .eq('id', id)
+                .select());
+        }
 
         if (error) throw error;
         return NextResponse.json(data[0], { status: 200 });
     } catch (error) {
+        console.error('Erro ao atualizar tipo de operação:', {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint,
+        });
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
 }
@@ -42,7 +64,11 @@ export async function DELETE(request, { params }) {
         if (!token) return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
         jwt.verify(token, process.env.JWT_SECRET);
 
-        const { id } = params;
+        const resolvedParams = await Promise.resolve(params);
+        const id = resolvedParams?.id;
+        if (id === undefined || id === null || id === '') {
+            return NextResponse.json({ message: 'ID do tipo de operação não informado.' }, { status: 400 });
+        }
         const { error } = await supabase.from('tipos_operacao').delete().eq('id', id);
 
         if (error) throw error;

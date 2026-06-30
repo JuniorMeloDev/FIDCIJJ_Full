@@ -6,6 +6,14 @@ import { formatBRLNumber, formatDate, formatBRLInput, parseBRL } from '../utils/
 const isPostFixedInterest = (operation, duplicate) => {
   if (!operation) return false;
 
+  if (typeof operation.juros_pre_fixado === "boolean") {
+    return !operation.juros_pre_fixado;
+  }
+
+  if (typeof operation.tipo_operacao?.juros_pre_fixado === "boolean") {
+    return !operation.tipo_operacao.juros_pre_fixado;
+  }
+
   const totalDescontadoNaOrigem = (operation.valor_total_bruto || 0) - (operation.valor_liquido || 0);
   const descontosEsperadosPreFixado = (operation.valor_total_juros || 0) + (operation.valor_total_descontos || 0);
 

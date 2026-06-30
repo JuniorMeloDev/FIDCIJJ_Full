@@ -155,6 +155,7 @@ export default function OperacaoBorderoPage() {
         despesasBancarias: t.despesas_bancarias,
         usarPrazoSacado: t.usar_prazo_sacado,
         usarPesoNoValorFixo: t.usar_peso_no_valor_fixo,
+        jurosPreFixado: t.juros_pre_fixado,
       }));
       const formattedContas = contasData.map((c) => ({
         ...c,
@@ -961,6 +962,15 @@ export default function OperacaoBorderoPage() {
       (op) => op.id === parseInt(tipoOperacaoId)
     );
     return selectedOperacao?.usarPesoNoValorFixo || false;
+  }, [tipoOperacaoId, tiposOperacao]);
+
+  useEffect(() => {
+    const selectedOperacao = tiposOperacao.find(
+      (op) => op.id === parseInt(tipoOperacaoId)
+    );
+    if (selectedOperacao && typeof selectedOperacao.jurosPreFixado === "boolean") {
+      setjurosPre(selectedOperacao.jurosPreFixado);
+    }
   }, [tipoOperacaoId, tiposOperacao]);
 
   const totais = useMemo(() => {

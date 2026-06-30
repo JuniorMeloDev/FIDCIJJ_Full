@@ -19,7 +19,7 @@ export async function GET(request) {
 
         let dbQuery = supabase
             .from('duplicatas')
-            .select('*, operacao:operacoes!inner(status, cliente_id, valor_liquido, valor_total_bruto, valor_total_juros, valor_total_descontos)')
+            .select('*, operacao:operacoes!inner(status, cliente_id, valor_liquido, valor_total_bruto, valor_total_juros, valor_total_descontos, juros_pre_fixado, tipo_operacao:tipos_operacao(juros_pre_fixado))')
             .eq('status_recebimento', 'Pendente')
             .eq('operacao.status', 'Aprovada');
 

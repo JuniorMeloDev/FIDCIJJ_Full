@@ -13,6 +13,12 @@ export async function GET(request) {
         if (error) throw error;
         return NextResponse.json(data, { status: 200 });
     } catch (error) {
+        console.error('Erro ao criar tipo de operação:', {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint,
+        });
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
 }
@@ -26,20 +32,31 @@ export async function POST(request) {
 
         const body = await request.json();
 
-        const { data, error } = await supabase
+        const payload = {
+            nome: body.nome,
+            taxa_juros: body.taxaJuros,
+            taxa_multa: body.taxa_multa,
+            taxa_juros_mora: body.taxa_juros_mora,
+            valor_fixo: body.valorFixo,
+            despesas_bancarias: body.despesasBancarias,
+            descricao: body.descricao,
+            usar_prazo_sacado: body.usarPrazoSacado,
+            usar_peso_no_valor_fixo: body.usarPesoNoValorFixo,
+            juros_pre_fixado: body.jurosPreFixado ?? true,
+        };
+
+        let { data, error } = await supabase
             .from('tipos_operacao')
-            .insert([{
-                nome: body.nome,
-                taxa_juros: body.taxaJuros,
-                taxa_multa: body.taxa_multa,
-                taxa_juros_mora: body.taxa_juros_mora,
-                valor_fixo: body.valorFixo,
-                despesas_bancarias: body.despesasBancarias,
-                descricao: body.descricao,
-                usar_prazo_sacado: body.usarPrazoSacado,
-                usar_peso_no_valor_fixo: body.usarPesoNoValorFixo,
-            }])
+            .insert([payload])
             .select();
+
+        if (error && (error.code === '42703' || String(error.message || '').includes('juros_pre_fixado'))) {
+            const { juros_pre_fixado, ...fallbackPayload } = payload;
+            ({ data, error } = await supabase
+                .from('tipos_operacao')
+                .insert([fallbackPayload])
+                .select());
+        }
 
         if (error) throw error;
         return NextResponse.json(data[0], { status: 201 });

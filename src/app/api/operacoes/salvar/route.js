@@ -15,6 +15,15 @@ export async function POST(request) {
 
         const body = await request.json();
         const { totais, notasFiscais, efetuar_pix, pixEndToEndId } = body;
+        const { data: tipoOperacao, error: tipoOperacaoError } = await supabase
+            .from('tipos_operacao')
+            .select('id, juros_pre_fixado')
+            .eq('id', body.tipoOperacaoId)
+            .single();
+
+        if (tipoOperacaoError) {
+            throw new Error('Tipo de operação não encontrado.');
+        }
         
         const duplicatasParaSalvar = notasFiscais.flatMap(nf => {
             return nf.parcelasCalculadas.map(p => ({
@@ -75,7 +84,7 @@ export async function POST(request) {
             .from('operacoes')
             .update({ 
                 status: 'Aprovada',
-                juros_pre_fixado: body.jurosPre 
+                juros_pre_fixado: body.jurosPre ?? tipoOperacao?.juros_pre_fixado ?? true
             })
             .eq('id', operacaoId);
 
