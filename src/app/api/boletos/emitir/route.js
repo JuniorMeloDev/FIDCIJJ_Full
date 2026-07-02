@@ -58,6 +58,11 @@ const toMoneyBradescoString = (value) => (Number(value) || 0).toFixed(2);
 const toPercentBradesco = (value) => Number((Number(value) || 0).toFixed(3));
 const toPercentBradescoString = (value) => (Number(value) || 0).toFixed(2);
 const toStringSafe = (value) => String(value ?? "");
+const normalizeSafraAgencia = (value) => {
+  const digits = toOnlyDigits(value);
+  return digits ? digits.padStart(4, "0").slice(-4) : "";
+};
+const normalizeSafraConta = (value) => toOnlyDigits(value);
 const buildBradescoNegociacao = (agencia, conta) => {
   const agenciaDigits = toOnlyDigits(agencia).padStart(4, "0").slice(-4);
   const contaDigits = toOnlyDigits(conta).padStart(7, "0").slice(-7);
@@ -96,14 +101,26 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
   if (banco === "safra") {
      const valorFinal = duplicata.valor_bruto - (abatimento || 0);
      const nossoNumeroUnico = `${duplicata.operacao.id}${duplicata.id}`.slice(-9).padStart(9, "0");
+     const agencia = normalizeSafraAgencia(process.env.SAFRA_AGENCIA);
+     const conta = normalizeSafraConta(process.env.SAFRA_CONTA);
+     const jurosPercentual = Number(tipoOperacao?.taxa_juros_mora || 0);
+     const multaPercentual = Number(tipoOperacao?.taxa_multa || 0);
+
+     if (!agencia || !conta) {
+       throw new Error(
+         "Configuracao Safra incompleta: SAFRA_AGENCIA e SAFRA_CONTA sao obrigatorias para emissao do boleto."
+       );
+     }
+
      return {
-        // ... (objeto de dados do Safra - sem alterações)
-        agencia: process.env.SAFRA_AGENCIA,
-        conta: process.env.SAFRA_CONTA,
+        agencia,
+        conta,
+        codigoMoeda: "09",
         documento: {
           numero: nossoNumeroUnico,
           numeroCliente: duplicata.nf_cte.substring(0, 10),
           especie: "02",
+          carteira: "01",
           dataVencimento: format(new Date(duplicata.data_vencimento + "T12:00:00Z"),"yyyy-MM-dd"),
           valor: parseFloat(valorFinal.toFixed(2)),
           quantidadeDiasProtesto: 5,
@@ -120,6 +137,20 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
               cep: (sacado.cep || "00000000").replace(/\D/g, ""),
             },
           },
+          juros: jurosPercentual > 0
+            ? {
+                tipoJuros: "TAXAMENSAL",
+                valor: jurosPercentual,
+                data: format(new Date(duplicata.data_vencimento + "T12:00:00Z"), "yyyy-MM-dd"),
+              }
+            : { tipoJuros: "ISENTO" },
+          multa: multaPercentual > 0
+            ? {
+                tipoMulta: "PERCENTUAL",
+                percentual: multaPercentual,
+                data: format(new Date(duplicata.data_vencimento + "T12:00:00Z"), "yyyy-MM-dd"),
+              }
+            : { tipoMulta: "ISENTO" },
         },
      };
   }

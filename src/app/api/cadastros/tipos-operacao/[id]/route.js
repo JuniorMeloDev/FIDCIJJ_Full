@@ -10,8 +10,9 @@ export async function PUT(request, { params }) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const resolvedParams = await Promise.resolve(params);
-        const id = resolvedParams?.id;
-        if (id === undefined || id === null || id === '') {
+        const idRaw = resolvedParams?.id;
+        const id = Number(idRaw);
+        if (!Number.isFinite(id) || id <= 0) {
             return NextResponse.json({ message: 'ID do tipo de operação não informado.' }, { status: 400 });
         }
         const body = await request.json();
@@ -65,8 +66,9 @@ export async function DELETE(request, { params }) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const resolvedParams = await Promise.resolve(params);
-        const id = resolvedParams?.id;
-        if (id === undefined || id === null || id === '') {
+        const idRaw = resolvedParams?.id;
+        const id = Number(idRaw);
+        if (!Number.isFinite(id) || id <= 0) {
             return NextResponse.json({ message: 'ID do tipo de operação não informado.' }, { status: 400 });
         }
         const { error } = await supabase.from('tipos_operacao').delete().eq('id', id);

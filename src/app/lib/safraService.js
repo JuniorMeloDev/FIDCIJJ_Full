@@ -65,6 +65,10 @@ export async function registrarBoletoSafra(accessToken, dadosBoleto) {
     const correlationId = crypto.randomUUID();
     const payload = JSON.stringify(dadosBoleto);
 
+    if (!dadosBoleto?.agencia || !dadosBoleto?.conta) {
+        throw new Error('Payload Safra sem agência ou conta do cedente. Verifique SAFRA_AGENCIA e SAFRA_CONTA.');
+    }
+
     const options = {
         method: 'POST',
         headers: {
@@ -89,7 +93,10 @@ export async function registrarBoletoSafra(accessToken, dadosBoleto) {
                         console.log("--- [SAFRAPAY API] Boleto registrado com sucesso. ---");
                         resolve(jsonData);
                     } else {
-                        const errorMessage = jsonData.fields?.[0]?.message || jsonData.message || data;
+                        const errorMessage =
+                            jsonData.fields?.map((field) => field.message).filter(Boolean).join(" | ") ||
+                            jsonData.message ||
+                            data;
                         reject(new Error(`Erro ${res.statusCode} ao registrar boleto: ${errorMessage}`));
                     }
                 } catch (e) {

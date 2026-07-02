@@ -65,6 +65,11 @@ const cleanSeuNumero = (value, fallback) => {
     .replace(/[^A-Za-z0-9]/g, "");
   return cleaned || String(fallback || Date.now());
 };
+const normalizeSafraAgencia = (value) => {
+  const digits = onlyDigits(value);
+  return digits ? digits.padStart(4, "0").slice(-4) : "";
+};
+const normalizeSafraConta = (value) => onlyDigits(value);
 
 const parseEndereco = (enderecoRaw) => {
   const endereco = String(enderecoRaw || "NAO INFORMADO").trim();
@@ -100,13 +105,15 @@ const validatePayload = ({
   if (!String(descricao || "").trim()) throw new Error("Descricao obrigatoria.");
 };
 
-const buildSafraPayload = ({ sacado, vencimento, valorFinal, abatimento, nossoNumero, seuNumero }) => ({
-  agencia: process.env.SAFRA_AGENCIA,
-  conta: process.env.SAFRA_CONTA,
+const buildSafraPayload = ({ sacado, vencimento, valorFinal, abatimento, nossoNumero, seuNumero, juros = 0, multa = 0 }) => ({
+  agencia: normalizeSafraAgencia(process.env.SAFRA_AGENCIA),
+  conta: normalizeSafraConta(process.env.SAFRA_CONTA),
+  codigoMoeda: "09",
   documento: {
     numero: nossoNumero,
     numeroCliente: cleanSeuNumero(seuNumero, nossoNumero).slice(0, 10),
     especie: "02",
+    carteira: "01",
     dataVencimento: format(dateAtNoon(vencimento), "yyyy-MM-dd"),
     valor: toMoney(valorFinal),
     quantidadeDiasProtesto: 5,
@@ -123,8 +130,33 @@ const buildSafraPayload = ({ sacado, vencimento, valorFinal, abatimento, nossoNu
         cep: onlyDigits(sacado.cep || "00000000"),
       },
     },
+    juros:
+      Number(juros) > 0
+        ? {
+            tipoJuros: "TAXAMENSAL",
+            valor: Number(juros),
+            data: format(dateAtNoon(vencimento), "yyyy-MM-dd"),
+          }
+        : { tipoJuros: "ISENTO" },
+    multa:
+      Number(multa) > 0
+        ? {
+            tipoMulta: "PERCENTUAL",
+            percentual: Number(multa),
+            data: format(dateAtNoon(vencimento), "yyyy-MM-dd"),
+          }
+        : { tipoMulta: "ISENTO" },
   },
 });
+
+const validateSafraCedente = (payload) => {
+  if (!payload.agencia || !payload.conta) {
+    throw new Error(
+      "Configuracao Safra incompleta: SAFRA_AGENCIA e SAFRA_CONTA sao obrigatorias para emissao do boleto."
+    );
+  }
+  return payload;
+};
 
 const buildItauPayload = ({ sacado, vencimento, valorFinal, nossoNumero, seuNumero, juros = 0, multa = 0 }) => {
   const documento = onlyDigits(sacado.cnpj);
@@ -350,7 +382,7 @@ const extractBradesco = (boletoGerado) => {
 const emitirNoBanco = async ({ banco, dadosBoleto }) => {
   if (banco === "safra") {
     const tokenData = await getSafraAccessToken();
-    const boletoGerado = await registrarBoletoSafra(tokenData.access_token, dadosBoleto);
+    const boletoGerado = await registrarBoletoSafra(tokenData.access_token, validateSafraCedente(dadosBoleto));
     return {
       boletoGerado,
       linhaDigitavel: boletoGerado.data?.documento?.linhaDigitavel || boletoGerado.data?.linhaDigitavel || null,
@@ -482,7 +514,7 @@ export async function POST(request) {
 
     const dadosBoleto =
       payload.banco === "safra"
-        ? buildSafraPayload(common)
+        ? validateSafraCedente(buildSafraPayload(common))
         : payload.banco === "bradesco"
           ? buildBradescoPayload(common)
           : payload.banco === "itau"

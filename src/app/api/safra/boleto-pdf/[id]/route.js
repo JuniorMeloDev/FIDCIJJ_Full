@@ -76,7 +76,7 @@ export async function GET(request, { params }) {
             throw new Error("Não foi possível montar os dados para nenhum boleto da operação (verifique se já foram registrados).");
         }
 
-        const pdfBuffer = gerarPdfBoletoSafra(listaBoletos);
+        const pdfBuffer = await gerarPdfBoletoSafra(listaBoletos);
         
         const tipoDocumento = duplicatas[0]?.operacao?.cliente?.ramo_de_atividade === 'Transportes' ? 'CTe' : 'NF';
         const numerosDocumento = [...new Set(duplicatas.map(d => d.nf_cte.split('.')[0]))].join('_');

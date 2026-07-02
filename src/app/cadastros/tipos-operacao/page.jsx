@@ -99,9 +99,14 @@ export default function TiposOperacaoPage() {
   };
 
   const handleSave = async (id, data) => {
-    const isUpdating = !!id;
+    const parsedId = Number(id);
+    const isUpdating = Number.isFinite(parsedId) && parsedId > 0;
+    if (id !== undefined && id !== null && id !== "" && !isUpdating) {
+      showNotification("ID inválido do tipo de operação.", "error");
+      return;
+    }
     const url = isUpdating
-      ? `/api/cadastros/tipos-operacao/${id}`
+      ? `/api/cadastros/tipos-operacao/${parsedId}`
       : `/api/cadastros/tipos-operacao`;
     const method = isUpdating ? "PUT" : "POST";
 
