@@ -48,7 +48,7 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || 'Falha ao processar pagamento PIX.');
 
-      await onSave();
+      await onSave(null, result.pixResult);
       setIsPixConfirmOpen(false);
       onClose();
     } catch (err) {
@@ -87,6 +87,11 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
         contaOrigem: contaOrigemObj.contaCorrente,
         empresaAssociada: lancamentoOriginal.empresaAssociada,
         operacao_id: lancamentoOriginal.operacaoId,
+        natureza: 'Aquisição de Direitos Creditórios',
+        pix: {
+          tipo: pixData.tipo_chave_pix,
+          chave: pixData.chave
+        },
         destinatario: {
           tipo: pixData.tipo_chave_pix,
           chave: pixData.chave
@@ -127,7 +132,7 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
         isSending={isSaving}
       />
 
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
+      {!isPixConfirmOpen && <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
         <div
           className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-gray-800 text-white shadow-2xl sm:max-w-md sm:rounded-2xl"
           onClick={(e) => e.stopPropagation()}
@@ -228,7 +233,7 @@ export default function ComplementModal({ isOpen, onClose, onSave, lancamentoOri
             </div>
           </div>
         </div>
-      </div>
+      </div>}
     </>
   );
 }

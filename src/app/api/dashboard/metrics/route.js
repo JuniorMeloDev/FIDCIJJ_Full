@@ -67,6 +67,15 @@ export async function GET(request) {
     if (tipoOperacaoId) recompraQuery = recompraQuery.eq('operacao.tipo_operacao_id', tipoOperacaoId);
     if (clienteId) recompraQuery = recompraQuery.eq('operacao.cliente_id', clienteId);
 
+    let estornosJurosQuery = supabase
+      .from('movimentacoes_caixa')
+      .select('valor')
+      .ilike('descricao', 'Estorno de juros%')
+      .eq('natureza', 'Aquisição de Direitos Creditórios');
+
+    if (dataInicio) estornosJurosQuery = estornosJurosQuery.gte('data_movimento', dataInicio);
+    if (dataFim) estornosJurosQuery = estornosJurosQuery.lte('data_movimento', dataFim);
+
     let renegociacoesQuery = supabase
       .from('duplicatas')
       .select('valor_bruto, valor_juros, cliente_sacado, operacao:operacoes!inner(status, tipo_operacao_id, cliente_id)')
@@ -86,6 +95,7 @@ export async function GET(request) {
       totaisFinanceirosRes,
       vencimentosProximosRes,
       recompraCreditsRes,
+      estornosJurosRes,
       jurosMoraRes,
       renegociacoesRes
     ] = await Promise.all([
@@ -95,6 +105,7 @@ export async function GET(request) {
       supabase.rpc('get_totais_financeiros', rpcParams),
       vencimentosQuery,
       recompraQuery,
+      estornosJurosQuery,
       supabase.rpc('get_total_juros_mora_no_periodo', rpcParams),
       renegociacoesQuery
     ]);
@@ -106,6 +117,7 @@ export async function GET(request) {
       totaisFinanceirosRes.error,
       vencimentosProximosRes.error,
       recompraCreditsRes.error,
+      estornosJurosRes.error,
       jurosMoraRes.error,
       renegociacoesRes.error
     ].filter(Boolean);
@@ -116,13 +128,14 @@ export async function GET(request) {
     }
 
     const totalCreditosRecompra = recompraCreditsRes.data?.reduce((sum, item) => sum + item.valor, 0) || 0;
+    const totalEstornosJuros = estornosJurosRes.data?.reduce((sum, item) => sum + Number(item.valor || 0), 0) || 0;
     const totalJurosMora = jurosMoraRes.data || 0;
     const totalOperadoRenegociacao = renegociacoesRes.data?.reduce((sum, item) => sum + (item.valor_bruto || 0), 0) || 0;
     const totalJurosRenegociacao = renegociacoesRes.data?.reduce((sum, item) => sum + (item.valor_juros || 0), 0) || 0;
 
     const totais = totaisFinanceirosRes.data?.[0] || { total_juros: 0, total_despesas: 0 };
     const totalJurosBruto = totais.total_juros || 0;
-    const totalJurosAjustado = totalJurosBruto + totalCreditosRecompra + totalJurosMora + totalJurosRenegociacao;
+    const totalJurosAjustado = totalJurosBruto + totalCreditosRecompra + totalEstornosJuros + totalJurosMora + totalJurosRenegociacao;
     const lucroLiquido = totalJurosAjustado - (totais.total_despesas || 0);
 
     const metrics = {

@@ -559,6 +559,7 @@ export default function FluxoDeCaixaPage() {
 
   // States para Lançamento Manual e OFX
   const [isLancamentoManualOpen, setIsLancamentoManualOpen] = useState(false);
+  const [lancamentoInicial, setLancamentoInicial] = useState(null);
   const [ofxExtrato, setOfxExtrato] = useState(null);
   const [isLoadingOfx, setIsLoadingOfx] = useState(false);
   const [ofxError, setOfxError] = useState(null);
@@ -976,6 +977,8 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
     detalhesTransacao,
     contaBancaria,
     contaDestino, // (Legado)
+    estornoJuros,
+    seguirComPagamentoEstorno,
   }) => {
     try {
       const contaExternaInfo = parseContaExterna(filters.contaExterna);
@@ -1008,6 +1011,7 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
           items,
           detalhesTransacao,
           contaBancaria: contaSelecionada,
+          estornoJuros,
         }),
       });
 
@@ -1016,8 +1020,24 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
       showNotification("Conciliação realizada com sucesso!", "success");
       refreshFluxoCaixaView(filters, sortConfig);
       setIsConciliacaoModalOpen(false);
+
+      if (seguirComPagamentoEstorno && Number(estornoJuros || 0) > 0) {
+        const documentos = [...new Set(items
+          .map((item) => String(item.nfCte || item.nf_cte || '').split('.')[0])
+          .filter(Boolean))];
+        setLancamentoInicial({
+          tipo: "DEBITO",
+          data: detalhesTransacao.data,
+          valor: Number(estornoJuros),
+          descricao: `Estorno de juros${documentos.length ? ` - ${documentos.join(", ")}` : ""}`,
+          contaOrigem: contaSelecionada,
+          natureza: "Aquisição de Direitos Creditórios",
+        });
+        setIsModalOpen(true);
+      }
     } catch (err) {
       showNotification(err.message, "error");
+      throw err;
     }
   };
 
@@ -1263,14 +1283,12 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
           cnpj: apiResponse.pagador?.documento,
           conta: contaOrigemCompleta,
         },
-        recebedor: apiResponse.recebedor
-          ? {
-            nome: apiResponse.recebedor.nome,
-            cnpj: apiResponse.recebedor.documento,
-            instituicao: apiResponse.recebedor.banco,
-            chavePix: apiResponse.recebedor.identificacao_chave,
-          }
-          : null,
+        recebedor: {
+          nome: apiResponse.recebedor?.nome || pixPayload.favorecido,
+          cnpj: apiResponse.recebedor?.documento,
+          instituicao: apiResponse.recebedor?.banco || pixPayload.instituicao,
+          chavePix: apiResponse.recebedor?.identificacao_chave || pixPayload.chavePix || pixPayload.pix?.chave,
+        },
       });
 
       setIsPixConfirmOpen(false);
@@ -1491,6 +1509,12 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
     }
   };
   const handleSaveComplemento = async (payload, pixResult) => {
+    if (!payload && pixResult) {
+      showNotification("Complemento pago via PIX!", "success");
+      fetchMovimentacoes(filters, sortConfig);
+      fetchSaldos(filters);
+      return true;
+    }
     if (!payload) return false;
     try {
       const response = await fetch('/api/operacoes/complemento', {
@@ -1647,11 +1671,15 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
 
       <LancamentoModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setLancamentoInicial(null);
+        }}
         onSave={handleSaveLancamento}
         onPixSubmit={handleOpenPixConfirm}
         contasMaster={contasMaster}
         clienteMasterNome={clienteMasterInfo.nome}
+        initialData={lancamentoInicial}
       />
       <PixConfirmationModal
         isOpen={isPixConfirmOpen}
@@ -1767,7 +1795,10 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
                 Emitir Boletos
               </button>
               <button
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => {
+                  setLancamentoInicial(null);
+                  setIsModalOpen(true);
+                }}
                 className="bg-orange-500 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-orange-600 transition w-full md:w-auto"
               >
                 + Novo Lançamento

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { formatBRLNumber, formatDate, formatBRLInput, parseBRL } from '../utils/formatters';
+import { differenceInDays } from 'date-fns';
 
 const isPostFixedInterest = (operation, duplicate) => {
   if (!operation) return false;
@@ -36,6 +37,29 @@ const getEmbeddedInterestValue = (duplicate) => {
     : 0;
 };
 
+const parseDateAtNoonUtc = (date) => {
+  if (!date) return null;
+  const normalizedDate = String(date).slice(0, 10);
+  const parsedDate = new Date(`${normalizedDate}T12:00:00Z`);
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+};
+
+const getInterestRefund = (duplicate, settlementDate) => {
+  const originalInterest = Number(duplicate.valorJuros ?? duplicate.valor_juros ?? 0);
+  const operationDate = parseDateAtNoonUtc(duplicate.operacao?.data_operacao ?? duplicate.dataOperacao ?? duplicate.data_operacao);
+  const dueDate = parseDateAtNoonUtc(duplicate.dataVencimento ?? duplicate.data_vencimento);
+  const receiptDate = parseDateAtNoonUtc(settlementDate);
+
+  if (originalInterest <= 0 || !operationDate || !dueDate || !receiptDate) return 0;
+
+  const totalTerm = differenceInDays(dueDate, operationDate);
+  const elapsedDays = differenceInDays(receiptDate, operationDate);
+  if (totalTerm <= 0 || elapsedDays >= totalTerm) return 0;
+
+  const proportionalElapsedInterest = originalInterest * (Math.max(elapsedDays, 0) / totalTerm);
+  return Math.round(Math.max(originalInterest - proportionalElapsedInterest, 0) * 100) / 100;
+};
+
 export default function ConciliacaoModal({
   isOpen,
   onClose,
@@ -61,6 +85,8 @@ export default function ConciliacaoModal({
   const [clienteResultados, setClienteResultados] = useState([]);
   const [loadingClientes, setLoadingClientes] = useState(false);
   const [clienteSelecionado, setClienteSelecionado] = useState(null);
+  const [showInterestRefundDecision, setShowInterestRefundDecision] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const selectedIds = useMemo(() => new Set(selectedItemsData.map((item) => item.id)), [selectedItemsData]);
 
@@ -74,6 +100,10 @@ export default function ConciliacaoModal({
   }, [selectedItemsData]);
 
   const valorExtrato = Number(transacao?.valor || 0);
+  const totalInterestRefund = useMemo(() => selectedItemsData.reduce(
+    (sum, item) => sum + Number(item.estornoJurosCalculado || 0),
+    0
+  ), [selectedItemsData]);
   const saldoRestante = valorExtrato - valorFinalCalculado;
   const saldoRestanteCentavos = Math.round(valorExtrato * 100) - Math.round(valorFinalCalculado * 100);
   const saldoOk = Math.abs(saldoRestanteCentavos) <= 5;
@@ -91,6 +121,8 @@ export default function ConciliacaoModal({
     setIsClienteModalOpen(false);
     setShowHeaderActions(false);
     setMobilePreviewDuplicata(null);
+    setShowInterestRefundDecision(false);
+    setConfirming(false);
 
     fetchContas();
   }, [isOpen]);
@@ -199,12 +231,14 @@ export default function ConciliacaoModal({
     if (selectedIds.has(duplicata.id)) {
       setSelectedItemsData((prev) => prev.filter((item) => item.id !== duplicata.id));
     } else {
+      const interestRefund = getInterestRefund(duplicata, transacao?.data);
       setSelectedItemsData((prev) => [...prev, {
         ...duplicata,
         juros: 0,
         desconto: 0,
         jurosInput: '',
         descontoInput: '',
+        estornoJurosCalculado: interestRefund,
         jurosBase: getEmbeddedInterestValue(duplicata)
       }]);
     }
@@ -220,6 +254,39 @@ export default function ConciliacaoModal({
           }
         : item
     ));
+  };
+
+  const concluirConciliacao = async (seguirComPagamento = false) => {
+    setConfirming(true);
+    setError('');
+
+    try {
+      const contaObj = listaContas.find((c) => String(c.id) === String(contaDestinoId));
+      const nomeContaFormatado = `${contaObj.banco} - ${contaObj.agencia}/${contaObj.conta_corrente}`;
+      const itemsPayload = selectedItemsData.map(({ id, nfCte, nf_cte, juros, desconto, jurosBase, estornoJurosCalculado }) => ({
+        id,
+        nfCte: nfCte || nf_cte,
+        juros,
+        desconto,
+        jurosBase: Number(jurosBase || 0),
+        estornoJuros: Number(estornoJurosCalculado || 0)
+      }));
+
+      await onConfirm({
+        items: itemsPayload,
+        detalhesTransacao: transacao,
+        contaBancaria: nomeContaFormatado,
+        estornoJuros: totalInterestRefund,
+        seguirComPagamentoEstorno: seguirComPagamento
+      });
+      setShowInterestRefundDecision(false);
+      onClose();
+    } catch {
+      setError('Não foi possível concluir a conciliação.');
+      setShowInterestRefundDecision(false);
+    } finally {
+      setConfirming(false);
+    }
   };
 
   const handleConfirmar = () => {
@@ -239,20 +306,12 @@ export default function ConciliacaoModal({
       return;
     }
 
-    const nomeContaFormatado = `${contaObj.banco} - ${contaObj.agencia}/${contaObj.conta_corrente}`;
-    const itemsPayload = selectedItemsData.map(({ id, juros, desconto, jurosBase }) => ({
-      id,
-      juros,
-      desconto,
-      jurosBase: Number(jurosBase || 0)
-    }));
+    if (totalInterestRefund > 0) {
+      setShowInterestRefundDecision(true);
+      return;
+    }
 
-    onConfirm({
-      items: itemsPayload,
-      detalhesTransacao: transacao,
-      contaBancaria: nomeContaFormatado
-    });
-    onClose();
+    concluirConciliacao(false);
   };
 
   return (
@@ -476,6 +535,11 @@ export default function ConciliacaoModal({
                         />
                       </div>
                     </div>
+                    {Number(d.estornoJurosCalculado || 0) > 0 && (
+                      <div className="mt-2 rounded-md border border-emerald-800/70 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300">
+                        Estorno de juros calculado separadamente: <strong>{formatBRLNumber(d.estornoJurosCalculado)}</strong>
+                      </div>
+                    )}
                   </div>
                 )) : (
                   <p className="mt-6 p-4 text-center text-sm text-gray-500">Selecione os títulos na esquerda para vincular a este recebimento.</p>
@@ -518,7 +582,8 @@ export default function ConciliacaoModal({
                 {selectedIds.size > 0 && saldoOk && (
                   <button
                     onClick={handleConfirmar}
-                    className="rounded-md bg-green-600 px-4 py-3 font-bold text-white shadow-lg transition-all active:scale-95 hover:bg-green-500"
+                    disabled={confirming}
+                    className="rounded-md bg-green-600 px-4 py-3 font-bold text-white shadow-lg transition-all active:scale-95 hover:bg-green-500 disabled:opacity-50"
                   >
                     Confirmar Conciliação
                   </button>
@@ -531,7 +596,8 @@ export default function ConciliacaoModal({
             {selectedIds.size > 0 && saldoOk && (
               <button
                 onClick={handleConfirmar}
-                className="w-full rounded-md bg-green-600 px-4 py-3 font-bold text-white shadow-lg transition-all active:scale-95 hover:bg-green-500"
+                disabled={confirming}
+                className="w-full rounded-md bg-green-600 px-4 py-3 font-bold text-white shadow-lg transition-all active:scale-95 hover:bg-green-500 disabled:opacity-50"
               >
                 Confirmar Conciliação
               </button>
@@ -581,6 +647,46 @@ export default function ConciliacaoModal({
             </div>
           </div>
         )}
+
+        {showInterestRefundDecision && (
+          <div
+            className="fixed inset-0 z-[80] flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-4"
+            onClick={() => !confirming && setShowInterestRefundDecision(false)}
+          >
+            <div
+              className="w-full max-w-md rounded-t-3xl border border-gray-700 bg-gray-900 p-5 text-white shadow-2xl sm:rounded-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-xl font-bold">Estorno de juros</h3>
+              <p className="mt-2 text-sm text-gray-400">
+                O recebimento está conciliado com o valor do extrato. Escolha se deseja pagar o estorno ao cliente agora.
+              </p>
+              <div className="mt-4 rounded-xl border border-emerald-800 bg-emerald-950/30 p-4 text-center">
+                <span className="block text-xs uppercase tracking-wide text-emerald-300">Total de juros estornado</span>
+                <strong className="mt-1 block text-2xl text-emerald-400">{formatBRLNumber(totalInterestRefund)}</strong>
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={confirming}
+                  onClick={() => concluirConciliacao(false)}
+                  className="rounded-md bg-gray-700 px-4 py-3 text-sm font-semibold hover:bg-gray-600 disabled:opacity-50"
+                >
+                  Somente Conciliar
+                </button>
+                <button
+                  type="button"
+                  disabled={confirming}
+                  onClick={() => concluirConciliacao(true)}
+                  className="rounded-md bg-orange-500 px-4 py-3 text-sm font-semibold hover:bg-orange-600 disabled:opacity-50"
+                >
+                  {confirming ? 'Processando...' : 'Seguir com pagamento'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

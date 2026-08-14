@@ -6,6 +6,23 @@ import { getInterAccessToken, enviarPixInter } from "@/app/lib/interService";
 import { getItauAccessToken, enviarPixItau } from "@/app/lib/itauService";
 import { format } from "date-fns"; // Apenas 'format' é necessário
 
+const firstValue = (...values) => values.find((value) => value !== undefined && value !== null && value !== "");
+
+const normalizePixRecipient = (pixResult, fallbackKey, fallbackKeyType) => {
+  const transaction = pixResult?.transacaoPix || pixResult?.transacao || {};
+  const recipient = pixResult?.recebedor || pixResult?.destinatario ||
+    transaction?.recebedor || transaction?.destinatario || transaction?.favorecido || {};
+  const account = recipient?.conta || recipient?.dadosConta || {};
+  const documentFromKey = /cpf|cnpj/i.test(String(fallbackKeyType || "")) ? fallbackKey : null;
+
+  return {
+    nome: firstValue(recipient?.nome, recipient?.nome_favorecido, recipient?.nomeFavorecido, recipient?.titular, transaction?.nomeRecebedor),
+    documento: firstValue(recipient?.documento, recipient?.cpfCnpj, recipient?.cpf_cnpj, recipient?.cnpj, account?.documento, documentFromKey),
+    banco: firstValue(recipient?.banco, recipient?.instituicao, recipient?.nomeInstituicao, recipient?.instituicaoFinanceira, account?.instituicao),
+    identificacao_chave: firstValue(recipient?.identificacao_chave, recipient?.chave, recipient?.chavePix, transaction?.chave, fallbackKey)
+  };
+};
+
 export async function POST(request) {
   try {
     const token = request.headers.get("Authorization")?.split(" ")[1];
@@ -233,6 +250,8 @@ export async function POST(request) {
       );
     }
 
+    const recebedorNormalizado = normalizePixRecipient(resultadoPix, chaveFinal, pix?.tipo);
+
     // 3. Lógica de salvar no banco de dados
     
     // --- INÍCIO DA MODIFICAÇÃO ---
@@ -241,7 +260,7 @@ export async function POST(request) {
     if (skipSave) {
       console.log("[LOG PIX] skipSave=true. Pulando inserção em movimentacoes_caixa.");
       return NextResponse.json(
-        { success: true, pixResult: resultadoPix, duplicatas: duplicatasNormalizadas },
+        { success: true, pixResult: { ...resultadoPix, recebedor: recebedorNormalizado }, duplicatas: duplicatasNormalizadas },
         { status: 201 } // Retorna 201 (Created) pois o PIX foi criado
       );
     }
@@ -317,14 +336,14 @@ export async function POST(request) {
       return NextResponse.json(
         {
           message: `PIX enviado com sucesso (ID: ${pixEndToEndId}), mas falhou ao registrar a movimentação. Por favor, registre manualmente.`,
-          pixResult: resultadoPix,
+          pixResult: { ...resultadoPix, recebedor: recebedorNormalizado },
         },
         { status: 207 }
       );
     }
 
     return NextResponse.json(
-      { success: true, pixResult: resultadoPix },
+      { success: true, pixResult: { ...resultadoPix, recebedor: recebedorNormalizado } },
       { status: 201 }
     );
   } catch (error) {

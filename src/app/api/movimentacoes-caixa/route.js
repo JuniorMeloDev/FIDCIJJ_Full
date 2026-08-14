@@ -92,20 +92,34 @@ export async function GET(request) {
         // Soma tudo que veio ANTES da data de início para compor o saldo inicial do extrato
         let saldoAnterior = 0;
         if (dataInicio) {
-            let saldoQuery = supabase.from('movimentacoes_caixa').select('valor');
+            const pageSize = 1000;
+            let from = 0;
+            let hasMore = true;
+
+            while (hasMore) {
+                let saldoQuery = supabase
+                    .from('movimentacoes_caixa')
+                    .select('id, valor')
+                    .order('id', { ascending: true })
+                    .range(from, from + pageSize - 1);
             
             // O saldo anterior deve respeitar a conta selecionada, mas NÃO os outros filtros (descrição/categoria),
             // para que represente o saldo real disponível na conta.
-            saldoQuery = saldoQuery.lt('data_movimento', dataInicio);
+                saldoQuery = saldoQuery.lt('data_movimento', dataInicio);
             
-            if (conta) {
-                saldoQuery = saldoQuery.eq('conta_bancaria', conta);
-            }
+                if (conta) {
+                    saldoQuery = saldoQuery.eq('conta_bancaria', conta);
+                }
 
-            const { data: saldoData, error: saldoError } = await saldoQuery;
-            
-            if (!saldoError && saldoData) {
-                saldoAnterior = saldoData.reduce((acc, cur) => acc + (cur.valor || 0), 0);
+                const { data: saldoData, error: saldoError } = await saldoQuery;
+                if (saldoError) throw saldoError;
+
+                saldoAnterior += (saldoData || []).reduce(
+                    (acc, cur) => acc + Number(cur.valor || 0),
+                    0
+                );
+                hasMore = (saldoData || []).length === pageSize;
+                from += pageSize;
             }
         }
 

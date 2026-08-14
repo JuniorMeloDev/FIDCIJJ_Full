@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { formatBRLInput, parseBRL, formatDisplayConta } from '@/app/utils/formatters';
+import { formatBRLInput, parseBRL, formatDisplayConta, formatBRLNumber } from '@/app/utils/formatters';
 
 export default function LancamentoModal({
   isOpen,
@@ -9,7 +9,8 @@ export default function LancamentoModal({
   onSave,
   onPixSubmit,
   contasMaster,
-  clienteMasterNome
+  clienteMasterNome,
+  initialData = null
 }) {
   const [tipo, setTipo] = useState('DEBITO');
   const [data, setData] = useState(new Date().toISOString().split('T')[0]);
@@ -32,8 +33,35 @@ export default function LancamentoModal({
     : [];
 
   useEffect(() => {
-    if (isOpen) handleLimpar();
-  }, [isOpen]);
+    if (!isOpen) return;
+
+    if (initialData) {
+      setTipo(initialData.tipo || 'DEBITO');
+      setData(initialData.data || new Date().toISOString().split('T')[0]);
+      setDescricao(initialData.descricao || '');
+      setValor(initialData.valor ? formatBRLNumber(initialData.valor) : '');
+      setContaOrigem(initialData.contaOrigem || '');
+      setContaDestino('');
+      setError('');
+      setPixData({ tipo_chave_pix: 'CPF/CNPJ', chave: '' });
+      setNatureza(initialData.natureza || 'Despesas Administrativas');
+      return;
+    }
+
+    handleLimpar();
+  }, [isOpen, initialData]);
+
+  const handleTipoChange = (nextType) => {
+    setTipo(nextType);
+
+    if (!initialData?.contaOrigem) return;
+    if (nextType === 'PIX') {
+      const initialAccount = contasMaster.find((account) => account.contaBancaria === initialData.contaOrigem);
+      setContaOrigem(initialAccount?.contaCorrente || '');
+    } else if (nextType === 'DEBITO' || nextType === 'CREDITO') {
+      setContaOrigem(initialData.contaOrigem);
+    }
+  };
 
   const handleLimpar = () => {
     setTipo('DEBITO');
@@ -141,7 +169,7 @@ export default function LancamentoModal({
                   name="tipo"
                   value="DEBITO"
                   checked={tipo === 'DEBITO'}
-                  onChange={(e) => setTipo(e.target.value)}
+                  onChange={(e) => handleTipoChange(e.target.value)}
                   className="h-4 w-4 border-gray-600 text-orange-500"
                 />
                 <span className="text-sm">Saída (Débito)</span>
@@ -152,7 +180,7 @@ export default function LancamentoModal({
                   name="tipo"
                   value="CREDITO"
                   checked={tipo === 'CREDITO'}
-                  onChange={(e) => setTipo(e.target.value)}
+                  onChange={(e) => handleTipoChange(e.target.value)}
                   className="h-4 w-4 border-gray-600 text-orange-500"
                 />
                 <span className="text-sm">Entrada (Crédito)</span>
@@ -163,7 +191,7 @@ export default function LancamentoModal({
                   name="tipo"
                   value="TRANSFERENCIA"
                   checked={tipo === 'TRANSFERENCIA'}
-                  onChange={(e) => setTipo(e.target.value)}
+                  onChange={(e) => handleTipoChange(e.target.value)}
                   className="h-4 w-4 border-gray-600 text-orange-500"
                 />
                 <span className="text-sm">Transferência</span>
@@ -174,7 +202,7 @@ export default function LancamentoModal({
                   name="tipo"
                   value="PIX"
                   checked={tipo === 'PIX'}
-                  onChange={(e) => setTipo(e.target.value)}
+                  onChange={(e) => handleTipoChange(e.target.value)}
                   className="h-4 w-4 border-gray-600 text-orange-500"
                 />
                 <span className="text-sm font-bold text-orange-300">Pagamento (PIX)</span>
