@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import {
-    findRepeatedValues,
+    findRepeatedDuplicatas,
     formatDuplicataConflictMessage,
-    queryDuplicatasByIdentifiers,
+    queryDuplicatasByEntries,
 } from '@/app/lib/duplicataGuard';
 
 export async function POST(request) {
@@ -37,10 +37,10 @@ export async function POST(request) {
         });
 
         const identificadoresDuplicata = duplicatasParaSalvar.map((duplicata) => duplicata.nfCte);
-        const repetidosNoEnvio = findRepeatedValues(identificadoresDuplicata);
-        const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
+        const repetidosNoEnvio = findRepeatedDuplicatas(duplicatasParaSalvar);
+        const duplicatasConflitantes = await queryDuplicatasByEntries(
             supabase,
-            identificadoresDuplicata,
+            duplicatasParaSalvar,
             { clienteId: body.clienteId }
         );
 

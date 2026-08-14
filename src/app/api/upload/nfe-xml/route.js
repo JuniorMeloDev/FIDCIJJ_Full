@@ -119,7 +119,7 @@ export async function POST(request) {
       const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
         supabase,
         identificadoresDuplicata,
-        { clienteId: clienteIdEmitente }
+        { clienteId: clienteIdEmitente, sacadoId: sacadoData?.id }
       );
 
       if (duplicatasConflitantes.length > 0) {

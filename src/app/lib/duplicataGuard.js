@@ -49,10 +49,24 @@ export const findRepeatedValues = (values = []) => {
   return [...repeated];
 };
 
+const normalizeSacado = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().toLocaleLowerCase('pt-BR');
+};
+
+export const findRepeatedDuplicatas = (duplicatas = []) => {
+  const keys = duplicatas.map((duplicata) =>
+    `${normalizeDocumentoNumero(duplicata?.nfCte ?? duplicata?.nf_cte)}::${normalizeSacado(
+      duplicata?.sacadoId ?? duplicata?.sacado_id ?? duplicata?.clienteSacado ?? duplicata?.cliente_sacado
+    )}`
+  );
+  return findRepeatedValues(keys).map((key) => key.split('::')[0]);
+};
+
 export const queryDuplicatasByIdentifiers = async (
   supabase,
   identifiers = [],
-  { clienteId = null, excludeOperacaoId = null } = {}
+  { clienteId = null, excludeOperacaoId = null, sacadoId = null } = {}
 ) => {
   const uniqueIdentifiers = [...new Set(identifiers.map(normalizeDocumentoNumero).filter(Boolean))];
 
@@ -62,7 +76,7 @@ export const queryDuplicatasByIdentifiers = async (
 
   let query = supabase
     .from('duplicatas')
-    .select('id, nf_cte, operacao_id, cliente_sacado, data_operacao, status_recebimento, operacao:operacoes!inner(cliente_id)');
+    .select('id, nf_cte, operacao_id, cliente_sacado, sacado_id, data_operacao, status_recebimento, operacao:operacoes!inner(cliente_id)');
 
   if (excludeOperacaoId !== null && excludeOperacaoId !== undefined && excludeOperacaoId !== '') {
     query = query.neq('operacao_id', excludeOperacaoId);
@@ -72,11 +86,36 @@ export const queryDuplicatasByIdentifiers = async (
     query = query.eq('operacao.cliente_id', clienteId);
   }
 
+  if (sacadoId !== null && sacadoId !== undefined && sacadoId !== '') {
+    query = query.eq('sacado_id', sacadoId);
+  }
+
   const { data, error } = await query.in('nf_cte', uniqueIdentifiers);
 
   if (error) throw error;
 
   return data || [];
+};
+
+export const queryDuplicatasByEntries = async (
+  supabase,
+  duplicatas = [],
+  options = {}
+) => {
+  const identifiers = duplicatas.map((item) => item?.nfCte ?? item?.nf_cte);
+  const candidates = await queryDuplicatasByIdentifiers(supabase, identifiers, options);
+
+  return candidates.filter((candidate) => duplicatas.some((item) => {
+    const identifier = normalizeDocumentoNumero(item?.nfCte ?? item?.nf_cte);
+    if (identifier !== normalizeDocumentoNumero(candidate.nf_cte)) return false;
+
+    const requestedId = normalizeSacado(item?.sacadoId ?? item?.sacado_id);
+    const candidateId = normalizeSacado(candidate.sacado_id);
+    if (requestedId && candidateId) return requestedId === candidateId;
+
+    return normalizeSacado(item?.clienteSacado ?? item?.cliente_sacado) ===
+      normalizeSacado(candidate.cliente_sacado);
+  }));
 };
 
 export const formatDuplicataConflictMessage = (conflicts = [], repeatedInPayload = []) => {

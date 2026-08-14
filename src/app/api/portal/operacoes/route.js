@@ -3,9 +3,9 @@ import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { sendOperationSubmittedEmail } from '@/app/lib/emailService';
 import {
-    findRepeatedValues,
+    findRepeatedDuplicatas,
     formatDuplicataConflictMessage,
-    queryDuplicatasByIdentifiers,
+    queryDuplicatasByEntries,
 } from '@/app/lib/duplicataGuard';
 
 async function resolvePortalClient(token) {
@@ -118,10 +118,10 @@ export async function POST(request) {
         );
 
         const identificadoresDuplicata = duplicatasParaSalvar.map((duplicata) => duplicata.nf_cte);
-        const repetidosNoEnvio = findRepeatedValues(identificadoresDuplicata);
-        const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
+        const repetidosNoEnvio = findRepeatedDuplicatas(duplicatasParaSalvar);
+        const duplicatasConflitantes = await queryDuplicatasByEntries(
             supabase,
-            identificadoresDuplicata,
+            duplicatasParaSalvar,
             { clienteId }
         );
 

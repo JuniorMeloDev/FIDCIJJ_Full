@@ -117,11 +117,17 @@ export async function POST(request) {
     const sacadoCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
     const nomeSacadoXml = getVal(sacadoNode, 'xNome');
 
+    const { data: sacadoDb } = await supabase
+        .from('sacados')
+        .select('*')
+        .eq('cnpj', sacadoCnpjCpf)
+        .single();
+
     const identificadoresDuplicata = buildDuplicataIdentifiers(numeroDoc, parcelas);
     const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
       supabase,
       identificadoresDuplicata,
-      { clienteId: clienteIdLogado }
+      { clienteId: clienteIdLogado, sacadoId: sacadoDb?.id }
     );
 
     if (duplicatasConflitantes.length > 0) {
@@ -152,12 +158,6 @@ export async function POST(request) {
 
     // 4. Prepara o retorno (Sacado)
     // Tenta buscar sacado no banco para completar dados (opcional no portal, mas útil)
-    const { data: sacadoDb } = await supabase
-        .from('sacados')
-        .select('*')
-        .eq('cnpj', sacadoCnpjCpf)
-        .single();
-
     return NextResponse.json({
       success: true,
       xmlData: {

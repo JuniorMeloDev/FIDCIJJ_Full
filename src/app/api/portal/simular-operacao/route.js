@@ -139,7 +139,7 @@ const parseXmlAndSimulate = async (xmlText, clienteCnpj, clienteId, tipoOperacao
     const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
         supabase,
         identificadoresDuplicata,
-        { clienteId }
+        { clienteId, sacadoId: sacadoData.id }
     );
 
     if (duplicatasConflitantes.length > 0) {
@@ -222,7 +222,8 @@ export async function POST(request) {
             const identifiers = Array.isArray(result.identificadoresDuplicata)
                 ? result.identificadoresDuplicata
                 : [];
-            const hasRepeatedInBatch = identifiers.some((identifier) => seenIdentifiers.has(identifier));
+            const batchKeys = identifiers.map((identifier) => `${identifier}::${result.sacadoId}`);
+            const hasRepeatedInBatch = batchKeys.some((key) => seenIdentifiers.has(key));
 
             if (hasRepeatedInBatch) {
                 return {
@@ -232,7 +233,7 @@ export async function POST(request) {
                 };
             }
 
-            identifiers.forEach((identifier) => seenIdentifiers.add(identifier));
+            batchKeys.forEach((key) => seenIdentifiers.add(key));
             return result;
         });
 

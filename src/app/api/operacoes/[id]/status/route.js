@@ -6,9 +6,9 @@ import { getInterAccessToken, enviarPixInter } from "@/app/lib/interService";
 import { getItauAccessToken, enviarPixItau } from "@/app/lib/itauService";
 import { format } from 'date-fns';
 import {
-  findRepeatedValues,
+  findRepeatedDuplicatas,
   formatDuplicataConflictMessage,
-  queryDuplicatasByIdentifiers,
+  queryDuplicatasByEntries,
 } from "@/app/lib/duplicataGuard";
 
 // ... imports existing ...
@@ -49,14 +49,14 @@ export async function PUT(request, props) {
     if (status === "Aprovada") {
       const { data: duplicatas } = await supabase
         .from("duplicatas")
-        .select("nf_cte")
+        .select("nf_cte, sacado_id, cliente_sacado")
         .eq("operacao_id", id);
 
       const identificadoresDuplicata = duplicatas?.map((duplicata) => duplicata.nf_cte) || [];
-      const repetidosNaOperacao = findRepeatedValues(identificadoresDuplicata);
-      const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
+      const repetidosNaOperacao = findRepeatedDuplicatas(duplicatas || []);
+      const duplicatasConflitantes = await queryDuplicatasByEntries(
         supabase,
-        identificadoresDuplicata,
+        duplicatas || [],
         { excludeOperacaoId: id, clienteId: operacao.cliente?.id }
       );
 

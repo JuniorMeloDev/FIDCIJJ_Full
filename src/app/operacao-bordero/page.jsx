@@ -469,7 +469,9 @@ export default function OperacaoBorderoPage() {
       );
 
       const identificadoresJaAdicionados = new Set(
-        notasFiscais.flatMap((nf) => getDuplicataIdentifiers(nf.nfCte, nf.parcelasCalculadas))
+        notasFiscais
+          .filter((nf) => String(nf.sacadoId) === String(sacadoSelecionado.id))
+          .flatMap((nf) => getDuplicataIdentifiers(nf.nfCte, nf.parcelasCalculadas))
       );
 
       const repetidosNaTela = novosIdentificadores.filter((id) => identificadoresJaAdicionados.has(id));
@@ -487,6 +489,7 @@ export default function OperacaoBorderoPage() {
         body: JSON.stringify({
           nfCtes: novosIdentificadores,
           clienteId: empresaCedenteId,
+          sacadoId: sacadoSelecionado.id,
         }),
       });
 

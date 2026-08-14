@@ -20,6 +20,7 @@ export async function POST(request) {
     const nfCtes = Array.isArray(body?.nfCtes) ? body.nfCtes : [];
     const clienteId = body?.clienteId ?? null;
     const excludeOperacaoId = body?.excludeOperacaoId ?? null;
+    const sacadoId = body?.sacadoId ?? null;
 
     if (nfCtes.length === 0) {
       return NextResponse.json({ message: 'Nenhum documento informado.' }, { status: 400 });
@@ -36,6 +37,7 @@ export async function POST(request) {
     const conflicts = await queryDuplicatasByIdentifiers(supabase, nfCtes, {
       clienteId,
       excludeOperacaoId,
+      sacadoId,
     });
 
     return NextResponse.json({
