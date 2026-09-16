@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getBoletoValue } from "@/app/lib/boletoValue";
 import { supabase } from "@/app/utils/supabaseClient";
 import jwt from "jsonwebtoken";
 import { gerarPdfBoletoBradesco } from "@/app/lib/bradescoPdfService";
@@ -137,6 +138,7 @@ export async function GET(request, { params }) {
 
       listaBoletos.push({
         ...duplicata,
+        valor_bruto: getBoletoValue(duplicata),
         cedente: duplicata.operacao.cliente,
         sacado,
         linhaDigitavel: dadosBradesco.linhaDigitavel || duplicata.linha_digitavel || "",

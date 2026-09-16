@@ -470,7 +470,10 @@ export default function ConsultasPage() {
 
       const todasDuplicatas = await response.json();
       setTodasDuplicatasOperacao(todasDuplicatas);
-      setDuplicataParaEmitir(duplicataSelecionada);
+      setDuplicataParaEmitir(
+        todasDuplicatas.find((duplicata) => duplicata.id === duplicataSelecionada.id) ||
+          duplicataSelecionada
+      );
       setShowEmitirModal(true); // 👈 abre o modal de escolha
 
     } catch (err) {

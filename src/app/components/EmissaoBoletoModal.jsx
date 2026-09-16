@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { formatBRLNumber, formatDate, formatBRLInput, parseBRL } from '@/app/utils/formatters';
+import { getBoletoValue } from '@/app/lib/boletoValue';
 
 const AbatimentoQuestionModal = ({ isOpen, onClose, onConfirmYes, onConfirmNo }) => {
   if (!isOpen) return null;
@@ -56,8 +57,8 @@ const AbatimentoConfirmationModal = ({ isOpen, onClose, onConfirm, duplicatas, a
         <div className="max-h-48 space-y-2 overflow-y-auto rounded bg-gray-800 p-3">
           {duplicatas.map((dup) => (
             <div key={dup.id} className="flex justify-between border-b border-gray-600 pb-1 text-sm">
-              <span>{dup.nfCte}: <span className="text-gray-400 line-through">{formatBRLNumber(dup.valorBruto)}</span></span>
-              <span className="font-bold text-green-400">{formatBRLNumber(dup.valorBruto - abatimento)}</span>
+              <span>{dup.nfCte}: <span className="text-gray-400 line-through">{formatBRLNumber(getBoletoValue(dup))}</span></span>
+              <span className="font-bold text-green-400">{formatBRLNumber(getBoletoValue(dup) - abatimento)}</span>
             </div>
           ))}
         </div>
@@ -270,7 +271,7 @@ export default function EmissaoBoletoModal({ isOpen, onClose, duplicatas, showNo
                   <ul className="list-inside list-disc pl-4 text-sm text-gray-300">
                     {duplicatas.map((dup) => (
                       <li key={dup.id}>
-                        {dup.nfCte} - Venc: {formatDate(dup.dataVencimento)} - Valor: {formatBRLNumber(dup.valorBruto)}
+                        {dup.nfCte} - Venc: {formatDate(dup.dataVencimento)} - Valor: {formatBRLNumber(getBoletoValue(dup))}
                       </li>
                     ))}
                   </ul>

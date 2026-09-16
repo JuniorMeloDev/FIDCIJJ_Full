@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/utils/supabaseClient";
 import jwt from "jsonwebtoken";
 import { format } from "date-fns";
+import { getBoletoValue } from "@/app/lib/boletoValue";
 
 // Serviços dos bancos
 import {
@@ -99,7 +100,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
 
   // SAFRA (sem alterações)
   if (banco === "safra") {
-     const valorFinal = duplicata.valor_bruto - (abatimento || 0);
+     const valorFinal = getBoletoValue(duplicata) - (abatimento || 0);
      const nossoNumeroUnico = `${duplicata.operacao.id}${duplicata.id}`.slice(-9).padStart(9, "0");
      const agencia = normalizeSafraAgencia(process.env.SAFRA_AGENCIA);
      const conta = normalizeSafraConta(process.env.SAFRA_CONTA);
@@ -157,7 +158,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
 
   // BRADESCO
   if (banco === "bradesco") {
-    const valorFinal = duplicata.valor_bruto - (abatimento || 0);
+    const valorFinal = getBoletoValue(duplicata) - (abatimento || 0);
     if (valorFinal <= 0) throw new Error("Valor com abatimento invalido.");
 
     const pagadorDoc = toOnlyDigits(sacado.cnpj);
@@ -374,7 +375,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
 
   // ITAU (com alteração no texto_seu_numero)
   if (banco === "itau") {
-    const valorComAbatimento = duplicata.valor_bruto - (abatimento || 0);
+    const valorComAbatimento = getBoletoValue(duplicata) - (abatimento || 0);
     if (valorComAbatimento <= 0) throw new Error("Valor com abatimento inválido.");
 
     const baseNossoNumero = duplicata.id.toString().padStart(8, "0");
@@ -451,7 +452,7 @@ async function getDadosParaBoleto(duplicataId, banco, abatimento = 0) {
 
   // INTER (Boleto com Pix V3)
   if (banco === "inter") {
-    const valorComAbatimento = duplicata.valor_bruto - (abatimento || 0);
+    const valorComAbatimento = getBoletoValue(duplicata) - (abatimento || 0);
     if (valorComAbatimento <= 0) throw new Error("Valor com abatimento inválido.");
 
     const cleanCpfCnpj = (sacado.cnpj || "").replace(/\D/g, "");

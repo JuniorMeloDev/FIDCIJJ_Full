@@ -16,7 +16,9 @@ export async function GET(request, { params }) {
             .select(`
                 *,
                 operacao:operacoes (
-                    cliente:clientes ( nome )
+                    *,
+                    cliente:clientes ( nome ),
+                    tipo_operacao:tipos_operacao ( juros_pre_fixado )
                 )
             `)
             .eq('operacao_id', operacaoId)
@@ -31,10 +33,12 @@ export async function GET(request, { params }) {
             empresaCedente: d.operacao?.cliente?.nome,
             clienteSacado: d.cliente_sacado,
             valorBruto: d.valor_bruto,
+            valorJuros: d.valor_juros,
             dataVencimento: d.data_vencimento,
             statusRecebimento: d.status_recebimento,
             linha_digitavel: d.linha_digitavel, // Retornando novo campo
-            banco_emissor_boleto: d.banco_emissor_boleto // Retornando novo campo
+            banco_emissor_boleto: d.banco_emissor_boleto, // Retornando novo campo
+            operacao: d.operacao
         }));
 
         return NextResponse.json(formattedData, { status: 200 });

@@ -50,44 +50,42 @@ export async function GET(request, { params }) {
       throw new Error(`Sacado ID ${boleto.sacado_id} não encontrado.`);
     }
 
-    const clienteId = decoded.cliente_id || decoded?.cliente?.id;
-    let cedente = null;
+    // Contas administrativas normalmente não possuem cliente_id. Nesse caso, o
+    // beneficiário do boleto avulso é o cliente master configurado para o FIDC.
+    // Para contas de cliente, preservamos o próprio cliente como cedente.
+    let clienteId = decoded.cliente_id || decoded?.cliente?.id || null;
 
-    if (clienteId) {
-      const { data: cedenteData, error: cedenteError } = await supabase
-        .from("clientes")
-        .select("*")
-        .eq("id", clienteId)
-        .single();
+    if (!clienteId) {
+      let userQuery = supabase.from("users").select("cliente_id");
+      userQuery = decoded.user_id
+        ? userQuery.eq("id", decoded.user_id)
+        : userQuery.eq("username", decoded.sub);
 
-      if (cedenteError || !cedenteData) {
-        throw new Error("Cadastro do cedente do usuário autenticado não encontrado.");
+      const { data: userData } = await userQuery.maybeSingle();
+      clienteId = userData?.cliente_id || null;
+    }
+
+    if (!clienteId) {
+      const masterClienteId = Number(
+        process.env.MASTER_CLIENT_ID || process.env.NEXT_PUBLIC_MASTER_CLIENT_ID
+      );
+      if (Number.isFinite(masterClienteId) && masterClienteId > 0) {
+        clienteId = masterClienteId;
       }
+    }
 
-      cedente = cedenteData;
-    } else {
-      const username = decoded.sub;
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("cliente_id")
-        .eq("username", username)
-        .single();
+    if (!clienteId) {
+      throw new Error("Cliente master não configurado para emissão do PDF.");
+    }
 
-      if (userError || !userData?.cliente_id) {
-        throw new Error("Usuário autenticado não possui cliente vinculado para emissão do PDF.");
-      }
+    const { data: cedente, error: cedenteError } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("id", clienteId)
+      .single();
 
-      const { data: cedenteData, error: cedenteError } = await supabase
-        .from("clientes")
-        .select("*")
-        .eq("id", userData.cliente_id)
-        .single();
-
-      if (cedenteError || !cedenteData) {
-        throw new Error("Cadastro do cedente do usuário autenticado não encontrado.");
-      }
-
-      cedente = cedenteData;
+    if (cedenteError || !cedente) {
+      throw new Error("Cadastro do cedente para emissão do PDF não encontrado.");
     }
 
     const respostaBanco = boleto.resposta_banco || {};

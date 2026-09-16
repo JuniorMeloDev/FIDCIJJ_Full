@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { gerarPdfBoletoItau, getNossoNumeroDAC } from '@/app/lib/itauPdfService';
+import { getBoletoValue } from '@/app/lib/boletoValue';
 
 // Função HELPER para obter a URL base (mantida da correção anterior)
 const getBaseURL = () => {
@@ -110,6 +111,7 @@ export async function GET(request, { params }) {
 
             listaBoletos.push({
                 ...duplicata,
+                valor_bruto: getBoletoValue(duplicata),
                 cedente: duplicata.operacao.cliente,
                 sacado: sacado,
                 agencia: agencia, // <-- Usa a variável

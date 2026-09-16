@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
 import { gerarPdfBoletoSafra } from '@/app/lib/safraPdfService';
+import { getBoletoValue } from '@/app/lib/boletoValue';
 
 export async function GET(request, { params }) {
     try {
@@ -67,6 +68,7 @@ export async function GET(request, { params }) {
             // Monta o objeto completo para a geração do PDF, incluindo a duplicata inteira.
             listaBoletos.push({
                 ...duplicata,
+                valor_bruto: getBoletoValue(duplicata),
                 cedente: duplicata.operacao.cliente,
                 sacado: sacado,
             });
