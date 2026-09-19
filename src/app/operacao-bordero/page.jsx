@@ -53,6 +53,10 @@ export default function OperacaoBorderoPage() {
   const [isPartialDebit, setIsPartialDebit] = useState(false);
   const [isPartialDebitModalOpen, setIsPartialDebitModalOpen] = useState(false);
   const fileInputRef = useRef(null);
+  const [isXmlBatchModalOpen, setIsXmlBatchModalOpen] = useState(false);
+  const [xmlBatchFiles, setXmlBatchFiles] = useState([]);
+  const [xmlBatchStatus, setXmlBatchStatus] = useState({});
+  const [isProcessingXmlBatch, setIsProcessingXmlBatch] = useState(false);
   const [xmlDataPendente, setXmlDataPendente] = useState(null);
   const [isClienteModalOpen, setIsClienteModalOpen] = useState(false);
   const [isSacadoModalOpen, setIsSacadoModalOpen] = useState(false);
@@ -131,6 +135,14 @@ export default function OperacaoBorderoPage() {
     });
   };
 
+  const sortDocumentosByNumber = (documentos = []) => [...documentos].sort((a, b) =>
+    String(a?.nfCte || "").localeCompare(
+      String(b?.nfCte || ""),
+      "pt-BR",
+      { numeric: true, sensitivity: "base" }
+    )
+  );
+
   const fetchApiData = async (url) => {
     try {
       const res = await fetch(url, { headers: getAuthHeader() });
@@ -187,6 +199,192 @@ export default function OperacaoBorderoPage() {
     fetchApiData(`/api/cadastros/sacados/search?nome=${query}`);
 
   // --- ATUALIZAÇÃO IMPORTANTE AQUI ---
+  const handleXmlBatchSelection = (event) => {
+    const selected = Array.from(event.target.files || []);
+    const xmlFiles = selected.filter((file) => file.name.toLowerCase().endsWith(".xml"));
+    if (xmlFiles.length !== selected.length) {
+      showNotification("Apenas arquivos XML são permitidos. Os demais foram ignorados.", "error");
+    }
+
+    if (xmlFiles.length === 1 && selected.length === 1 && xmlBatchFiles.length === 0) {
+      setIsXmlBatchModalOpen(false);
+      setXmlBatchFiles([]);
+      setXmlBatchStatus({});
+      handleXmlUpload(event);
+      return;
+    }
+
+    setXmlBatchFiles((current) => {
+      const existing = new Set(current.map((file) => `${file.name}-${file.size}-${file.lastModified}`));
+      return [...current, ...xmlFiles.filter((file) => !existing.has(`${file.name}-${file.size}-${file.lastModified}`))];
+    });
+    event.target.value = "";
+  };
+
+  const removeXmlBatchFile = (file) => {
+    const key = `${file.name}-${file.size}-${file.lastModified}`;
+    setXmlBatchFiles((current) => current.filter(
+      (item) => `${item.name}-${item.size}-${item.lastModified}` !== key
+    ));
+    setXmlBatchStatus((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const closeXmlBatchModal = () => {
+    if (isProcessingXmlBatch) return;
+    setIsXmlBatchModalOpen(false);
+    setXmlBatchFiles([]);
+    setXmlBatchStatus({});
+  };
+
+  const buildNotaFromXml = async (data, currentNotas, batchCedenteId) => {
+    if (!data.emitenteExiste || !data.emitente?.id) {
+      throw new Error(`Cedente “${data.emitente?.nome || "não identificado"}” não está cadastrado.`);
+    }
+    if (!data.sacadoExiste || !data.sacado?.id) {
+      throw new Error(`Sacado “${data.sacado?.nome || "não identificado"}” não está cadastrado.`);
+    }
+    if (batchCedenteId && String(batchCedenteId) !== String(data.emitente.id)) {
+      throw new Error("O XML pertence a outro cedente. Use apenas documentos do mesmo cedente no borderô.");
+    }
+
+    const prazos = (data.parcelas || []).map((parcela) => {
+      const emissao = new Date(`${data.dataEmissao}T00:00:00`);
+      const vencimento = new Date(`${parcela.dataVencimento}T00:00:00`);
+      return Math.ceil((vencimento - emissao) / (1000 * 60 * 60 * 24));
+    });
+    const condicaoPadrao = data.sacado.condicoes_pagamento?.[0];
+    const prazosString = prazos.length > 0 ? prazos.join("/") : (condicaoPadrao?.prazos || "");
+    const quantidadeParcelas = data.parcelas?.length || Number(condicaoPadrao?.parcelas) || 1;
+    const nfCte = data.numeroNf || data.numeroCte || "";
+
+    const calculoResponse = await fetch(`/api/operacoes/calcular-juros`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeader() },
+      body: JSON.stringify({
+        dataOperacao,
+        tipoOperacaoId: parseInt(tipoOperacaoId),
+        dataNf: data.dataEmissao?.split("T")[0],
+        valorNf: Number(data.valorTotal),
+        parcelas: quantidadeParcelas,
+        prazos: prazosString,
+        peso: null,
+      }),
+    });
+    const calculo = await calculoResponse.json();
+    if (!calculoResponse.ok) throw new Error(calculo.message || "Falha ao calcular os juros.");
+
+    const identifiers = getDuplicataIdentifiers(nfCte, calculo.parcelasCalculadas);
+    const identifiersOnScreen = new Set(
+      currentNotas
+        .filter((nf) => String(nf.sacadoId) === String(data.sacado.id))
+        .flatMap((nf) => getDuplicataIdentifiers(nf.nfCte, nf.parcelasCalculadas))
+    );
+    const repeated = identifiers.filter((identifier) => identifiersOnScreen.has(identifier));
+    if (repeated.length > 0) throw new Error(`Documento já adicionado no borderô: ${repeated.join(", ")}.`);
+
+    const validationResponse = await fetch('/api/duplicatas/verificar-operacao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ nfCtes: identifiers, clienteId: data.emitente.id, sacadoId: data.sacado.id }),
+    });
+    const validation = await validationResponse.json();
+    if (!validationResponse.ok || !validation.ok) {
+      throw new Error(validation.message || "Esta NF/CT-e já foi operada.");
+    }
+
+    return {
+      id: `${Date.now()}-${nfCte}-${Math.random()}`,
+      nfCte,
+      dataNf: data.dataEmissao?.split("T")[0] || "",
+      valorNf: Number(data.valorTotal),
+      clienteSacado: data.sacado.nome,
+      sacadoId: data.sacado.id,
+      parcelas: quantidadeParcelas,
+      prazos: prazosString,
+      peso: "",
+      tipoDocumento: data.tipo || null,
+      jurosCalculado: calculo.totalJuros,
+      valorLiquidoCalculado: calculo.valorLiquido,
+      parcelasCalculadas: calculo.parcelasCalculadas,
+    };
+  };
+
+  const processXmlBatch = async (filesToProcess = xmlBatchFiles) => {
+    if (!tipoOperacaoId || !dataOperacao) {
+      showNotification("Selecione o tipo e a data da operação antes de importar os XMLs.", "error");
+      return;
+    }
+    if (filesToProcess.length === 0) {
+      showNotification("Selecione ao menos um arquivo XML.", "error");
+      return;
+    }
+
+    setIsProcessingXmlBatch(true);
+    let workingNotas = [...notasFiscais];
+    let imported = 0;
+    let firstCedente = cedenteSelecionado;
+    let batchCedenteId = empresaCedenteId;
+
+    const orderedFiles = [...filesToProcess].sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-BR", { numeric: true, sensitivity: "base" })
+    );
+
+    for (const file of orderedFiles) {
+      const key = `${file.name}-${file.size}-${file.lastModified}`;
+      setXmlBatchStatus((current) => ({ ...current, [key]: { status: "processing", message: "Processando..." } }));
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch(`/api/upload/nfe-xml`, {
+          method: "POST",
+          headers: { ...getAuthHeader() },
+          body: formData,
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Falha ao ler o arquivo XML.");
+
+        if (data.emitenteExiste && data.emitente?.id) {
+          const detailsResponse = await fetch(`/api/cadastros/clientes/${data.emitente.id}`, { headers: getAuthHeader() });
+          if (detailsResponse.ok) {
+            const details = await detailsResponse.json();
+            data.emitente = { ...data.emitente, ...details, nome: details.nome };
+          }
+        }
+
+        const nota = await buildNotaFromXml(data, workingNotas, batchCedenteId);
+        workingNotas.push(nota);
+        imported += 1;
+        batchCedenteId = data.emitente.id;
+        firstCedente ||= data.emitente;
+        setXmlBatchStatus((current) => ({ ...current, [key]: { status: "success", message: "Adicionado ao borderô." } }));
+      } catch (error) {
+        setXmlBatchStatus((current) => ({ ...current, [key]: { status: "error", message: error.message } }));
+      }
+    }
+
+    setNotasFiscais(sortDocumentosByNumber(workingNotas));
+    if (firstCedente && imported > 0) {
+      setEmpresaCedente(firstCedente.nome || "");
+      setEmpresaCedenteId(firstCedente.id);
+      setCedenteRamo(firstCedente.ramo_de_atividade || "");
+      setCedenteSelecionado(firstCedente);
+    }
+    setIsProcessingXmlBatch(false);
+    setIsXmlBatchModalOpen(false);
+    setXmlBatchFiles([]);
+    setXmlBatchStatus({});
+    showNotification(
+      imported === filesToProcess.length
+        ? `${imported} XML(s) importado(s) com sucesso!`
+        : `${imported} de ${filesToProcess.length} XML(s) foram importados. Os demais apresentaram erro.`,
+      imported === filesToProcess.length ? "success" : "error"
+    );
+  };
+
   const handleXmlUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -1107,6 +1305,74 @@ export default function OperacaoBorderoPage() {
         clienteId={empresaCedenteId} 
       />
 
+      {isXmlBatchModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-3xl rounded-xl border border-gray-700 bg-gray-800 p-6 text-white shadow-2xl"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold">Importar XMLs</h2>
+                <p className="mt-1 text-sm text-gray-300">
+                  Selecione vários arquivos NF-e/CT-e para processá-los no mesmo borderô.
+                </p>
+              </div>
+              <button type="button" onClick={closeXmlBatchModal} disabled={isProcessingXmlBatch}
+                className="text-2xl text-gray-400 hover:text-white disabled:opacity-50" aria-label="Fechar">
+                ×
+              </button>
+            </div>
+
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isProcessingXmlBatch}
+              className="w-full rounded-lg border-2 border-dashed border-gray-600 px-6 py-8 text-center text-gray-300 transition hover:border-orange-400 hover:text-orange-300 disabled:cursor-not-allowed disabled:opacity-60">
+              <span className="block text-lg font-semibold">Selecionar arquivos XML</span>
+              <span className="mt-1 block text-sm">Você pode escolher vários arquivos de uma vez</span>
+            </button>
+            <input type="file" accept=".xml,text/xml,application/xml" multiple ref={fileInputRef}
+              onChange={handleXmlBatchSelection} className="hidden" />
+
+            <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
+              {xmlBatchFiles.length === 0 ? (
+                <p className="py-5 text-center text-sm text-gray-400">Nenhum arquivo selecionado.</p>
+              ) : xmlBatchFiles.map((file) => {
+                const key = `${file.name}-${file.size}-${file.lastModified}`;
+                const check = xmlBatchStatus[key];
+                return (
+                  <div key={key} className="flex items-center justify-between gap-3 rounded-lg bg-gray-700/70 p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{file.name}</p>
+                      <p className={`mt-1 text-xs ${check?.status === "error" ? "text-red-300" : check?.status === "success" ? "text-green-300" : "text-gray-400"}`}>
+                        {check?.message || `${(file.size / 1024).toFixed(1)} KB`}
+                      </p>
+                    </div>
+                    {!isProcessingXmlBatch && check?.status !== "success" && (
+                      <button type="button" onClick={() => removeXmlBatchFile(file)}
+                        className="rounded px-2 py-1 text-sm text-red-300 hover:bg-red-900/40">
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={closeXmlBatchModal} disabled={isProcessingXmlBatch}
+                className="rounded-md bg-gray-600 px-5 py-2 font-semibold hover:bg-gray-500 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={() => processXmlBatch()}
+                disabled={isProcessingXmlBatch || xmlBatchFiles.length === 0}
+                className="rounded-md bg-orange-500 px-5 py-2 font-semibold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-gray-600">
+                {isProcessingXmlBatch ? "Processando..." : `Processar ${xmlBatchFiles.length} XML(s)`}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       <main className="h-full overflow-y-auto p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
         <motion.header
           className="mb-4 flex justify-between items-center border-b-2 border-orange-500 pb-4"
@@ -1120,18 +1386,11 @@ export default function OperacaoBorderoPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <input
-              type="file"
-              accept=".xml"
-              ref={fileInputRef}
-              onChange={handleXmlUpload}
-              style={{ display: "none" }}
-            />
             <button
-              onClick={() => fileInputRef.current.click()}
+              onClick={() => setIsXmlBatchModalOpen(true)}
               className="bg-gray-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-gray-600 transition"
             >
-              Importar NF/CT-e (XML)
+              Importar NF/CT-e (XMLs)
             </button>
           </div>
         </motion.header>
