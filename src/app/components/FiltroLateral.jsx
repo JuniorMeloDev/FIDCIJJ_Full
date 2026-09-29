@@ -12,7 +12,9 @@ export default function FiltroLateral({
     contasMaster, 
     onOfxUpload, 
     ofxExtrato,
-    onOfxClear 
+    onOfxClear,
+    onConciliar,
+    podeConciliar = false
 }) {
 
     const fileInputRef = useRef(null); 
@@ -124,6 +126,15 @@ export default function FiltroLateral({
                             <FaUpload /> Carregar Arquivo OFX
                         </button>
                     </div>
+
+                    <button
+                        type="button"
+                        onClick={onConciliar}
+                        disabled={!podeConciliar}
+                        className="w-full rounded-md bg-green-700 px-3 py-2 font-semibold text-white transition hover:bg-green-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        Conciliar
+                    </button>
 
                     <div className="border-t border-gray-600 my-4"></div>
                     <p className="text-sm font-semibold text-gray-300">Filtros Internos</p>

@@ -567,6 +567,7 @@ export default function FluxoDeCaixaPage() {
   // NOVOS STATES PARA O MODAL DE OFX
   const [isOfxModalOpen, setIsOfxModalOpen] = useState(false);
   const [ofxData, setOfxData] = useState([]);
+  const [contaConciliacaoId, setContaConciliacaoId] = useState('');
   const [itemOfxParaCriar, setItemOfxParaCriar] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -606,7 +607,7 @@ export default function FluxoDeCaixaPage() {
       }));
 
       setOfxData(normalized);
-      setIsOfxModalOpen(true);
+      setContaConciliacaoId('');
       setFilters((prev) => ({ ...prev, contaExterna: "" }));
     } catch (err) {
       setOfxError(err.message || "Erro ao carregar OFX.");
@@ -1042,6 +1043,18 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
   };
 
   const handleAbrirConciliacaoOfxDaApi = () => {
+    if (!filters.contaExterna) {
+      if (!ofxData.length) return;
+      setContaConciliacaoId('');
+      setIsOfxModalOpen(true);
+      return;
+    }
+    const contaInfo = parseContaExterna(filters.contaExterna);
+    const conta = contasMaster.find((item) =>
+      String(item.agencia) === String(contaInfo.agencia) &&
+      String(item.contaCorrente) === String(contaInfo.conta)
+    );
+    setContaConciliacaoId(conta?.id || '');
     const normalizedApiExtrato = (interExtrato?.transacoes || [])
       .filter((t) => {
         const transactionDate = String(
@@ -1716,6 +1729,7 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
         refreshKey={refreshKey}
         initialDataInicio={filters.dataInicio}
         initialDataFim={filters.dataFim}
+        initialContaId={contaConciliacaoId}
         apiDailyBalances={interExtrato?.dailyBalances || {}}
       />
 
@@ -1848,6 +1862,8 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
               onOfxUpload={handleOfxUpload}
               ofxExtrato={ofxExtrato}
               onOfxClear={() => setOfxData([])}
+              onConciliar={handleAbrirConciliacaoOfxDaApi}
+              podeConciliar={filters.contaExterna ? Boolean(interExtrato?.transacoes?.length) : ofxData.length > 0}
             />
           </div>
 
