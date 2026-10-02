@@ -24,7 +24,7 @@ const parseXmlAndSimulate = async (xmlText, clienteCnpj, clienteId, tipoOperacao
     let numeroDoc, valorTotal, parcelas = [], emitNode, sacadoNode, dataEmissao, prazosString, chaveNfe;
 
     // Tenta ler como NF-e
-    const infNFe = parsedXml?.NFe?.infNFe?.[0] || parsedXml?.nfeProc?.[0]?.NFe?.[0]?.infNFe?.[0];
+    const infNFe = parsedXml?.NFe?.infNFe?.[0] || parsedXml?.nfeProc?.NFe?.[0]?.infNFe?.[0];
     
     if (infNFe) {
         chaveNfe = infNFe.$?.Id.replace('NFe', '');

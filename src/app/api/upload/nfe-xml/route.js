@@ -35,7 +35,7 @@ export async function POST(request) {
     let numeroDoc, valorTotal, parcelas = [], emitNode, sacadoNode, dataEmissao, chaveNfe;
 
     // --- NF-e ---
-    const infNFe = parsedXml?.NFe?.infNFe?.[0] || parsedXml?.nfeProc?.[0]?.NFe?.[0]?.infNFe?.[0];
+    const infNFe = parsedXml?.NFe?.infNFe?.[0] || parsedXml?.nfeProc?.NFe?.[0]?.infNFe?.[0];
     if (infNFe) {
       chaveNfe = infNFe.$?.Id.replace('NFe', '');
       numeroDoc = getVal(infNFe, 'ide.nNF');

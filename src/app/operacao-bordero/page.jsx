@@ -206,14 +206,6 @@ export default function OperacaoBorderoPage() {
       showNotification("Apenas arquivos XML são permitidos. Os demais foram ignorados.", "error");
     }
 
-    if (xmlFiles.length === 1 && selected.length === 1 && xmlBatchFiles.length === 0) {
-      setIsXmlBatchModalOpen(false);
-      setXmlBatchFiles([]);
-      setXmlBatchStatus({});
-      handleXmlUpload(event);
-      return;
-    }
-
     setXmlBatchFiles((current) => {
       const existing = new Set(current.map((file) => `${file.name}-${file.size}-${file.lastModified}`));
       return [...current, ...xmlFiles.filter((file) => !existing.has(`${file.name}-${file.size}-${file.lastModified}`))];
@@ -1325,6 +1317,21 @@ export default function OperacaoBorderoPage() {
               </button>
             </div>
 
+            <div className="mb-4">
+              <label htmlFor="xml-tipo-operacao" className="block text-sm font-medium text-gray-300">
+                Tipo de Operação
+              </label>
+              <select id="xml-tipo-operacao" value={tipoOperacaoId}
+                onChange={(event) => setTipoOperacaoId(event.target.value)}
+                disabled={isProcessingXmlBatch}
+                className="mt-1 w-full rounded-md border border-gray-600 bg-gray-700 p-2 text-white disabled:opacity-50">
+                <option value="">Selecione...</option>
+                {tiposOperacao.map((op) => (
+                  <option key={op.id} value={op.id}>{op.nome}</option>
+                ))}
+              </select>
+            </div>
+
             <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isProcessingXmlBatch}
               className="w-full rounded-lg border-2 border-dashed border-gray-600 px-6 py-8 text-center text-gray-300 transition hover:border-orange-400 hover:text-orange-300 disabled:cursor-not-allowed disabled:opacity-60">
               <span className="block text-lg font-semibold">Selecionar arquivos XML</span>
@@ -1364,7 +1371,7 @@ export default function OperacaoBorderoPage() {
                 Cancelar
               </button>
               <button type="button" onClick={() => processXmlBatch()}
-                disabled={isProcessingXmlBatch || xmlBatchFiles.length === 0}
+                disabled={isProcessingXmlBatch || xmlBatchFiles.length === 0 || !tipoOperacaoId || !dataOperacao}
                 className="rounded-md bg-orange-500 px-5 py-2 font-semibold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-gray-600">
                 {isProcessingXmlBatch ? "Processando..." : `Processar ${xmlBatchFiles.length} XML(s)`}
               </button>
