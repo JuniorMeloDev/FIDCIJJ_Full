@@ -506,6 +506,7 @@ export default function FluxoDeCaixaPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [interCurrentPage, setInterCurrentPage] = useState(1);
   const [contasMaster, setContasMaster] = useState([]);
+  const [contasInvestimento, setContasInvestimento] = useState([]);
   const [clienteMasterInfo, setClienteMasterInfo] = useState({
     nome: "",
     cnpj: "",
@@ -870,14 +871,25 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
     const fetchStaticData = async () => {
       try {
         const headers = getAuthHeader();
-        const [masterContasResponse, clientesResponse] = await Promise.all([
+        const [masterContasResponse, clientesResponse, investimentosResponse] = await Promise.all([
           fetch(`/api/cadastros/contas/master`, { headers }),
           fetch(`/api/cadastros/clientes`, { headers }),
+          fetch(`/api/investimentos/contas`, { headers }),
         ]);
         if (!masterContasResponse.ok || !clientesResponse.ok) return;
 
         const masterContasData = await masterContasResponse.json();
         const clientesData = await clientesResponse.json();
+        if (investimentosResponse.ok) {
+          const investimentosData = await investimentosResponse.json();
+          setContasInvestimento(investimentosData.filter((c) => c.ativa).map((c) => ({
+            id: `investimento-${c.id}`,
+            contaBancaria: c.conta ? `${c.banco} - ${c.agencia || ''}/${c.conta}` : `${c.banco} - ${c.nome}`,
+            nome: c.nome,
+          })));
+        } else {
+          showNotification('Não foi possível carregar as contas de investimento.', 'error');
+        }
 
         setContasMaster(
           masterContasData.map((c) => ({
@@ -1691,6 +1703,7 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
         onSave={handleSaveLancamento}
         onPixSubmit={handleOpenPixConfirm}
         contasMaster={contasMaster}
+        contasInvestimento={contasInvestimento}
         clienteMasterNome={clienteMasterInfo.nome}
         initialData={lancamentoInicial}
       />

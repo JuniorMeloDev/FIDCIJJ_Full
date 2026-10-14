@@ -9,6 +9,7 @@ export default function LancamentoModal({
   onSave,
   onPixSubmit,
   contasMaster,
+  contasInvestimento = [],
   clienteMasterNome,
   initialData = null
 }) {
@@ -21,7 +22,9 @@ export default function LancamentoModal({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [pixData, setPixData] = useState({ tipo_chave_pix: 'CPF/CNPJ', chave: '' });
-  const [natureza, setNatureza] = useState('Despesas Administrativas');
+  const natureza = 'Transferência Entre Contas';
+  const contasLancamento = [...(contasMaster || []), ...contasInvestimento]
+    .filter((conta, index, contas) => contas.findIndex((c) => c.contaBancaria === conta.contaBancaria) === index);
 
   const contasPix = Array.isArray(contasMaster)
     ? contasMaster.filter(
@@ -44,7 +47,6 @@ export default function LancamentoModal({
       setContaDestino('');
       setError('');
       setPixData({ tipo_chave_pix: 'CPF/CNPJ', chave: '' });
-      setNatureza(initialData.natureza || 'Despesas Administrativas');
       return;
     }
 
@@ -72,7 +74,6 @@ export default function LancamentoModal({
     setContaDestino('');
     setError('');
     setPixData({ tipo_chave_pix: 'CPF/CNPJ', chave: '' });
-    setNatureza('Despesas Administrativas');
   };
 
   if (!isOpen) return null;
@@ -134,7 +135,7 @@ export default function LancamentoModal({
       contaDestino: tipo === 'TRANSFERENCIA' ? contaDestinoParaSalvar : null,
       empresaDestino: tipo === 'TRANSFERENCIA' ? clienteMasterNome : null,
       isDespesa: false,
-      natureza: tipo === 'DEBITO' ? natureza : null
+      natureza
     };
 
     const success = await onSave(payload);
@@ -261,10 +262,10 @@ export default function LancamentoModal({
                 className="mt-1 block w-full rounded-md border border-gray-600 bg-gray-700 p-3 shadow-sm"
               >
                 <option value="">Selecione...</option>
-                {Array.isArray(contasMaster) &&
-                  contasMaster.map((c) => (
+                {Array.isArray(contasLancamento) &&
+                  contasLancamento.map((c) => (
                     <option key={c.contaBancaria} value={c.contaBancaria}>
-                      {formatDisplayConta(c.contaBancaria)}
+                      {c.nome ? `${c.nome} (Investimento) - ${formatDisplayConta(c.contaBancaria)}` : formatDisplayConta(c.contaBancaria)}
                     </option>
                   ))}
               </select>
@@ -284,10 +285,10 @@ export default function LancamentoModal({
                   className="mt-1 block w-full rounded-md border border-gray-600 bg-gray-700 p-3 shadow-sm"
                 >
                   <option value="">Selecione...</option>
-                  {Array.isArray(contasMaster) &&
-                    contasMaster.map((c) => (
+                  {Array.isArray(contasLancamento) &&
+                    contasLancamento.map((c) => (
                       <option key={c.contaBancaria + '-origem'} value={c.contaBancaria}>
-                        {formatDisplayConta(c.contaBancaria)}
+                        {c.nome ? `${c.nome} (Investimento) - ${formatDisplayConta(c.contaBancaria)}` : formatDisplayConta(c.contaBancaria)}
                       </option>
                     ))}
                 </select>
@@ -303,10 +304,10 @@ export default function LancamentoModal({
                   className="mt-1 block w-full rounded-md border border-gray-600 bg-gray-700 p-3 shadow-sm"
                 >
                   <option value="">Selecione...</option>
-                  {Array.isArray(contasMaster) &&
-                    contasMaster.map((c) => (
+                  {Array.isArray(contasLancamento) &&
+                    contasLancamento.map((c) => (
                       <option key={c.contaBancaria + '-destino'} value={c.contaBancaria}>
-                        {formatDisplayConta(c.contaBancaria)}
+                        {c.nome ? `${c.nome} (Investimento) - ${formatDisplayConta(c.contaBancaria)}` : formatDisplayConta(c.contaBancaria)}
                       </option>
                     ))}
                 </select>
@@ -329,7 +330,7 @@ export default function LancamentoModal({
                   <option value="">Selecione uma conta</option>
                   {contasPix.map((c) => (
                     <option key={c.id} value={c.contaCorrente}>
-                      {formatDisplayConta(c.contaBancaria)}
+                      {c.nome ? `${c.nome} (Investimento) - ${formatDisplayConta(c.contaBancaria)}` : formatDisplayConta(c.contaBancaria)}
                     </option>
                   ))}
                 </select>
@@ -360,27 +361,6 @@ export default function LancamentoModal({
                   />
                 </div>
               </div>
-            </div>
-          )}
-
-          {(tipo === 'DEBITO' || tipo === 'PIX') && (
-            <div className="mt-2 border-t border-gray-700 pt-4">
-              <label className="mb-1 block text-sm font-medium text-orange-400">Natureza (Classificação DRE)</label>
-              <select
-                value={natureza}
-                onChange={(e) => setNatureza(e.target.value)}
-                className="w-full rounded-md border border-gray-600 bg-gray-700 p-3 text-white"
-              >
-                <option value="Despesas Administrativas">Despesas Administrativas (Salários, Aluguel, etc)</option>
-                <option value="Despesas Financeiras">Despesas Financeiras (Tarifas, Juros, PIX)</option>
-                <option value="Despesas Tributárias">Despesas Tributárias (Impostos)</option>
-                <option value="Serviços de Terceiros (FIDC)">Serviços de Terceiros (Consultoria, Serasa)</option>
-                <option value="Aquisição de Direitos Creditórios">Aquisição de Direitos Creditórios (Compra de Carteira)</option>
-                <option value="Distribuição de Lucros / Amortização">Distribuição de Lucros / Amortização</option>
-                <option value="Transferência Entre Contas">Transferência Entre Contas</option>
-                <option value="Empréstimos / Mútuos">Empréstimos / Mútuos</option>
-                <option value="Outras Despesas">Outras Despesas</option>
-              </select>
             </div>
           )}
 

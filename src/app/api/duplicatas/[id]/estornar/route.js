@@ -28,8 +28,7 @@ export async function POST(request, { params }) {
 
         if (deleteError) {
             console.error('Erro ao excluir movimentação do fluxo de caixa:', deleteError);
-            // Mesmo se falhar aqui, a duplicata já foi estornada (passo 1). 
-            // Idealmente seria uma transação, mas no Supabase via cliente JS fazemos sequencial.
+            throw new Error('A duplicata foi estornada, mas não foi possível remover o lançamento do fluxo de caixa. Tente novamente.');
         }
         // -------------------------------
 

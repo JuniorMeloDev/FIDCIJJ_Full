@@ -19,24 +19,21 @@ export async function POST(request) {
                     valor: -Math.abs(body.valor),
                     conta_bancaria: body.contaOrigem,
                     empresa_associada: body.empresaAssociada,
-                    // ALTERAÇÃO: Removemos a dependência de body.isDespesa
-                    categoria: 'Movimentação Avulsa', 
-                    natureza: body.natureza || 'Outras Despesas'
+                    categoria: 'Transferência',
+                    natureza: 'Transferência Entre Contas'
                 });
                 break;
             case 'CREDITO':
-                // ... (igual ao anterior)
                 movements.push({
                     data_movimento: body.data,
                     descricao: body.descricao,
                     valor: Math.abs(body.valor),
                     conta_bancaria: body.contaOrigem,
                     empresa_associada: body.empresaAssociada,
-                    categoria: 'Receita Avulsa',
-                    natureza: 'Receitas Financeiras'
+                    categoria: 'Transferência',
+                    natureza: 'Transferência Entre Contas'
                 });
                 break;
-            // ... (TRANSFERENCIA igual)
             case 'TRANSFERENCIA':
                 movements.push({
                     data_movimento: body.data,
