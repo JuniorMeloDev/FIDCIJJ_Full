@@ -24,6 +24,10 @@ export async function PUT(request, { params }) {
 
     if (registroAtualError) throw registroAtualError;
 
+    if (registroAtual?.origem === "fluxo_caixa") {
+      return NextResponse.json({ message: "Edite este lançamento no Fluxo de Caixa." }, { status: 400 });
+    }
+
     if (body.tipo === "transferencia" || registroAtual?.origem === "transferencia") {
       return NextResponse.json(
         { message: "Transferências devem ser excluídas e recriadas para manter a integridade do saldo." },
@@ -90,6 +94,10 @@ export async function DELETE(request, { params }) {
       .single();
 
     if (registroAtualError) throw registroAtualError;
+
+    if (registroAtual?.origem === "fluxo_caixa") {
+      return NextResponse.json({ message: "Exclua este lançamento no Fluxo de Caixa." }, { status: 400 });
+    }
 
     let idsParaExcluir = [id];
 

@@ -276,8 +276,8 @@ export function buildInvestmentDashboard({
 
   const patrimonioInvestido = roundMoney(
     movimentacoesAteDataFim
-      .filter((item) => item.tipo === "aporte" && item.origem !== "transferencia")
-      .reduce((acc, item) => acc + Math.abs(toNumber(item.valor)), 0)
+      .filter((item) => item.tipo === "aporte" || item.tipo === "resgate")
+      .reduce((acc, item) => acc + toNumber(item.valor), 0)
   );
 
   const saldoDisponivel = roundMoney(

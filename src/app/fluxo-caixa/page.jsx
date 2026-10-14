@@ -871,22 +871,28 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
     const fetchStaticData = async () => {
       try {
         const headers = getAuthHeader();
-        const [masterContasResponse, clientesResponse, investimentosResponse] = await Promise.all([
+        const [masterContasResponse, clientesResponse, investimentosResponse, aplicacoesResponse] = await Promise.all([
           fetch(`/api/cadastros/contas/master`, { headers }),
           fetch(`/api/cadastros/clientes`, { headers }),
           fetch(`/api/investimentos/contas`, { headers }),
+          fetch(`/api/investimentos/aplicacoes`, { headers }),
         ]);
         if (!masterContasResponse.ok || !clientesResponse.ok) return;
 
         const masterContasData = await masterContasResponse.json();
         const clientesData = await clientesResponse.json();
-        if (investimentosResponse.ok) {
+        if (investimentosResponse.ok && aplicacoesResponse.ok) {
           const investimentosData = await investimentosResponse.json();
-          setContasInvestimento(investimentosData.filter((c) => c.ativa).map((c) => ({
-            id: `investimento-${c.id}`,
-            contaBancaria: c.conta ? `${c.banco} - ${c.agencia || ''}/${c.conta}` : `${c.banco} - ${c.nome}`,
-            nome: c.nome,
-          })));
+          const aplicacoesData = await aplicacoesResponse.json();
+          setContasInvestimento(aplicacoesData.filter((a) => a.ativa).flatMap((a) => {
+            const c = investimentosData.find((conta) => conta.id === a.conta_id && conta.ativa);
+            return c ? [{
+              id: `investimento-${a.id}`,
+              aplicacaoId: a.id,
+              contaBancaria: c.conta ? `${c.banco} - ${c.agencia || ''}/${c.conta}` : `${c.banco} - ${c.nome}`,
+              nome: `${c.nome} / ${a.nome}`,
+            }] : [];
+          }));
         } else {
           showNotification('Não foi possível carregar as contas de investimento.', 'error');
         }
@@ -1338,7 +1344,10 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify(payload),
       });
-      if (!response.ok) throw new Error("Falha ao salvar lançamento.");
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.message || "Falha ao salvar lançamento.");
+      }
 
       showNotification("Lançamento salvo com sucesso!", "success");
       refreshFluxoCaixaView(filters, sortConfig);

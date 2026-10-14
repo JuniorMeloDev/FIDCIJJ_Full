@@ -24,7 +24,8 @@ export default function LancamentoModal({
   const [pixData, setPixData] = useState({ tipo_chave_pix: 'CPF/CNPJ', chave: '' });
   const natureza = 'Transferência Entre Contas';
   const contasLancamento = [...(contasMaster || []), ...contasInvestimento]
-    .filter((conta, index, contas) => contas.findIndex((c) => c.contaBancaria === conta.contaBancaria) === index);
+    .map((conta) => ({ ...conta, selecao: conta.aplicacaoId ? `investimento:${conta.aplicacaoId}` : conta.contaBancaria }))
+    .filter((conta, index, contas) => contas.findIndex((c) => c.selecao === conta.selecao) === index);
 
   const contasPix = Array.isArray(contasMaster)
     ? contasMaster.filter(
@@ -89,8 +90,10 @@ export default function LancamentoModal({
 
     const contaNoDb = process.env.NEXT_PUBLIC_ITAU_CONTA_DB;
     const contaDisplay = process.env.NEXT_PUBLIC_ITAU_CONTA_DISPLAY;
-    let contaOrigemParaSalvar = contaOrigem;
-    let contaDestinoParaSalvar = contaDestino;
+    const origemSelecionada = contasLancamento.find((c) => c.selecao === contaOrigem);
+    const destinoSelecionado = contasLancamento.find((c) => c.selecao === contaDestino);
+    let contaOrigemParaSalvar = origemSelecionada?.contaBancaria || contaOrigem;
+    let contaDestinoParaSalvar = destinoSelecionado?.contaBancaria || contaDestino;
 
     if ((tipo === 'DEBITO' || tipo === 'CREDITO') && contaNoDb && contaDisplay && contaOrigem.endsWith(contaNoDb)) {
       contaOrigemParaSalvar =
@@ -131,8 +134,10 @@ export default function LancamentoModal({
       descricao,
       valor: parseBRL(valor),
       contaOrigem: contaOrigemParaSalvar,
+      aplicacaoOrigemId: origemSelecionada?.aplicacaoId || null,
       empresaAssociada: clienteMasterNome,
       contaDestino: tipo === 'TRANSFERENCIA' ? contaDestinoParaSalvar : null,
+      aplicacaoDestinoId: tipo === 'TRANSFERENCIA' ? destinoSelecionado?.aplicacaoId || null : null,
       empresaDestino: tipo === 'TRANSFERENCIA' ? clienteMasterNome : null,
       isDespesa: false,
       natureza
@@ -264,7 +269,7 @@ export default function LancamentoModal({
                 <option value="">Selecione...</option>
                 {Array.isArray(contasLancamento) &&
                   contasLancamento.map((c) => (
-                    <option key={c.contaBancaria} value={c.contaBancaria}>
+                    <option key={c.selecao} value={c.selecao}>
                       {c.nome ? `${c.nome} (Investimento) - ${formatDisplayConta(c.contaBancaria)}` : formatDisplayConta(c.contaBancaria)}
                     </option>
                   ))}
@@ -287,7 +292,7 @@ export default function LancamentoModal({
                   <option value="">Selecione...</option>
                   {Array.isArray(contasLancamento) &&
                     contasLancamento.map((c) => (
-                      <option key={c.contaBancaria + '-origem'} value={c.contaBancaria}>
+                      <option key={c.selecao + '-origem'} value={c.selecao}>
                         {c.nome ? `${c.nome} (Investimento) - ${formatDisplayConta(c.contaBancaria)}` : formatDisplayConta(c.contaBancaria)}
                       </option>
                     ))}
@@ -306,7 +311,7 @@ export default function LancamentoModal({
                   <option value="">Selecione...</option>
                   {Array.isArray(contasLancamento) &&
                     contasLancamento.map((c) => (
-                      <option key={c.contaBancaria + '-destino'} value={c.contaBancaria}>
+                      <option key={c.selecao + '-destino'} value={c.selecao}>
                         {c.nome ? `${c.nome} (Investimento) - ${formatDisplayConta(c.contaBancaria)}` : formatDisplayConta(c.contaBancaria)}
                       </option>
                     ))}

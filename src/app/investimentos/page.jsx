@@ -546,7 +546,7 @@ export default function InvestimentosPage() {
                         <td className="px-3 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${(mov.origem === "transferencia" ? tipos.transferencia : tipos[mov.tipo])?.[1] || "border border-white/10 bg-white/10 text-gray-200"}`}>{(mov.origem === "transferencia" ? tipos.transferencia : tipos[mov.tipo])?.[0] || mov.tipo}</span>
-                            <span className="text-xs text-gray-500">{mov.origem === "calculada" ? "Automático" : mov.origem === "transferencia" ? "Transferência" : "Manual"}</span>
+                            <span className="text-xs text-gray-500">{mov.origem === "calculada" ? "Automático" : mov.origem === "fluxo_caixa" ? "Fluxo de Caixa" : mov.origem === "transferencia" ? "Transferência" : "Manual"}</span>
                           </div>
                         </td>
                         <td className={`px-3 py-3 whitespace-nowrap text-right text-base font-bold ${Number(mov.valor) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{Number(mov.valor) >= 0 ? "" : "-"}{formatBRLNumber(Math.abs(Number(mov.valor || 0)))}</td>
@@ -561,7 +561,7 @@ export default function InvestimentosPage() {
                               <button onClick={() => setDeleteState({ kind: "movimentacao", item: mov })} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/20">Excluir</button>
                             </div>
                           ) : (
-                            <span className="text-xs text-gray-500">Sem ação</span>
+                            <span className="text-xs text-gray-500">{mov.origem === "fluxo_caixa" ? "Edite no Fluxo de Caixa" : "Sem ação"}</span>
                           )}
                         </td>
                       </tr>

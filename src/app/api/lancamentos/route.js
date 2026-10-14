@@ -9,6 +9,9 @@ export async function POST(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const body = await request.json();
+        if (!Number.isFinite(Number(body.valor)) || Number(body.valor) <= 0) {
+            return NextResponse.json({ message: 'Informe um valor maior que zero.' }, { status: 400 });
+        }
         let movements = [];
 
         switch (body.tipo.toUpperCase()) {
@@ -18,6 +21,7 @@ export async function POST(request) {
                     descricao: body.descricao,
                     valor: -Math.abs(body.valor),
                     conta_bancaria: body.contaOrigem,
+                    ...(body.aplicacaoOrigemId ? { investimento_aplicacao_id: body.aplicacaoOrigemId } : {}),
                     empresa_associada: body.empresaAssociada,
                     categoria: 'Transferência',
                     natureza: 'Transferência Entre Contas'
@@ -29,6 +33,7 @@ export async function POST(request) {
                     descricao: body.descricao,
                     valor: Math.abs(body.valor),
                     conta_bancaria: body.contaOrigem,
+                    ...(body.aplicacaoOrigemId ? { investimento_aplicacao_id: body.aplicacaoOrigemId } : {}),
                     empresa_associada: body.empresaAssociada,
                     categoria: 'Transferência',
                     natureza: 'Transferência Entre Contas'
@@ -40,6 +45,7 @@ export async function POST(request) {
                     descricao: `Transf. para ${body.contaDestino}`,
                     valor: -Math.abs(body.valor),
                     conta_bancaria: body.contaOrigem,
+                    ...(body.aplicacaoOrigemId ? { investimento_aplicacao_id: body.aplicacaoOrigemId } : {}),
                     empresa_associada: body.empresaAssociada,
                     categoria: 'Transferencia Enviada',
                     natureza: 'Transferência Entre Contas'
@@ -49,6 +55,7 @@ export async function POST(request) {
                     descricao: `Transf. de ${body.contaOrigem}`,
                     valor: Math.abs(body.valor),
                     conta_bancaria: body.contaDestino,
+                    ...(body.aplicacaoDestinoId ? { investimento_aplicacao_id: body.aplicacaoDestinoId } : {}),
                     empresa_associada: body.empresaDestino,
                     categoria: 'Transferencia Recebida',
                     natureza: 'Transferência Entre Contas'
