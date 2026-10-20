@@ -137,7 +137,7 @@ export async function POST(request, { params }) {
             <p>Atenciosamente,</p>
             <p>
                 <strong>Junior Melo</strong><br>
-                Analista Financeiro<br>
+                Controller<br>
                 <strong>FIDC IJJ</strong><br>
                 (81) 9 7339-0292
             </p>

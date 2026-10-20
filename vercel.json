@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/cron/investimentos-relatorios", "schedule": "0 11 * * *" }
+  ]
+}

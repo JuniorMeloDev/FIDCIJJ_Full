@@ -15,6 +15,7 @@ import {
 import Notification from "@/app/components/Notification";
 import ConfirmacaoModal from "@/app/components/ConfirmacaoModal";
 import Pagination from "@/app/components/Pagination";
+import InvestimentosEmailModal from "@/app/components/InvestimentosEmailModal";
 import {
   formatBRLInput,
   formatBRLNumber,
@@ -405,6 +406,7 @@ export default function InvestimentosPage() {
   return (
     <main className="h-full overflow-x-hidden overflow-y-auto bg-gradient-to-br from-gray-950 via-gray-900 to-slate-900">
       <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: "", type: "" })} />
+      <InvestimentosEmailModal open={modal === "email"} onClose={() => setModal("")} aplicacoes={cadastros.aplicacoes} contas={cadastros.contas} getAuthHeader={getAuthHeader} onNotify={notify} />
       <ConfirmacaoModal isOpen={!!deleteState.item} onClose={() => setDeleteState({ kind: "", item: null })} onConfirm={confirmDelete} title="Confirmar exclusão" message={`Deseja excluir "${deleteState.item?.nome || deleteState.item?.descricao}"?`} />
 
       <Modal open={modal === "conta"} title="Conta bancária" subtitle="Cadastro exclusivo deste módulo" onClose={() => { setModal(""); resetConta(); }}>
@@ -481,10 +483,11 @@ export default function InvestimentosPage() {
               <p className="mt-2 text-sm text-gray-300">Acompanhe aplicações, saldos e rentabilidade diária com foco operacional nas movimentações.</p>
               {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <button onClick={() => openConta()} className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-gray-200 transition hover:bg-white/10">Nova conta</button>
               <button onClick={() => openAplicacao()} className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-gray-200 transition hover:bg-white/10">Nova aplicação</button>
               <button onClick={() => openReport()} className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-orange-400">Relatórios</button>
+              <button onClick={() => setModal("email")} className="rounded-2xl border border-orange-400/30 bg-orange-500/10 px-5 py-3 text-sm font-semibold text-orange-200 transition hover:bg-orange-500/20">Relatórios por e-mail</button>
             </div>
           </div>
         </motion.section>

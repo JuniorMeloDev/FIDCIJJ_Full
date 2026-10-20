@@ -133,6 +133,31 @@ A conciliação automática compara conta, data e valor do extrato com os lança
 
 O débito criado por um aporte fica disponível para essa comparação quando o extrato OFX é importado. A criação do aporte, sozinha, não comprova a transação no banco.
 
+### Relatórios por e-mail
+
+No botão **Relatórios por e-mail**, adicione cada destinatário e selecione suas aplicações. Cada endereço recebe um PDF e um resumo financeiro contendo somente suas aplicações, tanto no envio manual quanto no automático. Assunto, mensagem e frequência são compartilhados pela configuração, salva por usuário da equipe interna. Para baixar uma prévia, escolha o destinatário correspondente.
+
+A opção **Todas as aplicações** seleciona ou desmarca todas as aplicações daquele destinatário. Uma seleção vazia não concede acesso a todas: é necessário selecionar ao menos uma aplicação por e-mail para salvar ou enviar. Configurações antigas devem ser revisadas e salvas novamente; agendamentos antigos sem uma seleção explícita não enviam relatórios até essa revisão. Os vínculos ficam no JSON da configuração, sem necessidade de nova migração SQL.
+
+O anexo inclui saldo inicial e final, aportes, retiradas, rendimentos, transferências, ajustes, posição por aplicação e extrato completo com observações e origem dos aportes. O histórico anterior ao período é considerado no saldo inicial. Cada destinatário recebe uma mensagem individual.
+
+Para ativar o envio automático:
+
+1. Aplique a [migração de relatórios por e-mail](supabase/migrations/20261020000005_investimentos_relatorios_email.sql).
+2. Configure `EMAIL_USERNAME`, `EMAIL_PASSWORD` e um `CRON_SECRET` aleatório e privado no servidor.
+3. Publique o projeto com o [vercel.json](vercel.json), que agenda a rota `/api/cron/investimentos-relatorios` diariamente às 11h UTC (8h em Brasília). Em outra hospedagem, configure um agendador equivalente que chame a rota com `Authorization: Bearer <CRON_SECRET>`.
+4. No modal, ative o envio automático, escolha a frequência e salve a configuração.
+
+| Frequência | Período do relatório automático |
+| --- | --- |
+| Diária | Dia anterior ao envio. |
+| Semanal | Sete dias anteriores, no dia da semana escolhido. |
+| Mensal | Mês anterior completo, no dia escolhido entre 1 e 28. |
+
+As datas do formulário valem para o envio manual. O automático calcula o período em `America/Sao_Paulo` e usa os destinatários e aplicações salvos. Usuários removidos ou sem perfil interno não geram novos envios.
+
+O último resultado automático aparece no modal. Uma reserva única por usuário e dia evita repetir o envio quando o agendador é chamado novamente. Em caso de falha, envio parcial ou interrupção, confira o resultado e reenvie manualmente apenas para quem não recebeu; o agendador não repete aquela tentativa no mesmo dia.
+
 ## Integrações
 
 Configure apenas as integrações necessárias ao ambiente. A tabela lista as principais variáveis lidas pelos serviços; parâmetros adicionais de contas, boletos e extratos aparecem nas respectivas rotas de API.
@@ -177,10 +202,11 @@ supabase/migrations/    Alterações SQL incrementais
 | `npm run dev` | Inicia o desenvolvimento com Turbopack. |
 | `npm run build` | Gera o build de produção com Turbopack. |
 | `npm start` | Executa o build de produção já gerado. |
+| `npm run test:investimentos` | Testa os totais do relatório, paginação, agendamento, PDF, acesso e envio simulado. Use Node.js 22.7 ou superior para esse comando. |
 
 O script `npm run lint` ainda aponta para `next lint`, incompatível com a versão 16 utilizada pelo projeto. A execução direta com `npx eslint .` também depende de corrigir a configuração atual em [eslint.config.mjs](eslint.config.mjs), que apresentou erro de referência circular. O lint não deve ser considerado uma verificação disponível até esse ajuste.
 
-Não há um script de testes automatizados definido no `package.json`. Alterações financeiras devem ser verificadas em uma base de validação, cobrindo saldos, vínculos de conciliação e reversão de transações em caso de falha.
+Os testes de relatórios usam o executor nativo do Node.js e simulam o envio de e-mail, sem acessar o SMTP real. Alterações financeiras também devem ser verificadas em uma base de validação, cobrindo saldos, vínculos de conciliação e reversão de transações em caso de falha.
 
 ## Produção
 
