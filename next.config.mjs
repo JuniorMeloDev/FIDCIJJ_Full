@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   outputFileTracingIncludes: {
+    "/api/cron/duplicatas-alertas": ["./public/Logo.png"],
     "/api/investimentos/relatorios-email/preview": ["./public/Logo.png"],
     "/api/investimentos/relatorios-email/enviar": ["./public/Logo.png"],
     "/api/cron/investimentos-relatorios": ["./public/Logo.png"],

@@ -7,7 +7,8 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "next lint",
-    "test:investimentos": "node --test tests/investimentosRelatorio.test.mjs"
+    "test:investimentos": "node --test tests/investimentosRelatorio.test.mjs",
+    "test:duplicatas": "node --test tests/duplicatasAlertas.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.53.0",

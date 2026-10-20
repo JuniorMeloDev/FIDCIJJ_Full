@@ -160,6 +160,16 @@ O último resultado automático aparece no modal. Uma reserva única por usuári
 
 ## Integrações
 
+### Alertas automáticos de duplicatas
+
+Em **Consultas → Alertas por e-mail**, configure os destinatários e ative os grupos desejados: vencimento no dia e duplicatas vencidas. O resumo é enviado diariamente às 8h de Brasília, inclusive nos fins de semana, enquanto houver títulos pendentes. A seleção considera toda a carteira de operações aprovadas, independentemente dos filtros da tela. Não há envio automático aos sacados.
+
+Aplique a [migração dos alertas](supabase/migrations/20261020000006_alertas_duplicatas_email.sql), mantenha `CRON_SECRET`, `EMAIL_USERNAME` e `EMAIL_PASSWORD` configurados e publique o `vercel.json` atualizado. A nova rota agendada é `/api/cron/duplicatas-alertas`; em outra hospedagem, chame-a diariamente com `Authorization: Bearer <CRON_SECRET>`.
+
+O e-mail contém os totais e até 50 títulos por grupo; o CSV anexo contém a relação completa, com cedente, sacado, NF/CT-e, vencimento, dias de atraso e valor. Os valores incluem os juros da operação pós-fixada quando aplicáveis, sem atualização de multa ou mora. Nenhum e-mail é enviado se os grupos selecionados estiverem vazios.
+
+Cada usuário interno tem sua configuração e pode acompanhar o último resultado no modal. Uma chave única por usuário e data impede repetir a tentativa automática no mesmo dia, inclusive após falha ou envio parcial. Os testes são executados com `npm run test:duplicatas` (Node.js 22.7+), sem SMTP real.
+
 Configure apenas as integrações necessárias ao ambiente. A tabela lista as principais variáveis lidas pelos serviços; parâmetros adicionais de contas, boletos e extratos aparecem nas respectivas rotas de API.
 
 | Integração | Principais variáveis | Implementação |

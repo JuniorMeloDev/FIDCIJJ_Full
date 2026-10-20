@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import Notification from "@/app/components/Notification";
+import DuplicatasAlertasModal from "@/app/components/DuplicatasAlertasModal";
 import LiquidacaoModal from "@/app/components/LiquidacaoModal";
 import ConfirmacaoEstornoModal from "@/app/components/ConfirmacaoEstornoModal";
 import ConfirmacaoExclusaoModal from "@/app/components/ConfirmacaoExclusaoModal";
@@ -18,6 +19,7 @@ import EmitirBoletoConfirmModal from "@/app/components/EmitirBoletoConfirmModal"
 const ITEMS_PER_PAGE = 5;
 
 export default function ConsultasPage() {
+  const [alertasEmailOpen, setAlertasEmailOpen] = useState(false);
   const [duplicatas, setDuplicatas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -660,6 +662,7 @@ export default function ConsultasPage() {
 
       />
       <main className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+        <DuplicatasAlertasModal open={alertasEmailOpen} onClose={() => setAlertasEmailOpen(false)} getAuthHeader={getAuthHeader} onNotify={showNotification} />
         <div className="flex-shrink-0 px-6 pt-6">
           <motion.header
             className="mb-4 border-b-2 border-orange-500 pb-4"
@@ -669,6 +672,7 @@ export default function ConsultasPage() {
             <h1 className="text-3xl font-bold">
               Consulta de Duplicatas Operadas
             </h1>
+            <button type="button" onClick={() => setAlertasEmailOpen(true)} className="mt-3 rounded-xl border border-orange-400/30 bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-200 hover:bg-orange-500/20">Alertas por e-mail</button>
             <p className="text-sm text-gray-300">
               Histórico completo de todas as duplicatas processadas.
             </p>
