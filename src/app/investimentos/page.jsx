@@ -31,8 +31,8 @@ const getDefaultDateRange = () => ({
   dataFim: new Date().toISOString().slice(0, 10),
 });
 const initialConta = { id: null, nome: "", banco: "", agencia: "", conta: "", descricao: "", ativa: true };
-const initialAplicacao = { id: null, contaId: "", nome: "", descricao: "", percentualJurosMensal: "0", baseDias: "corridos", rendeJuros: true, ativa: true };
-const initialMov = { id: null, contaId: "", aplicacaoId: "", aplicacaoDestinoId: "", dataMovimento: new Date().toISOString().slice(0, 10), tipo: "aporte", descricao: "", valor: "", observacao: "" };
+const initialAplicacao = { id: null, contaId: "", nome: "", descricao: "", percentualJurosMensal: "0", baseDias: "uteis", rendeJuros: true, ativa: true };
+const initialMov = { contaOrigem: "", contaOrigemExterna: "", id: null, contaId: "", aplicacaoId: "", aplicacaoDestinoId: "", dataMovimento: new Date().toISOString().slice(0, 10), tipo: "aporte", descricao: "", valor: "", observacao: "" };
 const initialReportFilters = { ...getDefaultDateRange(), contaId: "", aplicacaoId: "", tipo: "" };
 const movementTypeOptions = [
   ["aporte", "Aporte"],
@@ -58,7 +58,7 @@ function Modal({ open, title, subtitle, onClose, children }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl rounded-3xl border border-white/10 bg-gray-900 p-5 shadow-2xl"
+        className="max-h-[90vh] overflow-y-auto w-full max-w-xl rounded-3xl border border-white/10 bg-gray-900 p-5 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between gap-4">
@@ -82,7 +82,7 @@ export default function InvestimentosPage() {
   const [error, setError] = useState("");
   const [notification, setNotification] = useState({ message: "", type: "" });
   const [dashboard, setDashboard] = useState({ cards: {}, contas: [], aplicacoes: [], movimentacoes: [], evolucao: [] });
-  const [cadastros, setCadastros] = useState({ contas: [], aplicacoes: [] });
+  const [cadastros, setCadastros] = useState({ contas: [], aplicacoes: [], contasOrigem: [] });
   const [filters, setFilters] = useState({ ...initialReportFilters });
   const [reportFilters, setReportFilters] = useState({ ...initialReportFilters });
   const [contaForm, setContaForm] = useState(initialConta);
@@ -119,12 +119,13 @@ export default function InvestimentosPage() {
 
   const loadAll = async (currentFilters = filters) => {
     const params = buildSearchParams(currentFilters);
-    const [contas, aplicacoes, data] = await Promise.all([
+    const [contas, aplicacoes, data, contasOrigem] = await Promise.all([
       api("/api/investimentos/contas"),
       api("/api/investimentos/aplicacoes"),
       api(`/api/investimentos/dashboard?${params.toString()}`),
+      api("/api/cadastros/contas/master"),
     ]);
-    setCadastros({ contas, aplicacoes });
+    setCadastros({ contas, aplicacoes, contasOrigem });
     setDashboard(data);
     setError("");
   };
@@ -180,7 +181,7 @@ export default function InvestimentosPage() {
     setModal("conta");
   };
   const openAplicacao = (item = null) => {
-    setAplicacaoForm(item ? { id: item.id, contaId: String(item.conta_id || ""), nome: item.nome || "", descricao: item.descricao || "", percentualJurosMensal: String(item.percentual_juros_mensal || 0), baseDias: item.base_dias || "corridos", rendeJuros: item.rende_juros !== false, ativa: item.ativa !== false } : { ...initialAplicacao, contaId: cadastros.contas[0]?.id ? String(cadastros.contas[0].id) : "" });
+    setAplicacaoForm(item ? { id: item.id, contaId: String(item.conta_id || ""), nome: item.nome || "", descricao: item.descricao || "", percentualJurosMensal: String(item.percentual_juros_mensal || 0), baseDias: "uteis", rendeJuros: item.rende_juros !== false, ativa: item.ativa !== false } : { ...initialAplicacao, contaId: cadastros.contas[0]?.id ? String(cadastros.contas[0].id) : "" });
     setModal("aplicacao");
   };
   const openMov = (item = null) => {
@@ -421,7 +422,7 @@ export default function InvestimentosPage() {
         <form onSubmit={handleSaveAplicacao} className="space-y-3">
           <div><label className={labelClass}>Conta bancária</label><select className={fieldClass} value={aplicacaoForm.contaId} onChange={(e) => setAplicacaoForm((v) => ({ ...v, contaId: e.target.value }))} required><option value="">Selecione</option>{cadastros.contas.map((conta) => <option key={conta.id} value={conta.id}>{conta.nome}</option>)}</select></div>
           <div><label className={labelClass}>Nome da aplicação</label><input className={fieldClass} value={aplicacaoForm.nome} onChange={(e) => setAplicacaoForm((v) => ({ ...v, nome: e.target.value }))} required /></div>
-          <div className="grid gap-3 sm:grid-cols-2"><div><label className={labelClass}>% de juros mensal</label><input type="number" min="0" step="0.0001" className={fieldClass} value={aplicacaoForm.percentualJurosMensal} onChange={(e) => setAplicacaoForm((v) => ({ ...v, percentualJurosMensal: e.target.value }))} /></div><div><label className={labelClass}>Base</label><select className={fieldClass} value={aplicacaoForm.baseDias} onChange={(e) => setAplicacaoForm((v) => ({ ...v, baseDias: e.target.value }))}><option value="corridos">Dias corridos</option><option value="uteis">Dias úteis</option></select></div></div>
+          <div className="grid gap-3 sm:grid-cols-2"><div><label className={labelClass}>% de juros mensal</label><input type="number" min="0" step="0.0001" className={fieldClass} value={aplicacaoForm.percentualJurosMensal} onChange={(e) => setAplicacaoForm((v) => ({ ...v, percentualJurosMensal: e.target.value }))} /></div><div><label className={labelClass}>Base</label><input className={fieldClass} value="Dias úteis (segunda a sexta)" readOnly /></div></div>
           <div><label className={labelClass}>Descrição</label><textarea className={`${fieldClass} min-h-24`} value={aplicacaoForm.descricao} onChange={(e) => setAplicacaoForm((v) => ({ ...v, descricao: e.target.value }))} /></div>
           <label className="flex items-center gap-3 text-sm font-semibold text-gray-300"><input type="checkbox" checked={aplicacaoForm.rendeJuros} onChange={(e) => setAplicacaoForm((v) => ({ ...v, rendeJuros: e.target.checked }))} />Aplicação com rendimento</label>
           <label className="flex items-center gap-3 text-sm font-semibold text-gray-300"><input type="checkbox" checked={aplicacaoForm.ativa} onChange={(e) => setAplicacaoForm((v) => ({ ...v, ativa: e.target.checked }))} />Aplicação ativa</label>
@@ -435,6 +436,19 @@ export default function InvestimentosPage() {
           <div><label className={labelClass}>Aplicação</label><select className={fieldClass} value={movForm.aplicacaoId} onChange={(e) => setMovForm((v) => ({ ...v, aplicacaoId: e.target.value }))} required><option value="">Selecione</option>{aplicacoesDaConta.map((aplicacao) => <option key={aplicacao.id} value={aplicacao.id}>{aplicacao.nome}</option>)}</select></div>
           {movForm.tipo === "transferencia" ? <div><label className={labelClass}>Aplicação destino</label><select className={fieldClass} value={movForm.aplicacaoDestinoId} onChange={(e) => setMovForm((v) => ({ ...v, aplicacaoDestinoId: e.target.value }))} required><option value="">Selecione</option>{aplicacoesDestino.map((aplicacao) => <option key={aplicacao.id} value={aplicacao.id}>{aplicacao.nome}</option>)}</select></div> : null}
           <div className="grid gap-3 sm:grid-cols-2"><div><label className={labelClass}>Data</label><input type="date" className={fieldClass} value={movForm.dataMovimento} onChange={(e) => setMovForm((v) => ({ ...v, dataMovimento: e.target.value }))} required /></div><div><label className={labelClass}>Tipo</label><select className={fieldClass} value={movForm.tipo} onChange={(e) => setMovForm((v) => ({ ...v, tipo: e.target.value, aplicacaoDestinoId: e.target.value === "transferencia" ? v.aplicacaoDestinoId : "" }))}>{movementTypeOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div></div>
+          {!movForm.id && movForm.tipo === "aporte" && (
+            <div className="space-y-3 rounded-2xl border border-white/10 p-3">
+              <div><label className={labelClass}>Conta de origem do aporte</label>
+                <select className={fieldClass} value={movForm.contaOrigem} onChange={(e) => setMovForm((v) => ({ ...v, contaOrigem: e.target.value }))} required>
+                  <option value="">Selecione a origem</option>
+                  {cadastros.contasOrigem.map((conta) => <option key={conta.id} value={String(conta.id)}>{conta.banco} - {conta.agencia}/{conta.conta_corrente}</option>)}
+                  <option value="externa">Outra conta sem vínculo</option>
+                </select>
+              </div>
+              {movForm.contaOrigem === "externa" ? <div><label className={labelClass}>Identifique a conta de origem</label><input className={fieldClass} value={movForm.contaOrigemExterna} onChange={(e) => setMovForm((v) => ({ ...v, contaOrigemExterna: e.target.value }))} placeholder="Banco, titular ou conta" required /></div> : null}
+              <p className="text-sm text-gray-400">{movForm.contaOrigem === "externa" ? "O aporte sera registrado sem alterar o saldo das contas cadastradas." : "O valor sera debitado da conta selecionada e registrado no fluxo de caixa junto com o aporte."}</p>
+            </div>
+          )}
           <div><label className={labelClass}>Descrição</label><input className={fieldClass} value={movForm.descricao} onChange={(e) => setMovForm((v) => ({ ...v, descricao: e.target.value }))} required /></div>
           <div><label className={labelClass}>Valor</label><input inputMode="numeric" className={fieldClass} value={movForm.valor} onChange={(e) => setMovForm((v) => ({ ...v, valor: formatBRLInput(e.target.value) }))} placeholder="R$ 0,00" required /></div>
           <div><label className={labelClass}>Observação</label><textarea className={`${fieldClass} min-h-24`} value={movForm.observacao} onChange={(e) => setMovForm((v) => ({ ...v, observacao: e.target.value }))} /></div>
@@ -540,7 +554,7 @@ export default function InvestimentosPage() {
                     {movimentacoesPaginadas.length > 0 ? movimentacoesPaginadas.map((mov) => (
                       <tr key={mov.id} className="text-gray-200 hover:bg-white/[0.03]">
                         <td className="px-3 py-3 whitespace-nowrap font-semibold text-white">{formatDate(mov.data_movimento)}</td>
-                        <td className="px-3 py-3 max-w-[220px] truncate">{mov.descricao}</td>
+                        <td className="px-3 py-3 max-w-[220px]"><div className="truncate">{mov.descricao}</div>{mov.conta_origem_nome && <div className="truncate text-xs text-gray-400" title={mov.conta_origem_nome}>Origem: {mov.conta_origem_nome}</div>}</td>
                         <td className="px-3 py-3 max-w-[90px] truncate text-gray-200">{mov.aplicacao_nome}</td>
                         <td className="px-3 py-3 max-w-[170px] truncate text-gray-400">{mov.conta_nome}</td>
                         <td className="px-3 py-3 whitespace-nowrap">
@@ -553,7 +567,7 @@ export default function InvestimentosPage() {
                         <td className="px-3 py-3 text-right whitespace-nowrap">
                           {mov.origem === "manual" ? (
                             <div className="inline-flex gap-2">
-                              <button onClick={() => openMov(mov)} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-gray-200 transition hover:bg-white/10">Editar</button>
+                              <button disabled={Boolean(mov.debito_origem_id)} title={mov.debito_origem_id ? "Exclua e recrie para alterar o aporte vinculado" : undefined} onClick={() => openMov(mov)} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-gray-200 transition hover:bg-white/10">Editar</button>
                               <button onClick={() => setDeleteState({ kind: "movimentacao", item: mov })} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/20">Excluir</button>
                             </div>
                           ) : mov.origem === "transferencia" ? (
@@ -587,7 +601,7 @@ export default function InvestimentosPage() {
                   <span className="rounded-full bg-white/5 px-4 py-2 text-sm text-gray-300">{dashboard.aplicacoes.length} registros</span>
                 </div>
                 <div className="space-y-3">
-                  {dashboard.aplicacoes.map((aplicacao) => <article key={aplicacao.id} className="rounded-2xl border border-white/10 bg-slate-900/70 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-lg font-bold text-white">{aplicacao.nome}</h3><p className="mt-1 truncate text-sm text-gray-400">{aplicacao.contaLabel}</p></div><span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${!aplicacao.ativa ? "bg-gray-700/70 text-gray-300" : !aplicacao.rende_juros ? "bg-amber-500/10 text-amber-300" : "bg-emerald-500/10 text-emerald-300"}`}>{!aplicacao.ativa ? "Inativa" : !aplicacao.rende_juros ? "Sem rendimento" : "Ativa"}</span></div><div className="mt-4 grid gap-3 md:grid-cols-3"><div className="rounded-2xl bg-white/5 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">Saldo</p><p className="mt-2 truncate text-lg font-bold text-white">{formatBRLNumber(Number(aplicacao.saldoAtual || 0))}</p></div><div className="rounded-2xl bg-white/5 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">Rendimento</p><p className="mt-2 truncate text-lg font-bold text-emerald-400">{formatBRLNumber(Number(aplicacao.rendimentoPeriodo || 0))}</p></div><div className="rounded-2xl bg-white/5 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">Estimativa</p><p className="mt-2 truncate text-lg font-bold text-cyan-300">{formatBRLNumber(Number(aplicacao.rentabilidadeDiariaEstimada || 0))}</p></div></div><div className="mt-3 text-sm text-gray-400">{Number(aplicacao.percentual_juros_mensal || 0).toFixed(4)}% ao mês em {aplicacao.base_dias === "uteis" ? "dias úteis" : "dias corridos"}</div></article>)}
+                  {dashboard.aplicacoes.map((aplicacao) => <article key={aplicacao.id} className="rounded-2xl border border-white/10 bg-slate-900/70 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-lg font-bold text-white">{aplicacao.nome}</h3><p className="mt-1 truncate text-sm text-gray-400">{aplicacao.contaLabel}</p></div><span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${!aplicacao.ativa ? "bg-gray-700/70 text-gray-300" : !aplicacao.rende_juros ? "bg-amber-500/10 text-amber-300" : "bg-emerald-500/10 text-emerald-300"}`}>{!aplicacao.ativa ? "Inativa" : !aplicacao.rende_juros ? "Sem rendimento" : "Ativa"}</span></div><div className="mt-4 grid gap-3 md:grid-cols-3"><div className="rounded-2xl bg-white/5 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">Saldo</p><p className="mt-2 truncate text-lg font-bold text-white">{formatBRLNumber(Number(aplicacao.saldoAtual || 0))}</p></div><div className="rounded-2xl bg-white/5 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">Rendimento</p><p className="mt-2 truncate text-lg font-bold text-emerald-400">{formatBRLNumber(Number(aplicacao.rendimentoPeriodo || 0))}</p></div><div className="rounded-2xl bg-white/5 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">Estimativa</p><p className="mt-2 truncate text-lg font-bold text-cyan-300">{formatBRLNumber(Number(aplicacao.rentabilidadeDiariaEstimada || 0))}</p></div></div><div className="mt-3 text-sm text-gray-400">{Number(aplicacao.percentual_juros_mensal || 0).toFixed(4)}% ao mês em dias úteis</div></article>)}
                 </div>
               </section>
 

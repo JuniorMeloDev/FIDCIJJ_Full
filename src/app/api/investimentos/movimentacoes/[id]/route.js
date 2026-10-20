@@ -18,11 +18,15 @@ export async function PUT(request, { params }) {
 
     const { data: registroAtual, error: registroAtualError } = await supabase
       .from("investimentos_movimentacoes")
-      .select("id, origem")
+      .select("id, origem, debito_origem_id")
       .eq("id", id)
       .single();
 
     if (registroAtualError) throw registroAtualError;
+
+    if (registroAtual?.debito_origem_id) {
+      return NextResponse.json({ message: "Exclua e recrie este aporte para manter o debito da conta de origem consistente." }, { status: 400 });
+    }
 
     if (registroAtual?.origem === "fluxo_caixa") {
       return NextResponse.json({ message: "Edite este lançamento no Fluxo de Caixa." }, { status: 400 });

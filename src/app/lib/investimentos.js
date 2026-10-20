@@ -95,10 +95,12 @@ export function getAplicacaoDailyRate(aplicacao, dateKey) {
     return 0;
   }
 
-  const divisor =
-    aplicacao.base_dias === "uteis"
-      ? getBusinessDaysInMonth(dateKey)
-      : getDaysInMonth(dateKey);
+  const weekDay = new Date(`${dateKey}T12:00:00Z`).getUTCDay();
+  if (weekDay === 0 || weekDay === 6) {
+    return 0;
+  }
+
+  const divisor = getBusinessDaysInMonth(dateKey);
 
   return percentualMensal / 100 / divisor;
 }

@@ -31,7 +31,7 @@ export async function POST(request) {
       nome: body.nome,
       descricao: body.descricao || null,
       percentual_juros_mensal: body.percentualJurosMensal || 0,
-      base_dias: body.baseDias || "corridos",
+      base_dias: "uteis",
       rende_juros: body.rendeJuros !== false,
       ativa: body.ativa !== false,
     };

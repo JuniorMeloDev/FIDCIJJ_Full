@@ -29,6 +29,8 @@ import PixConfirmationModal from "@/app/components/PixConfirmationModal";
 import ConciliacaoOFXModal from "../components/ConciliacaoOFXModal";
 import EmissaoBoletoManualModal from "@/app/components/EmissaoBoletoManualModal";
 
+import { resolveContaBancaria } from "@/app/lib/contasBancarias";
+
 const ITEMS_PER_PAGE = 16;
 const INTER_ITEMS_PER_PAGE = 2;
 
@@ -889,7 +891,10 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
             return c ? [{
               id: `investimento-${a.id}`,
               aplicacaoId: a.id,
-              contaBancaria: c.conta ? `${c.banco} - ${c.agencia || ''}/${c.conta}` : `${c.banco} - ${c.nome}`,
+              contaBancaria: resolveContaBancaria(
+                c.conta ? `${c.banco} - ${c.agencia || ''}/${c.conta}` : `${c.banco} - ${c.nome}`,
+                masterContasData.map((conta) => ({ contaBancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}` }))
+              ),
               nome: `${c.nome} / ${a.nome}`,
             }] : [];
           }));

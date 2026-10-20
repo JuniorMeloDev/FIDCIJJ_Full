@@ -49,6 +49,14 @@ export async function POST(request) {
     ensureAuthenticated(request);
     const body = await request.json();
     const valor = roundMoney(Math.abs(body.valor));
+    if (!Number.isFinite(Number(body.valor)) || Number(body.valor) <= 0) {
+      return NextResponse.json({ message: "Informe um valor maior que zero." }, { status: 400 });
+    }
+    if (body.tipo === "aporte" && (!body.contaOrigem ||
+        (body.contaOrigem === "externa" && (typeof body.contaOrigemExterna !== "string" || !body.contaOrigemExterna.trim())) ||
+        (body.contaOrigem !== "externa" && !/^[1-9]\d*$/.test(String(body.contaOrigem))))) {
+      return NextResponse.json({ message: "Selecione a conta de origem ou informe uma conta sem vinculo." }, { status: 400 });
+    }
 
     if (body.tipo === "transferencia") {
       if (
@@ -130,6 +138,10 @@ export async function POST(request) {
           : valor,
       observacao: body.observacao || null,
       origem: "manual",
+      ...(body.tipo === "aporte" ? {
+        conta_origem_id: body.contaOrigem === "externa" ? null : Number(body.contaOrigem),
+        conta_origem_nome: body.contaOrigem === "externa" ? body.contaOrigemExterna.trim() : null,
+      } : {}),
     };
 
     if (

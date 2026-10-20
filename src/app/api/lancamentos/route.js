@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
+import { resolveContaBancaria } from '@/app/lib/contasBancarias';
 
 export async function POST(request) {
     try {
@@ -12,6 +13,17 @@ export async function POST(request) {
         if (!Number.isFinite(Number(body.valor)) || Number(body.valor) <= 0) {
             return NextResponse.json({ message: 'Informe um valor maior que zero.' }, { status: 400 });
         }
+        const { data: masterClient, error: clientError } = await supabase
+            .from('clientes').select('id').order('id', { ascending: true }).limit(1).single();
+        if (clientError) throw clientError;
+        const { data: contas, error: contasError } = await supabase
+            .from('contas_bancarias').select('banco, agencia, conta_corrente').eq('cliente_id', masterClient.id);
+        if (contasError) throw contasError;
+        const contasCanonicas = contas.map((conta) => ({
+            contaBancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}`,
+        }));
+        body.contaOrigem = resolveContaBancaria(body.contaOrigem, contasCanonicas);
+        body.contaDestino = resolveContaBancaria(body.contaDestino, contasCanonicas);
         let movements = [];
 
         switch (body.tipo.toUpperCase()) {
