@@ -15,3 +15,13 @@ export function resolveContaBancaria(label, contas) {
   const labels = [...new Set(matches.map((conta) => conta.contaBancaria))];
   return labels.length === 1 ? labels[0] : label;
 }
+
+const prefixoContaInvestimento = "Investimentos | ";
+
+export function nomeContaInvestimento(aplicacao) {
+  return `${prefixoContaInvestimento}${aplicacao.conta.nome} / ${aplicacao.nome} (#${aplicacao.id})`;
+}
+
+export function ehContaInvestimento(label) {
+  return String(label || "").startsWith(prefixoContaInvestimento);
+}

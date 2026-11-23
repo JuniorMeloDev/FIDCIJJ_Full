@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/utils/supabaseClient';
 import jwt from 'jsonwebtoken';
+import { ehContaInvestimento } from '@/app/lib/contasBancarias';
 
 export async function GET(request) {
     try {
@@ -25,7 +26,9 @@ export async function GET(request) {
             throw error;
         }
 
-        const formattedData = data.map(item => ({ contaBancaria: item.conta_bancaria, saldo: item.saldo }));
+        const formattedData = data
+            .filter(item => !ehContaInvestimento(item.conta_bancaria))
+            .map(item => ({ contaBancaria: item.conta_bancaria, saldo: item.saldo }));
         return NextResponse.json(formattedData, { status: 200 });
     } catch (error) {
         console.error('Erro no endpoint de saldos:', error.message);

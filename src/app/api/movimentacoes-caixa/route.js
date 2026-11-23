@@ -100,6 +100,7 @@ export async function GET(request) {
                 let saldoQuery = supabase
                     .from('movimentacoes_caixa')
                     .select('id, valor')
+                    .is('investimento_aplicacao_id', null)
                     .order('id', { ascending: true })
                     .range(from, from + pageSize - 1);
             

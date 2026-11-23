@@ -1654,7 +1654,7 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
       const itemsDoDia = groupedByDate[date];
 
       itemsDoDia.forEach(item => {
-        runningBalance += parseFloat(item.valor);
+        if (!item.investimento_aplicacao_id) runningBalance += parseFloat(item.valor);
         finalIds.push(item);
       });
 

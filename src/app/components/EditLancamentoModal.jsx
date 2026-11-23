@@ -106,14 +106,18 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
 
               <div>
                 <label htmlFor="conta_bancaria" className="block text-sm font-medium text-gray-300">Conta</label>
-                <select id="conta_bancaria" name="conta_bancaria" value={formData.conta_bancaria || ''} onChange={handleChange} required className="mt-1 block w-full rounded-md border border-gray-600 bg-gray-700 p-3 shadow-sm">
-                  <option value="">Selecione...</option>
-                  {Array.isArray(contasMaster) && contasMaster.map((c) => (
-                    <option key={c.contaBancaria} value={c.contaBancaria}>
-                      {formatDisplayConta(c.contaBancaria)}
-                    </option>
-                  ))}
-                </select>
+                {lancamento.investimento_aplicacao_id ? (
+                  <p className="mt-1 p-3 text-sm text-gray-300">{formData.conta_bancaria}</p>
+                ) : (
+                  <select id="conta_bancaria" name="conta_bancaria" value={formData.conta_bancaria || ''} onChange={handleChange} required className="mt-1 block w-full rounded-md border border-gray-600 bg-gray-700 p-3 shadow-sm">
+                    <option value="">Selecione...</option>
+                    {Array.isArray(contasMaster) && contasMaster.map((c) => (
+                      <option key={c.contaBancaria} value={c.contaBancaria}>
+                        {formatDisplayConta(c.contaBancaria)}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {lancamento.valor < 0 && (
