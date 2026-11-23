@@ -10,6 +10,9 @@ export async function PUT(request, { params }) {
 
     const payload = {
       conta_id: body.contaId,
+      ...(body.contaBancariaVinculadaId !== undefined && {
+        conta_bancaria_vinculada_id: body.contaBancariaVinculadaId || null,
+      }),
       nome: body.nome,
       descricao: body.descricao || null,
       percentual_juros_mensal: body.percentualJurosMensal || 0,
@@ -38,7 +41,7 @@ export async function PUT(request, { params }) {
   } catch (error) {
     return NextResponse.json(
       { message: error.message || "Erro ao atualizar aplicação." },
-      { status: error.message === "Não autorizado" ? 401 : 500 }
+      { status: error.message === "Não autorizado" ? 401 : error.code === "23514" ? 400 : 500 }
     );
   }
 }

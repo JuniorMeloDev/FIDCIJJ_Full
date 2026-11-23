@@ -133,6 +133,7 @@ export function buildInvestmentDashboard({
 }) {
   const contasMap = new Map(contas.map((conta) => [conta.id, conta]));
   const monthlyYields = new Map();
+  const saldosFinaisPorDia = {};
   const rows = [];
   const matchesSelectedType = (movimento) => {
     if (!tipo) return true;
@@ -233,6 +234,10 @@ export function buildInvestmentDashboard({
           });
         }
       }
+
+      if (dateKey >= dataInicio) {
+        saldosFinaisPorDia[dateKey] = roundMoney((saldosFinaisPorDia[dateKey] ?? 0) + saldoAtual);
+      }
     }
 
     return {
@@ -315,6 +320,7 @@ export function buildInvestmentDashboard({
     contas: contaCards,
     aplicacoes: cardsAplicacoes,
     movimentacoes: rows,
+    saldosFinaisPorDia,
     evolucao: buildMonthlySeries(monthlyYields),
   };
 }

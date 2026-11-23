@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -32,7 +32,7 @@ const getDefaultDateRange = () => ({
   dataFim: new Date().toISOString().slice(0, 10),
 });
 const initialConta = { id: null, nome: "", banco: "", agencia: "", conta: "", descricao: "", ativa: true };
-const initialAplicacao = { id: null, contaId: "", nome: "", descricao: "", percentualJurosMensal: "0", baseDias: "uteis", rendeJuros: true, ativa: true };
+const initialAplicacao = { id: null, contaId: "", contaBancariaVinculadaId: "", nome: "", descricao: "", percentualJurosMensal: "0", baseDias: "uteis", rendeJuros: true, ativa: true };
 const initialMov = { contaOrigem: "", contaOrigemExterna: "", id: null, contaId: "", aplicacaoId: "", aplicacaoDestinoId: "", dataMovimento: new Date().toISOString().slice(0, 10), tipo: "aporte", descricao: "", valor: "", observacao: "" };
 const initialReportFilters = { ...getDefaultDateRange(), contaId: "", aplicacaoId: "", tipo: "" };
 const movementTypeOptions = [
@@ -82,7 +82,7 @@ export default function InvestimentosPage() {
   const [logoBase64, setLogoBase64] = useState(null);
   const [error, setError] = useState("");
   const [notification, setNotification] = useState({ message: "", type: "" });
-  const [dashboard, setDashboard] = useState({ cards: {}, contas: [], aplicacoes: [], movimentacoes: [], evolucao: [] });
+  const [dashboard, setDashboard] = useState({ cards: {}, contas: [], aplicacoes: [], movimentacoes: [], saldosFinaisPorDia: {}, evolucao: [] });
   const [cadastros, setCadastros] = useState({ contas: [], aplicacoes: [], contasOrigem: [] });
   const [filters, setFilters] = useState({ ...initialReportFilters });
   const [reportFilters, setReportFilters] = useState({ ...initialReportFilters });
@@ -165,7 +165,10 @@ export default function InvestimentosPage() {
 
   const movimentacoesPaginadas = useMemo(() => {
     const start = (movPage - 1) * itemsPerPage;
-    return dashboard.movimentacoes.slice(start, start + itemsPerPage);
+    return dashboard.movimentacoes.slice(start, start + itemsPerPage).map((mov, index) => ({
+      mov,
+      encerraDia: dashboard.movimentacoes[start + index + 1]?.data_movimento !== mov.data_movimento,
+    }));
   }, [dashboard.movimentacoes, movPage]);
 
   useEffect(() => {
@@ -182,7 +185,17 @@ export default function InvestimentosPage() {
     setModal("conta");
   };
   const openAplicacao = (item = null) => {
-    setAplicacaoForm(item ? { id: item.id, contaId: String(item.conta_id || ""), nome: item.nome || "", descricao: item.descricao || "", percentualJurosMensal: String(item.percentual_juros_mensal || 0), baseDias: "uteis", rendeJuros: item.rende_juros !== false, ativa: item.ativa !== false } : { ...initialAplicacao, contaId: cadastros.contas[0]?.id ? String(cadastros.contas[0].id) : "" });
+    setAplicacaoForm(item ? {
+      id: item.id,
+      contaId: String(item.conta_id || ""),
+      contaBancariaVinculadaId: String(item.conta_bancaria_vinculada_id ?? ""),
+      nome: item.nome || "",
+      descricao: item.descricao || "",
+      percentualJurosMensal: String(item.percentual_juros_mensal || 0),
+      baseDias: "uteis",
+      rendeJuros: item.rende_juros !== false,
+      ativa: item.ativa !== false,
+    } : { ...initialAplicacao, contaId: cadastros.contas[0]?.id ? String(cadastros.contas[0].id) : "" });
     setModal("aplicacao");
   };
   const openMov = (item = null) => {
@@ -422,7 +435,25 @@ export default function InvestimentosPage() {
 
       <Modal open={modal === "aplicacao"} title="Aplicação" subtitle="Juros mensais e base de dias" onClose={() => { setModal(""); resetAplicacao(); }}>
         <form onSubmit={handleSaveAplicacao} className="space-y-3">
-          <div><label className={labelClass}>Conta bancária</label><select className={fieldClass} value={aplicacaoForm.contaId} onChange={(e) => setAplicacaoForm((v) => ({ ...v, contaId: e.target.value }))} required><option value="">Selecione</option>{cadastros.contas.map((conta) => <option key={conta.id} value={conta.id}>{conta.nome}</option>)}</select></div>
+          <div><label htmlFor="conta-investimento-aplicacao" className={labelClass}>Conta de investimento</label><select id="conta-investimento-aplicacao" className={fieldClass} value={aplicacaoForm.contaId} onChange={(e) => setAplicacaoForm((v) => ({ ...v, contaId: e.target.value }))} required><option value="">Selecione</option>{cadastros.contas.map((conta) => <option key={conta.id} value={conta.id}>{conta.nome}</option>)}</select></div>
+          <div>
+            <label htmlFor="conta-bancaria-aplicacao" className={labelClass}>Conta bancária vinculada</label>
+            <select
+              id="conta-bancaria-aplicacao"
+              className={fieldClass}
+              value={aplicacaoForm.contaBancariaVinculadaId}
+              onChange={(e) => setAplicacaoForm((v) => ({ ...v, contaBancariaVinculadaId: e.target.value }))}
+              aria-describedby="conta-bancaria-aplicacao-ajuda"
+            >
+              <option value="">Sem vínculo</option>
+              {cadastros.contasOrigem.map((conta) => (
+                <option key={conta.id} value={String(conta.id)}>{conta.banco} - {conta.agencia}/{conta.conta_corrente}</option>
+              ))}
+            </select>
+            <p id="conta-bancaria-aplicacao-ajuda" className="mt-2 text-sm text-gray-400">
+              Entradas e saídas diretas feitas pelo Fluxo de Caixa atualizam também esta conta bancária.
+            </p>
+          </div>
           <div><label className={labelClass}>Nome da aplicação</label><input className={fieldClass} value={aplicacaoForm.nome} onChange={(e) => setAplicacaoForm((v) => ({ ...v, nome: e.target.value }))} required /></div>
           <div className="grid gap-3 sm:grid-cols-2"><div><label className={labelClass}>% de juros mensal</label><input type="number" min="0" step="0.0001" className={fieldClass} value={aplicacaoForm.percentualJurosMensal} onChange={(e) => setAplicacaoForm((v) => ({ ...v, percentualJurosMensal: e.target.value }))} /></div><div><label className={labelClass}>Base</label><input className={fieldClass} value="Dias úteis (segunda a sexta)" readOnly /></div></div>
           <div><label className={labelClass}>Descrição</label><textarea className={`${fieldClass} min-h-24`} value={aplicacaoForm.descricao} onChange={(e) => setAplicacaoForm((v) => ({ ...v, descricao: e.target.value }))} /></div>
@@ -481,6 +512,9 @@ export default function InvestimentosPage() {
               <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-orange-400/20 bg-orange-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-orange-300"><FaPiggyBank />Controle de investimentos</div>
               <h1 className="text-3xl font-bold text-white">Investimentos</h1>
               <p className="mt-2 text-sm text-gray-300">Acompanhe aplicações, saldos e rentabilidade diária com foco operacional nas movimentações.</p>
+              <a href="#aplicacoes" className="mt-3 inline-block text-sm font-semibold text-orange-300 underline underline-offset-4 hover:text-orange-200">
+                Ver e editar aplicações
+              </a>
               {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -554,34 +588,46 @@ export default function InvestimentosPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {movimentacoesPaginadas.length > 0 ? movimentacoesPaginadas.map((mov) => (
-                      <tr key={mov.id} className="text-gray-200 hover:bg-white/[0.03]">
-                        <td className="px-3 py-3 whitespace-nowrap font-semibold text-white">{formatDate(mov.data_movimento)}</td>
-                        <td className="px-3 py-3 max-w-[220px]"><div className="truncate">{mov.descricao}</div>{mov.conta_origem_nome && <div className="truncate text-xs text-gray-400" title={mov.conta_origem_nome}>Origem: {mov.conta_origem_nome}</div>}</td>
-                        <td className="px-3 py-3 max-w-[90px] truncate text-gray-200">{mov.aplicacao_nome}</td>
-                        <td className="px-3 py-3 max-w-[170px] truncate text-gray-400">{mov.conta_nome}</td>
-                        <td className="px-3 py-3 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${(mov.origem === "transferencia" ? tipos.transferencia : tipos[mov.tipo])?.[1] || "border border-white/10 bg-white/10 text-gray-200"}`}>{(mov.origem === "transferencia" ? tipos.transferencia : tipos[mov.tipo])?.[0] || mov.tipo}</span>
-                            <span className="text-xs text-gray-500">{mov.origem === "calculada" ? "Automático" : mov.origem === "fluxo_caixa" ? "Fluxo de Caixa" : mov.origem === "transferencia" ? "Transferência" : "Manual"}</span>
-                          </div>
-                        </td>
-                        <td className={`px-3 py-3 whitespace-nowrap text-right text-base font-bold ${Number(mov.valor) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{Number(mov.valor) >= 0 ? "" : "-"}{formatBRLNumber(Math.abs(Number(mov.valor || 0)))}</td>
-                        <td className="px-3 py-3 text-right whitespace-nowrap">
-                          {mov.origem === "manual" ? (
-                            <div className="inline-flex gap-2">
-                              <button disabled={Boolean(mov.debito_origem_id)} title={mov.debito_origem_id ? "Exclua e recrie para alterar o aporte vinculado" : undefined} onClick={() => openMov(mov)} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-gray-200 transition hover:bg-white/10">Editar</button>
-                              <button onClick={() => setDeleteState({ kind: "movimentacao", item: mov })} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/20">Excluir</button>
+                    {movimentacoesPaginadas.length > 0 ? movimentacoesPaginadas.map(({ mov, encerraDia }) => (
+                      <Fragment key={mov.id}>
+                        <tr className="text-gray-200 hover:bg-white/[0.03]">
+                          <td className="px-3 py-3 whitespace-nowrap font-semibold text-white">{formatDate(mov.data_movimento)}</td>
+                          <td className="px-3 py-3 max-w-[220px]"><div className="truncate">{mov.descricao}</div>{mov.conta_origem_nome && <div className="truncate text-xs text-gray-400" title={mov.conta_origem_nome}>Origem: {mov.conta_origem_nome}</div>}</td>
+                          <td className="px-3 py-3 max-w-[90px] truncate text-gray-200">{mov.aplicacao_nome}</td>
+                          <td className="px-3 py-3 max-w-[170px] truncate text-gray-400">{mov.conta_nome}</td>
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${(mov.origem === "transferencia" ? tipos.transferencia : tipos[mov.tipo])?.[1] || "border border-white/10 bg-white/10 text-gray-200"}`}>{(mov.origem === "transferencia" ? tipos.transferencia : tipos[mov.tipo])?.[0] || mov.tipo}</span>
+                              <span className="text-xs text-gray-500">{mov.origem === "calculada" ? "Automático" : mov.origem === "fluxo_caixa" ? "Fluxo de Caixa" : mov.origem === "transferencia" ? "Transferência" : "Manual"}</span>
                             </div>
-                          ) : mov.origem === "transferencia" ? (
-                            <div className="inline-flex gap-2">
-                              <button onClick={() => setDeleteState({ kind: "movimentacao", item: mov })} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/20">Excluir</button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-500">{mov.origem === "fluxo_caixa" ? "Edite no Fluxo de Caixa" : "Sem ação"}</span>
-                          )}
-                        </td>
-                      </tr>
+                          </td>
+                          <td className={`px-3 py-3 whitespace-nowrap text-right text-base font-bold ${Number(mov.valor) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{Number(mov.valor) >= 0 ? "" : "-"}{formatBRLNumber(Math.abs(Number(mov.valor || 0)))}</td>
+                          <td className="px-3 py-3 text-right whitespace-nowrap">
+                            {mov.origem === "manual" ? (
+                              <div className="inline-flex gap-2">
+                                <button disabled={Boolean(mov.debito_origem_id)} title={mov.debito_origem_id ? "Exclua e recrie para alterar o aporte vinculado" : undefined} onClick={() => openMov(mov)} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-gray-200 transition hover:bg-white/10">Editar</button>
+                                <button onClick={() => setDeleteState({ kind: "movimentacao", item: mov })} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/20">Excluir</button>
+                              </div>
+                            ) : mov.origem === "transferencia" ? (
+                              <div className="inline-flex gap-2">
+                                <button onClick={() => setDeleteState({ kind: "movimentacao", item: mov })} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/20">Excluir</button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-500">{mov.origem === "fluxo_caixa" ? "Edite no Fluxo de Caixa" : "Sem ação"}</span>
+                            )}
+                          </td>
+                        </tr>
+                        {encerraDia && dashboard.saldosFinaisPorDia?.[mov.data_movimento] !== undefined && (
+                          <tr className="bg-slate-800 text-sm font-semibold">
+                            <td className="whitespace-nowrap px-3 py-3 text-gray-200">{formatDate(mov.data_movimento)}</td>
+                            <th colSpan={4} className="px-3 py-3 text-left text-orange-300">Saldo final do dia</th>
+                            <td className="whitespace-nowrap px-3 py-3 text-right text-blue-300">
+                              {formatBRLNumber(dashboard.saldosFinaisPorDia[mov.data_movimento])}
+                            </td>
+                            <td />
+                          </tr>
+                        )}
+                      </Fragment>
                     )) : (
                       <tr>
                         <td colSpan="7" className="px-4 py-10 text-center text-gray-400">Nenhuma movimentação encontrada para os filtros aplicados.</td>
@@ -595,16 +641,39 @@ export default function InvestimentosPage() {
             </section>
 
             <section className="grid gap-5 2xl:grid-cols-[minmax(0,1.2fr)_320px]">
-              <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-lg">
+              <section id="aplicacoes" aria-labelledby="titulo-aplicacoes" className="scroll-mt-20 rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-lg">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
-                    <h2 className="text-xl font-bold text-white">Aplicações e posição atual</h2>
+                    <h2 id="titulo-aplicacoes" className="text-xl font-bold text-white">Aplicações e posição atual</h2>
                     <p className="text-sm text-gray-400">Visão resumida das aplicações sem tomar o espaço da tabela.</p>
                   </div>
                   <span className="rounded-full bg-white/5 px-4 py-2 text-sm text-gray-300">{dashboard.aplicacoes.length} registros</span>
                 </div>
                 <div className="space-y-3">
-                  {dashboard.aplicacoes.map((aplicacao) => <article key={aplicacao.id} className="rounded-2xl border border-white/10 bg-slate-900/70 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-lg font-bold text-white">{aplicacao.nome}</h3><p className="mt-1 truncate text-sm text-gray-400">{aplicacao.contaLabel}</p></div><span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${!aplicacao.ativa ? "bg-gray-700/70 text-gray-300" : !aplicacao.rende_juros ? "bg-amber-500/10 text-amber-300" : "bg-emerald-500/10 text-emerald-300"}`}>{!aplicacao.ativa ? "Inativa" : !aplicacao.rende_juros ? "Sem rendimento" : "Ativa"}</span></div><div className="mt-4 grid gap-3 md:grid-cols-3"><div className="rounded-2xl bg-white/5 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">Saldo</p><p className="mt-2 truncate text-lg font-bold text-white">{formatBRLNumber(Number(aplicacao.saldoAtual || 0))}</p></div><div className="rounded-2xl bg-white/5 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">Rendimento</p><p className="mt-2 truncate text-lg font-bold text-emerald-400">{formatBRLNumber(Number(aplicacao.rendimentoPeriodo || 0))}</p></div><div className="rounded-2xl bg-white/5 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">Estimativa</p><p className="mt-2 truncate text-lg font-bold text-cyan-300">{formatBRLNumber(Number(aplicacao.rentabilidadeDiariaEstimada || 0))}</p></div></div><div className="mt-3 text-sm text-gray-400">{Number(aplicacao.percentual_juros_mensal || 0).toFixed(4)}% ao mês em dias úteis</div></article>)}
+                  {dashboard.aplicacoes.map((aplicacao) => {
+                    const contaVinculada = cadastros.contasOrigem.find((conta) => String(conta.id) === String(aplicacao.conta_bancaria_vinculada_id));
+                    return (
+                      <article key={aplicacao.id} className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-lg font-bold text-white">{aplicacao.nome}</h3>
+                            <p className="mt-1 text-sm text-gray-400">{aplicacao.contaLabel}</p>
+                            {contaVinculada && <p className="mt-1 text-sm text-gray-400">{contaVinculada.banco} - {contaVinculada.agencia}/{contaVinculada.conta_corrente}</p>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${!aplicacao.ativa ? "bg-gray-700/70 text-gray-300" : !aplicacao.rende_juros ? "bg-amber-500/10 text-amber-300" : "bg-emerald-500/10 text-emerald-300"}`}>{!aplicacao.ativa ? "Inativa" : !aplicacao.rende_juros ? "Sem rendimento" : "Ativa"}</span>
+                            <button type="button" onClick={() => openAplicacao(aplicacao)} className="rounded-lg border border-white/10 px-3 py-1 text-sm text-gray-200 hover:bg-white/10">Editar</button>
+                          </div>
+                        </div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-3">
+                          <div className="rounded-2xl bg-white/5 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">Saldo</p><p className="mt-2 truncate text-lg font-bold text-white">{formatBRLNumber(Number(aplicacao.saldoAtual || 0))}</p></div>
+                          <div className="rounded-2xl bg-white/5 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">Rendimento</p><p className="mt-2 truncate text-lg font-bold text-emerald-400">{formatBRLNumber(Number(aplicacao.rendimentoPeriodo || 0))}</p></div>
+                          <div className="rounded-2xl bg-white/5 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">Estimativa</p><p className="mt-2 truncate text-lg font-bold text-cyan-300">{formatBRLNumber(Number(aplicacao.rentabilidadeDiariaEstimada || 0))}</p></div>
+                        </div>
+                        <div className="mt-3 text-sm text-gray-400">{Number(aplicacao.percentual_juros_mensal || 0).toFixed(4)}% ao mês em dias úteis</div>
+                      </article>
+                    );
+                  })}
                 </div>
               </section>
 

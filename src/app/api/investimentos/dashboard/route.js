@@ -7,6 +7,18 @@ import {
   getTodayKey,
 } from "@/app/lib/investimentos";
 
+async function carregarHistorico(query) {
+  const historico = [];
+  const tamanhoPagina = 1000;
+
+  for (let inicio = 0; ; inicio += tamanhoPagina) {
+    const { data, error } = await query.range(inicio, inicio + tamanhoPagina - 1);
+    if (error) throw error;
+    historico.push(...data);
+    if (data.length < tamanhoPagina) return historico;
+  }
+}
+
 export async function GET(request) {
   try {
     ensureAuthenticated(request);
@@ -58,17 +70,16 @@ export async function GET(request) {
     const [
       { data: contas, error: contasError },
       { data: aplicacoes, error: aplicacoesError },
-      { data: movimentacoes, error: movimentacoesError },
-    ] = await Promise.all([contasQuery, aplicacoesQuery, movimentacoesQuery]);
+      movimentacoes,
+    ] = await Promise.all([contasQuery, aplicacoesQuery, carregarHistorico(movimentacoesQuery)]);
 
     if (contasError) throw contasError;
     if (aplicacoesError) throw aplicacoesError;
-    if (movimentacoesError) throw movimentacoesError;
 
     const dashboard = buildInvestmentDashboard({
       contas: contas || [],
       aplicacoes: aplicacoes || [],
-      movimentacoes: movimentacoes || [],
+      movimentacoes,
       dataInicio,
       dataFim,
       tipo,

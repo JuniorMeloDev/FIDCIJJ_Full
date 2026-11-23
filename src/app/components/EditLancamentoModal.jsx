@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { formatBRLInput, parseBRL, formatDisplayConta } from '@/app/utils/formatters';
 
-export default function EditLancamentoModal({ isOpen, onClose, onSave, lancamento, contasMaster }) {
+export default function EditLancamentoModal({ isOpen, onClose, onSave, lancamento, contasMaster, contasInvestimento = [] }) {
   const [formData, setFormData] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -13,8 +13,9 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
       setFormData({
         ...lancamento,
         data_movimento: lancamento.dataMovimento ? new Date(lancamento.dataMovimento).toISOString().split('T')[0] : '',
-        valor: formatBRLInput(String(Math.abs(lancamento.valor) * 100)),
+        valor: formatBRLInput(String(Math.round(Math.abs(lancamento.valor) * 100))),
         conta_bancaria: lancamento.contaBancaria || '',
+        investimento_aplicacao_id: String(lancamento.investimento_aplicacao_id ?? ''),
         natureza: lancamento.natureza || 'Despesas Administrativas'
       });
     }
@@ -45,7 +46,12 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
       descricao: formData.descricao,
       valor: valorFinal,
       conta_bancaria: formData.conta_bancaria,
-      categoria: lancamento.valor < 0 ? 'Movimentação Avulsa' : lancamento.categoria,
+      ...(lancamento.investimento_aplicacao_id && {
+        investimento_aplicacao_id: formData.investimento_aplicacao_id,
+      }),
+      categoria: lancamento.valor < 0 && !lancamento.investimento_aplicacao_id
+        ? 'Movimentação Avulsa'
+        : lancamento.categoria,
       natureza: lancamento.valor < 0 ? formData.natureza : null
     };
 
@@ -119,6 +125,28 @@ export default function EditLancamentoModal({ isOpen, onClose, onSave, lancament
                   </select>
                 )}
               </div>
+
+              {lancamento.investimento_aplicacao_id && (
+                <div>
+                  <label htmlFor="investimento_aplicacao_id" className="block text-sm font-medium text-gray-300">Aplicação</label>
+                  <select
+                    id="investimento_aplicacao_id"
+                    name="investimento_aplicacao_id"
+                    value={formData.investimento_aplicacao_id || ''}
+                    onChange={handleChange}
+                    required
+                    className="mt-1 block w-full rounded-md border border-gray-600 bg-gray-700 p-3 shadow-sm"
+                  >
+                    <option value="" disabled>Selecione uma aplicação</option>
+                    {!contasInvestimento.some((conta) => String(conta.aplicacaoId) === String(lancamento.investimento_aplicacao_id)) && (
+                      <option value={String(lancamento.investimento_aplicacao_id)} disabled>Aplicação atual indisponível</option>
+                    )}
+                    {contasInvestimento.map((conta) => (
+                      <option key={conta.aplicacaoId} value={String(conta.aplicacaoId)}>{conta.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {lancamento.valor < 0 && (
                 <div className="mt-2">

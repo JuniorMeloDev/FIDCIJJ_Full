@@ -11,6 +11,22 @@ export async function PUT(request, { params }) {
 
         const { id } = await params;
         const body = await request.json();
+        const { data: lancamento, error: fetchError } = await supabase
+            .from('movimentacoes_caixa')
+            .select('categoria, investimento_aplicacao_id')
+            .eq('id', id)
+            .maybeSingle();
+        if (fetchError) throw fetchError;
+        if (!lancamento) return NextResponse.json({ message: 'Lançamento não encontrado.' }, { status: 404 });
+
+        const aplicacaoId = body.investimento_aplicacao_id;
+        const trocarAplicacao = aplicacaoId !== undefined &&
+            String(aplicacaoId) !== String(lancamento.investimento_aplicacao_id);
+        if (trocarAplicacao && (!lancamento.investimento_aplicacao_id ||
+            ['Pagamento de Borderô', 'Recebimento', 'Transferencia Enviada', 'Transferencia Recebida'].includes(lancamento.categoria) ||
+            !/^[1-9]\d*$/.test(String(aplicacaoId)) || !Number.isSafeInteger(Number(aplicacaoId)))) {
+            return NextResponse.json({ message: 'Selecione uma aplicação válida para este lançamento.' }, { status: 400 });
+        }
 
         // Apenas atualiza os campos permitidos
         const { error } = await supabase
@@ -19,8 +35,11 @@ export async function PUT(request, { params }) {
                 data_movimento: body.data_movimento,
                 descricao: body.descricao,
                 valor: body.valor,
-                conta_bancaria: body.conta_bancaria,
-                categoria: body.categoria,
+                ...(trocarAplicacao && { investimento_aplicacao_id: aplicacaoId }),
+                ...(!lancamento.investimento_aplicacao_id && {
+                    conta_bancaria: body.conta_bancaria,
+                    categoria: body.categoria,
+                }),
                 natureza: body.natureza // <--- Agora atualiza a natureza
             })
             .eq('id', id);
@@ -65,6 +84,12 @@ export async function DELETE(request, props) {
         // 3. Se não for protegido, prossegue com a exclusão.
         const { error } = await supabase.from('movimentacoes_caixa').delete().eq('id', id);
 
+        if (['23001', '23503'].includes(error?.code)) {
+            return NextResponse.json(
+                { message: 'Este lançamento está vinculado a outro registro, como uma conciliação.' },
+                { status: 409 },
+            );
+        }
         if (error) throw error;
         return new NextResponse(null, { status: 204 });
     } catch (error) {

@@ -888,9 +888,11 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
           const aplicacoesData = await aplicacoesResponse.json();
           setContasInvestimento(aplicacoesData.filter((a) => a.ativa).flatMap((a) => {
             const c = investimentosData.find((conta) => conta.id === a.conta_id && conta.ativa);
+            const vinculada = masterContasData.find((conta) => conta.id === a.conta_bancaria_vinculada_id);
             return c ? [{
               id: `investimento-${a.id}`,
               aplicacaoId: a.id,
+              contaBancariaVinculada: vinculada ? `${vinculada.banco} - ${vinculada.agencia}/${vinculada.conta_corrente}` : null,
               contaBancaria: resolveContaBancaria(
                 c.conta ? `${c.banco} - ${c.agencia || ''}/${c.conta}` : `${c.banco} - ${c.nome}`,
                 masterContasData.map((conta) => ({ contaBancaria: `${conta.banco} - ${conta.agencia}/${conta.conta_corrente}` }))
@@ -1251,6 +1253,7 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
   const canShowEditDeleteActions = (item) => {
     const categoria = normalizeMatchText(item?.categoria);
     return (
+      categoria === "transferencia" ||
       categoria.includes("despesa avulsa") ||
       categoria.includes("receita avulsa") ||
       (categoria.includes("movimenta") && categoria.includes("avulsa")) ||
@@ -1393,35 +1396,47 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify(payload),
       });
-      if (!response.ok) throw new Error("Falha ao atualizar.");
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.message || "Falha ao atualizar.");
+      }
       showNotification("Atualizado com sucesso!", "success");
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
       return true;
     } catch (error) {
+      showNotification(error.message, "error");
       return false;
     }
   };
   const handleEditRequest = (item = contextMenu.selectedItem) => {
     if (item) {
+      setContextMenu((prev) => ({ ...prev, visible: false }));
       setItemParaEditar(item);
       setIsEditModalOpen(true);
     }
   };
   const handleDeleteRequest = (item = contextMenu.selectedItem) => {
-    if (item) setItemParaExcluir(item.id);
+    if (item) {
+      setContextMenu((prev) => ({ ...prev, visible: false }));
+      setItemParaExcluir(item);
+    }
   };
   const handleConfirmDelete = async () => {
     try {
-      await fetch(`/api/movimentacoes-caixa/${itemParaExcluir}`, {
+      const response = await fetch(`/api/movimentacoes-caixa/${itemParaExcluir.id}`, {
         method: "DELETE",
         headers: getAuthHeader(),
       });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.message || "Erro ao excluir.");
+      }
       showNotification("Excluído com sucesso!", "success");
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
-    } catch {
-      showNotification("Erro ao excluir.", "error");
+    } catch (error) {
+      showNotification(error.message, "error");
     }
     setItemParaExcluir(null);
   };
@@ -1654,7 +1669,9 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
       const itemsDoDia = groupedByDate[date];
 
       itemsDoDia.forEach(item => {
-        if (!item.investimento_aplicacao_id) runningBalance += parseFloat(item.valor);
+        if (!item.investimento_aplicacao_id || item.investimento_conta_bancaria_id) {
+          runningBalance += parseFloat(item.valor);
+        }
         finalIds.push(item);
       });
 
@@ -1785,13 +1802,16 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
         onSave={handleUpdateLancamento}
         lancamento={itemParaEditar}
         contasMaster={contasMaster}
+        contasInvestimento={contasInvestimento}
       />
       <ConfirmacaoModal
         isOpen={!!itemParaExcluir}
         onClose={() => setItemParaExcluir(null)}
         onConfirm={handleConfirmDelete}
         title="Confirmar Exclusão"
-        message="Deseja excluir?"
+        message={itemParaExcluir?.investimento_aplicacao_id
+          ? "Deseja excluir este lançamento do Fluxo de Caixa e o movimento vinculado em Investimentos?"
+          : "Deseja excluir este lançamento?"}
       />
       <EmailModal
         isOpen={isEmailModalOpen}
@@ -2241,12 +2261,7 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
                   </a>
                 </>
               )}
-              {[
-                "Despesa Avulsa",
-                "Receita Avulsa",
-                "Movimentação Avulsa",
-                "Pagamento PIX",
-              ].includes(contextMenu.selectedItem.categoria) && (
+              {canShowEditDeleteActions(contextMenu.selectedItem) && (
                   <>
                     <div className="border-t border-gray-600 my-1"></div>
                     <a

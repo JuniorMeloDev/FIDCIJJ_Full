@@ -270,7 +270,9 @@ export default function LancamentoModal({
                 {Array.isArray(contasLancamento) &&
                   contasLancamento.map((c) => (
                     <option key={c.selecao} value={c.selecao}>
-                      {c.nome ? `${c.nome} (Investimento) - ${formatDisplayConta(c.contaBancaria)}` : formatDisplayConta(c.contaBancaria)}
+                      {c.aplicacaoId
+                        ? `${c.nome} (Investimento) - ${c.contaBancariaVinculada ? formatDisplayConta(c.contaBancariaVinculada) : 'Somente investimento'}`
+                        : formatDisplayConta(c.contaBancaria)}
                     </option>
                   ))}
               </select>

@@ -9,7 +9,8 @@ export async function GET(request) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const { searchParams } = new URL(request.url);
-        let query = supabase.from('movimentacoes_caixa').select('*').is('investimento_aplicacao_id', null);
+        let query = supabase.from('movimentacoes_caixa').select('*')
+            .or('investimento_aplicacao_id.is.null,investimento_conta_bancaria_id.not.is.null');
 
         // Aplica os filtros da URL
         if (searchParams.get('dataInicio')) query = query.gte('data_movimento', searchParams.get('dataInicio'));

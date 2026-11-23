@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { validateReportSettings, summarizeInvestmentReport, loadInvestmentReport, generateInvestmentReportPdf } from "../src/app/lib/investimentosRelatorio.js";
-import { buildInvestmentDashboard } from "../src/app/lib/investimentos.js";
+import { buildInvestmentDashboard, getBusinessDaysInMonth } from "../src/app/lib/investimentos.js";
 import { scheduledReportPeriod } from "../src/app/lib/investimentosRelatorioAgenda.js";
 import { sendInvestmentReport } from "../src/app/lib/investimentosRelatorioEnvio.js";
 import { reportUser } from "../src/app/lib/investimentosRelatorioAuth.js";
@@ -31,6 +31,31 @@ test("saldo inicial usa histórico e transferências não contam como aportes ou
   assert.equal(data.aplicacoes[0].resumo.saldoFinal, 1355);
   assert.equal(data.aplicacoes[1].resumo.saldoFinal, 50);
   assert.equal(data.movimentacoes.length, 6);
+});
+
+test("saldo final do dia soma histórico e rendimentos mesmo com filtro de tipo", () => {
+  const dataInicio = "2026-10-01";
+  const dataFim = "2026-10-02";
+  const comJuros = {
+    ...aplicacoes[0],
+    rende_juros: true,
+    percentual_juros_mensal: getBusinessDaysInMonth(dataInicio),
+  };
+  const options = {
+    contas,
+    aplicacoes: [comJuros, aplicacoes[1]],
+    movimentacoes: [...movimentos.slice(0, 3), mov(8, "2026-09-30", 200, "aporte", 2)],
+    dataInicio,
+    dataFim,
+    tipo: "resgate",
+  };
+  const resultado = buildInvestmentDashboard(options);
+  assert.deepEqual(resultado.movimentacoes.map(({ id }) => id), [3]);
+  assert.deepEqual(resultado.saldosFinaisPorDia, { [dataInicio]: 1710, [dataFim]: 1625.10 });
+  assert.equal(resultado.saldosFinaisPorDia[dataFim], resultado.cards.saldoDisponivel);
+
+  const apenasUmaAplicacao = buildInvestmentDashboard({ ...options, aplicacoes: [comJuros] });
+  assert.equal(apenasUmaAplicacao.saldosFinaisPorDia[dataFim], 1425.10);
 });
 
 test("agenda considera Brasília, frequência, virada de ano e mês bissexto", () => {
