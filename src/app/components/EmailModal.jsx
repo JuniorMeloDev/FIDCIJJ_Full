@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 
-export default function EmailModal({ isOpen, onClose, onSend, isSending, clienteId }) {
+export default function EmailModal({ isOpen, onClose, onSend, isSending, clienteId, onPrint, isPrinting }) {
   const [recipients, setRecipients] = useState([]);
   const [newEmail, setNewEmail] = useState('');
 
@@ -63,12 +63,12 @@ export default function EmailModal({ isOpen, onClose, onSend, isSending, cliente
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-gray-700 px-5 py-4 sm:px-6">
-          <h2 className="text-xl font-bold">Enviar E-mail de Notificação?</h2>
+          <h2 className="text-xl font-bold">{onPrint ? "Operação registrada" : "Enviar E-mail de Notificação?"}</h2>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
           <p className="mb-4 text-gray-300">
-            O borderô foi guardado. Deseja enviar o PDF por e-mail para os destinatários abaixo?
+            {onPrint ? "Imprima o PDF ou envie uma cópia por e-mail." : "O borderô foi guardado. Deseja enviar o PDF por e-mail para os destinatários abaixo?"}
           </p>
 
           <div className="rounded-md bg-gray-700 p-4">
@@ -102,8 +102,13 @@ export default function EmailModal({ isOpen, onClose, onSend, isSending, cliente
 
         <div className="border-t border-gray-700 px-5 py-4 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            {onPrint && (
+              <button type="button" onClick={onPrint} disabled={isPrinting || isSending} className="w-full rounded-md border border-gray-500 px-4 py-3 font-semibold text-gray-100 hover:bg-gray-700 disabled:opacity-50 sm:w-auto">
+                {isPrinting ? "Abrindo PDF..." : "Imprimir PDF"}
+              </button>
+            )}
             <button onClick={onClose} disabled={isSending} className="w-full rounded-md bg-gray-600 px-4 py-3 font-semibold text-gray-100 transition hover:bg-gray-500 disabled:opacity-50 sm:w-auto">
-              Não, Obrigado
+              {onPrint ? "Fechar" : "Não, Obrigado"}
             </button>
             <button onClick={handleSend} disabled={isSending || recipients.length === 0} className="w-full rounded-md bg-green-500 px-4 py-3 font-semibold text-white transition hover:bg-green-600 disabled:opacity-50 sm:w-auto">
               {isSending ? 'Enviando...' : 'Sim, Enviar E-mail'}

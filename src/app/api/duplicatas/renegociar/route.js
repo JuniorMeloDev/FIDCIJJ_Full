@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/utils/supabaseClient";
 import jwt from "jsonwebtoken";
-import { buildRenegociacaoPlano } from "@/app/lib/renegociacao";
+import { buildRenegociacaoPlano, getValorBaseRenegociacao, roundMoney } from "@/app/lib/renegociacao";
 
 const STATUS_BLOQUEADOS = new Set([
   "liquidada",
@@ -34,7 +34,7 @@ export async function POST(request) {
       return NextResponse.json({ message: "Nao autorizado." }, { status: 401 });
     }
 
-    jwt.verify(token, process.env.JWT_SECRET);
+    const usuario = jwt.verify(token, process.env.JWT_SECRET);
 
     const {
       duplicataIds,
@@ -44,7 +44,13 @@ export async function POST(request) {
       jurosManual,
       taxaJurosManual,
       observacao,
+      encerramento,
+      tipoOperacaoEncerramentoId,
     } = await request.json();
+    const isEncerramento = encerramento === true;
+    if (isEncerramento && !usuario.roles?.some((role) => ["ROLE_ADMIN", "ROLE_USER"].includes(role))) {
+      return NextResponse.json({ message: "Acesso restrito à equipe interna." }, { status: 403 });
+    }
 
     if (!Array.isArray(duplicataIds) || duplicataIds.length === 0) {
       return NextResponse.json(
@@ -53,7 +59,8 @@ export async function POST(request) {
       );
     }
 
-    if (!novaDataVencimento) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(novaDataVencimento || "")) ||
+        !Number.isFinite(new Date(`${novaDataVencimento}T12:00:00Z`).getTime())) {
       return NextResponse.json(
         { message: "Informe a data da primeira parcela." },
         { status: 400 }
@@ -61,9 +68,9 @@ export async function POST(request) {
     }
 
     const parcelas = Math.max(1, Number(quantidadeParcelas) || 1);
-    const ids = [...new Set(duplicataIds.map(Number).filter(Boolean))];
+    const ids = [...new Set(duplicataIds.map(Number))];
 
-    if (ids.length === 0) {
+    if (!ids.every((id) => Number.isSafeInteger(id) && id > 0) || !Number.isSafeInteger(parcelas)) {
       return NextResponse.json(
         { message: "IDs de duplicatas invalidos." },
         { status: 400 }
@@ -130,7 +137,7 @@ export async function POST(request) {
       );
     }
 
-    if (
+    if (!isEncerramento &&
       duplicatas.some(
         (duplicata) => duplicata.operacao?.tipo_operacao_id !== tipoOperacaoId
       )
@@ -144,9 +151,9 @@ export async function POST(request) {
       );
     }
 
-    if (duplicatas.some((duplicata) => duplicata.sacado_id !== sacadoId)) {
+    if (!isEncerramento && duplicatas.some((duplicata) => duplicata.sacado_id !== sacadoId)) {
       return NextResponse.json(
-        { message: "Selecione duplicatas do mesmo sacado para renegociar juntas." },
+        { message: "Marque Encerramento do cliente para reunir títulos de sacados diferentes." },
         { status: 400 }
       );
     }
@@ -170,6 +177,55 @@ export async function POST(request) {
         { message: "O total original das duplicatas deve ser maior que zero." },
         { status: 400 }
       );
+    }
+
+    if (isEncerramento) {
+      const tipos = new Set(duplicatas.map((duplicata) => duplicata.operacao.tipo_operacao_id));
+      const tipoId = tipos.size === 1 ? tipoOperacaoId : Number(tipoOperacaoEncerramentoId);
+      if (!tipos.has(tipoId)) {
+        return NextResponse.json(
+          { message: "Escolha o tipo da operação de encerramento." },
+          { status: 400 }
+        );
+      }
+      if (plano.parcelasCalculadas.some((parcela) => !Number.isFinite(parcela.valorParcela) || parcela.valorParcela <= 0)) {
+        return NextResponse.json({ message: "As parcelas devem ter valor positivo." }, { status: 400 });
+      }
+      const { data: encerrado, error } = await supabase.rpc("registrar_encerramento_cliente", {
+        p_cliente_id: clienteId,
+        p_tipo_operacao_id: tipoId,
+        p_ids: ids,
+        p_data_operacao: new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Sao_Paulo" }).format(new Date()),
+        p_primeiro_vencimento: plano.parcelasCalculadas[0].dataVencimento,
+        p_parcelas: plano.parcelasCalculadas.map((parcela) => ({
+          numero: parcela.numeroParcela,
+          valor: parcela.valorParcela,
+          juros: parcela.jurosParcela,
+          vencimento: parcela.dataVencimento,
+        })),
+        p_juros_calculado: plano.jurosCalculado,
+        p_juros_manual: jurosManual === "" ? null : jurosManual ?? null,
+        p_observacao: observacaoNormalizada || null,
+        p_titulos: duplicatas.map((duplicata) => ({
+          id: duplicata.id,
+          nf_cte: duplicata.nf_cte,
+          sacado: duplicata.cliente_sacado,
+          data_vencimento: duplicata.data_vencimento,
+          valor_bruto: duplicata.valor_bruto,
+          valor_juros: duplicata.valor_juros,
+          principal: roundMoney(getValorBaseRenegociacao(duplicata)),
+        })),
+      });
+      if (error?.code === "P0001") return NextResponse.json({ message: error.message }, { status: 409 });
+      if (error) throw error;
+
+      return NextResponse.json({
+        success: true,
+        message: "Operação de encerramento registrada.",
+        clienteId,
+        operacaoId: encerrado.operacaoNova.id,
+        ...encerrado,
+      });
     }
 
     const observacaoOperacao =

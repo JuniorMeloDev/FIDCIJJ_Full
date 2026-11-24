@@ -6,6 +6,7 @@ import autoTable from "jspdf-autotable";
 import fs from "fs";
 import path from "path";
 import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
+import { buscarHistoricoEncerramento, buscarHistoricoPorParcela, gerarPdfEncerramento } from "@/app/lib/encerramentoPdf";
 
 const getLogoBase64 = async () => {
   try {
@@ -35,11 +36,7 @@ const sum = (items, getter) =>
   items.reduce((total, item) => total + (Number(getter(item)) || 0), 0);
 
 const getDuplicatasDaRenegociacao = async (duplicataId) => {
-  const { data: historico } = await supabase
-    .from("renegociacoes_duplicatas")
-    .select("novas_duplicata_ids")
-    .contains("novas_duplicata_ids", [Number(duplicataId)])
-    .maybeSingle();
+  const historico = await buscarHistoricoPorParcela(supabase, duplicataId, "novas_duplicata_ids");
 
   if (historico?.novas_duplicata_ids?.length > 0) {
     const { data, error } = await supabase
@@ -173,7 +170,7 @@ export async function GET(request) {
   try {
     const token = request.headers.get("Authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
-    jwt.verify(token, process.env.JWT_SECRET);
+    const usuario = jwt.verify(token, process.env.JWT_SECRET);
 
     const { searchParams } = new URL(request.url);
     const duplicataId = Number(searchParams.get("duplicataId"));
@@ -186,7 +183,14 @@ export async function GET(request) {
       return NextResponse.json({ message: "Renegociação não encontrada." }, { status: 404 });
     }
 
-    const pdfBuffer = await generatePdfBuffer(duplicatas);
+    if (duplicatas[0].operacao?.chave_nfe?.startsWith("ENC-") &&
+        !usuario.roles?.some((role) => ["ROLE_ADMIN", "ROLE_USER"].includes(role))) {
+      return NextResponse.json({ message: "Acesso restrito à equipe interna." }, { status: 403 });
+    }
+    const encerramento = await buscarHistoricoEncerramento(supabase, duplicatas[0]);
+    const pdfBuffer = encerramento
+      ? gerarPdfEncerramento(duplicatas, encerramento, await getLogoBase64())
+      : await generatePdfBuffer(duplicatas);
     const numeros = [...new Set(duplicatas.map((d) => String(d.nf_cte || "").split(".")[0]))].join("_");
     const headers = new Headers();
     headers.append("Content-Type", "application/pdf");

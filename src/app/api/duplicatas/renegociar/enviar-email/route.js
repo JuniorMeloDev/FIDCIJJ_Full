@@ -7,6 +7,7 @@ import autoTable from "jspdf-autotable";
 import fs from "fs";
 import path from "path";
 import { formatBRLNumber, formatDate } from "@/app/utils/formatters";
+import { buscarHistoricoEncerramento, gerarPdfEncerramento } from "@/app/lib/encerramentoPdf";
 
 const getLogoBase64 = async () => {
   try {
@@ -129,7 +130,7 @@ export async function POST(request) {
     if (!token) {
       return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
     }
-    jwt.verify(token, process.env.JWT_SECRET);
+    const usuario = jwt.verify(token, process.env.JWT_SECRET);
 
     const { destinatarios, duplicataIds } = await request.json();
 
@@ -169,7 +170,15 @@ export async function POST(request) {
       );
     }
 
-    const pdfBuffer = await generatePdfBuffer(duplicatas);
+    if (duplicatas[0].operacao?.chave_nfe?.startsWith("ENC-") &&
+        !usuario.roles?.some((role) => ["ROLE_ADMIN", "ROLE_USER"].includes(role))) {
+      return NextResponse.json({ message: "Acesso restrito à equipe interna." }, { status: 403 });
+    }
+    const encerramento = await buscarHistoricoEncerramento(supabase, duplicatas[0]);
+    const logoBase64 = await getLogoBase64();
+    const pdfBuffer = encerramento
+      ? gerarPdfEncerramento(duplicatas, encerramento, logoBase64)
+      : await generatePdfBuffer(duplicatas);
     const tipoDocumento =
       duplicatas[0]?.operacao?.cliente?.ramo_de_atividade === "Transportes"
         ? "CTe"
@@ -177,7 +186,9 @@ export async function POST(request) {
     const numeros = [
       ...new Set(duplicatas.map((d) => String(d.nf_cte || "").split(".")[0])),
     ].join(", ");
-    const subject = `Renegociação ${tipoDocumento} ${numeros}`;
+    const subject = encerramento
+      ? `Encerramento ${duplicatas[0].operacao.chave_nfe}`
+      : `Renegociação ${tipoDocumento} ${numeros}`;
 
     const transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
@@ -189,10 +200,9 @@ export async function POST(request) {
       },
     });
 
-    const logoBase64 = await getLogoBase64();
     const attachments = [
       {
-        filename: `${subject}.pdf`,
+        filename: encerramento ? `Renegociacao_${duplicatas[0].operacao.chave_nfe}.pdf` : `${subject}.pdf`,
         content: pdfBuffer,
         contentType: "application/pdf",
       },
@@ -213,7 +223,7 @@ export async function POST(request) {
       subject,
       html: `
         <p>Prezados,</p>
-        <p>Segue em anexo o borderô de renegociação.</p>
+        <p>Segue em anexo o ${encerramento ? "demonstrativo de encerramento" : "borderô de renegociação"}.</p>
         <br>
         <p>Atenciosamente,</p>
         <p>

@@ -50,6 +50,8 @@ export default function RenegociacaoModal({
   const [informarTaxaManual, setInformarTaxaManual] = useState(false);
   const [taxaManual, setTaxaManual] = useState("");
   const [observacao, setObservacao] = useState("");
+  const [encerramento, setEncerramento] = useState(false);
+  const [tipoEncerramento, setTipoEncerramento] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -73,6 +75,8 @@ export default function RenegociacaoModal({
     setInformarTaxaManual(false);
     setTaxaManual("");
     setObservacao("");
+    setEncerramento(false);
+    setTipoEncerramento("");
     setError("");
     setSubmitting(false);
     setDatasParcelas([]);
@@ -112,6 +116,12 @@ export default function RenegociacaoModal({
     () => duplicatas.filter((duplicata) => selectedIds.includes(duplicata.id)),
     [duplicatas, selectedIds]
   );
+  const tiposSelecionados = new Map(duplicatasSelecionadas
+    .filter((duplicata) => duplicata.operacao?.tipo_operacao_id)
+    .map((duplicata) => [
+      String(duplicata.operacao.tipo_operacao_id),
+      duplicata.operacao.tipo_operacao?.nome,
+    ]));
 
   const plano = useMemo(() => {
     return buildRenegociacaoPlano({
@@ -168,6 +178,10 @@ export default function RenegociacaoModal({
       setError("A quantidade de parcelas precisa ser maior que zero.");
       return;
     }
+    if (encerramento && tiposSelecionados.size > 1 && !tiposSelecionados.has(tipoEncerramento)) {
+      setError("Escolha o tipo da operação de encerramento.");
+      return;
+    }
 
     setError("");
     setSubmitting(true);
@@ -180,6 +194,8 @@ export default function RenegociacaoModal({
         jurosManual: null,
         taxaJurosManual: informarTaxaManual ? taxa : null,
         observacao,
+        encerramento,
+        tipoOperacaoEncerramentoId: tipoEncerramento || null,
       });
     } finally {
       setSubmitting(false);
@@ -188,8 +204,33 @@ export default function RenegociacaoModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="relative w-full max-w-6xl rounded-lg bg-gray-800 p-6 text-white shadow-xl">
+      <div className="relative max-h-[calc(100dvh-2rem)] w-full max-w-6xl overflow-y-auto rounded-lg bg-gray-800 p-6 text-white shadow-xl">
         <h2 className="mb-4 text-2xl font-bold">Renegociacao</h2>
+
+        <div className="mb-4 rounded-md border border-gray-600 p-3">
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input type="checkbox" checked={encerramento} onChange={(event) => setEncerramento(event.target.checked)} className="accent-orange-500" />
+            Encerramento do cliente
+          </label>
+          {encerramento && (
+            <>
+              <p className="mt-2 text-sm text-gray-300">Reúne os títulos selecionados do mesmo cliente, inclusive de sacados diferentes, em um único plano de parcelas em nome do cliente.</p>
+              {tiposSelecionados.size > 1 && (
+                <label className="mt-3 block text-sm text-gray-200">
+                  Tipo da operação de encerramento
+                  <select
+                    value={tiposSelecionados.has(tipoEncerramento) ? tipoEncerramento : ""}
+                    onChange={(event) => setTipoEncerramento(event.target.value)}
+                    className="mt-1 block w-full rounded-md border border-gray-600 bg-gray-700 p-2"
+                  >
+                    <option value="">Selecione</option>
+                    {[...tiposSelecionados].map(([id, nome]) => <option key={id} value={id}>{nome || id}</option>)}
+                  </select>
+                </label>
+              )}
+            </>
+          )}
+        </div>
 
         <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-4">
           <div>
@@ -428,7 +469,7 @@ export default function RenegociacaoModal({
             disabled={submitting || selectedIds.length === 0}
             className="rounded-md bg-orange-500 px-4 py-2 font-semibold text-white transition hover:bg-orange-600 disabled:opacity-60"
           >
-            Confirmar renegociacao
+            {submitting ? "Registrando..." : encerramento ? "Confirmar encerramento" : "Confirmar renegociação"}
           </button>
         </div>
 

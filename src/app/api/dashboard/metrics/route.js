@@ -45,8 +45,8 @@ export async function GET(request) {
       .select(`
         id, nf_cte, data_vencimento, valor_bruto, valor_juros, cliente_sacado,
           operacao:operacoes!inner(
-            id, cliente_id, valor_liquido, valor_total_bruto, valor_total_juros,
-            cliente:clientes(id, nome, ramo_de_atividade), tipo_operacao:tipos_operacao(nome, taxa_juros_mora, taxa_juros)
+            id, cliente_id, tipo_operacao_id, juros_pre_fixado, valor_liquido, valor_total_bruto, valor_total_juros, valor_total_descontos,
+            cliente:clientes(id, nome, ramo_de_atividade), tipo_operacao:tipos_operacao(nome, taxa_juros_mora, taxa_juros, juros_pre_fixado)
           )
       `)
       .eq('operacao.status', 'Aprovada')

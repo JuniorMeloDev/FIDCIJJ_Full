@@ -72,7 +72,7 @@ export const buildRenegociacaoPlano = ({
 
   const jurosCalculado = selecionadas.reduce((sum, duplicata) => {
     const valorBase = getValorBaseRenegociacao(duplicata);
-    const taxaMensal = Number.isFinite(Number(taxaJurosManual))
+    const taxaMensal = taxaJurosManual != null && taxaJurosManual !== "" && Number.isFinite(Number(taxaJurosManual))
       ? Number(taxaJurosManual)
       : getTaxaMensal(duplicata);
     const dias = diffDias(duplicata?.dataVencimento ?? duplicata?.data_vencimento, novaDataVencimento);
@@ -94,13 +94,10 @@ export const buildRenegociacaoPlano = ({
     : [];
 
   const parcelasCalculadas = Array.from({ length: parcelas }, (_, index) => {
-    const ultima = index === parcelas - 1;
-    const principal = ultima
-      ? roundMoney(totalOriginal - principalPorParcela * (parcelas - 1))
-      : roundMoney(principalPorParcela);
-    const juros = ultima
-      ? roundMoney(jurosTotal - jurosPorParcela * (parcelas - 1))
-      : roundMoney(jurosPorParcela);
+    const dividirCentavos = (valor) =>
+      roundMoney(roundMoney(valor * (index + 1)) - roundMoney(valor * index));
+    const principal = dividirCentavos(principalPorParcela);
+    const juros = dividirCentavos(jurosPorParcela);
     const valorParcela = roundMoney(principal + juros);
     const dataPersonalizada = String(datasParcelas[index] || "").trim();
     const dataVencimento =

@@ -61,6 +61,7 @@ export default function ResumoPage() {
   const [isRenegociacaoModalOpen, setIsRenegociacaoModalOpen] = useState(false);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isPrintingRenegociacao, setIsPrintingRenegociacao] = useState(false);
   const [duplicataParaLiquidar, setDuplicataParaLiquidar] = useState(null);
   const [duplicatasParaRenegociar, setDuplicatasParaRenegociar] = useState([]);
   const [duplicatasSelecionadas, setDuplicatasSelecionadas] = useState([]);
@@ -275,6 +276,8 @@ export default function ResumoPage() {
     jurosManual,
     taxaJurosManual,
     observacao,
+    encerramento,
+    tipoOperacaoEncerramentoId,
   }) => {
     try {
       const response = await fetch("/api/duplicatas/renegociar", {
@@ -288,6 +291,8 @@ export default function ResumoPage() {
           jurosManual,
           taxaJurosManual,
           observacao,
+          encerramento,
+          tipoOperacaoEncerramentoId,
         }),
       });
 
@@ -327,6 +332,39 @@ export default function ResumoPage() {
       fetchDashboardData();
     } catch (err) {
       showNotification(err.message, "error");
+    }
+  };
+
+  const handlePrintRenegociacao = async () => {
+    const duplicataId = operacaoParaEmail?.duplicataIds[0];
+    if (!duplicataId) return;
+
+    const aba = window.open("about:blank", "_blank");
+    if (aba) aba.opener = null;
+    setIsPrintingRenegociacao(true);
+    try {
+      const response = await fetch(`/api/duplicatas/renegociar/pdf?duplicataId=${duplicataId}`, {
+        headers: getAuthHeader(),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || "Falha ao abrir o PDF.");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      if (aba && !aba.closed) {
+        aba.location.replace(url);
+      } else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `Operacao_${operacaoParaEmail.id}.pdf`;
+        link.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      aba?.close();
+      showNotification(error.message, "error");
+    } finally {
+      setIsPrintingRenegociacao(false);
     }
   };
 
@@ -406,6 +444,8 @@ export default function ResumoPage() {
         }}
         onSend={handleSendEmail}
         isSending={isSendingEmail}
+        onPrint={operacaoParaEmail?.duplicataIds.length ? handlePrintRenegociacao : undefined}
+        isPrinting={isPrintingRenegociacao}
         clienteId={operacaoParaEmail?.clienteId}
       />
       <RelatorioModal
