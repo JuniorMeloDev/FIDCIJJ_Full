@@ -9,6 +9,17 @@ export async function POST(request, { params }) {
         jwt.verify(token, process.env.JWT_SECRET);
 
         const { id } = await params; // ID da Duplicata
+        const { data: duplicata, error: consultaError } = await supabase.from('duplicatas')
+            .select('movimento:movimentacoes_caixa!liquidacao_mov_id(*)')
+            .eq('id', id)
+            .maybeSingle();
+        if (consultaError) throw consultaError;
+        if (duplicata?.movimento?.recebimento_ofx_agrupado) {
+            return NextResponse.json(
+                { message: 'Esta NF pertence a um recebimento agrupado. Estorne o grupo no Fluxo de Caixa.' },
+                { status: 409 }
+            );
+        }
 
         // 1. Executa a função de banco (RPC) que volta a duplicata para 'Pendente'
         const { error: rpcError } = await supabase.rpc('estornar_liquidacao', { p_duplicata_id: id });

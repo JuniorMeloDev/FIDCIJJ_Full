@@ -13,11 +13,14 @@ export async function PUT(request, { params }) {
         const body = await request.json();
         const { data: lancamento, error: fetchError } = await supabase
             .from('movimentacoes_caixa')
-            .select('categoria, investimento_aplicacao_id')
+            .select('*')
             .eq('id', id)
             .maybeSingle();
         if (fetchError) throw fetchError;
         if (!lancamento) return NextResponse.json({ message: 'Lançamento não encontrado.' }, { status: 404 });
+        if (lancamento.recebimento_ofx_agrupado) {
+            return NextResponse.json({ message: 'Estorne o recebimento agrupado para corrigir a conciliação.' }, { status: 409 });
+        }
 
         const aplicacaoId = body.investimento_aplicacao_id;
         const trocarAplicacao = aplicacaoId !== undefined &&

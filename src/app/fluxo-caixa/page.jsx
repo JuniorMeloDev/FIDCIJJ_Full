@@ -1445,15 +1445,25 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
   };
   const confirmarEstorno = async () => {
     try {
-      await fetch(`/api/duplicatas/${estornoInfo.duplicata_id}/estornar`, {
-        method: "POST",
-        headers: getAuthHeader(),
-      });
+      const response = estornoInfo.recebimento_ofx_agrupado
+        ? await fetch("/api/conciliacao-ofx/grupos", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json", ...getAuthHeader() },
+          body: JSON.stringify({ movimentoId: estornoInfo.id }),
+        })
+        : await fetch(`/api/duplicatas/${estornoInfo.duplicata_id}/estornar`, {
+          method: "POST",
+          headers: getAuthHeader(),
+        });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.message || "Erro ao estornar.");
+      }
       showNotification("Estornado com sucesso!", "success");
       fetchMovimentacoes(filters, sortConfig);
       fetchSaldos(filters);
-    } catch {
-      showNotification("Erro ao estornar.", "error");
+    } catch (error) {
+      showNotification(error.message, "error");
     }
     setEstornoInfo(null);
   };
@@ -1767,6 +1777,10 @@ const handleCriarLancamentoDoOfx = (ofxItem, contaSelecionadaId) => {
         ofxData={ofxData}
         onConciliar={handleConciliarManual}
         onCriarLancamento={handleCriarLancamentoDoOfx}
+        onAtualizarFluxo={() => {
+          fetchMovimentacoes(filters, sortConfig);
+          fetchSaldos(filters);
+        }}
         contas={contasMaster}
         lancamentosDoGrid={movimentacoes}
         saldoInicial={saldoAnterior}

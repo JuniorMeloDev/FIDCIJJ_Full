@@ -1216,6 +1216,7 @@ const NovaOperacaoView = ({ showNotification, getAuthHeader, onOperationSubmitte
 
   const handleFileChange = (event) => {
     const newFiles = Array.from(event.target.files);
+    event.target.value = "";
     const xmlFiles = newFiles.filter(file => file.type === "text/xml" || file.name.endsWith('.xml'));
 
     if (xmlFiles.length !== newFiles.length) {

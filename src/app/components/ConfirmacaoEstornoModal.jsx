@@ -9,7 +9,9 @@ export default function ConfirmacaoEstornoModal({ isOpen, onClose, onConfirm, it
     ? `Tem certeza que deseja estornar o lançamento "${item.descricao}" no valor de ${formatBRLNumber(item.valor)}?`
     : 'Tem certeza que deseja estornar esta liquidação?';
 
-  const duplicataInfo = item?.duplicata?.nf_cte
+  const duplicataInfo = item?.recebimento_ofx_agrupado
+    ? "Todas as NFs vinculadas a este recebimento voltarão ao status 'Pendente'."
+    : item?.duplicata?.nf_cte
     ? `A duplicata ${item.duplicata.nf_cte} voltará ao status 'Pendente'.`
     : "A duplicata correspondente voltará ao status 'Pendente'.";
 

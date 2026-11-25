@@ -30,7 +30,7 @@ export async function POST(request) {
         .single();
         
     if (profileError || !userProfile?.clientes?.cnpj) {
-        return NextResponse.json({ message: 'Perfil de cliente não encontrado.' }, { status: 403 });
+        return NextResponse.json({ message: 'Cliente não encontrado. Peça para o administrador que cadastre esse CNPJ.' }, { status: 403 });
     }
     
     const cnpjClienteLogado = userProfile.clientes.cnpj.replace(/\D/g, '');
@@ -56,7 +56,7 @@ export async function POST(request) {
     // --- LÓGICA INTELIGENTE (Igual ao Admin) ---
 
     // Tenta ler como NF-e
-    const infNFe = parsedXml?.NFe?.infNFe?.[0] || parsedXml?.nfeProc?.[0]?.NFe?.[0]?.infNFe?.[0];
+    const infNFe = parsedXml?.NFe?.infNFe?.[0] || parsedXml?.nfeProc?.NFe?.[0]?.infNFe?.[0];
     
     // Tenta ler como CT-e
     const infCte = parsedXml?.cteProc?.CTe?.[0]?.infCte?.[0] || parsedXml?.CTe?.infCte?.[0];
@@ -117,17 +117,27 @@ export async function POST(request) {
     const sacadoCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
     const nomeSacadoXml = getVal(sacadoNode, 'xNome');
 
-    const { data: sacadoDb } = await supabase
+    if (!sacadoCnpjCpf) {
+      return NextResponse.json({ message: 'O XML não informa o CPF/CNPJ do sacado.' }, { status: 422 });
+    }
+
+    const { data: sacadoDb, error: sacadoError } = await supabase
         .from('sacados')
-        .select('*')
+        .select('id, nome')
         .eq('cnpj', sacadoCnpjCpf)
-        .single();
+        .maybeSingle();
+
+    if (sacadoError) throw new Error('Não foi possível consultar o cadastro do sacado.');
+    if (!sacadoDb) {
+      const message = `Sacado “${nomeSacadoXml || sacadoCnpjCpf}” não está cadastrado.`;
+      return NextResponse.json({ message }, { status: 422 });
+    }
 
     const identificadoresDuplicata = buildDuplicataIdentifiers(numeroDoc, parcelas);
     const duplicatasConflitantes = await queryDuplicatasByIdentifiers(
       supabase,
       identificadoresDuplicata,
-      { clienteId: clienteIdLogado, sacadoId: sacadoDb?.id }
+      { clienteId: clienteIdLogado, sacadoId: sacadoDb.id }
     );
 
     if (duplicatasConflitantes.length > 0) {
@@ -149,15 +159,13 @@ export async function POST(request) {
           sacado: {
               nome: nomeSacadoXml,
               cnpj: sacadoCnpjCpf,
-              existeNoBanco: false
+              existeNoBanco: true
           },
           parcelas: parcelas
         }
       }, { status: 200 });
     }
 
-    // 4. Prepara o retorno (Sacado)
-    // Tenta buscar sacado no banco para completar dados (opcional no portal, mas útil)
     return NextResponse.json({
       success: true,
       xmlData: {
@@ -171,9 +179,9 @@ export async function POST(request) {
             nome: getVal(emitNode, 'xNome')
         },
         sacado: {
-            nome: sacadoDb?.nome || nomeSacadoXml,
+            nome: sacadoDb.nome || nomeSacadoXml,
             cnpj: sacadoCnpjCpf,
-            existeNoBanco: !!sacadoDb
+            existeNoBanco: true
         },
         parcelas: parcelas
       }

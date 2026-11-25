@@ -57,11 +57,7 @@ export default function OperacaoBorderoPage() {
   const [xmlBatchFiles, setXmlBatchFiles] = useState([]);
   const [xmlBatchStatus, setXmlBatchStatus] = useState({});
   const [isProcessingXmlBatch, setIsProcessingXmlBatch] = useState(false);
-  const [xmlDataPendente, setXmlDataPendente] = useState(null);
-  const [isClienteModalOpen, setIsClienteModalOpen] = useState(false);
-  const [isSacadoModalOpen, setIsSacadoModalOpen] = useState(false);
-  const [clienteParaCriar, setClienteParaCriar] = useState(null);
-  const [sacadoParaCriar, setSacadoParaCriar] = useState(null);
+  const [cadastroXml, setCadastroXml] = useState(null);
   const [isPagarComPix, setIsPagarComPix] = useState(false);
   const [pixData, setPixData] = useState({ tipo_chave_pix: 'CPF/CNPJ', chave: '' });
   const [isPixConfirmOpen, setIsPixConfirmOpen] = useState(false);
@@ -232,17 +228,7 @@ export default function OperacaoBorderoPage() {
     setXmlBatchStatus({});
   };
 
-  const buildNotaFromXml = async (data, currentNotas, batchCedenteId) => {
-    if (!data.emitenteExiste || !data.emitente?.id) {
-      throw new Error(`Cedente “${data.emitente?.nome || "não identificado"}” não está cadastrado.`);
-    }
-    if (!data.sacadoExiste || !data.sacado?.id) {
-      throw new Error(`Sacado “${data.sacado?.nome || "não identificado"}” não está cadastrado.`);
-    }
-    if (batchCedenteId && String(batchCedenteId) !== String(data.emitente.id)) {
-      throw new Error("O XML pertence a outro cedente. Use apenas documentos do mesmo cedente no borderô.");
-    }
-
+  const buildNotaFromXml = async (data, currentNotas) => {
     const prazos = (data.parcelas || []).map((parcela) => {
       const emissao = new Date(`${data.dataEmissao}T00:00:00`);
       const vencimento = new Date(`${parcela.dataVencimento}T00:00:00`);
@@ -305,23 +291,23 @@ export default function OperacaoBorderoPage() {
     };
   };
 
-  const processXmlBatch = async (filesToProcess = xmlBatchFiles) => {
+  const processXmlBatch = async () => {
     if (!tipoOperacaoId || !dataOperacao) {
       showNotification("Selecione o tipo e a data da operação antes de importar os XMLs.", "error");
       return;
     }
-    if (filesToProcess.length === 0) {
+    if (xmlBatchFiles.length === 0) {
       showNotification("Selecione ao menos um arquivo XML.", "error");
       return;
     }
 
     setIsProcessingXmlBatch(true);
     let workingNotas = [...notasFiscais];
-    let imported = 0;
+    const failedFiles = [];
     let firstCedente = cedenteSelecionado;
     let batchCedenteId = empresaCedenteId;
 
-    const orderedFiles = [...filesToProcess].sort((a, b) =>
+    const orderedFiles = [...xmlBatchFiles].sort((a, b) =>
       a.name.localeCompare(b.name, "pt-BR", { numeric: true, sensitivity: "base" })
     );
 
@@ -339,7 +325,29 @@ export default function OperacaoBorderoPage() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Falha ao ler o arquivo XML.");
 
-        if (data.emitenteExiste && data.emitente?.id) {
+        if (batchCedenteId && String(batchCedenteId) !== String(data.emitente?.id)) {
+          throw new Error("O XML pertence a outro cedente. Use apenas documentos do mesmo cedente no borderô.");
+        }
+
+        const cadastro = !data.emitenteExiste || !data.emitente?.id
+          ? { tipo: "Cedente", dados: data.emitente, rota: "clientes" }
+          : !data.sacadoExiste || !data.sacado?.id
+            ? { tipo: "Sacado", dados: data.sacado, rota: "sacados" }
+            : null;
+
+        if (cadastro) {
+          failedFiles.push(file);
+          const message = cadastro.dados?.cnpj
+            ? `${cadastro.tipo} “${cadastro.dados.nome || cadastro.dados.cnpj}” não está cadastrado.`
+            : `O XML não informa o CPF/CNPJ do ${cadastro.tipo.toLowerCase()}.`;
+          setXmlBatchStatus((current) => ({
+            ...current,
+            [key]: { status: "error", message, cadastro: cadastro.dados?.cnpj ? cadastro : null },
+          }));
+          continue;
+        }
+
+        if (!firstCedente) {
           const detailsResponse = await fetch(`/api/cadastros/clientes/${data.emitente.id}`, { headers: getAuthHeader() });
           if (detailsResponse.ok) {
             const details = await detailsResponse.json();
@@ -347,17 +355,18 @@ export default function OperacaoBorderoPage() {
           }
         }
 
-        const nota = await buildNotaFromXml(data, workingNotas, batchCedenteId);
+        const nota = await buildNotaFromXml(data, workingNotas);
         workingNotas.push(nota);
-        imported += 1;
         batchCedenteId = data.emitente.id;
         firstCedente ||= data.emitente;
         setXmlBatchStatus((current) => ({ ...current, [key]: { status: "success", message: "Adicionado ao borderô." } }));
       } catch (error) {
+        failedFiles.push(file);
         setXmlBatchStatus((current) => ({ ...current, [key]: { status: "error", message: error.message } }));
       }
     }
 
+    const imported = xmlBatchFiles.length - failedFiles.length;
     setNotasFiscais(sortDocumentosByNumber(workingNotas));
     if (firstCedente && imported > 0) {
       setEmpresaCedente(firstCedente.nome || "");
@@ -366,200 +375,40 @@ export default function OperacaoBorderoPage() {
       setCedenteSelecionado(firstCedente);
     }
     setIsProcessingXmlBatch(false);
-    setIsXmlBatchModalOpen(false);
-    setXmlBatchFiles([]);
-    setXmlBatchStatus({});
-    showNotification(
-      imported === filesToProcess.length
-        ? `${imported} XML(s) importado(s) com sucesso!`
-        : `${imported} de ${filesToProcess.length} XML(s) foram importados. Os demais apresentaram erro.`,
-      imported === filesToProcess.length ? "success" : "error"
-    );
+    setXmlBatchFiles(failedFiles);
+    setXmlBatchStatus((current) => Object.fromEntries(
+      Object.entries(current).filter(([, check]) => check.status === "error")
+    ));
+    if (failedFiles.length === 0) {
+      setIsXmlBatchModalOpen(false);
+      showNotification(`${imported} XML(s) importado(s) com sucesso!`, "success");
+    } else if (imported > 0) {
+      showNotification(`${imported} XML(s) importado(s). Confira os arquivos pendentes.`, "info");
+    }
   };
 
-  const handleXmlUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    showNotification("Processando XML...", "info");
-    const formData = new FormData();
-    formData.append("file", file);
+  const handleSaveCadastroXml = async (_id, data) => {
+    if (data.cnpj !== cadastroXml.dados.cnpj.replace(/\D/g, "")) {
+      return { success: false, message: "Informe o mesmo CPF/CNPJ que consta no XML." };
+    }
+
     try {
-      const response = await fetch(`/api/upload/nfe-xml`, {
+      const response = await fetch(`/api/cadastros/${cadastroXml.rota}`, {
         method: "POST",
-        headers: { ...getAuthHeader() },
-        body: formData,
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify(data),
       });
       if (!response.ok) {
-        const errorText = await response.json();
-        throw new Error(errorText.message || "Falha ao ler o ficheiro XML.");
-      }
-      
-      let data = await response.json(); // Usando let para permitir mutação
-
-      // Se o emitente já existe (identificado por CNPJ no back), buscamos os dados completos (incluindo chaves PIX)
-      if (data.emitenteExiste && data.emitente.id) {
-        try {
-            const clientFullRes = await fetch(`/api/cadastros/clientes/${data.emitente.id}`, {
-                headers: getAuthHeader()
-            });
-            if (clientFullRes.ok) {
-                const clientFullData = await clientFullRes.json();
-                // Sobrescrevemos o emitente do XML com os dados oficiais do banco
-                data.emitente = {
-                    ...data.emitente,
-                    ...clientFullData, // Traz contas bancárias, chaves pix, etc.
-                    nome: clientFullData.nome // Garante o nome oficial
-                };
-            }
-        } catch (fetchErr) {
-            console.error("Erro ao buscar detalhes completos do cliente:", fetchErr);
-            // Continua com os dados do XML se falhar
-        }
-      }
-
-      setXmlDataPendente(data);
-      
-      if (!data.emitenteExiste) {
-        setClienteParaCriar(data.emitente);
-        setIsClienteModalOpen(true);
-      } else if (!data.sacadoExiste) {
-        setSacadoParaCriar(data.sacado);
-        setIsSacadoModalOpen(true);
-      } else {
-        preencherFormularioComXml(data);
+        const { message } = await response.json();
+        throw new Error(message || "Falha ao salvar o cadastro.");
       }
     } catch (error) {
-      showNotification(error.message, "error");
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-  // --- FIM DA ATUALIZAÇÃO ---
-
-  const preencherFormularioComXml = (data) => {
-    const prazosArray = data.parcelas
-      ? data.parcelas.map((p) => {
-          const d1 = new Date(data.dataEmissao);
-          const d2 = new Date(p.dataVencimento);
-          return Math.ceil(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24)) +1;
-        })
-      : [];
-    const prazosString = prazosArray.join("/");
-    const valorFormatado = data.valorTotal
-      ? formatBRLInput(String(data.valorTotal * 100))
-      : "";
-
-    const nomeExibicaoSacado = data.sacado.matriz_id
-      ? `${data.sacado.nome} [Filial - ${data.sacado.uf}]`
-      : data.sacado.nome;
-
-    setNovaNf({
-      nfCte: data.numeroNf || data.numeroCte || "",
-      dataNf: data.dataEmissao ? data.dataEmissao.split("T")[0] : "",
-      valorNf: valorFormatado,
-      clienteSacado: nomeExibicaoSacado,
-      parcelas:
-        data.parcelas && data.parcelas.length > 0
-          ? String(data.parcelas.length)
-          : "1",
-      prazos: prazosString,
-      peso: "",
-      tipoDocumento: data.tipo || null,
-    });
-
-    // Aqui garantimos que o nome e o objeto completo (com chaves pix) sejam usados
-    setEmpresaCedente(data.emitente.nome || "");
-    setEmpresaCedenteId(data.emitente.id || null);
-    setCedenteRamo(data.emitente.ramo_de_atividade || "");
-    setCedenteSelecionado(data.emitente); 
-    
-    setSacadoSelecionado(data.sacado); 
-    const condicoes = data.sacado.condicoes_pagamento || [];
-    setCondicoesSacado(condicoes);
-    if (condicoes.length > 0 && !prazosString) {
-        const condicaoPadrao = condicoes[0];
-        setNovaNf(prev => ({
-            ...prev,
-            prazos: condicaoPadrao.prazos,
-            parcelas: String(condicaoPadrao.parcelas),
-        }));
+      return { success: false, message: error.message };
     }
 
-    showNotification("Dados do XML preenchidos com sucesso!", "success");
-    setXmlDataPendente(null);
-  };
-
-  const handleSaveNovoCliente = async (id, data) => {
-    try {
-      const response = await fetch(`/api/cadastros/clientes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const errorText = await response.json();
-        throw new Error(errorText.message || "Falha ao criar novo cliente.");
-      }
-
-      const novoClienteCriado = await response.json();
-      const updatedXmlData = {
-        ...xmlDataPendente,
-        emitente: {
-          ...xmlDataPendente.emitente,
-          id: novoClienteCriado.id,
-          nome: novoClienteCriado.nome, // Garante nome atualizado
-          ramo_de_atividade: data.ramoDeAtividade,
-          contasBancarias: data.contasBancarias || [], // Garante chaves pix
-        },
-        emitenteExiste: true,
-      };
-      setXmlDataPendente(updatedXmlData);
-
-      showNotification("Cliente criado com sucesso!", "success");
-      setIsClienteModalOpen(false);
-
-      if (!updatedXmlData.sacadoExiste) {
-        setSacadoParaCriar(updatedXmlData.sacado);
-        setIsSacadoModalOpen(true);
-      } else {
-        preencherFormularioComXml(updatedXmlData);
-      }
-      return { success: true };
-    } catch (err) {
-      showNotification(err.message, "error");
-      return { success: false, message: err.message };
-    }
-  };
-
-  const handleSaveNovoSacado = async (id, data) => {
-    try {
-      const response = await fetch(`/api/cadastros/sacados`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const errorText = await response.json();
-        throw new Error(errorText.message || "Falha ao criar novo sacado.");
-      }
-      const novoSacadoCriado = await response.json();
-      const updatedXmlData = {
-        ...xmlDataPendente,
-        sacado: { 
-            ...xmlDataPendente.sacado, 
-            id: novoSacadoCriado.id,
-            condicoes_pagamento: data.condicoesPagamento || []
-        },
-        sacadoExiste: true,
-      };
-      showNotification("Sacado criado com sucesso!", "success");
-      setIsSacadoModalOpen(false);
-      preencherFormularioComXml(updatedXmlData);
-      return { success: true };
-    } catch (err) {
-      showNotification(err.message, "error");
-      return { success: false, message: err.message };
-    }
+    setCadastroXml(null);
+    await processXmlBatch();
+    return { success: true };
   };
 
   const handleSelectCedente = (cliente) => {
@@ -693,7 +542,7 @@ export default function OperacaoBorderoPage() {
         {
           id: Date.now(),
           ...novaNf,
-          tipoDocumento: xmlDataPendente?.tipo || novaNf.tipoDocumento || null,
+          tipoDocumento: novaNf.tipoDocumento || null,
           clienteSacado: sacadoSelecionado.nome, 
           sacadoId: sacadoSelecionado.id, 
           valorNf: valorNfFloat,
@@ -1253,16 +1102,16 @@ export default function OperacaoBorderoPage() {
         onSave={(d) => setDescontos([...descontos, d])}
       />
       <EditClienteModal
-        isOpen={isClienteModalOpen}
-        onClose={() => { setIsClienteModalOpen(false); setClienteParaCriar(null); }}
-        onSave={handleSaveNovoCliente}
-        cliente={clienteParaCriar}
+        isOpen={cadastroXml?.rota === "clientes"}
+        onClose={() => setCadastroXml(null)}
+        onSave={handleSaveCadastroXml}
+        cliente={cadastroXml?.dados}
       />
       <EditSacadoModal
-        isOpen={isSacadoModalOpen}
-        onClose={() => { setIsSacadoModalOpen(false); setSacadoParaCriar(null); }}
-        onSave={handleSaveNovoSacado}
-        sacado={sacadoParaCriar}
+        isOpen={cadastroXml?.rota === "sacados"}
+        onClose={() => setCadastroXml(null)}
+        onSave={handleSaveCadastroXml}
+        sacado={cadastroXml?.dados}
       />
       <EmailModal
         isOpen={isEmailModalOpen}
@@ -1297,7 +1146,7 @@ export default function OperacaoBorderoPage() {
         clienteId={empresaCedenteId} 
       />
 
-      {isXmlBatchModalOpen && (
+      {isXmlBatchModalOpen && !cadastroXml && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
@@ -1354,6 +1203,12 @@ export default function OperacaoBorderoPage() {
                         {check?.message || `${(file.size / 1024).toFixed(1)} KB`}
                       </p>
                     </div>
+                    {!isProcessingXmlBatch && check?.cadastro && (
+                      <button type="button" onClick={() => setCadastroXml(check.cadastro)}
+                        className="rounded px-2 py-1 text-sm font-semibold text-orange-300 hover:bg-gray-600">
+                        Cadastrar {check.cadastro.tipo.toLowerCase()}
+                      </button>
+                    )}
                     {!isProcessingXmlBatch && check?.status !== "success" && (
                       <button type="button" onClick={() => removeXmlBatchFile(file)}
                         className="rounded px-2 py-1 text-sm text-red-300 hover:bg-red-900/40">

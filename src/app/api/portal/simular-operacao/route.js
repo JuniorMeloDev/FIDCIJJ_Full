@@ -73,10 +73,16 @@ const parseXmlAndSimulate = async (xmlText, clienteCnpj, clienteId, tipoOperacao
     const destCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
     const nomeSacadoXml = getVal(sacadoNode, 'xNome');
     
-    // Busca Sacado
-    const { data: sacadoData } = await supabase.from('sacados').select('*, condicoes_pagamento(*)').eq('cnpj', destCnpjCpf).single();
-    
-    if (!sacadoData) throw new Error(`Sacado com CNPJ/CPF ${destCnpjCpf} (${nomeSacadoXml}) não está cadastrado.`);
+    if (!destCnpjCpf) throw new Error('O XML não informa o CPF/CNPJ do sacado.');
+
+    const { data: sacadoData, error: sacadoError } = await supabase
+        .from('sacados')
+        .select('*, condicoes_pagamento(*)')
+        .eq('cnpj', destCnpjCpf)
+        .maybeSingle();
+
+    if (sacadoError) throw new Error('Não foi possível consultar o cadastro do sacado.');
+    if (!sacadoData) throw new Error(`Sacado “${nomeSacadoXml || destCnpjCpf}” não está cadastrado.`);
     
     // LÓGICA DE PRAZOS
     // Se tiver parcelas no XML (ou a padrão do CTe), usamos elas para calcular os prazos.

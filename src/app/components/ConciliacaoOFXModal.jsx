@@ -3,7 +3,22 @@
 import { useState, useEffect, useMemo } from 'react';
 import { formatBRLNumber, formatDate } from '../utils/formatters';
 import { valorLiquidacaoDuplicata } from '../utils/valorLiquidacaoDuplicata';
+import { ehCobrancaAgrupadaOfx, sugerirCobrancasAgrupadasOfx } from '../lib/conciliacaoOfxAgrupada';
 import { FaWallet } from 'react-icons/fa';
+
+const statusAutomatico = {
+  PRONTO: 'Pronto para conciliar',
+  CONCILIADO: 'Conciliado',
+  JA_CONCILIADO: 'Já conciliado',
+  REVISAR: 'Revisar',
+  SEM_CORRESPONDENCIA: 'Sem correspondência',
+};
+
+const filtrosAutomaticos = [
+  ['PRONTO', 'Identificados'],
+  ['REVISAR', 'Revisar'],
+  ['SEM_CORRESPONDENCIA', 'Sem correspondência exata'],
+];
 
 export default function ConciliacaoOFXModal({
   isOpen,
@@ -11,6 +26,7 @@ export default function ConciliacaoOFXModal({
   ofxData,
   onConciliar,
   onCriarLancamento,
+  onAtualizarFluxo,
   contas = [],
   lancamentosDoGrid = [],
   saldoInicial = 0,
@@ -25,7 +41,8 @@ export default function ConciliacaoOFXModal({
   const [saldoInicialLocal, setSaldoInicialLocal] = useState(0);
   const [loadingSistema, setLoadingSistema] = useState(false);
   const [matches, setMatches] = useState({});
-  const [conciliando, setConciliando] = useState(false);
+  const [automatico, setAutomatico] = useState(null);
+  const [filtroAutomatico, setFiltroAutomatico] = useState('PRONTO');
   const [erroConciliacao, setErroConciliacao] = useState('');
   const [resultadoConciliacao, setResultadoConciliacao] = useState({});
   const [duplicatasPendentes, setDuplicatasPendentes] = useState([]);
@@ -37,6 +54,7 @@ export default function ConciliacaoOFXModal({
     if (isOpen) {
       setMatches({});
       setResultadoConciliacao({});
+      setAutomatico(null);
       setErroConciliacao('');
       if (initialDataInicio && initialDataFim) {
         setDataInicio(initialDataInicio);
@@ -87,31 +105,46 @@ export default function ConciliacaoOFXModal({
     const candidatos = duplicatasPendentes.map((duplicata) => {
       const dias = Math.round((Date.parse(`${String(duplicata.data_vencimento).slice(0, 10)}T00:00:00Z`) - data) / 86400000);
       const valorTotal = valorLiquidacaoDuplicata(duplicata);
-      const diferenca = Math.abs(valorTotal - valor);
-      return { ...duplicata, dias, diferenca, valorTotal };
+      const ajusteCentavos = Math.round(valor * 100) - Math.round(valorTotal * 100);
+      return { ...duplicata, dias, diferenca: Math.abs(ajusteCentavos) / 100, ajusteCentavos, valorTotal };
     }).filter((item) => item.dias >= -40 && item.dias <= 30 && item.diferenca <= valor * 0.15)
       .sort((a, b) => a.diferenca - b.diferenca || Math.abs(a.dias) - Math.abs(b.dias));
-    const exatos = candidatos.filter((item) => Math.round(item.diferenca * 100) === 0 && item.dias === 0);
-    return exatos.length ? exatos : candidatos.slice(0, 5);
+    const quantidadeExata = candidatos.filter((item) => item.ajusteCentavos === 0).length;
+    return candidatos.slice(0, Math.max(5, quantidadeExata));
   };
 
-  const validarDuplicata = async (ofx, duplicata) => {
+  const validarTitulos = async (ofx, titulos, noModal = false) => {
     const conta = contas.find((item) => String(item.id) === String(contaSelecionada));
     if (!conta?.contaBancaria) { setErroConciliacao('Selecione a conta bancária do extrato.'); return; }
+    const agrupado = titulos.length > 1;
+    const duplicata = titulos[0];
+    const rota = agrupado ? 'grupos' : 'duplicatas';
+    const selecao = agrupado
+      ? { titulos: titulos.map(({ id, centavos }) => ({ id, centavos })) }
+      : { duplicataId: duplicata.id };
     setConciliandoDuplicata(String(ofx.id));
     setErroConciliacao('');
     try {
-      const response = await fetch('/api/conciliacao-ofx/duplicatas', {
+      const response = await fetch(`/api/conciliacao-ofx/${rota}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('authToken')}` },
-        body: JSON.stringify({ conta: conta.contaBancaria, transacao: ofx, duplicataId: duplicata.id }),
+        body: JSON.stringify({ conta: conta.contaBancaria, transacao: ofx, ...selecao }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Falha ao conciliar duplicata.');
-      setDuplicatasPendentes((current) => current.filter((item) => item.id !== duplicata.id));
-      setResultadoConciliacao((current) => ({ ...current, [ofx.id]: { status: 'CONCILIADO' } }));
-      setMatches((current) => ({ ...current, [ofx.id]: data.movimentoId }));
+      const idsValidados = new Set(titulos.map((titulo) => titulo.id));
+      setDuplicatasPendentes((current) => current.filter((item) => !idsValidados.has(item.id)));
+      setResultadoConciliacao((current) => ({
+        ...current, [ofx.id]: { status: 'CONCILIADO', movimentoId: data.movimentoId },
+      }));
       await carregarDadosSistema();
+      if (agrupado) onAtualizarFluxo?.();
+      if (noModal) {
+        const aviso = agrupado
+          ? `${titulos.length} NFs validadas no recebimento de ${formatBRLNumber(ofx.valor)}.`
+          : `NF ${duplicata.nf_cte || duplicata.id} validada.`;
+        await processarConciliacao(false, aviso);
+      }
     } catch (error) { setErroConciliacao(error.message); }
     finally { setConciliandoDuplicata(''); }
   };
@@ -211,12 +244,31 @@ export default function ConciliacaoOFXModal({
     });
   }, [lancamentosSistema, saldoInicialLocal]);
 
-  const ofxProcessado = useMemo(() => {
-    if (!Array.isArray(ofxData) || ofxData.length === 0) return [];
+  const transacoesNoPeriodo = useMemo(() => (ofxData || []).filter((item) => {
+    const dia = String(item.data || '').slice(0, 10);
+    return dia && dia >= dataInicio && dia <= dataFim;
+  }), [ofxData, dataInicio, dataFim]);
 
+  const transacoesPorId = useMemo(() => new Map(
+    transacoesNoPeriodo.map((item) => [String(item.id).trim(), item])
+  ), [transacoesNoPeriodo]);
+  const resultadosDaPrevia = automatico?.resultados;
+  const gruposPorTransacao = useMemo(() => {
+    const grupos = new Map();
+    for (const resultado of resultadosDaPrevia || []) {
+      if (resultado.status === 'JA_CONCILIADO' || resultado.status === 'CONCILIADO') continue;
+      const transacao = transacoesPorId.get(resultado.id);
+      if (transacao && ehCobrancaAgrupadaOfx(transacao.descricao)) {
+        grupos.set(resultado.id, sugerirCobrancasAgrupadasOfx(transacao, duplicatasPendentes));
+      }
+    }
+    return grupos;
+  }, [resultadosDaPrevia, transacoesPorId, duplicatasPendentes]);
+
+  const ofxProcessado = useMemo(() => {
     const groupedByDate = {};
 
-    [...ofxData]
+    [...transacoesNoPeriodo]
       .sort((a, b) => new Date(a.data || 0) - new Date(b.data || 0))
       .forEach((item) => {
         const date = (item.data || '').split('T')[0];
@@ -253,7 +305,7 @@ export default function ConciliacaoOFXModal({
       if (b.isBalanceRow) return 1;
       return 0;
     });
-  }, [apiDailyBalances, ofxData]);
+  }, [apiDailyBalances, transacoesNoPeriodo]);
 
   const autoConciliar = (ofxItems, sysItems) => {
     const newMatches = {};
@@ -271,28 +323,69 @@ export default function ConciliacaoOFXModal({
     setMatches(newMatches);
   };
 
-  const confirmarConciliacao = async () => {
+  const processarConciliacao = async (confirmar = false, aviso = '') => {
     const conta = contas.find((item) => String(item.id) === String(contaSelecionada));
     if (!conta?.contaBancaria) return;
-    setConciliando(true);
     setErroConciliacao('');
+    const previstos = new Map(
+      resultadosAutomaticos.filter((item) => item.status === 'PRONTO')
+        .map((item) => [item.id, item])
+    );
+    const transacoes = transacoesNoPeriodo.map(({ id, data, valor, descricao }) => {
+      const previsto = confirmar ? previstos.get(String(id).trim()) : undefined;
+      return { id, data, valor, descricao, movimentoId: previsto?.movimentoId, duplicataId: previsto?.duplicataId };
+    });
+    setAutomatico({ fase: confirmar ? 'gravando' : 'buscando', resultados: [], erro: '', aviso });
     try {
       const response = await fetch('/api/conciliacao-ofx', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('authToken')}` },
-        body: JSON.stringify({ conta: conta.contaBancaria, transacoes: ofxData }),
+        body: JSON.stringify({ conta: conta.contaBancaria, transacoes, confirmar }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || 'Falha na conciliação.');
-      const resultados = Object.fromEntries(payload.resultados.map((item) => [item.id, item]));
-      setResultadoConciliacao(resultados);
-      setMatches(Object.fromEntries(payload.resultados.filter((item) => item.status === 'CONCILIADO').map((item) => [item.id, item.movimentoId])));
+      const resultados = payload.resultados;
+      setAutomatico({ fase: confirmar ? 'resultado' : 'previa', resultados, erro: '', aviso });
+      setFiltroAutomatico((atual) => {
+        if (automatico && resultados.some((item) => item.status === atual)) return atual;
+        return filtrosAutomaticos.find(([status]) => resultados.some((item) => item.status === status))?.[0] || 'PRONTO';
+      });
+      setResultadoConciliacao((current) => ({
+        ...current,
+        ...Object.fromEntries(resultados.map((item) => [item.id, item])),
+      }));
+      const duplicatasValidadas = new Set(resultados
+        .filter((item) => item.status === 'CONCILIADO' && item.duplicataId)
+        .map((item) => item.duplicataId));
+      if (duplicatasValidadas.size > 0) {
+        setDuplicatasPendentes((current) => current.filter((item) => !duplicatasValidadas.has(item.id)));
+        await carregarDadosSistema();
+      }
     } catch (error) {
-      setErroConciliacao(error.message);
-    } finally {
-      setConciliando(false);
+      setAutomatico({ fase: 'erro', resultados: [], erro: error.message, aviso });
     }
   };
+
+  const matchesVisiveis = { ...matches };
+  for (const [id, resultado] of Object.entries(resultadoConciliacao)) {
+    if (resultado.movimentoId) matchesVisiveis[id] = resultado.movimentoId;
+    else delete matchesVisiveis[id];
+  }
+  const resultadosAutomaticos = (automatico?.resultados || [])
+    .filter((item) => item.status !== 'JA_CONCILIADO' && item.status !== 'CONCILIADO')
+    .map((item) => item.status === 'PRONTO' && item.duplicataId && gruposPorTransacao.get(item.id)?.length
+      ? { ...item, status: 'REVISAR', duplicataId: null }
+      : item);
+  const conciliadosAgora = automatico?.resultados.filter((item) => item.status === 'CONCILIADO').length || 0;
+  const prontos = resultadosAutomaticos.filter((item) => item.status === 'PRONTO').length;
+  const haGruposParaValidar = resultadosAutomaticos.some((item) =>
+    !item.movimentoId && gruposPorTransacao.get(item.id)?.length
+  );
+  const filtroVisivel = resultadosAutomaticos.some((item) => item.status === filtroAutomatico)
+    ? filtroAutomatico
+    : filtrosAutomaticos.find(([status]) => resultadosAutomaticos.some((item) => item.status === status))?.[0];
+  const resultadosFiltrados = resultadosAutomaticos.filter((item) => item.status === filtroVisivel);
+  const aguardandoAutomatico = automatico?.fase === 'buscando' || automatico?.fase === 'gravando';
 
   const handleCriarNovo = (ofxItem) => {
     onCriarLancamento(ofxItem, contaSelecionada || null);
@@ -302,7 +395,7 @@ export default function ConciliacaoOFXModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-gray-900 text-white sm:items-center sm:p-4">
-      <div className="flex h-[100vh] w-full flex-col overflow-hidden bg-gray-900 sm:h-[92vh] sm:rounded-2xl">
+      <div inert={Boolean(automatico)} className="flex h-[100vh] w-full flex-col overflow-hidden bg-gray-900 sm:h-[92vh] sm:rounded-2xl">
         <div className="border-b border-gray-700 bg-gray-800 px-4 py-4 shadow-md sm:px-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -315,7 +408,11 @@ export default function ConciliacaoOFXModal({
                 <label className="mb-1 text-xs font-bold uppercase text-gray-400">Conta Bancária (Filtro)</label>
                 <select
                   value={contaSelecionada}
-                  onChange={(e) => setContaSelecionada(e.target.value)}
+                  onChange={(e) => {
+                    setContaSelecionada(e.target.value);
+                    setMatches({});
+                    setResultadoConciliacao({});
+                  }}
                   className="h-11 w-full rounded border border-gray-500 bg-gray-800 p-2 text-sm text-white focus:ring-orange-500 sm:w-64"
                 >
                   <option value="">-- Selecione uma Conta --</option>
@@ -341,12 +438,12 @@ export default function ConciliacaoOFXModal({
               <button onClick={onClose} className="h-11 rounded bg-red-600 px-4 font-bold text-white transition hover:bg-red-700">
                 Fechar
               </button>
-              <button onClick={confirmarConciliacao} disabled={conciliando || loadingSistema || !contaSelecionada || !ofxData?.length} className="h-11 rounded bg-green-700 px-4 font-bold text-white disabled:opacity-50">
-                {conciliando ? 'Conciliando...' : 'Conciliar automaticamente'}
+              <button onClick={() => processarConciliacao()} disabled={loadingSistema || Boolean(conciliandoDuplicata) || !contaSelecionada || !transacoesNoPeriodo.length} className="h-11 rounded bg-green-700 px-4 font-bold text-white disabled:opacity-50">
+                Conciliar automaticamente
               </button>
             </div>
           </div>
-          {erroConciliacao && <p role="alert" className="mt-2 text-sm text-red-400">{erroConciliacao}</p>}
+          {!automatico && erroConciliacao && <p role="alert" className="mt-2 text-sm text-red-400">{erroConciliacao}</p>}
         </div>
 
         <div className="flex-1 overflow-hidden">
@@ -354,7 +451,7 @@ export default function ConciliacaoOFXModal({
             <div className="flex min-h-0 flex-col overflow-hidden rounded-md border border-gray-700 bg-gray-800/50">
               <div className="sticky top-0 border-b border-gray-600 bg-gray-700 p-3 text-center font-bold">
                 EXTRATO BANCÁRIO (OFX)
-                <span className="block text-xs font-normal text-gray-400">{ofxData?.length || 0} registros importados</span>
+                <span className="block text-xs font-normal text-gray-400">{transacoesNoPeriodo.length} registros no período</span>
               </div>
               <div className="flex-grow overflow-y-auto p-2 space-y-2">
                 {ofxProcessado && ofxProcessado.map((item) => {
@@ -372,7 +469,7 @@ export default function ConciliacaoOFXModal({
                   }
 
                   const status = resultadoConciliacao[item.id]?.status;
-                  const isMatched = !!matches[item.id] || status === 'JA_CONCILIADO';
+                  const isMatched = !!matchesVisiveis[item.id] || status === 'JA_CONCILIADO';
                   const candidatos = isMatched ? [] : candidatosDuplicata(item);
                   return (
                     <div key={item.id} className={`rounded border p-3 ${isMatched ? 'border-green-600 bg-green-900/20' : 'border-gray-600 bg-gray-800'}`}>
@@ -384,7 +481,7 @@ export default function ConciliacaoOFXModal({
                       <div className="flex-shrink-0 text-right">
                         <div className={`font-bold ${item.valor < 0 ? 'text-red-400' : 'text-green-400'}`}>{formatBRLNumber(item.valor)}</div>
                         {!isMatched && candidatos.length === 0 ? (
-                          <><span className="block text-xs text-yellow-400">{status === 'REVISAR' ? 'Revisar: mais de um lançamento' : status === 'SEM_CORRESPONDENCIA' ? 'Sem correspondência' : ''}</span><button
+                          <><span className="block text-xs text-yellow-400">{status === 'REVISAR' || status === 'SEM_CORRESPONDENCIA' ? statusAutomatico[status] : ''}</span><button
                             onClick={() => handleCriarNovo(item)}
                             className="mt-1 rounded bg-blue-600 px-2 py-1 text-xs text-white transition-colors hover:bg-blue-500"
                           >
@@ -396,10 +493,16 @@ export default function ConciliacaoOFXModal({
                       </div>
                     </div>
                     {candidatos.length > 0 && <div className="mt-3 space-y-2 border-t border-gray-600 pt-2">
-                      <p className="text-xs font-semibold text-orange-300">{candidatos.every((candidato) => Math.round(candidato.diferenca * 100) === 0 && candidato.dias === 0) ? 'NF encontrada' : 'Sugestões de NF em aberto'}</p>
+                      <p className="text-xs font-semibold text-orange-300">{candidatos.every((candidato) => candidato.ajusteCentavos === 0) ? 'NF encontrada' : 'Sugestões de NF em aberto'}</p>
                       {candidatos.map((duplicata) => <div key={duplicata.id} className="flex items-center justify-between gap-2 rounded bg-gray-700 px-2 py-1 text-xs">
-                        <span className="min-w-0 truncate" title={duplicata.cliente_sacado}>NF {duplicata.nf_cte} · {duplicata.cliente_sacado} · {formatDate(duplicata.data_vencimento)} · {formatBRLNumber(duplicata.valorTotal)}</span>
-                        <button type="button" disabled={Boolean(conciliandoDuplicata)} onClick={() => validarDuplicata(item, duplicata)} className="shrink-0 rounded bg-green-700 px-2 py-1 font-semibold disabled:opacity-50">{conciliandoDuplicata === String(item.id) ? 'Validando...' : 'Validar'}</button>
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words">NF {duplicata.nf_cte} · {duplicata.cliente_sacado}</p>
+                          <p className="mt-1 flex flex-wrap gap-x-2 text-gray-300">
+                            <span>{formatDate(duplicata.data_vencimento)}</span>
+                            <strong className="whitespace-nowrap text-white">{formatBRLNumber(duplicata.valorTotal)}</strong>
+                          </p>
+                        </div>
+                        <button type="button" disabled={Boolean(conciliandoDuplicata)} onClick={() => validarTitulos(item, [duplicata])} className="shrink-0 rounded bg-green-700 px-2 py-1 font-semibold disabled:opacity-50">{conciliandoDuplicata === String(item.id) ? 'Validando...' : 'Validar'}</button>
                       </div>)}
                     </div>}
                     </div>
@@ -435,7 +538,7 @@ export default function ConciliacaoOFXModal({
                     );
                   }
 
-                  const matchedOfxId = Object.keys(matches).find((key) => matches[key] === sysItem.id);
+                  const matchedOfxId = Object.keys(matchesVisiveis).find((key) => String(matchesVisiveis[key]) === String(sysItem.id));
                   const isMatched = !!matchedOfxId;
 
                   return (
@@ -458,6 +561,138 @@ export default function ConciliacaoOFXModal({
           </div>
         </div>
       </div>
+      {automatico && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
+          <section role="dialog" aria-modal="true" aria-labelledby="titulo-conciliacao-automatica" className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-xl border border-gray-600 bg-gray-800 p-5 shadow-2xl">
+            <h3 id="titulo-conciliacao-automatica" className="text-xl font-bold">Conciliação automática</h3>
+            <p className="mt-1 text-sm text-gray-300">
+              {formatDate(dataInicio)} a {formatDate(dataFim)}. Confirme os pares exatos em lote ou escolha uma NF para validar com juros ou desconto.
+            </p>
+            {aguardandoAutomatico && (
+              <p role="status" className="my-5 text-sm">{automatico.fase === 'buscando' ? 'Buscando correspondências...' : 'Gravando conciliações...'}</p>
+            )}
+            {(automatico.erro || erroConciliacao) && <p role="alert" className="my-4 text-sm text-red-300">{automatico.erro || erroConciliacao}</p>}
+            {automatico.aviso && <p role="status" className="mt-4 text-sm font-semibold text-green-300">{automatico.aviso}</p>}
+            {(automatico.fase === 'previa' || automatico.fase === 'resultado') && (
+              <>
+                <p role="status" className="my-4 text-sm font-semibold text-green-300">
+                  {automatico.fase === 'previa'
+                    ? (prontos ? `${prontos} transação(ões) pronta(s) para conciliar.`
+                      : haGruposParaValidar ? 'Confira os grupos de NFs antes de validar.'
+                      : resultadosAutomaticos.length ? 'Nenhuma correspondência única para conciliar.' : 'Nenhuma transação pendente.')
+                    : `${conciliadosAgora} transação(ões) conciliada(s) agora.`}
+                </p>
+                {resultadosAutomaticos.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-2" aria-label="Filtrar transações">
+                    {filtrosAutomaticos.map(([status, label]) => {
+                      const total = resultadosAutomaticos.filter((item) => item.status === status).length;
+                      return (
+                        <button key={status} type="button" aria-pressed={filtroVisivel === status}
+                          onClick={() => setFiltroAutomatico(status)} disabled={total === 0 || Boolean(conciliandoDuplicata)}
+                          className={`rounded px-3 py-1.5 text-sm font-semibold disabled:opacity-50 ${filtroVisivel === status ? 'bg-orange-500 text-gray-950' : 'bg-gray-700 text-gray-100'}`}>
+                          {label} ({total})
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <ul className="min-h-0 space-y-2 overflow-y-auto">
+                  {resultadosFiltrados.map((resultado) => {
+                    const transacao = transacoesPorId.get(resultado.id);
+                    const grupos = gruposPorTransacao.get(resultado.id) || [];
+                    const cobrancaAgrupada = gruposPorTransacao.has(resultado.id);
+                    const sugestoes = resultado.status === 'PRONTO' || cobrancaAgrupada ? [] : candidatosDuplicata(transacao);
+                    return (
+                      <li key={resultado.id} className="rounded bg-gray-700 p-3 text-sm">
+                        <div className="flex flex-wrap justify-between gap-2">
+                          <div className="min-w-0 break-words">
+                            <p>{formatDate(transacao.data)} · {transacao.descricao}</p>
+                            {resultado.duplicataId
+                              ? <p className="mt-1 text-xs text-gray-300">NF {resultado.nfCte || resultado.duplicataId} · {resultado.clienteSacado}</p>
+                              : resultado.descricaoMovimento && <p className="mt-1 text-xs text-gray-300">Sistema: {resultado.descricaoMovimento}</p>}
+                          </div>
+                          <div className="text-right">
+                            <p className="whitespace-nowrap font-semibold">{formatBRLNumber(transacao.valor)}</p>
+                            <p className="text-xs text-gray-300">
+                              {grupos.length ? 'Soma exata de NFs' : sugestoes.length ? 'Selecione uma NF' : statusAutomatico[resultado.status]}
+                            </p>
+                          </div>
+                        </div>
+                        {cobrancaAgrupada && grupos.length === 0 && resultado.status !== 'PRONTO' && (
+                          <p className="mt-2 text-xs text-gray-300">Nenhuma soma exata de NFs em aberto encontrada.</p>
+                        )}
+                        {grupos.length > 0 && (
+                          <div className="mt-3 space-y-2 border-t border-gray-600 pt-3">
+                            {grupos.map((grupo) => (
+                              <div key={grupo.map((titulo) => titulo.id).join(',')} className="rounded bg-gray-800 p-2">
+                                <p className="flex flex-wrap justify-between gap-2 font-semibold text-green-300">
+                                  <span>{grupo.length} NFs em aberto</span>
+                                  <span className="whitespace-nowrap">Total {formatBRLNumber(grupo.reduce((soma, titulo) => soma + titulo.centavos, 0) / 100)}</span>
+                                </p>
+                                <ul className="mt-2 space-y-1 text-xs text-gray-300">
+                                  {grupo.map((titulo) => (
+                                    <li key={titulo.id} className="flex flex-wrap items-baseline justify-between gap-x-3">
+                                      <span className="min-w-0 break-words">NF {titulo.nf_cte || titulo.id} · {titulo.cliente_sacado} · {formatDate(titulo.data_vencimento)}</span>
+                                      <span className="whitespace-nowrap font-semibold text-white">{formatBRLNumber(titulo.centavos / 100)}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                                {!resultado.movimentoId && (
+                                  <div className="mt-3 flex justify-end">
+                                    <button type="button" onClick={() => validarTitulos(transacao, grupo, true)}
+                                      disabled={Boolean(conciliandoDuplicata)} className="rounded bg-green-700 px-3 py-2 text-xs font-semibold disabled:opacity-50">
+                                      {conciliandoDuplicata === String(transacao.id) ? 'Validando...' : 'Validar grupo'}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {sugestoes.length > 0 && (
+                          <ul className="mt-3 space-y-2 border-t border-gray-600 pt-3">
+                            {sugestoes.map((duplicata) => (
+                              <li key={duplicata.id} className="flex flex-wrap items-center justify-between gap-2 rounded bg-gray-800 p-2">
+                                <div className="min-w-0 flex-1 break-words">
+                                  <p className="font-semibold">NF {duplicata.nf_cte || duplicata.id} · {duplicata.cliente_sacado}</p>
+                                  <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-300">
+                                    <span>Vencimento {formatDate(duplicata.data_vencimento)}</span>
+                                    <span className="whitespace-nowrap">{formatBRLNumber(duplicata.valorTotal)}</span>
+                                    {duplicata.ajusteCentavos !== 0 && (
+                                      <span className="font-semibold text-amber-300">
+                                        {duplicata.ajusteCentavos > 0 ? 'Juros de mora +' : 'Desconto −'}{formatBRLNumber(duplicata.diferenca)}
+                                      </span>
+                                    )}
+                                  </p>
+                                </div>
+                                <button type="button" onClick={() => validarTitulos(transacao, [duplicata], true)}
+                                  disabled={Boolean(conciliandoDuplicata)} className="shrink-0 rounded bg-green-700 px-3 py-2 text-xs font-semibold disabled:opacity-50">
+                                  {duplicata.ajusteCentavos === 0 ? 'Aceitar sugestão' : 'Aceitar com diferença'}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" autoFocus onClick={() => setAutomatico(null)} disabled={aguardandoAutomatico || Boolean(conciliandoDuplicata)}
+                className="rounded bg-gray-600 px-4 py-2 font-semibold disabled:opacity-50">
+                {automatico.fase === 'previa' && prontos > 0 ? 'Cancelar' : 'Voltar'}
+              </button>
+              {automatico.fase === 'previa' && prontos > 0 && (
+                <button type="button" disabled={Boolean(conciliandoDuplicata)} onClick={() => processarConciliacao(true)} className="rounded bg-green-700 px-4 py-2 font-semibold disabled:opacity-50">
+                  Confirmar conciliação ({prontos})
+                </button>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

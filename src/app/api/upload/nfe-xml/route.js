@@ -80,18 +80,22 @@ export async function POST(request) {
     const sacadoCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
 
     // --- CORREÇÃO AQUI: Buscamos também as contas bancárias ---
-    const { data: emitenteData } = await supabase
+    const { data: emitenteData, error: emitenteError } = await supabase
       .from('clientes')
       .select('id, nome, ramo_de_atividade, contas_bancarias(*)') 
       .eq('cnpj', emitCnpj)
-      .single();
+      .maybeSingle();
+
+    if (emitenteError) throw new Error('Não foi possível consultar o cadastro do cedente.');
 
     // Busca dados do sacado
-    const { data: sacadoData } = await supabase
+    const { data: sacadoData, error: sacadoError } = await supabase
       .from('sacados')
       .select('*, condicoes_pagamento(*)')
       .eq('cnpj', sacadoCnpjCpf)
-      .single();
+      .maybeSingle();
+
+    if (sacadoError) throw new Error('Não foi possível consultar o cadastro do sacado.');
 
     const clienteIdEmitente = emitenteData?.id || null;
 
