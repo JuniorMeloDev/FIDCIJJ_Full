@@ -323,6 +323,7 @@ export default function AnalisePage() {
         // Não fechamos o modal do Pix aqui ainda para evitar flicker se der erro, 
         // ou fechamos se quisermos mostrar loading geral. Vamos manter aberto com loading.
 
+        let aguardandoExtrato = false;
         try {
             const finalPayload = {
                 ...approvalPayload,
@@ -332,14 +333,28 @@ export default function AnalisePage() {
                 recompraData: recompraData
             };
 
-            const response = await fetch(`/api/operacoes/${operacaoSelecionada.id}/status`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-                body: JSON.stringify(finalPayload),
-            });
+            const enviarAprovacao = (payloadEnvio) =>
+                fetch(`/api/operacoes/${operacaoSelecionada.id}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+                    body: JSON.stringify(payloadEnvio),
+                });
 
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.message || "Erro ao salvar operação.");
+            let response = await enviarAprovacao(finalPayload);
+            let result = await response.json();
+
+            for (let tentativa = 0; !response.ok && result.codigo === 'PIX_AGUARDANDO_EXTRATO' && tentativa < 2; tentativa++) {
+                await new Promise((resolve) => setTimeout(resolve, 1500 * (tentativa + 1)));
+                response = await enviarAprovacao({ ...finalPayload, recuperarPixItau: true });
+                result = await response.json();
+            }
+
+            if (!response.ok) {
+                if (result.codigo === 'PIX_AGUARDANDO_EXTRATO') {
+                    aguardandoExtrato = true;
+                }
+                throw new Error(result.message || "Erro ao salvar operação.");
+            }
 
             showNotification("Operação finalizada com sucesso!", "success");
             fetchPendentes();
@@ -471,14 +486,18 @@ export default function AnalisePage() {
             }
 
             if (!recovered) {
-                showNotification(err.message || "Erro desconhecido", "error");
-                setIsPixConfirmOpen(false);
+                showNotification(err.message || "Erro desconhecido", aguardandoExtrato ? "warning" : "error");
+                if (!aguardandoExtrato) {
+                    setIsPixConfirmOpen(false);
+                }
             }
         } finally {
             setIsSaving(false);
-            setRecompraData(null);
-            setPendingApprovalPayload(null);
-            setPendingPartialData(null);
+            if (!aguardandoExtrato) {
+                setRecompraData(null);
+                setPendingApprovalPayload(null);
+                setPendingPartialData(null);
+            }
         }
     };
 

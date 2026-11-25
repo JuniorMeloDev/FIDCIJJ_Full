@@ -321,7 +321,7 @@ export default function AprovacaoOperacaoModal({
                                 <span className="ml-2 text-sm text-gray-200">Debitar Valor Parcial</span>
                             </label>
 
-                            {(contaSelecionada?.banco?.toLowerCase().includes('inter') || contaSelecionada?.banco?.toLowerCase().includes('itaú')) && (
+                            {(/inter|ita[uú]/i.test(contaSelecionada?.banco || '')) && (
                                 <div className="space-y-3 rounded-2xl border-l-2 border-gray-600 bg-gray-900/40 p-4">
                                     <label className="flex items-center cursor-pointer">
                                         <input

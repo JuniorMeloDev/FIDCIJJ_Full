@@ -4,12 +4,23 @@ import jwt from "jsonwebtoken";
 import { sendOperationStatusEmail } from "@/app/lib/emailService";
 import { getInterAccessToken, enviarPixInter } from "@/app/lib/interService";
 import { getItauAccessToken, enviarPixItau } from "@/app/lib/itauService";
-import { format } from 'date-fns';
+import { consultarPixItauEfetivado } from "@/app/lib/pixItauExtrato";
 import {
   findRepeatedDuplicatas,
   formatDuplicataConflictMessage,
   queryDuplicatasByEntries,
 } from "@/app/lib/duplicataGuard";
+
+const hojeEmBrasilia = () =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+
+const formatarChavePix = (chave, tipo) => {
+  if (tipo === "Telefone") {
+    const numeros = String(chave || "").replace(/\D/g, "");
+    return numeros.length >= 10 && !numeros.startsWith("+55") ? `+55${numeros}` : numeros;
+  }
+  return chave;
+};
 
 // ... imports existing ...
 
@@ -34,11 +45,11 @@ export async function PUT(request, props) {
     }
 
     const body = await request.json();
-    const { status, conta_bancaria_id, descontos, valor_debito_parcial, data_debito_parcial, efetuar_pix, recompraData } = body;
+    const { status, conta_bancaria_id, descontos, valor_debito_parcial, data_debito_parcial, efetuar_pix, recuperarPixItau, recompraData } = body;
 
     const { data: operacao, error: fetchError } = await supabase
       .from("operacoes")
-      .select("*, cliente:clientes(id, nome, email, ramo_de_atividade)")
+      .select("*, cliente:clientes(id, nome, email, ramo_de_atividade, cnpj)")
       .eq("id", id)
       .single();
 
@@ -47,6 +58,13 @@ export async function PUT(request, props) {
     }
 
     if (status === "Aprovada") {
+      if (operacao.status === "Aprovada") {
+        return NextResponse.json(
+          { message: "Esta operação já foi aprovada." },
+          { status: 409 }
+        );
+      }
+
       const { data: duplicatas } = await supabase
         .from("duplicatas")
         .select("nf_cte, sacado_id, cliente_sacado")
@@ -150,6 +168,10 @@ export async function PUT(request, props) {
               throw new Error(`Cliente ${operacao.cliente.nome} não possui chave PIX cadastrada para recebimento.`);
           }
 
+          const chaveFormatada = formatarChavePix(
+              contaDestino.chave_pix,
+              contaDestino.tipo_chave_pix || contaDestino.tipoChavePix
+          );
 
           if (nomeBanco.includes('inter') && !nomeBanco.includes('itau') && !nomeBanco.includes('itaú')) {
               const dadosPix = {
@@ -158,7 +180,7 @@ export async function PUT(request, props) {
                   descricao: descricaoLancamento, // Usa a descrição detalhada
                   destinatario: {
                       tipo: "CHAVE",
-                      chave: contaDestino.chave_pix
+                      chave: chaveFormatada
                   }
               };
               
@@ -174,37 +196,117 @@ export async function PUT(request, props) {
               }
 
           } else if (nomeBanco.includes('itaú') || nomeBanco.includes('itau')) {
-                const CONTA_REAL_ITAU = process.env.ITAU_PIX_CONTA_REAL;
-                const ID_CLIENTE_PAGADOR = process.env.ITAU_PIX_CLIENTE_ID_REAL;
-                if (!CONTA_REAL_ITAU || !ID_CLIENTE_PAGADOR) throw new Error("Configuração PIX Itaú incompleta.");
+                const eventosExistentes = await consultarPixItauEfetivado({
+                    conta,
+                    data: dataEfetivaDebito,
+                    centavos: valorDebitadoCentavos,
+                    documento: operacao.cliente?.cnpj,
+                });
 
-                const { data: contaRealInfo } = await supabase.from("contas_bancarias").select("*").eq("conta_corrente", CONTA_REAL_ITAU).single();
-                const { data: dadosPagador } = await supabase.from("clientes").select("cnpj").eq("id", ID_CLIENTE_PAGADOR).single();
-                
-                const pagadorDocumento = dadosPagador.cnpj.replace(/\D/g, "");
-                const pagadorTipoPessoa = pagadorDocumento.length > 11 ? "J" : "F";
+                if (eventosExistentes.length > 1) {
+                    return NextResponse.json(
+                        { message: "Há mais de um PIX do mesmo valor para este cedente. Confira os pagamentos no Itaú." },
+                        { status: 409 }
+                    );
+                }
 
-                const dadosPixItau = {
-                    valor_pagamento: valorDebitado.toFixed(2),
-                    data_pagamento: dataEfetivaDebito,
-                    chave: contaDestino.chave_pix,
-                    tipo_conta: "CC",
-                    referencia_empresa: `OP-${id}`.substring(0, 20),
-                    identificacao_comprovante: descricaoLancamento.substring(0, 100), // Usa a descrição detalhada
-                    pagador: {
+                if (eventosExistentes.length === 1) {
+                    pixEndToEndId = eventosExistentes[0].id;
+                } else if (recuperarPixItau) {
+                    return NextResponse.json(
+                        {
+                            codigo: "PIX_AGUARDANDO_EXTRATO",
+                            message: "O Itaú ainda não confirmou o débito no extrato. Clique em Confirmar novamente para concluir a aprovação sem reenviar o PIX.",
+                        },
+                        { status: 409 }
+                    );
+                } else {
+                    const CONTA_REAL_ITAU = process.env.ITAU_PIX_CONTA_REAL;
+                    const ID_CLIENTE_PAGADOR = process.env.ITAU_PIX_CLIENTE_ID_REAL;
+                    if (!CONTA_REAL_ITAU || !ID_CLIENTE_PAGADOR) throw new Error("Configuração PIX Itaú incompleta.");
+
+                    const { data: contaRealInfo } = await supabase.from("contas_bancarias").select("*").eq("conta_corrente", CONTA_REAL_ITAU).single();
+                    const { data: dadosPagador } = await supabase.from("clientes").select("cnpj").eq("id", ID_CLIENTE_PAGADOR).single();
+                    
+                    const pagadorDocumento = dadosPagador.cnpj.replace(/\D/g, "");
+                    const pagadorTipoPessoa = pagadorDocumento.length > 11 ? "J" : "F";
+
+                    const dadosPixItau = {
+                        valor_pagamento: valorDebitado.toFixed(2),
+                        data_pagamento: dataEfetivaDebito,
+                        chave: chaveFormatada,
                         tipo_conta: "CC",
-                        agencia: contaRealInfo.agencia.replace(/\D/g, ""),
-                        conta: contaRealInfo.conta_corrente.replace(/\D/g, "").padStart(8, "0"),
-                        tipo_pessoa: pagadorTipoPessoa,
-                        documento: pagadorDocumento,
-                        modulo_sispag: "Fornecedores"
+                        referencia_empresa: `OP-${id}`.substring(0, 20),
+                        identificacao_comprovante: descricaoLancamento.substring(0, 100), // Usa a descrição detalhada
+                        pagador: {
+                            tipo_conta: "CC",
+                            agencia: contaRealInfo.agencia.replace(/\D/g, ""),
+                            conta: contaRealInfo.conta_corrente.replace(/\D/g, "").padStart(8, "0"),
+                            tipo_pessoa: pagadorTipoPessoa,
+                            documento: pagadorDocumento,
+                            modulo_sispag: "Fornecedores"
+                        }
+                    };
+                    
+                    const tokenItau = await getItauAccessToken();
+                    try {
+                        const resultadoPix = await enviarPixItau(tokenItau.access_token, dadosPixItau);
+                        pixEndToEndId = resultadoPix.end_to_end_id || resultadoPix.endToEndId || resultadoPix.endToEnd || resultadoPix.cod_pagamento || "ENVIADO_ITAU";
+                    } catch (pixError) {
+                        if (pixError.code === "PIX_NAO_ENVIADO") {
+                            throw pixError;
+                        }
+                        const eventosAposEnvio = await consultarPixItauEfetivado({
+                            conta,
+                            data: dataEfetivaDebito,
+                            centavos: valorDebitadoCentavos,
+                            documento: operacao.cliente?.cnpj,
+                        }).catch(() => []);
+
+                        if (eventosAposEnvio.length > 1) {
+                            return NextResponse.json(
+                                { message: "Há mais de um PIX do mesmo valor para este cedente. Confira os pagamentos no Itaú." },
+                                { status: 409 }
+                            );
+                        }
+                        if (eventosAposEnvio.length === 1) {
+                            pixEndToEndId = eventosAposEnvio[0].id;
+                        } else {
+                            return NextResponse.json(
+                                {
+                                    codigo: "PIX_AGUARDANDO_EXTRATO",
+                                    message: "O Itaú ainda não confirmou o débito no extrato. Clique em Confirmar novamente para concluir a aprovação sem reenviar o PIX.",
+                                },
+                                { status: 409 }
+                            );
+                        }
                     }
-                };
-                
-                const tokenItau = await getItauAccessToken();
-                const resultadoPix = await enviarPixItau(tokenItau.access_token, dadosPixItau);
-                pixEndToEndId = resultadoPix.cod_pagamento || "ENVIADO_ITAU";
+                }
           }
+      }
+
+      if (pixEndToEndId) {
+        const { data: movExistente } = await supabase
+          .from("movimentacoes_caixa")
+          .select("id, operacao_id")
+          .eq("transaction_id", pixEndToEndId)
+          .limit(1);
+
+        if (movExistente?.length && String(movExistente[0].operacao_id) !== String(id)) {
+          return NextResponse.json(
+            { message: "Este PIX já está vinculado a outra operação. Confira o Fluxo de Caixa." },
+            { status: 409 }
+          );
+        }
+      }
+
+      if (descontos && descontos.length > 0) {
+        const descontosToInsert = descontos.map(d => ({
+            operacao_id: id,
+            descricao: d.descricao,
+            valor: d.valor
+        }));
+        await supabase.from('descontos').insert(descontosToInsert);
       }
       
       // pixEndToEndId já está no escopo correto agora

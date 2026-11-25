@@ -202,8 +202,8 @@ export async function POST(request) {
       const dadosPixItau = {
         valor_pagamento: valor.toFixed(2),
 
-        // 1. CORREÇÃO DA DATA (Voltar para o formato da documentação)
-        data_pagamento: format(dataPagamentoHoje, "yyyy-MM-dd"), // esta ficando com agendado o pix
+        // 1. CORREÇÃO DA DATA (Voltar para o formato da documentação, usando fuso de Brasília)
+        data_pagamento: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(dataPagamentoHoje),
         chave: chaveFinal,
         referencia_empresa: descricao.substring(0, 20), // Ajustado para 20 (doc)
         identificacao_comprovante: descricao.substring(0, 100), // Ajustado para 100 (doc)
