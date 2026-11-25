@@ -58,6 +58,17 @@ test("confirma a efetivação do pagamento incluído sem repetir o envio", async
   ]);
 });
 
+test("aceita o identificador numérico quando a consulta devolve a mesma referência como texto", async (context) => {
+  const chamadas = simularSispag(context, [
+    { body: { data: { dados_pagamento: { cod_pagamento: 123, status: "Incluído" } } } },
+    { body: { data: { id_pagamento: "123", status_pagamento: "Efetuado", end_to_end_id: "end-to-end-123" } } },
+  ]);
+  const resultado = await enviarPixItau("token", {});
+  assert.equal(resultado.status_pagamento, "Efetuado");
+  assert.equal(resultado.end_to_end_id, "end-to-end-123");
+  assert.deepEqual(chamadas.map(([metodo]) => metodo), ["POST", "GET"]);
+});
+
 test("preserva o motivo da recusa informada pelo Itaú", async (context) => {
   const chamadas = simularSispag(context, [
     { body: { status_pagamento: "Não efetuado", motivo_recusa: [{ nome: "Saldo insuficiente" }] } },
@@ -73,6 +84,9 @@ test("sinaliza resultado indefinido quando a consulta falha", async (context) =>
     { http: 503, body: {} },
   ]);
 
-  await assert.rejects(enviarPixItau("token", {}), /ainda não confirmou.*pagamento-123.*Confira o pagamento/);
+  await assert.rejects(enviarPixItau("token", {}), {
+    code: "PIX_ITAU_INDEFINIDO",
+    message: /ainda não confirmou.*pagamento-123.*Confira o pagamento/,
+  });
   assert.deepEqual(chamadas.map(([metodo]) => metodo), ["POST", "GET"]);
 });

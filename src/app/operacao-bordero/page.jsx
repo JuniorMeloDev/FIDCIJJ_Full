@@ -16,6 +16,9 @@ import PixReceiptModal from "@/app/components/PixReceiptModal";
 import RecompraModal from "@/app/components/RecompraModal";
 import { formatBRLInput, parseBRL, formatDisplayConta, formatDate } from "../utils/formatters.jsx";
 
+const chavePixPendente = "bordero.pixPendente";
+const hojeEmBrasilia = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+
 export default function OperacaoBorderoPage() {
   const [dataOperacao, setDataOperacao] = useState(
     new Date().toISOString().split("T")[0]
@@ -59,6 +62,7 @@ export default function OperacaoBorderoPage() {
   const [isProcessingXmlBatch, setIsProcessingXmlBatch] = useState(false);
   const [cadastroXml, setCadastroXml] = useState(null);
   const [isPagarComPix, setIsPagarComPix] = useState(false);
+  const [pixPendente, setPixPendente] = useState(null);
   const [pixData, setPixData] = useState({ tipo_chave_pix: 'CPF/CNPJ', chave: '' });
   const [isPixConfirmOpen, setIsPixConfirmOpen] = useState(false);
   const [pixPayload, setPixPayload] = useState(null);
@@ -78,6 +82,24 @@ export default function OperacaoBorderoPage() {
   const showNotification = (message, type) => {
     setNotification({ message, type });
     setTimeout(() => setNotification({ message: "", type: "" }), 5000);
+  };
+
+  useEffect(() => {
+    try {
+      setPixPendente(JSON.parse(sessionStorage.getItem(chavePixPendente)));
+    } catch {
+      sessionStorage.removeItem(chavePixPendente);
+    }
+  }, []);
+
+  const guardarPixPendente = (pendencia) => {
+    setPixPendente(pendencia);
+    try {
+      if (pendencia) sessionStorage.setItem(chavePixPendente, JSON.stringify(pendencia));
+      else sessionStorage.removeItem(chavePixPendente);
+    } catch {
+      // A finalização continua disponível no estado da tela.
+    }
   };
 
   const getDuplicataIdentifiers = (nfCte, parcelasCalculadas = []) => {
@@ -717,6 +739,10 @@ export default function OperacaoBorderoPage() {
   };
   
   const handleSalvarOperacao = () => {
+    if (pixPendente) {
+      confirmarSalvamento(pixPendente.payload, pixPendente.comprovante);
+      return;
+    }
     if (notasFiscais.length === 0 || !contaBancariaId) {
       showNotification(
         "Adicione ao menos uma NF e selecione uma conta bancária.",
@@ -769,101 +795,80 @@ export default function OperacaoBorderoPage() {
           setIsPartialDebitModalOpen(true);
           return;
       }
-      confirmarSalvamento(valorParcialPendente, dataParcialPendente, false);
+      confirmarSalvamento(montarPayloadOperacao(valorParcialPendente, dataParcialPendente));
     } 
     else {
-      confirmarSalvamento(null, null, false);
+      confirmarSalvamento(montarPayloadOperacao());
     }
   };
 
-  const confirmarSalvamento = async (valorDebito = null, dataDebito = null, isPix = false, pixResultData = null) => {
-    setIsPartialDebitModalOpen(false);
-    setIsPixConfirmOpen(false);
-    setIsSaving(true);
-    
-    const finalLiquidoOperacao = jurosPre
-      ? totais.liquidoOperacao
-      : totais.valorTotalBruto - totais.totalOutrosDescontos;
-
-    const payload = {
+  const montarPayloadOperacao = (valorDebito = null, dataDebito = null, isPix = false) => ({
       dataOperacao,
       tipoOperacaoId: parseInt(tipoOperacaoId),
       clienteId: empresaCedenteId,
       contaBancariaId: parseInt(contaBancariaId),
-      totais: {
-        ...totais,
-        liquidoOperacao: finalLiquidoOperacao,
-      },
+      totais,
       descontos: todosOsDescontos.map(({ id, ...rest }) => rest),
       notasFiscais,
       cedenteRamo,
       valorDebito,
       dataDebito,
       efetuar_pix: isPix,
-      pixEndToEndId: isPix ? pixResultData?.transactionId : null,
+      pixEndToEndId: null,
       jurosPre: jurosPre, // Envia o status do checkbox
-    };
+  });
+
+  const confirmarSalvamento = async (payload, comprovante = null) => {
+    setIsPartialDebitModalOpen(false);
+    setIsPixConfirmOpen(false);
+    setIsSaving(true);
 
     try {
-      const response = await fetch(`/api/operacoes/salvar`, {
+      const salvar = () => fetch(`/api/operacoes/salvar`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify(payload),
       });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.message || "Ocorreu um erro ao salvar a operação."
-        );
+      let response = await salvar();
+      for (let tentativa = 0; !response.ok; tentativa++) {
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.codigo !== 'PIX_AGUARDANDO_EXTRATO' || tentativa >= 2) {
+          throw new Error(errorData.message || "Ocorreu um erro ao salvar a operação.");
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1200 * (tentativa + 1)));
+        response = await salvar();
       }
       const operacaoId = await response.json();
-      setSavedOperacaoInfo({ id: operacaoId, clienteId: empresaCedenteId });
-      const descricaoBordero = buildBorderoDescricao(notasFiscais);
-
-      if (isPix) {
-        showNotification("Operação salva e PIX enviado com sucesso!", "success");
-
-        const recebedorConta = (cedenteSelecionado.contasBancarias || []).find(c => c.chave_pix === pixPayload.chave) || (cedenteSelecionado.contasBancarias || [])[0] || {};
-
-        setReceiptData({
-          valor: pixPayload.valor,
-          data: new Date(), 
-          transactionId: pixResultData.transactionId,
-          descricao: descricaoBordero,
-          pagador: {
-              nome: clienteMasterInfo.nome,
-              cnpj: clienteMasterInfo.cnpj,
-              conta: pixPayload.contaOrigem || 'N/A',
-          },
-          recebedor: {
-             nome: empresaCedente,
-             cnpj: cedenteSelecionado?.cnpj,
-             instituicao: recebedorConta.banco,
-             chavePix: pixPayload.chave
-          }
-        });
+      setSavedOperacaoInfo({ id: operacaoId, clienteId: payload.clienteId });
+      if (payload.efetuar_pix) {
+        guardarPixPendente(null);
+        showNotification("Borderô finalizado com o PIX registrado.", "success");
+      }
+      if (comprovante && !payload.recuperarPixItau) {
+        setReceiptData({ ...comprovante, transactionId: payload.pixEndToEndId });
         setIsReceiptModalOpen(true);
         handleLimparTudo(false);
       } else {
         setIsEmailModalOpen(true);
       }
     } catch (error) {
-      showNotification(error.message, "error");
+      showNotification(payload.efetuar_pix && payload.pixEndToEndId
+        ? `PIX enviado. Falha ao finalizar o borderô: ${error.message}`
+        : error.message, "error");
     } finally {
       setIsSaving(false);
     }
   };
 
   const confirmarSalvamentoEPIX = async () => {
+    if (isSaving || pixPendente) return;
     setIsSaving(true);
     setIsPixConfirmOpen(false);
 
     const contaOrigemObj = contasBancarias.find(c => c.id === parseInt(contaBancariaId));
     
     const valorDebitado = pixPayload.valor; 
-    const dataPagamento = (isPartialDebit && dataParcialPendente) 
-                          ? dataParcialPendente 
-                          : new Date().toISOString().split("T")[0];
+    const dataPagamento = hojeEmBrasilia();
     const descricaoBordero = buildBorderoDescricao(notasFiscais);
     const duplicatasPayload = buildDuplicatasPayload(notasFiscais);
 
@@ -871,7 +876,7 @@ export default function OperacaoBorderoPage() {
         valor: valorDebitado,
         descricao: descricaoBordero,
         duplicatas: duplicatasPayload,
-        contaOrigem: contaOrigemObj.contaCorrente,
+        contaOrigem: contaOrigemObj?.contaCorrente,
         empresaAssociada: empresaCedente,
         pix: {
             tipo: pixData.tipo_chave_pix,
@@ -880,7 +885,29 @@ export default function OperacaoBorderoPage() {
         skipSave: true 
     };
 
+    const payload = montarPayloadOperacao(valorDebitado, dataPagamento, true);
+    const itau = /ita[uú]/i.test(contaOrigemObj?.banco || "");
+    const recuperar = { payload: { ...payload, recuperarPixItau: true } };
+    let enviandoPixItau = false;
     try {
+        const validacao = await fetch('/api/operacoes/salvar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify({ ...payload, validarApenas: true }),
+        });
+        if (!validacao.ok) {
+            const dados = await validacao.json().catch(() => ({}));
+            throw new Error(dados.message || 'Falha ao validar o borderô antes do PIX.');
+        }
+        if (validacao.status === 200 && (await validacao.json()).pixJaDebitado) {
+          guardarPixPendente(recuperar);
+          await confirmarSalvamento(recuperar.payload);
+          return;
+        }
+        if (itau) {
+          guardarPixPendente(recuperar);
+          enviandoPixItau = true;
+        }
         const pixResponse = await fetch('/api/lancamentos/pix', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
@@ -890,19 +917,48 @@ export default function OperacaoBorderoPage() {
         const pixResult = await pixResponse.json();
         
         if (!pixResponse.ok || !pixResult.success) {
+            if (itau && pixResponse.status >= 500 && pixResult.codigo !== 'PIX_NAO_ENVIADO') {
+              await confirmarSalvamento(recuperar.payload);
+              return;
+            }
+            if (itau) {
+              enviandoPixItau = false;
+              guardarPixPendente(null);
+            }
             throw new Error(pixResult.message || 'Falha ao enviar o PIX.');
         }
         
-        const pixApiResultData = pixResult.pixResult;
-        const transactionId = pixApiResultData.cod_pagamento || pixApiResultData.transacaoPix?.endToEnd; 
-
+        const transactionId = pixResult.transactionId || pixResult.pixResult?.cod_pagamento || pixResult.pixResult?.transacaoPix?.endToEnd;
         if (!transactionId) {
-            console.warn("Resposta PIX OK, mas 'transaction_id' não foi encontrado.", pixApiResultData);
+          if (itau) {
+            await confirmarSalvamento(recuperar.payload);
+            return;
+          }
+          throw new Error('PIX informado como enviado, mas o banco não retornou o identificador. Confira o comprovante.');
         }
 
-        await confirmarSalvamento(valorDebitado, dataPagamento, true, { transactionId });
+        const contasRecebedor = cedenteSelecionado?.contasBancarias || [];
+        const recebedorConta = contasRecebedor.find((conta) => conta.chave_pix === pixPayload.chave) || contasRecebedor[0];
+        const pendencia = {
+          payload: { ...payload, pixEndToEndId: transactionId },
+          comprovante: {
+            valor: valorDebitado,
+            data: new Date().toISOString(),
+            descricao: descricaoBordero,
+            pagador: { ...clienteMasterInfo, conta: pixPayload.contaOrigem },
+            recebedor: {
+              nome: empresaCedente, cnpj: cedenteSelecionado?.cnpj, instituicao: recebedorConta?.banco, chavePix: pixPayload.chave,
+            },
+          },
+        };
+        guardarPixPendente(pendencia);
+        await confirmarSalvamento(pendencia.payload, pendencia.comprovante);
 
     } catch (error) {
+        if (enviandoPixItau) {
+          await confirmarSalvamento(recuperar.payload);
+          return;
+        }
         showNotification(error.message, "error");
         setIsSaving(false);
     }
@@ -1060,7 +1116,7 @@ export default function OperacaoBorderoPage() {
     setDataParcialPendente(data);
     setIsPartialDebitModalOpen(false);
 
-    if (isPagarComPix) {
+    if (isPagarComPix && !pixPendente) {
       const contaOrigemObj = contasBancarias.find(c => c.id === parseInt(contaBancariaId));
       setPixPayload({
         valor: valorParcialNum,
@@ -1300,6 +1356,7 @@ export default function OperacaoBorderoPage() {
           setjurosPre={setjurosPre}
           isPagarComPix={isPagarComPix}
           handlePixChange={handlePixChange}
+          pixPendente={pixPendente}
           pixData={pixData}
           setPixData={setPixData}
           cedenteSelecionado={cedenteSelecionado}

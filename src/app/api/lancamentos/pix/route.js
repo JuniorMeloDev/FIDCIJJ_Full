@@ -24,6 +24,7 @@ const normalizePixRecipient = (pixResult, fallbackKey, fallbackKeyType) => {
 };
 
 export async function POST(request) {
+  let pixItauIniciado = false;
   try {
     const token = request.headers.get("Authorization")?.split(" ")[1];
     if (!token)
@@ -237,13 +238,14 @@ export async function POST(request) {
       );
 
       const tokenItau = await getItauAccessToken();
+      pixItauIniciado = true;
       resultadoPix = await enviarPixItau(tokenItau.access_token, dadosPixItau);
 
       console.log(
         "[DEBUG] Resposta Itaú:",
         JSON.stringify(resultadoPix, null, 2)
       );
-      pixEndToEndId = resultadoPix.cod_pagamento;
+      pixEndToEndId = resultadoPix.end_to_end_id || resultadoPix.endToEndId || resultadoPix.endToEnd || resultadoPix.cod_pagamento;
     } else {
       throw new Error(
         `Banco "${contaInfoSelecionada.banco}" não configurado para pagamentos PIX.`
@@ -260,7 +262,7 @@ export async function POST(request) {
     if (skipSave) {
       console.log("[LOG PIX] skipSave=true. Pulando inserção em movimentacoes_caixa.");
       return NextResponse.json(
-        { success: true, pixResult: { ...resultadoPix, recebedor: recebedorNormalizado }, duplicatas: duplicatasNormalizadas },
+        { success: true, transactionId: pixEndToEndId || null, pixResult: { ...resultadoPix, recebedor: recebedorNormalizado }, duplicatas: duplicatasNormalizadas },
         { status: 201 } // Retorna 201 (Created) pois o PIX foi criado
       );
     }
@@ -377,7 +379,10 @@ export async function POST(request) {
     }
 
     return NextResponse.json(
-      { message: `Erro: ${errorMessage}` },
+      {
+        message: `Erro: ${errorMessage}`,
+        codigo: pixItauIniciado && error.code !== 'PIX_NAO_ENVIADO' ? 'PIX_ITAU_INDEFINIDO' : 'PIX_NAO_ENVIADO',
+      },
       { status: 500 }
     );
   }

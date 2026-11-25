@@ -184,7 +184,28 @@ function motivoRecusaPix(dados) {
 
 function pixSemConfirmacao(codigo) {
     const referencia = codigo ? ` (código ${codigo})` : '';
-    return new Error(`O Itaú ainda não confirmou o resultado do PIX${referencia}. Confira o pagamento no SISPAG antes de tentar novamente.`);
+    const error = new Error(`O Itaú ainda não confirmou o resultado do PIX${referencia}. Confira o pagamento no SISPAG antes de tentar novamente.`);
+    error.code = 'PIX_ITAU_INDEFINIDO';
+    return error;
+}
+
+function pixRecusado(mensagem) {
+    const error = new Error(mensagem);
+    error.code = 'PIX_NAO_ENVIADO';
+    return error;
+}
+
+export async function consultarPagamentoPixItau(accessToken, codigo) {
+    const resposta = await requisitarSispag(
+        accessToken, `/pagamentos_sispag/${encodeURIComponent(codigo)}`, 'GET'
+    );
+    const dados = resposta.dados?.data ?? resposta.dados;
+    const pagamento = dados?.dados_pagamento ?? dados;
+    const id = pagamento?.id_pagamento ?? pagamento?.cod_pagamento;
+    return {
+        statusHttp: resposta.statusHttp,
+        pagamento: resposta.statusHttp === 200 && id != null && String(id) === String(codigo) ? pagamento : null,
+    };
 }
 
 export async function enviarPixItau(accessToken, dadosPix) {
@@ -193,7 +214,8 @@ export async function enviarPixItau(accessToken, dadosPix) {
             console.warn('[ITAÚ PIX] Falha ao receber o retorno do envio:', error.code);
             throw pixSemConfirmacao();
         });
-    const dados = resposta.dados?.data ?? resposta.dados;
+    const corpo = resposta.dados?.data ?? resposta.dados;
+    const dados = corpo?.dados_pagamento ?? corpo;
     const codigo = dados?.cod_pagamento || dados?.id_pagamento;
     let statusOriginal = dados?.status_pagamento || dados?.status;
     let status = normalizarStatusPix(statusOriginal);
@@ -206,14 +228,14 @@ export async function enviarPixItau(accessToken, dadosPix) {
         const detalhes = Array.isArray(dados)
             ? dados.map((item) => item.erro || item.mensagem).filter(Boolean).join(', ')
             : dados?.campos?.[0]?.mensagem || dados?.mensagem || dados?.detail;
-        throw new Error(`Erro ${resposta.statusHttp} ao enviar PIX no Itaú: ${motivo || detalhes || 'consulte o retorno do banco'}`);
+        throw pixRecusado(`Erro ${resposta.statusHttp} ao enviar PIX no Itaú: ${motivo || detalhes || 'consulte o retorno do banco'}`);
     }
 
     if (statusPixAceitos.has(status) && !motivo) {
         return { ...dados, cod_pagamento: codigo };
     }
     if (statusPixRecusados.has(status) || motivo) {
-        throw new Error(`PIX rejeitado pelo Itaú: ${motivo || statusOriginal}`);
+        throw pixRecusado(`PIX rejeitado pelo Itaú: ${motivo || statusOriginal}`);
     }
 
     // A inclusão pode ser confirmada antes da efetivação. Consulte o mesmo
@@ -221,24 +243,22 @@ export async function enviarPixItau(accessToken, dadosPix) {
     if (codigo) {
         for (let tentativa = 0; tentativa < 3; tentativa++) {
             if (tentativa > 0) await new Promise((resolve) => setTimeout(resolve, 750));
-            const consulta = await requisitarSispag(
-                accessToken, `/pagamentos_sispag/${encodeURIComponent(codigo)}`, 'GET'
-            ).catch((error) => {
+            const consulta = await consultarPagamentoPixItau(accessToken, codigo).catch((error) => {
                 console.warn('[ITAÚ PIX] Falha ao consultar pagamento:', error.code);
                 return null;
             });
             if (consulta?.statusHttp === 404) continue;
-            const pagamento = consulta?.dados?.data?.dados_pagamento;
-            if (consulta?.statusHttp !== 200 || pagamento?.id_pagamento !== codigo) break;
+            const pagamento = consulta?.pagamento;
+            if (!pagamento) break;
 
-            statusOriginal = pagamento.status;
+            statusOriginal = pagamento.status_pagamento || pagamento.status;
             status = normalizarStatusPix(statusOriginal);
 
             if (statusPixAceitos.has(status)) {
-                return { ...dados, cod_pagamento: codigo, status_pagamento: statusOriginal };
+                return { ...dados, ...pagamento, cod_pagamento: codigo, status_pagamento: statusOriginal };
             }
             if (statusPixRecusados.has(status)) {
-                throw new Error(`PIX rejeitado pelo Itaú: ${motivoRecusaPix(pagamento) || statusOriginal}`);
+                throw pixRecusado(`PIX rejeitado pelo Itaú: ${motivoRecusaPix(pagamento) || statusOriginal}`);
             }
         }
     }

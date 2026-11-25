@@ -27,6 +27,7 @@ export default function OperacaoDetalhes({
     
     isPagarComPix,
     handlePixChange, // <-- Recebe a função handler
+    pixPendente,
     
     pixData,
     setPixData,
@@ -197,7 +198,7 @@ export default function OperacaoDetalhes({
                         </label>
 
                         {/* --- INÍCIO DA MODIFICAÇÃO (Checkbox PIX) --- */}
-                        {isPixEnabled && (
+                        {isPixEnabled && !pixPendente && (
                           <label className="flex items-center cursor-pointer pt-2 border-t border-gray-600 mt-2">
                             <input
                               type="checkbox"
@@ -212,7 +213,7 @@ export default function OperacaoDetalhes({
                     </div>
                     
                     {/* Seleção de Chave PIX */}
-                    {isPagarComPix && isPixEnabled && (
+                    {isPagarComPix && isPixEnabled && !pixPendente && (
                         <div className="space-y-2 pt-2 border-t border-gray-600">
                             <label className="text-xs font-bold text-gray-300">Chave PIX do Favorecido</label>
                             {chavesPixDisponiveis.length > 0 ? (
@@ -241,8 +242,13 @@ export default function OperacaoDetalhes({
             </div>
             
             {/* Botões de Salvar/Limpar */}
+            {pixPendente && (
+                <p role="status" className="mt-6 text-sm text-yellow-300">
+                    O registro do PIX de {formatBRLNumber(pixPendente.payload.valorDebito)} está pendente. Salvar Operação retoma a finalização.
+                </p>
+            )}
             <div className="mt-8 flex justify-end gap-4">
-                <button type="button" onClick={handleLimparTudo} className="bg-gray-600 text-gray-100 font-semibold py-2 px-6 rounded-md hover:bg-gray-500 transition">
+                <button type="button" onClick={handleLimparTudo} disabled={isSaving || Boolean(pixPendente)} className="bg-gray-600 text-gray-100 font-semibold py-2 px-6 rounded-md hover:bg-gray-500 transition disabled:opacity-50">
                     Limpar
                 </button>
                 <button
