@@ -20,21 +20,41 @@ export async function POST(request) {
     }
     
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.id || decoded.sub; // Ajuste conforme seu payload JWT
-    
-    // Busca o CNPJ do cliente logado para validar se o XML é dele
-    const { data: userProfile, error: profileError } = await supabase
-        .from('users') // Ou tabela de perfis vinculada
-        .select('cliente_id, clientes(cnpj)')
-        .eq('id', userId)
-        .single();
-        
-    if (profileError || !userProfile?.clientes?.cnpj) {
-        return NextResponse.json({ message: 'Cliente não encontrado. Peça para o administrador que cadastre esse CNPJ.' }, { status: 403 });
+    let clienteIdLogado = decoded.cliente_id || null;
+    let cnpjClienteRaw = null;
+
+    if (clienteIdLogado) {
+      const { data: clienteData } = await supabase
+        .from('clientes')
+        .select('cnpj')
+        .eq('id', clienteIdLogado)
+        .maybeSingle();
+
+      cnpjClienteRaw = clienteData?.cnpj || null;
     }
-    
-    const cnpjClienteLogado = userProfile.clientes.cnpj.replace(/\D/g, '');
-    const clienteIdLogado = userProfile.cliente_id;
+
+    if (!cnpjClienteRaw) {
+      const userId = decoded.user_id || decoded.id;
+      if (userId) {
+        const { data: userProfile } = await supabase
+          .from('users')
+          .select('cliente_id, clientes(cnpj)')
+          .eq('id', userId)
+          .maybeSingle();
+
+        clienteIdLogado = userProfile?.cliente_id || clienteIdLogado;
+        cnpjClienteRaw = userProfile?.clientes?.cnpj || null;
+      }
+    }
+
+    if (!clienteIdLogado || !cnpjClienteRaw) {
+      return NextResponse.json(
+        { message: 'Cliente não encontrado. Peça para o administrador que cadastre esse CNPJ.' },
+        { status: 403 }
+      );
+    }
+
+    const cnpjClienteLogado = cnpjClienteRaw.replace(/\D/g, '');
 
     // 2. Processamento do Arquivo
     const formData = await request.formData();
@@ -114,7 +134,7 @@ export async function POST(request) {
     //    return NextResponse.json({ message: 'Este XML não pertence à sua empresa.' }, { status: 403 });
     // }
 
-    const sacadoCnpjCpf = getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF');
+    const sacadoCnpjCpf = (getVal(sacadoNode, 'CNPJ') || getVal(sacadoNode, 'CPF') || '').replace(/\D/g, '');
     const nomeSacadoXml = getVal(sacadoNode, 'xNome');
 
     if (!sacadoCnpjCpf) {
