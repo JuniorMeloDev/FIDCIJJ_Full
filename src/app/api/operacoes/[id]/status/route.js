@@ -114,6 +114,7 @@ export async function PUT(request, props) {
       if (valor_debito_parcial !== undefined && valor_debito_parcial !== null && valor_debito_parcial !== '') {
           valorDebitado = Number(valor_debito_parcial);
       }
+      const valorDebitadoCentavos = Math.round(valorDebitado * 100);
 
       if (descontos && descontos.length > 0) {
         const descontosToInsert = descontos.map(d => ({
